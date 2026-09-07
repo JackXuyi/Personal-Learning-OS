@@ -615,15 +615,55 @@ Import → Knowledge → Graph → Assess → Mastery → Learn → Re-assess �
 
 ## 🚀 快速开始
 
-> ⚠️ 本仓库目前处于 **Pre-MVP** 阶段：核心领域模型、架构与路线图正在定型，可运行代码尚未发布。
+> ⚠️ **Phase 0 —— 基座脚手架**：五核心对象、AI Provider 抽象层、存储适配层、
+> 七大引擎骨架与 UI 壳已可端到端运行。AI 生成能力（知识抽取、自适应测评）
+> 尚未接入 Provider —— 引擎未配置时优雅降级为启发式逻辑，可完全离线运行。
 
-现阶段想参与的最佳方式：
+### 环境要求
 
-1. 阅读上文的 [路线图](#️-路线图) 与产品概念。
-2. 通过 [issue](https://github.com/) 提交想法、反馈或使用场景。
-3. 参与讨论，共同确定 MVP 范围。
+- **Node.js ≥ 22**（npm 10+）
+- Rust 工具链 —— `cargo` ≥ 1.77 —— 仅在运行 Tauri 桌面壳时需要
 
-**MVP 验收目标** —— 发布后，用户可以：
+### 运行 Web 应用
+
+```bash
+npm install     # 安装依赖
+npm run dev     # 启动 Vite 开发服务器 → http://localhost:1420
+```
+
+打开输出的地址。**首页**会基于示例职业目标运行学习闭环 demo，展示引擎层
+计算出的下一步推荐动作。
+
+### 运行桌面壳（Tauri）
+
+```bash
+npm run tauri dev   # 启动原生窗口（需 Rust 工具链）
+```
+
+### 质量门禁
+
+```bash
+npm run typecheck   # tsc --noEmit 类型检查
+npm run build       # 类型检查 + 生产构建 → dist/
+```
+
+### 仓库结构
+
+```text
+src/
+  domain/      五核心对象 + goal/assessment/plan 类型（纯 TS）
+  ai/          AI Provider 抽象 —— Ollama · llama.cpp · OpenAI 兼容 …
+  storage/     StorageAdapter —— 内存 + localStorage（SQLite/Tauri 预留）
+  engine/      七大引擎 + loop.ts 学习闭环编排 demo
+  stores/      zustand 状态 —— 闭环快照、Provider 配置
+  components/  AppShell 布局 + 通用 UI 原语
+  features/    页面骨架 —— home · spaces · knowledge · assessment · career · study · settings
+src-tauri/     Tauri v2 壳 —— Cargo.toml · tauri.conf.json · capabilities
+```
+
+### MVP 验收目标
+
+**MVP 发布后**，用户应能：
 
 ```text
 导入一本技术书

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { Card, SectionTitle } from "../../components/primitives";
-import { PageContainer } from "../../components/layout/AppShell";
+import { Card, SectionTitle } from "../components/primitives";
+import { PageContainer } from "../components/layout/AppShell";
 
 export function ScaffoldPage({
   title,

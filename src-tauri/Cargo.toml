@@ -1,0 +1,26 @@
+[package]
+name = "personal-learning-os"
+version = "0.1.0"
+description = "Local-first AI learning system — Tauri shell"
+authors = ["JackXuyi"]
+edition = "2021"
+
+# The library is consumed by src/main.rs (desktop) and the mobile entry point.
+[lib]
+name = "personal_learning_os_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

@@ -603,15 +603,57 @@ Long-term: become an **open-source Personal Learning OS** where a Personal Knowl
 
 ## 🚀 Getting Started
 
-> ⚠️ This repository is currently **Pre-MVP**. The core domain model, architecture and roadmap are being finalized; runnable code is not published yet.
+> ⚠️ **Phase 0 — Foundation scaffold.** The five core objects, AI provider
+> abstraction, storage adapters, seven engine skeletons and the UI shell run
+> end-to-end. AI-backed generation (knowledge extraction, adaptive assessment)
+> is not wired to a provider yet — engines degrade gracefully to heuristics.
 
-For early adopters and contributors, the best way to get involved right now:
+### Prerequisites
 
-1. Read the [Roadmap](#️-roadmap) and the product concept above.
-2. Open an [issue](https://github.com/) with ideas, feedback or use cases.
-3. Join the discussion and help shape the MVP scope.
+- **Node.js ≥ 22** (npm 10+)
+- Rust toolchain — `cargo` ≥ 1.77 — only when running the Tauri desktop shell
 
-The **MVP acceptance target** — after it ships, a user should be able to:
+### Run the web app
+
+```bash
+npm install     # install dependencies
+npm run dev     # start the Vite dev server → http://localhost:1420
+```
+
+Open the printed URL. The **Home** page runs the learning-loop demo against a
+sample career goal and shows the recommended next action computed by the
+engine layer.
+
+### Run the desktop shell (Tauri)
+
+```bash
+npm run tauri dev   # launch the native window (requires the Rust toolchain)
+```
+
+### Quality gates
+
+```bash
+npm run typecheck   # tsc --noEmit
+npm run build       # typecheck + production build → dist/
+```
+
+### Repository layout
+
+```text
+src/
+  domain/      five core objects + goal/assessment/plan types (pure TS)
+  ai/          AI Provider abstraction — Ollama · llama.cpp · OpenAI-compatible …
+  storage/     StorageAdapter — in-memory + localStorage (SQLite/Tauri later)
+  engine/      seven engines + loop.ts orchestration demo
+  stores/      zustand state — loop snapshot, provider settings
+  components/  AppShell layout + shared UI primitives
+  features/    page skeletons — home · spaces · knowledge · assessment · career · study · settings
+src-tauri/     Tauri v2 shell — Cargo.toml · tauri.conf.json · capabilities
+```
+
+### MVP acceptance target
+
+After the MVP ships, a user should be able to:
 
 ```text
 Import a technical book

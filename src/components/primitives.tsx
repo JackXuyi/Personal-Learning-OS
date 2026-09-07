@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { MasteryBand } from "../../engine";
+import type { MasteryBand } from "../engine";
 
 const bandStyles: Record<MasteryBand, string> = {
   "not-started": "bg-slate-100 text-slate-500 border-slate-200",
