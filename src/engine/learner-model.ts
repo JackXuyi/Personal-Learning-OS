@@ -4,10 +4,13 @@
  * 每次测评都会产生证据；证据驱动掌握度更新。答错会登记误解，
  * 答对会把认知层级向前推。所有函数都是纯函数——由调用方
  * （引擎 / store）负责持久化结果。
+ *
+ * 双证据原则（V2）：subject（章 / 概念）的 mastery 唯一写方 = 卷面
+ * （applyPaperResult）；自评（applyKeyPointRating）只做调度
+ * （nextReviewAt）+ confidence 微调，不再移动 mastery / attempts / correctCount。
  */
-import type { Evaluation } from "../domain";
-import type { CognitiveLevel, LearnerState, SelfRating, UnitMastery } from "../domain";
-import { accuracyOf } from "../domain";
+import type { CognitiveLevel, Evaluation, LearnerState, SelfRating, UnitMastery } from "../domain";
+import { MASTERY_FLOOR, MASTERY_THRESHOLD, accuracyOf } from "../domain";
 
 /** Mastery delta applied when the model has nothing else to go on. */
 const UP_STEP = 0.08;
@@ -29,6 +32,13 @@ const RATING_INTERVAL_DAYS: Record<SelfRating, number> = {
   easy: 7,
 };
 
+/** 卷面分数 → 下次复习间隔（天）：高分长间隔。 */
+export function reviewIntervalDaysForScore(score: number): number {
+  if (score >= MASTERY_THRESHOLD) return 7;
+  if (score >= MASTERY_FLOOR) return 3;
+  return 1;
+}
+
 /** 自评 → 下次复习间隔（天）。 */
 export function nextReviewInDays(rating: SelfRating): number {
   return RATING_INTERVAL_DAYS[rating];
@@ -38,6 +48,8 @@ export function nextReviewInDays(rating: SelfRating): number {
 export function ratingStep(rating: SelfRating): number {
   return RATING_STEP[rating];
 }
+
+const MS_PER_DAY = 86_400_000;
 
 const COGNITIVE_ORDER: readonly CognitiveLevel[] = [
   "remember",
@@ -64,6 +76,14 @@ export function emptyUnit(now: number): UnitMastery {
 
 export function masteryOf(state: LearnerState, unitId: string): UnitMastery | undefined {
   return state.byUnit[unitId];
+}
+
+/**
+ * 卷面 → 新掌握度（docs §3 步骤 3）：newMastery = 0.65 × score + 0.35 × prev，
+ * 含历史分量，避免单次考试波动把掌握度带偏。
+ */
+export function smoothedMastery(score: number, prevMastery: number): number {
+  return clamp01(0.65 * score + 0.35 * prevMastery);
 }
 
 /** Apply an evaluation result to the learner state (pure, returns a new state). */
@@ -120,7 +140,6 @@ export function applyForgetting(
   now: number,
   halfLifeDays = 30,
 ): LearnerState {
-  const MS_PER_DAY = 86_400_000;
   const byUnit = { ...state.byUnit };
   let changed = false;
 
@@ -143,11 +162,88 @@ export function applyForgetting(
 }
 
 /**
- * 复习会话的四档自评（忘记/困难/记得/轻松）——纯函数。
+ * 卷面结果回写（V2 章掌握度唯一写方，双证据原则）。
  *
- * 自评不是「对错」证据，因此不走 applyEvaluation（它维护 correctCount 与
- * 认知层级）；自评只把掌握度沿评分方向移动、轻微调整置信度，并刷新
- * lastReviewedAt。间隔建议由 `nextReviewInDays` 单独给出。
+ * 纯函数。由 gradePaper → gradeAndApply（quiz-engine）为每章调用：
+ *   - mastery = smoothedMastery(score, prevMastery)；
+ *   - confidence 向卷面分平滑靠拢（卷面是真实对错证据）；
+ *   - attempts / correctCount 累加客观题证据（evidenceCorrect / evidenceTotal）；
+ *   - nextReviewAt 按卷面分数档写入（P0-1）；认知层级按达标情况推进。
+ * misconceptions 不在此处推断（P0-3：待 AI 批语回填，避免本地猜测污染）。
+ */
+export function applyPaperResult(
+  state: LearnerState,
+  subjectId: string,
+  input: { score: number; evidenceCorrect: number; evidenceTotal: number },
+  now: number,
+): LearnerState {
+  const prev = state.byUnit[subjectId] ?? emptyUnit(now);
+  const mastery = smoothedMastery(input.score, prev.mastery);
+  const confidence = clamp01(0.65 * input.score + 0.35 * prev.confidence);
+  const attempts = prev.attempts + input.evidenceTotal;
+  const correctCount = prev.correctCount + input.evidenceCorrect;
+  const cognitiveLevel = nextCognitiveLevel(
+    prev.cognitiveLevel,
+    input.score >= MASTERY_FLOOR,
+    mastery,
+  );
+
+  return {
+    ...state,
+    byUnit: {
+      ...state.byUnit,
+      [subjectId]: {
+        ...prev,
+        mastery,
+        confidence,
+        attempts,
+        correctCount,
+        cognitiveLevel,
+        applicationAbility: clamp01(mastery * 0.9),
+        interviewAbility: clamp01(mastery * 0.6),
+        lastAssessmentAt: now,
+        lastReviewedAt: now,
+        nextReviewAt: now + reviewIntervalDaysForScore(input.score) * MS_PER_DAY,
+      },
+    },
+  };
+}
+
+/**
+ * 章内要点复习的四档自评（V2 定位；替代 applyRating 的 mastery 副作用）。
+ *
+ * 只做调度 + 置信度微调：写 nextReviewAt / lastReviewedAt / confidence，
+ * 不移动 mastery / attempts / correctCount —— 章掌握度由卷面唯一写方
+ * （双证据原则）。ReviewSession 切换至章内要点复习后改调本函数。
+ */
+export function applyKeyPointRating(
+  state: LearnerState,
+  subjectId: string,
+  rating: SelfRating,
+  now: number,
+): LearnerState {
+  const prev = state.byUnit[subjectId] ?? emptyUnit(now);
+  const step = RATING_STEP[rating];
+  return {
+    ...state,
+    byUnit: {
+      ...state.byUnit,
+      [subjectId]: {
+        ...prev,
+        confidence: clamp01(prev.confidence + step * 0.5),
+        lastReviewedAt: now,
+        nextReviewAt: now + RATING_INTERVAL_DAYS[rating] * MS_PER_DAY,
+      },
+    },
+  };
+}
+
+/**
+ * 概念层复习的四档自评（遗留入口：卷面闭环接入前，概念级演示仍靠自评
+ * 移动 mastery；接入后 UI 改调 applyKeyPointRating）。
+ *
+ * 修正（P1 attempts 污染）：自评不是「对错」证据，不再 attempts + 1 /
+ * correctCount 累加，避免稀释正确率、压置信度。写入 nextReviewAt（P0-1）。
  */
 export function applyRating(
   state: LearnerState,
@@ -165,8 +261,8 @@ export function applyRating(
         ...prev,
         mastery: clamp01(prev.mastery + step),
         confidence: clamp01(prev.confidence + step * 0.5),
-        attempts: prev.attempts + 1,
         lastReviewedAt: now,
+        nextReviewAt: now + RATING_INTERVAL_DAYS[rating] * MS_PER_DAY,
       },
     },
   };
@@ -183,7 +279,7 @@ function nextCognitiveLevel(
     return current;
   }
   const idx = COGNITIVE_ORDER.indexOf(current);
-  if (after >= 0.8 && idx < COGNITIVE_ORDER.length - 1) {
+  if (after >= MASTERY_THRESHOLD && idx < COGNITIVE_ORDER.length - 1) {
     return COGNITIVE_ORDER[Math.min(idx + 1, COGNITIVE_ORDER.length - 1)];
   }
   if (after >= 0.5 && idx === 0) return "understand";

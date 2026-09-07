@@ -24,10 +24,6 @@ export interface AssessmentEngine {
   evaluate(question: Question, answer: Answer): Promise<Evaluation>;
 }
 
-function normalize(text: string): string {
-  return text.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
 export function createAssessmentEngine(provider?: AIProvider): AssessmentEngine {
   const askProvider = Boolean(provider?.isConfigured());
 
@@ -60,18 +56,25 @@ export function createAssessmentEngine(provider?: AIProvider): AssessmentEngine 
           console.warn(`[assessment-engine] provider evaluation fell back to local: ${String(err)}`);
         }
       }
-      // 本地启发式评分：没有 AI 时只标记明显的自测结果。
+      // P0-3 判分契约：无 AI 时不伪造判分。开放题本地无法可靠判对错——
+      // 不做「与 reference 逐字相等才判对」的假判（恒判错 / 恒判对都会污染
+      // 学习者模型），返回 pending（score 缺失 + feedback 标注需 AI）。
+      // misconceptions 恒空：由 AI 批语回填，禁止本地猜测。
       const answered = answer.content.trim().length > 0;
-      const matchesReference =
-        Boolean(question.referenceAnswer) &&
-        normalize(answer.content) === normalize(question.referenceAnswer ?? "");
+      if (!answered) {
+        return {
+          questionId: question.id,
+          correct: false,
+          score: 0,
+          feedback: "未作答。",
+          misconceptionsDetected: [],
+        };
+      }
       return {
         questionId: question.id,
-        correct: answered && matchesReference,
-        score: answered ? (matchesReference ? 1 : undefined) : 0,
-        feedback: matchesReference
-          ? "Matched the reference answer."
-          : "Open-ended answer — AI scoring required for a precise grade.",
+        correct: false,
+        score: undefined, // pending：不计入得分，不更新掌握度
+        feedback: "主观题需 AI 精确判分——未配置 Provider，本答案暂不计入对错。",
         misconceptionsDetected: [],
       };
     },

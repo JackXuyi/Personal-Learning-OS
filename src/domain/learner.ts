@@ -28,6 +28,12 @@ export interface UnitMastery {
   misconceptions: string[];
   lastReviewedAt?: number;
   lastAssessmentAt?: number;
+  /**
+   * 下次复习时间戳（P0-1 复习调度）。由卷面（applyPaperResult）与要点自评
+   * （applyKeyPointRating / applyRating）写入；planner 到期后以低优先级
+   * review 动作重新入队（V2 T9 收口）。
+   */
+  nextReviewAt?: number;
   /** Evidence-backed application ability in [0, 1]. */
   applicationAbility: number;
   /** Evidence-backed interview ability in [0, 1]. */

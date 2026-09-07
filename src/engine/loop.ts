@@ -15,7 +15,7 @@ import type {
   SourceDocument,
   UnitMastery,
 } from "../domain";
-import { RAG_UNIT_IDS } from "../domain";
+import { MASTERY_THRESHOLD, RAG_UNIT_IDS } from "../domain";
 import type { StorageAdapter } from "../storage";
 import { createLearningPlanner } from "./learning-planner";
 import { createRecommendationEngine } from "./recommendation-engine";
@@ -159,7 +159,7 @@ export async function runLearningLoop(
   const next = createRecommendationEngine().recommendNext(actions);
 
   const mastered = goal.requiredUnitIds.filter(
-    (id) => (learnerState.byUnit[id]?.mastery ?? 0) >= 0.8,
+    (id) => (learnerState.byUnit[id]?.mastery ?? 0) >= MASTERY_THRESHOLD,
   ).length;
   const readiness =
     goal.requiredUnitIds.length === 0 ? 0 : mastered / goal.requiredUnitIds.length;

@@ -5,9 +5,9 @@
  * 出卷单位，四种题型（客观：选择/判断；主观：问答/应用）覆盖 Bloom 认知层级，
  * 四种卷型（单元测 / 阶段测 / 综合测 / 补考卷）承载不同范围与配比。
  *
- * 判分契约（T3 落地）：客观题本地确定性判分（answer 比对）；主观题
- * 无 AI Provider 时置 pending，不伪造判分（P0-3）。PaperResult 随 T3
- * gradePaper 一起建立，此处只定义到 Paper。
+ * 判分契约（T3）：客观题本地确定性判分（answer 比对）；主观题
+ * 无 AI Provider 时置 pending，不伪造判分（P0-3）。PaperResult 由
+ * gradePaper（quiz-engine）产出，此处定义类型。
  */
 
 import type { CognitiveLevel } from "./learner";
@@ -87,4 +87,29 @@ export function isObjectiveType(type: QuizType): boolean {
 /** 主观题（需 AI 出题/批改；无 Provider 时剔除或置 pending）。 */
 export function isSubjectiveType(type: QuizType): boolean {
   return !isObjectiveType(type);
+}
+
+/* ---------- 判分（T3 · gradePaper / gradeAndApply 的类型契约） ---------- */
+
+/** 交卷答案：questionId → 作答串（choice = 选中项在 options 中的索引；judge = "true" | "false"；qa/application = 文本）。 */
+export type PaperAnswers = Record<string, string>;
+
+/** 判分 + 掌握度回写的完整产物（quiz-engine gradeAndApply 返回，供报告页消费）。 */
+export interface PaperResult {
+  paperId: string;
+  /** 全卷总分 0..1（客观难度加权正确率；主观 pending 不计入）。 */
+  totalScore: number;
+  /** 逐章：score = 卷面分；previousMastery / mastery = 回写前后掌握度。 */
+  perChapter: Record<
+    string,
+    { score: number; previousMastery: number; mastery: number }
+  >;
+  /** 错题回顾：客观错题（含未答）；主观 pending 不在此列（AI 批语回填后进 aiFeedback）。 */
+  wrongQuestions: {
+    questionId: string;
+    yourAnswer: string;
+    aiFeedback?: string;
+    point?: string;
+  }[];
+  createdAt: number;
 }

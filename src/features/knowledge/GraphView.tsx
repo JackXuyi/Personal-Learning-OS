@@ -16,7 +16,7 @@ import type {
   KnowledgeUnit,
   RelationType,
 } from "../../domain";
-import { relationsOf } from "../../domain";
+import { MASTERY_THRESHOLD, relationsOf } from "../../domain";
 import { BandBadge } from "../../components/primitives";
 import { bandOf } from "../../engine";
 import { unitTitle } from "../units";
@@ -55,7 +55,8 @@ const BAND_SVG: Record<string, { fill: string; stroke: string }> = {
   mastered: { fill: "#ecfdf5", stroke: "#34d399" },
 };
 
-export const GAP_THRESHOLD = 0.8;
+/** 缺口高亮阈值：与领域达标线同源（P1 阈值收敛）。 */
+export const GAP_THRESHOLD = MASTERY_THRESHOLD;
 
 interface GraphViewProps {
   graph: KnowledgeGraph;

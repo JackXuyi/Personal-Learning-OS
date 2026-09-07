@@ -1,5 +1,5 @@
 /**
- * Quiz Engine（试卷引擎）—— 出卷（T2）。
+ * Quiz Engine（试卷引擎）—— 出卷（T2）+ 判分（T3）。
  *
  * 从「章集合 + 学习者状态」确定性生成试卷：
  *   - 配额：按卷型（单元/阶段/综合/补考）× 章数 × 难度带计算题型分布
@@ -8,18 +8,23 @@
  *   - 题面：客观题用本地确定性题库（keyPoints 驱动，无 AI 也可判分）；
  *           主观题无 Provider 时剔除（诚实降级，docs §6）
  *
- * 判分（gradePaper / buildReport）属 T3；本文件只负责「出卷」。
+ * 判分（T3）：gradePaper 客观题本地比对判分、主观题无 AI → pending
+ * （P0-3 不伪造）；gradeAndApply 汇总卷面 → 调 learner-model.applyPaperResult
+ * 平滑更新章掌握度（0.65×score + 0.35×prev）并写 nextReviewAt（P0-1）。
  */
 import type { Chapter, LearnerState } from "../domain";
 import type {
   CognitiveLevel,
   Paper,
+  PaperAnswers,
   PaperMode,
   PaperQuestion,
+  PaperResult,
   PaperScope,
   QuizType,
 } from "../domain";
-import { newId, PAPER_MODE_LABEL } from "../domain";
+import { isSubjectiveType, newId, PAPER_MODE_LABEL } from "../domain";
+import { applyPaperResult } from "./learner-model";
 
 /* ------------------------------------------------------------------ */
 /* 难度带（Bloom / 配比的自适应输入）                                  */
@@ -339,3 +344,167 @@ export const QUIZ_QUOTA_PREVIEW: Record<PaperMode, string> = {
   "final-test": "总 clamp(3n,15,20) · 客观~60% / 主观~40%",
   retake: "每章 客观3 · 主观剔除 · 难度降一档",
 };
+
+/* ------------------------------------------------------------------ */
+/* 判分（T3）—— 客观本地判 + 主观 pending（P0-3）                     */
+/* ------------------------------------------------------------------ */
+
+/** 逐题判分结果；correct 为 undefined = 主观题 pending（无 AI，不伪造判分）。 */
+export interface GradedQuestion {
+  questionId: string;
+  chapterId: string;
+  type: QuizType;
+  correct?: boolean;
+  difficulty: number;
+}
+
+/** 章节级判分；score 为难度加权卷面分（本章无客观题时为 undefined）。 */
+export interface GradedChapter {
+  score?: number;
+  objectiveCount: number;
+  objectiveCorrect: number;
+}
+
+/** gradePaper 的中间产物（不含掌握度回写）。 */
+export interface GradedPaper {
+  paperId: string;
+  questions: GradedQuestion[];
+  perChapter: Record<string, GradedChapter>;
+  /** 全卷客观难度加权正确率 0..1（无可判客观题时为 0）。 */
+  totalScore: number;
+  wrongQuestions: PaperResult["wrongQuestions"];
+  submittedAt: number;
+}
+
+/**
+ * 客观题本地确定性判分；主观题 → pending（P0-3：无 AI 不伪造判分，不计入得分）。
+ * 纯函数；缺失答案的客观题按未答判错。
+ */
+export function gradePaper(
+  paper: Paper,
+  answers: PaperAnswers,
+  now = Date.now(),
+): GradedPaper {
+  // 逐题判分 + 按章聚合（难度加权；与报告展示的题数分开记录）。
+  type ChAgg = { w: number; earned: number; count: number; correctCount: number };
+  const aggByChapter = new Map<string, ChAgg>();
+  const questions: GradedQuestion[] = [];
+  const wrongQuestions: PaperResult["wrongQuestions"] = [];
+  let totalW = 0;
+  let earnedW = 0;
+
+  for (const q of paper.questions) {
+    if (isSubjectiveType(q.type)) {
+      questions.push({
+        questionId: q.id,
+        chapterId: q.chapterId,
+        type: q.type,
+        difficulty: q.difficulty,
+      });
+      continue; // pending：不判对错、不参与任何得分
+    }
+
+    const your = (answers[q.id] ?? "").trim();
+    const correct = your.length > 0 && your === q.answer;
+    questions.push({
+      questionId: q.id,
+      chapterId: q.chapterId,
+      type: q.type,
+      correct,
+      difficulty: q.difficulty,
+    });
+
+    const w = q.difficulty;
+    totalW += w;
+    if (correct) earnedW += w;
+
+    const agg = aggByChapter.get(q.chapterId) ?? { w: 0, earned: 0, count: 0, correctCount: 0 };
+    agg.w += w;
+    if (correct) agg.earned += w;
+    agg.count += 1;
+    if (correct) agg.correctCount += 1;
+    aggByChapter.set(q.chapterId, agg);
+
+    if (!correct) {
+      wrongQuestions.push({ questionId: q.id, yourAnswer: answers[q.id] ?? "" });
+    }
+  }
+
+  const perChapter: Record<string, GradedChapter> = {};
+  for (const [chapterId, agg] of aggByChapter) {
+    perChapter[chapterId] = {
+      score: agg.w > 0 ? agg.earned / agg.w : undefined,
+      objectiveCount: agg.count,
+      objectiveCorrect: agg.correctCount,
+    };
+  }
+
+  return {
+    paperId: paper.id,
+    questions,
+    perChapter,
+    totalScore: totalW > 0 ? earnedW / totalW : 0,
+    wrongQuestions,
+    submittedAt: now,
+  };
+}
+
+export interface GradeAndApplyInput {
+  paper: Paper;
+  answers: PaperAnswers;
+  learnerState: LearnerState;
+  /** 测试注入时间戳。 */
+  now?: number;
+}
+
+/**
+ * 判分 → 章掌握度平滑回写（V2 双证据原则的卷面路径）。
+ *
+ * 对每道有客观分的章调用 applyPaperResult：
+ *   newMastery = 0.65 × score + 0.35 × prev（含历史防单次波动）
+ * 并写 nextReviewAt（按分数档 7/3/1 天）。返回更新后的 learnerState 与
+ * PaperResult（报告页消费：总分 / 逐章前后掌握度 / 错题）。
+ */
+export function gradeAndApply(input: GradeAndApplyInput): {
+  result: PaperResult;
+  learnerState: LearnerState;
+  graded: GradedPaper;
+} {
+  const { paper, answers, learnerState, now = Date.now() } = input;
+  const graded = gradePaper(paper, answers, now);
+
+  let nextState = learnerState;
+  const perChapter: PaperResult["perChapter"] = {};
+
+  for (const [chapterId, ch] of Object.entries(graded.perChapter)) {
+    if (ch.score === undefined) continue; // 全主观章（无客观证据）不回写
+    const previousMastery = nextState.byUnit[chapterId]?.mastery ?? 0;
+    nextState = applyPaperResult(
+      nextState,
+      chapterId,
+      {
+        score: ch.score,
+        evidenceCorrect: ch.objectiveCorrect,
+        evidenceTotal: ch.objectiveCount,
+      },
+      now,
+    );
+    perChapter[chapterId] = {
+      score: ch.score,
+      previousMastery,
+      mastery: nextState.byUnit[chapterId].mastery,
+    };
+  }
+
+  return {
+    result: {
+      paperId: paper.id,
+      totalScore: graded.totalScore,
+      perChapter,
+      wrongQuestions: graded.wrongQuestions,
+      createdAt: now,
+    },
+    learnerState: nextState,
+    graded,
+  };
+}
