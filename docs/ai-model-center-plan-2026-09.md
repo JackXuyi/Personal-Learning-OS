@@ -16,7 +16,7 @@
 | --- | --- | --- | --- |
 | Q1 | 列出可下载模型时按当前设备实际匹配,**禁用不支持的模型(不可下载也不可启用)** | ✅ 采纳 | §4 设备能力匹配规则 + §7 UI 灰态卡 + Rust `llm_list_models` 返回 `supported` |
 | Q2 | `store` 本期就迁移为 `active: {source: local\|api}` 复合结构(原 M3 后置 → **前置到 M0**) | ✅ 本期迁移 | §3.2 + §9 M0;localStorage v1→v2 自动迁移 |
-| Q3 | API 供应商预置首屏:千问等**前 20 档可在个人设备使用的开源模型**为主,与 DeepSeek/OpenAI/自定义并列 | ✅ 采纳 | §5.2 开放模型榜单 + §7 wireframe;Anthropic/Gemini 因适配器未实现列为「规划中」禁用组 |
+| Q3 | API 供应商预置首屏:千问等**前 20 档可在个人设备使用的开源模型**为主,与 DeepSeek/OpenAI/自定义并列 | ✅ 采纳 | §5.2 开放模型榜单 + §7 wireframe;2026-09-07 UI 简化:预置供应商改为**下拉**,Anthropic/Gemini「规划中」与 Ollama 等「本地服务」入口移除(走「自定义兼容」) |
 
 ---
 
@@ -203,9 +203,8 @@ support(model) =
 | — | Llama / Mistral / Phi / Gemma / Yi / Baichuan / MiniCPM / InternLM 等 | 可,但中文与生态权衡后非首选 | 有(经各自/中转) | 不占首屏,可走「自定义兼容」 |
 | — | OpenAI / Anthropic / Gemini(闭源) | ❌ | 有 | OpenAI ✅;Anthropic/Gemini ⏳ 适配器未实现 → 禁用组 |
 
-**首屏预置卡(最终)**:千问 · DeepSeek · OpenAI · 智谱 GLM · Kimi · 自定义兼容(OpenAI 协议)。
-**规划中禁用组**:Anthropic / Gemini(registry `DEFERRED`,点到提示「传输格式适配器未实现」)。
-**本地服务分组**:Ollama · llama.cpp · LM Studio(外部自跑端点,免 Key)。
+**首屏预置(最终,2026-09-07 UI 简化迭代)**:预置供应商改为**单个下拉**,选项 = 千问 · DeepSeek · OpenAI · 智谱 GLM · Kimi · 自定义兼容(OpenAI 协议),选中即带入默认端点与建议模型。
+**已移除入口**:原「规划中禁用组(Anthropic / Gemini)」与「本地服务分组(Ollama · llama.cpp · LM Studio)」不再在 UI 展示 —— 外部端点需求可走「自定义(OpenAI 兼容)」;历史存档(旧版迁移的 `provider: ollama` 等)以 custom 身份保留 baseUrl/model/apiKey,labelOfProvider 兜底展示。
 
 | 预置 | 默认 Base URL(OpenAI 兼容) | 默认模型(可改) |
 | --- | --- | --- |
@@ -325,8 +324,9 @@ Tab:本地模型                                   下载存至:本机数据目�
 ```
 Tab:API 模型                    API Key 明文存本机 localStorage(仅本应用调用)
 
-┌─ 预置供应商(OpenAI 兼容协议 · 开源模型为主)──────────────────────────────┐
-│ [▣ 千问 Qwen] [□ DeepSeek] [□ OpenAI] [□ 智谱 GLM] [□ Kimi] [□ 自定义] │
+┌─ 预置供应商(下拉 · OpenAI 兼容 · 开源模型为主)─────────────────────────┐
+│  [ 千问 Qwen ▾ ]        ← 选中即带入默认端点与建议模型                   │
+│   选项:千问 · DeepSeek · OpenAI · 智谱 GLM · Kimi · 自定义(OpenAI 兼容)  │
 └──────────────────────────────────────────────────────────────────────────┘
 
 ┌─ 配置(以 千问 Qwen 为例,默认示例)───────────────────────────────────────┐
@@ -338,13 +338,7 @@ Tab:API 模型                    API Key 明文存本机 localStorage(仅本应
   测试成功: ✅ 已连接 · 320ms · 模型在线
   测试失败: ❌ 401 → 检查 API Key / 账户额度
 
-┌─ 规划中(适配器未实现 · 禁用)────────────────────────────────────────────┐
-│ [□ Anthropic(灰)] 非 OpenAI 传输格式,待适配器里程碑   [□ Gemini(灰)]   │
-└──────────────────────────────────────────────────────────────────────────┘
-┌─ 本地服务(自建端点,免 Key · 归端点型)──────────────────────────────────┐
-│ [□ Ollama  http://localhost:11434/v1 · llama3.1]                       │
-│ [□ llama.cpp …8080/v1]  [□ LM Studio …1234/v1]                         │
-└──────────────────────────────────────────────────────────────────────────┘
+  (已移除「规划中」与「本地服务」分组入口;外部自建端点经「自定义(OpenAI 兼容)」表达)
 ```
 
 校验:云端 provider 无 Key 不可「使用」;Base URL 需 http(s)://;「使用」前建议先测试(不强制)——与现状一致。
@@ -426,7 +420,7 @@ Personal Learning OS.app/
 | --- | --- | --- |
 | **M0 store 迁移(v2)+ 骨架** | SavedSettings → `active: ActiveSource`,persist `:v1→:v2` 迁移;SettingsPage / BuiltinModelsPanel / buildActiveProvider 适配;ModelCenterPage 双 Tab + ActiveBanner(含设备 chip) | 旧配置升级行为一致;typecheck/build 绿 |
 | **M1 设备匹配 + 本地交互闭环** | Rust:`llm_status` 增 device、`llm_list_models` 每项增 supported(§4.4);TS `LocalModelCard` 五态(含设备禁用灰态);F0-F3 全流程 | tauri dev:列表按本机匹配(16GB 禁 9B);下载 0.8B → 点选 → Banner/绿点 → 测评走本地 |
-| **M2 API Tab(Q3)** | `ApiProviderPresets`(千问/DeepSeek/OpenAI/GLM/Kimi/自定义 + Anthropic/Gemini 禁用组 + ollama/llama.cpp/lmstudio 分组);`openai-compatible.ts` 增 qwen/glm/kimi 预置;表单/测试/使用 | 千问预设一键带 DashScope 端点;测试两句式;「使用」后引擎走该端点 |
+| **M2 API Tab(Q3)** | `ApiProviderPresets`(千问/DeepSeek/OpenAI/GLM/Kimi/自定义,2026-09-07 UI 简化:预置改**下拉**,Anthropic/Gemini 与 ollama/llama.cpp/lmstudio 分组入口移除);`openai-compatible.ts` 增 qwen/glm/kimi 预置;表单/测试/使用 | 千问预设一键带 DashScope 端点;测试两句式;「使用」后引擎走该端点 |
 | **M3 收尾** | 全链路验证 + README/方案状态回填 + commit | cargo test / typecheck / build 绿;端到端本地+API 各跑通一次 |
 
 **不改的东西**:`buildActiveProvider()` 对外签名、引擎注入点、Rust 推理链路与 `llm_generate` 等命令面(M1 仅扩展两个查询命令的返回值);引擎构造时机不变(页面挂载),切模型下次进入生效。
@@ -443,7 +437,7 @@ Personal Learning OS.app/
 | P2 | 下载状态跨重启不持久(部分文件) | 需重下 | 开放项:断点续传(manager 记 .part) |
 | P2 | API 模型名靠手填易错 | 配置摩擦 | 开放项:预置云端拉 `/models`(meetily 已做,可借鉴) |
 | P2 | 云端 Key 明文 localStorage | 安全隐患(现状) | 保持现状并显式提示;可选 tauri-plugin-keyring |
-| P2 | Anthropic / Gemini 只能禁用展示 | 用户不可用 | 属既有 DEFERRED 里程碑,本期只标注「规划中」不实现 |
+| P2 | Anthropic / Gemini 只能禁用展示 | 用户不可用 | 属既有 DEFERRED 里程碑;2026-09-07 UI 简化:入口移除,不展示不实现 |
 
 ---
 
@@ -457,7 +451,7 @@ Personal Learning OS.app/
 | `BuiltInModelManager` 卡片四态 + 整卡点选 + Selected 徽标 | 1:1 吸收 + **增设备禁用灰态(第五态)** | meetily 无设备匹配;本项目需防多档误下载 |
 | 下载进度 toast + 完成/取消 toast | 吸收(完成 toast 带「去选中」) | 一致 |
 | 云端填 Key 后自动拉模型列表 | 列为 P2 开放项 | 需每厂商 /models 适配,先不阻塞主线 |
-| `builtin-ai` 与 `ollama` 并列 provider 下拉 | `ollama` 等归 API Tab「本地服务」分组 | 明确「应用自管」vs「外部自建端点」边界 |
+| `builtin-ai` 与 `ollama` 并列 provider 下拉 | 本地/API 双 Tab;API Tab 预置供应商**下拉**(2026-09-07 UI 简化,原「本地服务」分组入口移除,外部端点经「自定义兼容」) | 明确「应用自管本地模型」vs「API 请求模型」边界 |
 
 ### 11.2 千问等开源模型 API 预置字段速查(Q3 依据)
 
@@ -469,5 +463,5 @@ Personal Learning OS.app/
 | glm | `https://open.bigmodel.cn/api/paas/v4` | `glm-4.5` | ✅(新增) |
 | kimi | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` | ✅(新增) |
 | custom | 空 | 空 | ✅ |
-| anthropic / gemini | — | — | ⏳ DEFERRED(禁用展示) |
-| ollama / llama.cpp / lmstudio | 本机默认端口 | llama3.1 等 | ✅(归本地服务分组) |
+| anthropic / gemini | — | — | ⏳ DEFERRED(入口已移除,不展示) |
+| ollama / llama.cpp / lmstudio | 本机默认端口 | llama3.1 等 | ⏳ 入口已移除;需自建端点请用 `custom` 填同款 URL |

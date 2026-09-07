@@ -1,64 +1,59 @@
 /**
  * Provider / 模型 展示元数据 ——「AI 模型中心」UI 与 Active Banner 共用。
  *
- * 分类心智(决策 Q3,见 docs/ai-model-center-plan-2026-09.md §5.2):
- * - API 模型 = 云端/自建端点,预置以「千问等可在个人设备使用的开源模型」为主;
- * - Anthropic / Gemini 属「规划中」(registry DEFERRED,非 OpenAI 传输格式);
- * - Ollama / llama.cpp / LM Studio 属用户自跑的本机端点,归「本地服务」分组。
+ * 分类心智(2026-09-07 UI 简化迭代):API Tab 只保留**预置供应商下拉**,
+ * 以「千问等可在个人设备使用的开源模型」为主(决策 Q3):
+ * 千问 / DeepSeek / OpenAI / 智谱 GLM / Kimi / 自定义兼容。
+ * 「本地服务(自建端点)」与「规划中(适配器未实现)」入口已移除 —— 外部端点
+ * 需求可经「自定义(OpenAI 兼容)」表达。历史存档的 provider(如旧版迁移来的
+ * `ollama` 等)经 labelOfProvider 兜底展示,配置仍可编辑。
  */
 import { defaultModelOf, normalizeOpenAiBaseUrl } from "./openai-compatible";
 import type { ApiProviderKind } from "./active";
 import type { ProviderKind } from "./types";
 
-export type ProviderGroup = "open-source" | "custom" | "local-endpoint" | "planned";
-
 export interface ProviderPreset {
   provider: ApiProviderKind;
   label: string;
-  group: ProviderGroup;
   /** 预置默认 Base URL;custom 为空由用户填。 */
   baseUrl: string;
   /** 预置建议模型名(可改)。 */
   model: string;
-  /** 是否要求 API Key(本地服务/自定义兼容可免)。 */
+  /** 是否要求 API Key(自定义兼容可免)。 */
   keyRequired: boolean;
-  /** false = 适配器未实现等,UI 灰显禁选。 */
-  available: boolean;
   note?: string;
 }
 
-/** API 预置清单(顺序即首屏排列顺序)。 */
+/** 预置清单(下拉选项;顺序即下拉排列顺序,全部可直接选用)。 */
 export const API_PROVIDER_PRESETS: ProviderPreset[] = [
-  { provider: "qwen", label: "千问 Qwen", group: "open-source", baseUrl: normalizeOpenAiBaseUrl("qwen"), model: defaultModelOf("qwen"), keyRequired: true, available: true, note: "阿里开源 · 默认示例" },
-  { provider: "deepseek", label: "DeepSeek", group: "open-source", baseUrl: normalizeOpenAiBaseUrl("deepseek"), model: defaultModelOf("deepseek"), keyRequired: true, available: true },
-  { provider: "openai", label: "OpenAI", group: "open-source", baseUrl: normalizeOpenAiBaseUrl("openai"), model: defaultModelOf("openai"), keyRequired: true, available: true },
-  { provider: "glm", label: "智谱 GLM", group: "open-source", baseUrl: normalizeOpenAiBaseUrl("glm"), model: defaultModelOf("glm"), keyRequired: true, available: true },
-  { provider: "kimi", label: "Kimi(月之暗面)", group: "open-source", baseUrl: normalizeOpenAiBaseUrl("kimi"), model: defaultModelOf("kimi"), keyRequired: true, available: true },
-  { provider: "custom", label: "自定义(OpenAI 兼容)", group: "custom", baseUrl: "", model: "", keyRequired: false, available: true, note: "任意 OpenAI 兼容端点" },
+  { provider: "qwen", label: "千问 Qwen", baseUrl: normalizeOpenAiBaseUrl("qwen"), model: defaultModelOf("qwen"), keyRequired: true, note: "阿里开源 · 默认示例" },
+  { provider: "deepseek", label: "DeepSeek", baseUrl: normalizeOpenAiBaseUrl("deepseek"), model: defaultModelOf("deepseek"), keyRequired: true },
+  { provider: "openai", label: "OpenAI", baseUrl: normalizeOpenAiBaseUrl("openai"), model: defaultModelOf("openai"), keyRequired: true },
+  { provider: "glm", label: "智谱 GLM", baseUrl: normalizeOpenAiBaseUrl("glm"), model: defaultModelOf("glm"), keyRequired: true },
+  { provider: "kimi", label: "Kimi(月之暗面)", baseUrl: normalizeOpenAiBaseUrl("kimi"), model: defaultModelOf("kimi"), keyRequired: true },
+  { provider: "custom", label: "自定义(OpenAI 兼容)", baseUrl: "", model: "", keyRequired: false, note: "任意 OpenAI 兼容端点" },
 ];
-
-/** 规划中(传输适配器未实现):展示但禁选。 */
-export const PLANNED_PROVIDERS: ProviderPreset[] = [
-  { provider: "anthropic", label: "Anthropic", group: "planned", baseUrl: "", model: "", keyRequired: true, available: false, note: "非 OpenAI 协议,待适配器里程碑" },
-  { provider: "gemini", label: "Gemini", group: "planned", baseUrl: "", model: "", keyRequired: true, available: false, note: "非 OpenAI 协议,待适配器里程碑" },
-];
-
-/** 本地服务分组(外部自跑端点,免 Key)。 */
-export const LOCAL_ENDPOINT_PRESETS: ProviderPreset[] = [
-  { provider: "ollama", label: "Ollama", group: "local-endpoint", baseUrl: normalizeOpenAiBaseUrl("ollama"), model: defaultModelOf("ollama"), keyRequired: false, available: true },
-  { provider: "llama.cpp", label: "llama.cpp", group: "local-endpoint", baseUrl: normalizeOpenAiBaseUrl("llama.cpp"), model: defaultModelOf("llama.cpp"), keyRequired: false, available: true },
-  { provider: "lmstudio", label: "LM Studio", group: "local-endpoint", baseUrl: normalizeOpenAiBaseUrl("lmstudio"), model: defaultModelOf("lmstudio"), keyRequired: false, available: true },
-];
-
-const ALL_PRESETS = [...API_PROVIDER_PRESETS, ...PLANNED_PROVIDERS, ...LOCAL_ENDPOINT_PRESETS];
 
 export function presetOf(provider: ApiProviderKind): ProviderPreset | undefined {
-  return ALL_PRESETS.find((p) => p.provider === provider);
+  return API_PROVIDER_PRESETS.find((p) => p.provider === provider);
 }
+
+/** 已移除入口的历史厂商 label 兜底(旧存档展示用,不提供可点入口)。 */
+const LEGACY_PROVIDER_LABELS: Partial<Record<ProviderKind, string>> = {
+  ollama: "Ollama(本地服务,已下线)",
+  "llama.cpp": "llama.cpp(本地服务,已下线)",
+  lmstudio: "LM Studio(本地服务,已下线)",
+  anthropic: "Anthropic(规划中)",
+  gemini: "Gemini(规划中)",
+};
 
 export function labelOfProvider(provider: ProviderKind): string {
   if (provider === "builtin") return "内置本地模型";
-  return presetOf(provider)?.label ?? provider;
+  return (
+    presetOf(provider)?.label ??
+    LEGACY_PROVIDER_LABELS[provider] ??
+    provider
+  );
 }
 
 /** 本地模型展示名(与 Rust models.rs 的 display_name 对齐;未命中时回退原名)。 */

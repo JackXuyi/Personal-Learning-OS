@@ -1,20 +1,19 @@
 /**
  * API 模型 Tab(设置 → AI 模型中心)。
  *
- * 预置(决策 Q3,以千问等开源模型为主):千问 / DeepSeek / OpenAI / 智谱 GLM /
- * Kimi / 自定义兼容(OpenAI 协议) —— 点选即带入默认端点与建议模型;
- * Anthropic / Gemini 为「规划中」禁用组(适配器未实现);
- * Ollama / llama.cpp / LM Studio 归「本地服务」分组(外部自跑端点,免 Key)。
+ * 交互(2026-09-07 UI 简化迭代):顶部为**预置供应商下拉**(千问 / DeepSeek /
+ * OpenAI / 智谱 GLM / Kimi / 自定义兼容),选中即自动带入默认 Base URL 与建议
+ * 模型;下方表单可改 baseUrl / 模型 / API Key,经「测试连接」后「使用该模型」。
  *
- * 流程:选预置 → 填 API Key(云端必填)/ 改模型名 → 测试连接(两句式结果)→ 使用。
+ * 已移除的入口:「本地服务(自建端点 · 免 Key)」与「规划中」分组不再展示。
+ * 历史存档(如旧版迁移来的 `provider: ollama` 等端点型)若不在预置列表,
+ * 以「自定义(OpenAI 兼容)」身份保留原 baseUrl/model/apiKey,配置不丢失。
  */
 import { useState } from "react";
 import type { ActiveSource } from "../../ai/active";
 import type { ProviderKind } from "../../ai";
 import {
   API_PROVIDER_PRESETS,
-  LOCAL_ENDPOINT_PRESETS,
-  PLANNED_PROVIDERS,
   type ProviderPreset,
 } from "../../ai/presets";
 import { testConnection } from "../../ai/connection";
@@ -44,16 +43,35 @@ interface Props {
   ) => void;
 }
 
+/** 预置下拉的合法 provider 集合(全部 available)。 */
+const AVAILABLE_PRESETS = API_PROVIDER_PRESETS;
+
+/**
+ * 历史存档归一:若 saved 的 provider 仍在本期预置列表 → 原样回填;
+ * 若为已移除的端点型(如 ollama / llama.cpp)且带有效端点 → 以 custom
+ * 身份保留配置;否则(空配置 / 不可用厂商)回落默认 qwen。
+ */
 function initialDraft(saved: Props["saved"]): ApiDraft {
   if (saved) {
-    return {
-      provider: saved.provider,
-      baseUrl: saved.baseUrl,
-      model: saved.model,
-      apiKey: saved.apiKey,
-    };
+    const inList = AVAILABLE_PRESETS.some((p) => p.provider === saved.provider);
+    if (inList) {
+      return {
+        provider: saved.provider,
+        baseUrl: saved.baseUrl,
+        model: saved.model,
+        apiKey: saved.apiKey,
+      };
+    }
+    if (saved.baseUrl.trim()) {
+      return {
+        provider: "custom",
+        baseUrl: saved.baseUrl,
+        model: saved.model,
+        apiKey: saved.apiKey,
+      };
+    }
   }
-  const qwen = API_PROVIDER_PRESETS[0]; // 千问(默认示例)
+  const qwen = AVAILABLE_PRESETS[0]; // 千问(默认示例)
   return { provider: qwen.provider, baseUrl: qwen.baseUrl, model: qwen.model, apiKey: "" };
 }
 
@@ -62,10 +80,9 @@ export default function ApiModelsTab({ saved, onUse }: Props) {
   const [test, setTest] = useState<TestStatus>({ state: "idle" });
   const [savedFlash, setSavedFlash] = useState(false);
 
-  const preset = [...API_PROVIDER_PRESETS, ...PLANNED_PROVIDERS, ...LOCAL_ENDPOINT_PRESETS].find(
-    (p) => p.provider === draft.provider,
-  );
-  const cloudLike = Boolean(preset && preset.keyRequired);
+  const preset = AVAILABLE_PRESETS.find((p) => p.provider === draft.provider);
+  const isSaved = saved?.provider === draft.provider;
+  const cloudLike = Boolean(preset?.keyRequired);
 
   const pickPreset = (p: ProviderPreset) => {
     // 切 provider 时带入预置端点与建议模型;API Key 仅在回切到原保存的
@@ -104,7 +121,7 @@ export default function ApiModelsTab({ saved, onUse }: Props) {
     (!cloudLike || draft.apiKey.trim().length > 0);
 
   const runUse = () => {
-    if (!valid || !preset?.available) return;
+    if (!valid || !preset) return;
     onUse(
       {
         source: "api",
@@ -120,70 +137,42 @@ export default function ApiModelsTab({ saved, onUse }: Props) {
     window.setTimeout(() => setSavedFlash(false), 2500);
   };
 
-  const PresetChips = ({
-    items,
-    disabledHint,
-  }: {
-    items: ProviderPreset[];
-    disabledHint?: string;
-  }) => (
-    <div className="flex flex-wrap gap-2">
-      {items.map((p) => {
-        const selected = draft.provider === p.provider;
-        const isSaved = saved?.provider === p.provider;
-        return (
-          <button
-            key={p.provider}
-            disabled={!p.available}
-            title={!p.available ? disabledHint ?? p.note : p.note}
-            onClick={() => pickPreset(p)}
-            className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-              !p.available
-                ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
-                : selected
-                  ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                  : "border-slate-200 text-slate-600 hover:border-slate-300"
-            }`}
-          >
-            <span className="block">{p.label}</span>
-            {isSaved && p.available ? (
-              <span className="block text-[10px] font-medium text-indigo-500">当前使用</span>
-            ) : null}
-            {!p.available ? (
-              <span className="block text-[10px] text-slate-400">规划中</span>
-            ) : null}
-          </button>
-        );
-      })}
-    </div>
-  );
-
   return (
     <div className="space-y-5">
-      <div>
-        <p className="mb-2 text-xs font-medium text-slate-500">
-          预置供应商(OpenAI 兼容 · 开源模型为主,点选带入默认配置)
+      {/* 预置供应商下拉:选中即带入默认端点与建议模型 */}
+      <Field label="预置供应商">
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={draft.provider}
+            onChange={(e) => {
+              const p = AVAILABLE_PRESETS.find((x) => x.provider === e.target.value);
+              if (p) pickPreset(p);
+            }}
+            className="w-full max-w-sm rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-400"
+          >
+            {AVAILABLE_PRESETS.map((p) => (
+              <option key={p.provider} value={p.provider}>
+                {p.label}
+                {p.note ? ` — ${p.note}` : ""}
+              </option>
+            ))}
+          </select>
+          {isSaved ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+              当前使用
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
+          选择后自动带入默认 Base URL 与建议模型,下方均可修改。
         </p>
-        <PresetChips items={API_PROVIDER_PRESETS} />
-      </div>
+      </Field>
 
-      <div>
-        <p className="mb-2 text-xs font-medium text-slate-400">本地服务(自建端点 · 免 Key)</p>
-        <PresetChips items={LOCAL_ENDPOINT_PRESETS} />
-      </div>
-
-      <div>
-        <p className="mb-2 text-xs font-medium text-slate-400">
-          规划中(非 OpenAI 传输格式,适配器未实现)
-        </p>
-        <PresetChips items={PLANNED_PROVIDERS} disabledHint="该厂商适配器尚未实现,暂不可用" />
-      </div>
-
+      {/* 配置表单 */}
       <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/40 p-4">
         <p className="text-xs font-medium text-slate-600">
-          {preset
-            ? `配置:${preset.label}`
-            : "配置"}{" "}
+          {preset ? `配置:${preset.label}` : "配置"}{" "}
           <span className="font-normal text-slate-400">(Base URL / 模型名均可改)</span>
         </p>
         <Field label="Base URL">
