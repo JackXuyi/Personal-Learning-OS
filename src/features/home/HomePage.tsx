@@ -4,7 +4,7 @@ import { BandBadge, Bar, Card, SectionTitle, Stat } from "../../components/primi
 import { PageContainer } from "../../components/layout/AppShell";
 import { bandOf } from "../../engine";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
-import { actionKindLabel, goalTypeLabel, importanceLabel, unitTitle } from "../units";
+import { actionKindLabel, GOAL_TARGET, goalTypeLabel, importanceLabel, unitTitle } from "../units";
 
 /**
  * 首页 —— 每日启动器（范式 A）。
@@ -126,10 +126,9 @@ export default function HomePage() {
   );
 }
 
-/** 就绪度达标阈值（与领域层 MASTERY_THRESHOLD 一致）。 */
-export const GOAL_TARGET = 0.8;
-
-/** 主 CTA —— 「最佳下一步」从静态卡升级为可执行动作。 */
+/**
+ * 主 CTA —— 「最佳下一步」从静态卡升级为可执行动作。
+ */
 function MainCtaCard() {
   const navigate = useNavigate();
   const snapshot = useLoopStore((s) => s.snapshot);

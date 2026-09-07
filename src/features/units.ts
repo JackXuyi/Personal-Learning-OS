@@ -61,6 +61,12 @@ export function unitTitle(unitId: string): string {
   return UNIT_TITLES[unitId] ?? unitId;
 }
 
+/**
+ * 就绪度达标阈值（80%）。特征层共享：Home 目标梯度 / 职业页都以此为刻度。
+ * 领域引擎的掌握度判定同样用 0.8——两边需保持一致（见 business-logic-review P1-阈值重复）。
+ */
+export const GOAL_TARGET = 0.8;
+
 /** 动作类型中文标签。 */
 export function actionKindLabel(kind: ActionKind): string {
   return ACTION_LABELS[kind] ?? kind;

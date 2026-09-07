@@ -1,5 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import type { ReactNode } from "react";
+import CommandPalette from "../../components/CommandPalette";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 
 interface NavItem {
   to: string;
@@ -8,17 +10,42 @@ interface NavItem {
   hint?: string;
 }
 
-const NAV: NavItem[] = [
-  { to: "/", label: "首页", hint: "学习闭环" },
-  { to: "/spaces", label: "学习空间", hint: "知识库" },
-  { to: "/knowledge", label: "知识", hint: "图谱与掌握度" },
-  { to: "/assessment", label: "测评", hint: "自适应题目" },
-  { to: "/career", label: "职业", hint: "目标就绪度" },
-  { to: "/study", label: "学习", hint: "计划与记录" },
-  { to: "/settings", label: "设置", hint: "AI Provider" },
+/**
+ * 导航分组（P2-4 / S6）：按「做什么」分组做视觉分隔，不改路由路径。
+ * 学习空间 / 职业在 Pre-MVP 视觉降权但保留入口。
+ */
+const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
+  {
+    title: "学习闭环",
+    items: [{ to: "/", label: "首页", hint: "今天做哪件事" }],
+  },
+  {
+    title: "开始学习",
+    items: [
+      { to: "/study", label: "学习", hint: "今日队列与复习" },
+      { to: "/assessment", label: "测评", hint: "自适应作答" },
+    ],
+  },
+  {
+    title: "内容",
+    items: [
+      { to: "/knowledge", label: "知识", hint: "图谱与导入" },
+      { to: "/spaces", label: "学习空间", hint: "资料与空间" },
+    ],
+  },
+  {
+    title: "规划",
+    items: [{ to: "/career", label: "职业", hint: "目标就绪度" }],
+  },
+  {
+    title: "系统",
+    items: [{ to: "/settings", label: "设置", hint: "AI 服务" }],
+  },
 ];
 
 export default function AppShell() {
+  const providerReady = useSettingsStore((s) => s.providerReady);
+
   return (
     <div className="flex h-full min-h-screen bg-slate-50 text-slate-900">
       <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
@@ -26,42 +53,74 @@ export default function AppShell() {
           <p className="text-sm font-semibold tracking-tight text-slate-900">
             个人学习 OS
           </p>
-          <p className="mt-0.5 text-xs text-slate-400">本地优先 · Pre-MVP</p>
+          <p className="mt-0.5 text-xs text-slate-400">本地优先 · 学习闭环</p>
         </div>
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-          {NAV.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/"}
-              className={({ isActive }) =>
-                `block rounded-lg px-3 py-2 transition-colors ${
-                  isActive
-                    ? "bg-indigo-50 text-indigo-700"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                }`
-              }
-            >
-              <ShellNavContent item={item} />
-            </NavLink>
+        <nav className="flex-1 space-y-4 overflow-y-auto p-3">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.title}>
+              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                {group.title}
+              </p>
+              <div className="space-y-1">
+                {group.items.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === "/"}
+                    className={({ isActive }) =>
+                      `block rounded-lg px-3 py-2 transition-colors ${
+                        isActive
+                          ? "bg-indigo-50 text-indigo-700"
+                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                      }`
+                    }
+                  >
+                    <ShellNavContent
+                      item={item}
+                      readyDot={item.to === "/settings" && providerReady}
+                    />
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
-        <div className="border-t border-slate-100 px-5 py-3 text-xs text-slate-400">
-          Foundation scaffold · Phase 0
+        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2.5 text-xs text-slate-400">
+          <span>⌘K 快速操作</span>
+          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
+            Pre-MVP
+          </span>
         </div>
       </aside>
       <main className="min-w-0 flex-1 overflow-y-auto">
         <Outlet />
       </main>
+      <CommandPalette />
     </div>
   );
 }
 
-function ShellNavContent({ item }: { item: NavItem }) {
+function ShellNavContent({
+  item,
+  readyDot,
+}: {
+  item: NavItem;
+  readyDot?: boolean;
+}) {
   return (
-    <span className="flex flex-col">
-      <span className="text-sm font-medium">{item.label}</span>
-      {item.hint ? <span className="text-xs text-slate-400">{item.hint}</span> : null}
+    <span className="flex items-center justify-between gap-2">
+      <span className="flex flex-col">
+        <span className="text-sm font-medium">{item.label}</span>
+        {item.hint ? (
+          <span className="text-xs text-slate-400">{item.hint}</span>
+        ) : null}
+      </span>
+      {readyDot ? (
+        <span
+          className="h-2 w-2 shrink-0 rounded-full bg-emerald-500"
+          title="AI Provider 已就绪"
+        />
+      ) : null}
     </span>
   );
 }
