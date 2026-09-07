@@ -147,3 +147,6 @@ vite.config.ts.timestamp-*
 # Tauri
 src-tauri/target/
 src-tauri/gen/schemas/
+
+# llama-helper sidecar 编译产物（构建后按 binaries/README.md 重命名拷入）
+src-tauri/binaries/llama-helper-*

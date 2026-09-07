@@ -1,3 +1,13 @@
+# Workspace root for the Personal Learning OS desktop app.
+#
+# members:
+#   .              — main Tauri app (this crate)
+#   llama-helper   — sidecar inference process (llama.cpp via llama-cpp-2),
+#                    spawned by the app to run local LLMs (see docs/local-llm-loading-plan-2026-09.md)
+[workspace]
+resolver = "2"
+members = ["llama-helper"]
+
 [package]
 name = "personal-learning-os"
 version = "0.1.0"

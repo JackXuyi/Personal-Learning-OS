@@ -1,0 +1,32 @@
+[package]
+name = "llama-helper"
+version = "0.1.0"
+edition = "2021"
+description = "Sidecar inference process for Personal Learning OS (llama.cpp via llama-cpp-2)"
+
+# Protocol, model residency and GPU-layer logic are ported from meetily
+# (Zackriya-Solutions/meetily, MIT) — see docs/local-llm-loading-plan-2026-09.md.
+[dependencies]
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+encoding_rs = "0.8"
+
+# === N1 milestone wiring (kept commented until then) ===
+# llama-cpp-2 is added when generation is implemented. Version is pinned to the
+# revision meetily validated (`=0.1.146`) so upstream API churn can't break the build.
+# [dependencies]
+# llama-cpp-2 = "=0.1.146"
+#
+# GPU backends are opt-in at build time. macOS Apple Silicon enables `metal`
+# (default decision for this phase); cuda/vulkan are reserved for later phases.
+# [features]
+# default = []
+# metal = ["llama-cpp-2/metal"]
+# cuda = ["llama-cpp-2/cuda"]
+# vulkan = ["llama-cpp-2/vulkan"]
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s" # Optimize for size for faster loading

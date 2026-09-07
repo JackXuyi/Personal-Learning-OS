@@ -27,6 +27,7 @@
   "bundle": {
     "active": false,
     "targets": "all",
-    "icon": []
+    "icon": [],
+    "externalBin": ["binaries/llama-helper"]
   }
 }
