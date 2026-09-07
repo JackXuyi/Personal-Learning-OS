@@ -93,6 +93,8 @@ pub struct ModelDef {
     pub context_size: u32,
     /// 层数(仅供展示;None 表示按文件大小由 helper 粗估)。
     pub layer_count: Option<u32>,
+    /// 运行该档所需的最低设备内存(GB)。设备匹配(M1)据此禁用低配档位。
+    pub min_ram_gb: u64,
     pub sampling: SamplingParams,
     pub template: &'static str,
     pub description: String,
@@ -110,6 +112,7 @@ pub fn get_available_models() -> Vec<ModelDef> {
             2_550_000_000,
             32768,
             Some(32),
+            12,
             SamplingParams::qwen35_summary(),
             "默认本地模型:中文讲解/出题/评估/计划推理,16GB Mac 流畅。",
         ),
@@ -122,6 +125,7 @@ pub fn get_available_models() -> Vec<ModelDef> {
             1_300_000_000,
             32768,
             Some(24),
+            8,
             SamplingParams::qwen35_summary(),
             "轻量备选:后台常驻轻盈/低配机器,质量略低于 4B。",
         ),
@@ -134,6 +138,7 @@ pub fn get_available_models() -> Vec<ModelDef> {
             650_000_000,
             32768,
             None,
+            4,
             SamplingParams::qwen35_summary(),
             "低配机器 / 快速冒烟验证。",
         ),
@@ -146,8 +151,9 @@ pub fn get_available_models() -> Vec<ModelDef> {
             5_500_000_000,
             32768,
             None,
+            20,
             SamplingParams::qwen35_summary(),
-            "需要最高本地质量时使用;16GB 机器请确认内存充裕。",
+            "需要最高本地质量时使用;需 ≥20GB 内存(16GB 机器默认禁用)。",
         ),
     ]
 }
@@ -161,6 +167,7 @@ fn model_def(
     approx_bytes: u64,
     context_size: u32,
     layer_count: Option<u32>,
+    min_ram_gb: u64,
     sampling: SamplingParams,
     description: &str,
 ) -> ModelDef {
@@ -175,6 +182,7 @@ fn model_def(
         approx_bytes,
         context_size,
         layer_count,
+        min_ram_gb,
         sampling,
         template: "qwen3.5",
         description: description.to_string(),
@@ -266,6 +274,17 @@ mod tests {
         let default = get_default_model();
         assert_eq!(default.name, "qwen3.5:4b");
         assert_eq!(default.gguf_file, "Qwen3.5-4B-Q4_K_M.gguf");
+    }
+
+    #[test]
+    fn min_ram_matches_device_tiers() {
+        let by = |n: &str| get_model_by_name(n).expect(n);
+        assert_eq!(by("qwen3.5:4b").min_ram_gb, 12);
+        assert_eq!(by("qwen3.5:2b").min_ram_gb, 8);
+        assert_eq!(by("qwen3.5:0.8b").min_ram_gb, 4);
+        assert_eq!(by("qwen3.5:9b").min_ram_gb, 20);
+        // 默认档(4B)排首位
+        assert_eq!(get_available_models()[0].name, "qwen3.5:4b");
     }
 
     #[test]

@@ -6,7 +6,9 @@ use serde::Deserialize;
 use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
 
-use super::manager::{DownloadProgress, ModelInfo, ModelManager};
+use super::manager::{
+    block_reason_if_unsupported, current_device, DownloadProgress, ModelInfo, ModelManager,
+};
 use super::models::{
     get_default_model, get_model_by_name, render_prompt, ChatMessage, ChatRole,
 };
@@ -55,6 +57,10 @@ pub async fn llm_download(
     if get_model_by_name(&model).is_none() {
         return Err(format!("unknown model: {model}"));
     }
+    // 设备匹配纵深防御(Q1):本机不支持的档位拒绝下载。
+    if let Some(reason) = block_reason_if_unsupported(&model) {
+        return Err(format!("model '{model}' is not supported on this device: {reason}"));
+    }
     let manager = state.manager.clone();
     let app = app.clone();
     let model_name = model.clone();
@@ -90,9 +96,15 @@ pub async fn llm_generate(
     state: State<'_, LlmState>,
     request: GenerateRequest,
 ) -> Result<String, String> {
-    // 1. 模型存在且已下载
+    // 1. 模型存在、设备支持且已下载
     let def = get_model_by_name(&request.model)
         .ok_or_else(|| format!("unknown model: {}", request.model))?;
+    if let Some(reason) = block_reason_if_unsupported(&request.model) {
+        return Err(format!(
+            "model '{}' is not supported on this device: {reason}",
+            request.model
+        ));
+    }
     if !state.manager.is_model_ready(&request.model).await {
         return Err(format!(
             "model '{}' is not downloaded yet. Call llm_download first.",
@@ -152,14 +164,17 @@ pub async fn llm_default_model() -> String {
     get_default_model().name
 }
 
-/// 供设置页/诊断使用:当前 helper 是否健康(返回错误则说明不可用)。
+/// 供设置页/诊断使用:当前 helper 是否健康 + 设备能力(返回错误则说明不可用)。
 #[tauri::command]
 pub async fn llm_status(state: State<'_, LlmState>) -> Result<serde_json::Value, String> {
     let ready = state.sidecar.ping().await;
     let def = get_default_model();
+    let device = current_device();
+    let device_json = serde_json::to_value(&device).map_err(|e| e.to_string())?;
     Ok(json!({
         "helper_ready": ready,
         "default_model": def.name,
         "helper_path": state.sidecar.helper_path().to_string_lossy(),
+        "device": device_json,
     }))
 }

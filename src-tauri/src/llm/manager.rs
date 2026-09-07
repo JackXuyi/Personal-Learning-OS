@@ -38,6 +38,22 @@ pub enum ModelStatus {
     Corrupted,
 }
 
+/// 当前设备能力(供设备匹配与 llm_status 展示)。
+#[derive(Debug, Clone, Serialize)]
+pub struct DeviceInfo {
+    pub os: String,
+    pub arch: String,
+    pub ram_gb: u64,
+    pub metal: bool,
+}
+
+/// 设备是否支持某档模型(Q1 决策):ok=false 时 reason 为禁用原因码。
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelSupport {
+    pub ok: bool,
+    pub reason: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ModelInfo {
     pub name: String,
@@ -46,6 +62,75 @@ pub struct ModelInfo {
     pub context_size: u32,
     pub status: ModelStatus,
     pub description: String,
+    /// 运行该档所需最低内存(GB),供 UI 展示禁用原因。
+    pub min_ram_gb: u64,
+    /// 当前设备是否支持下载/启用。
+    pub supported: ModelSupport,
+}
+
+/// 采集当前设备信息。本地推理 sidecar 仅随 macOS(arm64)分发;
+/// RAM 检测失败时返回 0(未知,不做内存禁用)。
+pub fn current_device() -> DeviceInfo {
+    let os = std::env::consts::OS.to_string();
+    let arch = std::env::consts::ARCH.to_string();
+    DeviceInfo {
+        os: os.clone(),
+        arch: arch.clone(),
+        ram_gb: total_ram_gb(),
+        // Metal 加速随 macOS Apple Silicon 构建启用(决策 Q4);helper 按此平台构建。
+        metal: os == "macos" && arch == "aarch64",
+    }
+}
+
+fn total_ram_gb() -> u64 {
+    let bytes = total_ram_bytes();
+    bytes.map(|b| (b / 1_073_741_824).max(1)).unwrap_or(0)
+}
+
+fn total_ram_bytes() -> Option<u64> {
+    #[cfg(target_os = "macos")]
+    {
+        let out = std::process::Command::new("sysctl")
+            .args(["-n", "hw.memsize"])
+            .output()
+            .ok()?;
+        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        s.parse::<u64>().ok()
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let text = std::fs::read_to_string("/proc/meminfo").ok()?;
+        let line = text.lines().find(|l| l.starts_with("MemTotal:"))?;
+        let kb: u64 = line.split_whitespace().nth(1)?.parse().ok()?;
+        Some(kb.saturating_mul(1024))
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        None
+    }
+}
+
+/// 设备匹配规则:平台(macOS arm64)不满足 → 禁用;RAM 不足 → 禁用。
+fn model_support(def: &ModelDef, dev: &DeviceInfo) -> ModelSupport {
+    let platform_ok = dev.os == "macos" && dev.arch == "aarch64";
+    if !platform_ok {
+        return ModelSupport { ok: false, reason: Some("unsupported_platform".into()) };
+    }
+    if dev.ram_gb > 0 && dev.ram_gb < def.min_ram_gb {
+        return ModelSupport { ok: false, reason: Some("ram_below_min".into()) };
+    }
+    ModelSupport { ok: true, reason: None }
+}
+
+/// 命令层纵深防御:返回该模型「本机不支持」的禁用原因(None = 支持)。
+pub fn block_reason_if_unsupported(name: &str) -> Option<String> {
+    let def = get_model_by_name(name)?;
+    let support = model_support(&def, &current_device());
+    if support.ok {
+        None
+    } else {
+        support.reason.or_else(|| Some("unsupported".to_string()))
+    }
 }
 
 pub type ProgressCallback = Box<dyn Fn(DownloadProgress) + Send + Sync>;
@@ -93,9 +178,10 @@ impl ModelManager {
         self.models_dir.join(format!("{}.part", model.gguf_file))
     }
 
-    /// 扫描清单中每个模型的磁盘状态。
+    /// 扫描清单中每个模型的磁盘状态(并按当前设备计算 supported)。
     pub async fn scan_models(&self) -> Vec<ModelInfo> {
         let active = self.active.read().await;
+        let device = current_device();
         let mut out = Vec::new();
         for def in get_available_models() {
             let path = self.file_path(&def);
@@ -111,6 +197,7 @@ impl ModelManager {
             } else {
                 ModelStatus::NotFound
             };
+            let supported = model_support(&def, &device);
             out.push(ModelInfo {
                 name: def.name,
                 display_name: def.display_name,
@@ -118,6 +205,8 @@ impl ModelManager {
                 context_size: def.context_size,
                 status,
                 description: def.description,
+                min_ram_gb: def.min_ram_gb,
+                supported,
             });
         }
         out
