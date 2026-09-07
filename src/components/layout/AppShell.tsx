@@ -29,7 +29,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "内容",
     items: [
-      { to: "/knowledge", label: "知识", hint: "图谱与导入" },
+      { to: "/learn", label: "知识", hint: "章节目录与阅读" },
       { to: "/spaces", label: "学习空间", hint: "资料与空间" },
     ],
   },

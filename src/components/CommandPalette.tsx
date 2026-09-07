@@ -25,7 +25,7 @@ const NAV_ENTRIES: { to: string; label: string; hint?: string }[] = [
   { to: "/", label: "首页", hint: "今天做哪件事" },
   { to: "/study", label: "学习", hint: "今日队列与复习" },
   { to: "/assessment", label: "测评", hint: "自适应作答" },
-  { to: "/knowledge", label: "知识", hint: "图谱与导入" },
+  { to: "/learn", label: "知识", hint: "章节目录与阅读" },
   { to: "/spaces", label: "学习空间", hint: "资料与空间" },
   { to: "/career", label: "职业", hint: "目标就绪度" },
   { to: "/settings", label: "设置", hint: "AI 服务" },
@@ -103,10 +103,10 @@ export default function CommandPalette() {
     list.push({
       id: "act-import",
       label: "导入资料",
-      hint: "粘贴 → 抽取 → 写入图谱",
+      hint: "粘贴 → 切分章节 → 逐章学习",
       section: "行动",
-      search: "导入 资料 粘贴 知识 抽取",
-      run: () => navigate("/knowledge?import=1"),
+      search: "导入 资料 粘贴 章节 学习",
+      run: () => navigate("/learn?import=1"),
     });
 
     // ── 跳转 ──────────────────────────────────────────────

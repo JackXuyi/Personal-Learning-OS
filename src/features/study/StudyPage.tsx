@@ -56,7 +56,7 @@ export default function StudyPage() {
         <Card className="border-emerald-200 bg-emerald-50/40">
           <p className="text-lg font-semibold text-slate-900">🎉 今日队列已清空</p>
           <p className="mt-1 text-sm text-slate-500">
-            所有缺口单元都达标了，可以测评巩固，或查看知识图谱。
+            所有缺口单元都达标了，可以测评巩固，或查看章节目录。
           </p>
           <div className="mt-4 flex gap-3">
             <Link
@@ -66,10 +66,10 @@ export default function StudyPage() {
               去测评巩固
             </Link>
             <Link
-              to="/knowledge"
+              to="/learn"
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              查看知识图谱
+              查看章节目录
             </Link>
           </div>
         </Card>

@@ -216,10 +216,10 @@ function AllDoneCard() {
           去测评巩固
         </Link>
         <Link
-          to="/knowledge"
+          to="/learn"
           className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
-          查看知识图谱
+          查看章节目录
         </Link>
       </div>
     </Card>
@@ -236,7 +236,7 @@ function EmptyState({ onLoadDemo }: { onLoadDemo: () => void }) {
       </p>
       <div className="mt-4 flex flex-wrap gap-3">
         <Link
-          to="/knowledge?import=1"
+          to="/learn?import=1"
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
         >
           导入资料
@@ -258,8 +258,8 @@ function PlanList({ limit }: { limit?: number }) {
     return (
       <p className="text-sm text-slate-500">
         没有待补缺口——目标进展正常。{" "}
-        <Link to="/knowledge" className="text-indigo-600 hover:underline">
-          查看你的知识图谱
+        <Link to="/learn" className="text-indigo-600 hover:underline">
+          查看章节目录
         </Link>
         。
       </p>
