@@ -5,12 +5,18 @@
  */
 
 export type ActionKind =
+  // 概念层（Phase 0 基座，保留给概念粒度缺口）
   | "learn"
   | "review"
   | "practice"
   | "remediation"
   | "assessment"
-  | "explore";
+  | "explore"
+  // V2 章级（docs §5.5）：学习/出卷/补考/复习都以 Chapter 为单位
+  | "learn-chapter"
+  | "chapter-quiz"
+  | "retake-quiz"
+  | "review-points";
 
 export interface SkillGap {
   unitId: string;
@@ -24,6 +30,7 @@ export interface SkillGap {
 export interface NextAction {
   id: string;
   kind: ActionKind;
+  /** 动作对象 id —— 概念层为 KnowledgeUnit.id；V2 章级为 Chapter.id（subjectId 语义，UI 不区分）。 */
   unitId: string;
   /** 数值越小优先级越高。 */
   priority: number;

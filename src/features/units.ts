@@ -3,6 +3,7 @@
  * 避免各页各自维护一份中文标签表。
  */
 import type { ActionKind, GoalType, KnowledgeKind } from "../domain";
+import { MASTERY_THRESHOLD } from "../domain";
 
 const KIND_LABELS: Record<KnowledgeKind, string> = {
   concept: "概念",
@@ -33,12 +34,18 @@ const UNIT_TITLES: Record<string, string> = {
 };
 
 const ACTION_LABELS: Record<ActionKind, string> = {
+  // 概念层
   learn: "学习",
   review: "复习",
   practice: "练习",
   remediation: "补救",
   assessment: "测评",
   explore: "探索",
+  // V2 章级（planner 章级化 T4）
+  "learn-chapter": "学本章",
+  "chapter-quiz": "测本章",
+  "retake-quiz": "补考",
+  "review-points": "复习要点",
 };
 
 const GOAL_TYPE_LABELS: Record<GoalType, string> = {
@@ -62,10 +69,11 @@ export function unitTitle(unitId: string): string {
 }
 
 /**
- * 就绪度达标阈值（80%）。特征层共享：Home 目标梯度 / 职业页都以此为刻度。
- * 领域引擎的掌握度判定同样用 0.8——两边需保持一致（见 business-logic-review P1-阈值重复）。
+ * 就绪度达标阈值。特征层共享：Home 目标梯度 / 职业页都以此为刻度。
+ * 与领域引擎（planner / mastery-engine / quiz 判分）同源 ——
+ * 统一引用 domain 常量，避免重复（business-logic-review P1-阈值重复已收敛）。
  */
-export const GOAL_TARGET = 0.8;
+export const GOAL_TARGET = MASTERY_THRESHOLD;
 
 /** 动作类型中文标签。 */
 export function actionKindLabel(kind: ActionKind): string {

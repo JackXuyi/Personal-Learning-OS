@@ -20,8 +20,14 @@ export interface LearningGoal {
   title: string;
   description?: string;
   importance: GoalImportance;
-  /** 目标预计所需的单元。 */
+  /** 目标预计所需的单元（概念层）。 */
   requiredUnitIds: string[];
+  /**
+   * 目标要求的章节范围（V2 章级；可选）。
+   * 为空时章级计划由调用方传入整本文档的章；给定后 buildChapterPlan
+   * 只对范围内章排动作（plan.ts）。
+   */
+  requiredChapterIds?: string[];
   createdAt: number;
   /** Optional deadline (epoch ms). */
   deadlineAt?: number;
