@@ -2,7 +2,20 @@
  * 特征层共享的展示映射 —— 供 Home / Study / Assessment / Career 复用，
  * 避免各页各自维护一份中文标签表。
  */
-import type { ActionKind, GoalType } from "../domain";
+import type { ActionKind, GoalType, KnowledgeKind } from "../domain";
+
+const KIND_LABELS: Record<KnowledgeKind, string> = {
+  concept: "概念",
+  skill: "技能",
+  fact: "事实",
+  procedure: "流程",
+  principle: "原理",
+};
+
+/** 知识单元类型中文标签。 */
+export function kindLabel(kind: KnowledgeKind): string {
+  return KIND_LABELS[kind] ?? kind;
+}
 
 const UNIT_TITLES: Record<string, string> = {
   "rag-retrieval": "检索",
