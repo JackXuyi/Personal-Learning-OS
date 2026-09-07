@@ -36,6 +36,18 @@ export interface LlmModelInfo {
   context_size: number;
   status: "not_found" | "downloading" | "ready" | "corrupted";
   description: string;
+  /** 设备匹配(M1):运行该档所需最低内存;Rust 返回前可能缺省。 */
+  min_ram_gb?: number;
+  /** 设备匹配(M1):当前设备是否支持下载/启用。 */
+  supported?: { ok: boolean; reason?: string };
+}
+
+/** 当前设备能力(llm_status 返回;Rust 扩展前可能缺省)。 */
+export interface LlmDeviceInfo {
+  os: string;
+  arch: string;
+  ram_gb: number;
+  metal: boolean;
 }
 
 /** 下载进度事件负载(Rust 命令层 emit,键为 camelCase)。 */
@@ -76,6 +88,7 @@ export function llmStatus(): Promise<{
   helper_ready: boolean;
   default_model: string;
   helper_path: string;
+  device?: LlmDeviceInfo;
 }> {
   return invoke("llm_status");
 }

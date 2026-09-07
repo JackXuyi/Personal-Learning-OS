@@ -20,10 +20,14 @@ export type ProviderKind =
   | "ollama"
   | "llama.cpp"
   | "lmstudio"
+  // OpenAI 兼容的开源/开放模型云端 API(决策 Q3,见 ai-model-center-plan)
+  | "qwen"
+  | "deepseek"
+  | "glm"
+  | "kimi"
   | "openai"
   | "anthropic"
   | "gemini"
-  | "deepseek"
   | "custom";
 
 export interface ChatMessage {

@@ -41,10 +41,13 @@ const LOCAL_PORT_HINT: Record<ProviderKind, string> = {
   ollama: "Ollama 默认 11434",
   "llama.cpp": "llama.cpp 默认 8080",
   lmstudio: "LM Studio 默认 1234",
+  qwen: "",
+  deepseek: "",
+  glm: "",
+  kimi: "",
   openai: "",
   anthropic: "",
   gemini: "",
-  deepseek: "",
   custom: "",
 };
 

@@ -45,10 +45,16 @@ export function normalizeOpenAiBaseUrl(kind: ProviderKind): string {
       return "http://localhost:8080/v1";
     case "lmstudio":
       return "http://localhost:1234/v1";
-    case "openai":
-      return "https://api.openai.com/v1";
+    case "qwen":
+      return "https://dashscope.aliyuncs.com/compatible-mode/v1";
     case "deepseek":
       return "https://api.deepseek.com/v1";
+    case "glm":
+      return "https://open.bigmodel.cn/api/paas/v4";
+    case "kimi":
+      return "https://api.moonshot.cn/v1";
+    case "openai":
+      return "https://api.openai.com/v1";
     default:
       return "";
   }
@@ -60,8 +66,14 @@ export function defaultModelOf(kind: ProviderKind): string {
       return "qwen3.5:4b";
     case "ollama":
       return "llama3.1";
+    case "qwen":
+      return "qwen-plus";
     case "deepseek":
       return "deepseek-chat";
+    case "glm":
+      return "glm-4.5";
+    case "kimi":
+      return "moonshot-v1-8k";
     case "lmstudio":
     case "llama.cpp":
     case "openai":

@@ -1,68 +1,25 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Card, SectionTitle } from "../../components/primitives";
 import { PageContainer } from "../../components/layout/AppShell";
-import {
-  testConnection,
-  type ConnectionTestResult,
-} from "../../ai/connection";
 import { useSettingsStore } from "../../stores/useSettingsStore";
-import { defaultModelOf, normalizeOpenAiBaseUrl } from "../../ai/openai-compatible";
-import type { ProviderConfig, ProviderKind } from "../../ai";
+import type { ActiveSource } from "../../ai/active";
+import { labelOfLocalModel, labelOfProvider } from "../../ai/presets";
 import BuiltinModelsPanel from "./BuiltinModelsPanel";
+import ApiModelsTab from "./ApiModelsTab";
 
-const KINDS: { value: ProviderKind; label: string }[] = [
-  { value: "builtin", label: "内置本地模型（推荐）" },
-  { value: "ollama", label: "Ollama（本地）" },
-  { value: "llama.cpp", label: "llama.cpp（本地）" },
-  { value: "lmstudio", label: "LM Studio（本地）" },
-  { value: "openai", label: "OpenAI" },
-  { value: "anthropic", label: "Anthropic" },
-  { value: "gemini", label: "Gemini" },
-  { value: "deepseek", label: "DeepSeek" },
-  { value: "custom", label: "自定义（OpenAI 兼容）" },
-];
+/**
+ * 设置 · AI 模型中心(Q1/Q2/Q3,见 docs/ai-model-center-plan-2026-09.md)。
+ *
+ * 双 Tab:「本地模型」= 应用自己下载运行的 GGUF(按设备匹配,禁用不支持档);
+ * 「API 模型」= 预置(千问等开源模型)+ 配置 baseUrl/model/apiKey。
+ * 任意一侧选中即成为全局「当前使用模型」并立即写库;引擎经
+ * `buildActiveProvider()` 读取,下次进入功能即生效。
+ */
 
-const LOCAL_KINDS: ReadonlySet<ProviderKind> = new Set([
-  "ollama",
-  "llama.cpp",
-  "lmstudio",
-]);
+type Tab = "local" | "api";
 
-/** 表单草稿：编辑不落库，点「保存」才生效。 */
-interface Draft {
-  kind: ProviderKind;
-  baseUrl: string;
-  model: string;
-  apiKey: string;
-}
-
-type TestStatus =
-  | { state: "idle" }
-  | { state: "testing" }
-  | { state: "ok"; latencyMs: number }
-  | { state: "fail"; reason: string; hint: string };
-
-function defaultsFor(kind: ProviderKind): Pick<Draft, "baseUrl" | "model"> {
-  return { baseUrl: normalizeOpenAiBaseUrl(kind), model: defaultModelOf(kind) };
-}
-
-function sameConfig(a: Draft, b: Draft): boolean {
-  return (
-    a.kind === b.kind &&
-    a.baseUrl.trim() === b.baseUrl.trim() &&
-    a.model.trim() === b.model.trim() &&
-    a.apiKey.trim() === b.apiKey.trim()
-  );
-}
-
-function toProviderConfig(d: Draft): ProviderConfig {
-  return {
-    kind: d.kind,
-    baseUrl: d.baseUrl.trim() || undefined,
-    model: d.model.trim() || undefined,
-    apiKey: d.apiKey.trim() || undefined,
-  };
-}
+const apiActiveOf = (a: ActiveSource | null) =>
+  a && a.source === "api" ? a : null;
 
 function formatTime(ts: number): string {
   const d = new Date(ts);
@@ -74,291 +31,221 @@ function formatTime(ts: number): string {
 
 export default function SettingsPage() {
   const saved = useSettingsStore();
-  const save = useSettingsStore((s) => s.save);
+  const saveActive = useSettingsStore((s) => s.saveActive);
+  const clearActive = useSettingsStore((s) => s.clearActive);
 
-  const [draft, setDraft] = useState<Draft>({
-    kind: saved.kind,
-    baseUrl: saved.baseUrl,
-    model: saved.model,
-    apiKey: saved.apiKey,
-  });
-  const [test, setTest] = useState<TestStatus>({ state: "idle" });
-  const [savedFlash, setSavedFlash] = useState(false);
-  /** kind=builtin 时,激活的本地模型是否已就绪(下载完成)。 */
-  const [builtinReady, setBuiltinReady] = useState(false);
-
-  const dirty = useMemo(
-    () => !sameConfig(draft, { kind: saved.kind, baseUrl: saved.baseUrl, model: saved.model, apiKey: saved.apiKey }),
-    [draft, saved],
+  const [tab, setTab] = useState<Tab>(
+    saved.active?.source === "api" ? "api" : "local",
   );
-  const local = LOCAL_KINDS.has(draft.kind);
-  const builtinMode = draft.kind === "builtin";
+  const [savedFlash, setSavedFlash] = useState(false);
 
-  const onBuiltinModelChange = (name: string, ready: boolean) => {
-    setDraft((d) => ({ ...d, model: name }));
-    setBuiltinReady(ready);
-    setTest({ state: "idle" });
-  };
+  const { active, providerReady } = saved;
+  const apiSaved = apiActiveOf(active);
 
-  const update =
-    (key: keyof Draft) =>
-    (value: string) => {
-      setDraft((d) => ({ ...d, [key]: value }));
-      setTest({ state: "idle" }); // 改过配置，旧测试结果作废
-    };
-
-  const pickKind = (kind: ProviderKind) => {
-    setDraft((d) => ({ ...d, kind, ...defaultsFor(kind), apiKey: "" }));
-    setTest({ state: "idle" });
-  };
-
-  const runTest = async () => {
-    if (builtinMode) return; // 内置模型不做 HTTP 测试
-    setTest({ state: "testing" });
-    const result: ConnectionTestResult = await testConnection(toProviderConfig(draft));
-    if (result.ok) {
-      setTest({ state: "ok", latencyMs: result.latencyMs });
-    } else {
-      setTest({ state: "fail", reason: result.reason, hint: result.hint });
-    }
-  };
-
-  const runSave = () => {
-    if (builtinMode) {
-      // 内置模型:面板激活且就绪即视为「就绪」
-      save(
-        { ...draft, baseUrl: "", apiKey: "" },
-        { testedOk: builtinReady, latencyMs: undefined },
-      );
-    } else {
-      save(draft, {
-        testedOk: test.state === "ok",
-        latencyMs: test.state === "ok" ? test.latencyMs : undefined,
-      });
-    }
+  const flash = () => {
     setSavedFlash(true);
     window.setTimeout(() => setSavedFlash(false), 2500);
   };
 
-  const ready = saved.providerReady;
-  const kindLabel = KINDS.find((k) => k.value === saved.kind)?.label ?? saved.kind;
+  const onLocalActivate = (model: string) => {
+    saveActive({ source: "local", model }, { testedOk: true });
+    flash();
+  };
+
+  const onUseApi = (
+    api: Extract<ActiveSource, { source: "api" }>,
+    testedOk: boolean,
+    latencyMs?: number,
+  ) => {
+    saveActive(api, { testedOk, latencyMs });
+  };
+
+  // ---- Active Banner 文案 ----
+  let bannerTitle: string;
+  let bannerDesc: string;
+  let bannerTone: "ok" | "warn" | "empty" = "warn";
+  if (active?.source === "local") {
+    bannerTitle = labelOfLocalModel(active.model);
+    bannerDesc = providerReady
+      ? "本地模型 · 已就绪 · 数据不出本机,离线可用;知识抽取 / 测评出题判分等 AI 任务将由它完成"
+      : "本地模型 · 未就绪(需先在「本地模型」页下载并设为当前)";
+    bannerTone = providerReady ? "ok" : "warn";
+  } else if (active?.source === "api") {
+    bannerTitle = `${labelOfProvider(active.provider)} · ${active.model || "(未填模型)"}`;
+    bannerDesc = providerReady
+      ? "API 模型 · 已连接,云端推理;知识抽取 / 测评出题判分等 AI 任务将由它完成"
+      : "API 模型 · 尚未测试通过(建议先「测试连接」再使用)";
+    bannerTone = providerReady ? "ok" : "warn";
+  } else {
+    bannerTitle = "未选择任何模型";
+    bannerDesc =
+      "学习功能将以离线启发式运行。下载一个本地模型,或配置一个 API 模型,即可解锁完整 AI 能力。";
+    bannerTone = "empty";
+  }
+
+  const bannerStyle =
+    bannerTone === "ok"
+      ? "border-emerald-200 bg-emerald-50/50"
+      : bannerTone === "empty"
+        ? "border-slate-200 bg-slate-50"
+        : "border-amber-200 bg-amber-50/50";
 
   return (
     <PageContainer>
       <SectionTitle
-        title="设置 · AI 服务"
-        subtitle="配置 Provider 后，知识抽取 / 测评生成等 AI 能力会逐步解锁。"
+        title="设置 · AI 模型中心"
+        subtitle="选择「当前使用模型」：知识抽取 / 测评出题判分 / 答疑与学习进度总结都由它完成。"
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <h3 className="mb-1 text-sm font-semibold text-slate-700">AI Provider</h3>
-          <p className="mb-4 text-xs text-slate-500">
-            未配置 Provider 时引擎会优雅降级——启发式逻辑完全离线运行。
-            {dirty ? (
-              <span className="ml-1 font-medium text-amber-600">有未保存的修改。</span>
-            ) : null}
-          </p>
+          {/* Active Banner */}
+          <div className={`mb-4 rounded-xl border px-4 py-3 ${bannerStyle}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-800">
+                  {active ? "当前使用:" : ""}
+                  <span
+                    className={
+                      bannerTone === "ok"
+                        ? "text-emerald-700"
+                        : bannerTone === "empty"
+                          ? "text-slate-500"
+                          : "text-amber-700"
+                    }
+                  >
+                    {" "}
+                    {bannerTitle}
+                  </span>
+                </p>
+                <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{bannerDesc}</p>
+              </div>
+              {savedFlash ? <span className="shrink-0 text-sm text-emerald-600">已保存 ✓</span> : null}
+            </div>
+          </div>
 
-          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {KINDS.map((opt) => (
+          {/* Tabs */}
+          <div className="mb-4 flex gap-1 rounded-lg border border-slate-200 bg-slate-100/60 p-1">
+            {(
+              [
+                ["local", "本地模型(下载运行)"],
+                ["api", "API 模型(请求)"],
+              ] as [Tab, string][]
+            ).map(([value, label]) => (
               <button
-                key={opt.value}
-                onClick={() => pickKind(opt.value)}
-                className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                  draft.kind === opt.value
-                    ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                    : "border-slate-200 text-slate-600 hover:border-slate-300"
+                key={value}
+                onClick={() => setTab(value)}
+                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  tab === value
+                    ? "bg-white text-indigo-700 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
                 }`}
               >
-                {opt.label}
+                {label}
               </button>
             ))}
           </div>
 
-          {builtinMode ? (
-            <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-4">
+          {tab === "local" ? (
+            <div>
               <p className="mb-3 text-xs font-medium text-indigo-700">
-                下载并激活一个本地模型 —— 默认档 Qwen3.5-4B(约 2.5 GB),激活即生效。
+                下载并激活一个本地模型 —— 默认档 Qwen3.5-4B(约 2.5 GB);点选「设为当前」即生效,无需保存。
               </p>
               <BuiltinModelsPanel
-                selectedModel={draft.model}
-                onModelChange={onBuiltinModelChange}
+                activeModel={active?.source === "local" ? active.model : null}
+                onActivate={onLocalActivate}
+                onClearActive={() => {
+                  clearActive();
+                  flash();
+                }}
               />
             </div>
           ) : (
-            <div className="space-y-3">
-              <Field label={local ? "Base URL（本地服务）" : "Base URL"}>
-                <input
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
-                  value={draft.baseUrl}
-                  onChange={(e) => update("baseUrl")(e.target.value)}
-                  placeholder="http://localhost:11434/v1"
-                  spellCheck={false}
-                />
-              </Field>
-              <Field label="模型">
-                <input
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
-                  value={draft.model}
-                  onChange={(e) => update("model")(e.target.value)}
-                  placeholder="qwen2.5:7b"
-                  spellCheck={false}
-                />
-              </Field>
-              {!local ? (
-                <Field label="API Key">
-                  <input
-                    type="password"
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
-                    value={draft.apiKey}
-                    onChange={(e) => update("apiKey")(e.target.value)}
-                    placeholder="sk-..."
-                    spellCheck={false}
-                  />
-                </Field>
-              ) : null}
-            </div>
+            <ApiModelsTab saved={apiSaved} onUse={onUseApi} />
           )}
-
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            {builtinMode ? (
-              <span className="text-xs text-slate-400">
-                内置模型状态由上方「激活 / 下载」管理,点「保存」即写入配置。
-              </span>
-            ) : (
-              <button
-                onClick={() => void runTest()}
-                disabled={test.state === "testing"}
-                className="rounded-lg border border-indigo-200 bg-white px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {test.state === "testing" ? "正在测试…" : "测试连接"}
-              </button>
-            )}
-            <button
-              onClick={runSave}
-              className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
-            >
-              保存
-            </button>
-            {savedFlash ? (
-              <span className="text-sm text-emerald-600">已保存 ✓</span>
-            ) : null}
-          </div>
-
-          <TestResultArea test={test} draftTouched={dirty} />
         </Card>
 
         <div className="space-y-4">
           <Card>
-            <h3 className="mb-3 text-sm font-semibold text-slate-700">Provider 状态</h3>
+            <h3 className="mb-3 text-sm font-semibold text-slate-700">AI 状态</h3>
             <div className="flex flex-wrap items-center gap-2">
-              {ready ? (
-                <ReadyPill label="就绪 · 测试通过" />
+              {active ? (
+                providerReady ? (
+                  <ReadyPill label="当前模型就绪" ok />
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    当前模型未就绪
+                  </span>
+                )
               ) : (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
                   <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                  未就绪
+                  未选择模型
                 </span>
               )}
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                启发式降级已就绪
+                离线启发式引擎始终可用
               </span>
             </div>
             <p className="mt-3 text-xs leading-relaxed text-slate-500">
-              侧边栏「设置」项上的绿点代表：已保存配置通过连接测试。
-              保存前建议先测试（不阻断）。
+              侧边栏「设置」绿点代表当前模型就绪。未就绪时引擎自动以本地启发式逻辑降级运行(不崩溃)。
             </p>
           </Card>
 
           <Card>
-            <h3 className="mb-3 text-sm font-semibold text-slate-700">已保存配置</h3>
+            <h3 className="mb-3 text-sm font-semibold text-slate-700">当前配置</h3>
             <dl className="space-y-1 text-sm">
-              <KV k="kind" v={kindLabel} />
-              <KV k="baseUrl" v={saved.baseUrl || "（空）"} />
-              <KV k="model" v={saved.model || "（空）"} />
-              <KV k="apiKey" v={saved.apiKey ? "••••••••" : "（空）"} />
+              <KV
+                k="来源"
+                v={
+                  active?.source === "local"
+                    ? "本地模型"
+                    : active?.source === "api"
+                      ? "API 模型"
+                      : "（未选择）"
+                }
+              />
+              {active?.source === "local" ? <KV k="模型" v={labelOfLocalModel(active.model)} /> : null}
+              {active?.source === "api" ? (
+                <>
+                  <KV k="供应商" v={labelOfProvider(active.provider)} />
+                  <KV k="模型" v={active.model || "（空）"} />
+                  <KV k="Base URL" v={active.baseUrl || "（空）"} />
+                  <KV k="API Key" v={active.apiKey ? "••••••••" : "（空）"} />
+                </>
+              ) : null}
               <KV
                 k="状态"
                 v={
-                  ready && saved.testedAt
+                  providerReady && saved.testedAt
                     ? `测试通过 · ${formatTime(saved.testedAt)}${
                         saved.lastLatencyMs ? ` · ${saved.lastLatencyMs}ms` : ""
                       }`
-                    : "尚未通过测试"
+                    : "未通过测试 / 尚未就绪"
                 }
               />
             </dl>
           </Card>
-
-          <p className="text-xs leading-relaxed text-slate-400">
-            API Key 以明文保存在本机 localStorage，仅供本应用调用对应端点。
-          </p>
         </div>
       </div>
     </PageContainer>
   );
 }
 
-function ReadyPill({ label }: { label: string }) {
+function ReadyPill({ label, ok }: { label: string; ok: boolean }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${
+        ok
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : "border-slate-200 bg-slate-50 text-slate-600"
+      }`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-500" : "bg-slate-400"}`} />
       {label}
     </span>
-  );
-}
-
-/** 测试结果区：成功 / 失败两句式（原因 + 怎么办）。 */
-function TestResultArea({
-  test,
-  draftTouched,
-}: {
-  test: TestStatus;
-  draftTouched: boolean;
-}) {
-  if (test.state === "idle") {
-    if (!draftTouched) {
-      return (
-        <p className="mt-3 text-xs text-slate-400">
-          测试连接 = 向当前表单值（未保存也测）发一次最小请求。
-        </p>
-      );
-    }
-    return null;
-  }
-  if (test.state === "testing") {
-    return (
-      <p className="mt-3 flex items-center gap-2 text-sm text-slate-500">
-        <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
-        正在测试连接…
-      </p>
-    );
-  }
-  if (test.state === "ok") {
-    return (
-      <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2">
-        <p className="text-sm font-medium text-emerald-700">
-          ✅ 已连接 · 延迟 {test.latencyMs}ms · 模型在线
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div className="mt-3 rounded-lg border border-red-200 bg-red-50/60 px-3 py-2">
-      <p className="text-sm font-medium text-red-700">❌ {test.reason}</p>
-      <p className="mt-1 text-xs leading-relaxed text-red-600/90">→ {test.hint}</p>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium text-slate-500">{label}</span>
-      {children}
-    </label>
   );
 }
 
