@@ -1,8 +1,8 @@
 /**
- * Core Object #5 — Learning Goal.
+ * 核心对象 #5 —— Learning Goal（学习目标）。
  *
- * The goal is the entry point of the whole system. Career / Study / Exam /
- * Personal / Research / Project all flow into the same Learning Engine.
+ * 目标是整个系统的入口。职业 / 学习 / 考试 / 个人 / 研究 / 项目
+ * 六类目标最终都汇入同一个学习引擎。
  */
 export type GoalType =
   | "career"
@@ -20,14 +20,14 @@ export interface LearningGoal {
   title: string;
   description?: string;
   importance: GoalImportance;
-  /** Knowledge units the goal is expected to require. */
+  /** 目标预计所需的单元。 */
   requiredUnitIds: string[];
   createdAt: number;
   /** Optional deadline (epoch ms). */
   deadlineAt?: number;
 }
 
-/** Sample goal used by seed data & the Home dashboard. */
+/** 种子数据与首页仪表盘使用的示例目标。 */
 export const DEFAULT_GOAL: LearningGoal = {
   id: "goal-ai-app-engineer",
   type: "career",

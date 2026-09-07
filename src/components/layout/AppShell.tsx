@@ -4,18 +4,18 @@ import type { ReactNode } from "react";
 interface NavItem {
   to: string;
   label: string;
-  /** Short description shown under the label. */
+  /** 显示在标签下方的简短说明。 */
   hint?: string;
 }
 
 const NAV: NavItem[] = [
-  { to: "/", label: "Home", hint: "Learning loop" },
-  { to: "/spaces", label: "Learning Spaces", hint: "Knowledge bases" },
-  { to: "/knowledge", label: "Knowledge", hint: "Graph & mastery" },
-  { to: "/assessment", label: "Assessment", hint: "Adaptive questions" },
-  { to: "/career", label: "Career", hint: "Goal readiness" },
-  { to: "/study", label: "Study", hint: "Plans & sessions" },
-  { to: "/settings", label: "Settings", hint: "AI provider" },
+  { to: "/", label: "首页", hint: "学习闭环" },
+  { to: "/spaces", label: "学习空间", hint: "知识库" },
+  { to: "/knowledge", label: "知识", hint: "图谱与掌握度" },
+  { to: "/assessment", label: "测评", hint: "自适应题目" },
+  { to: "/career", label: "职业", hint: "目标就绪度" },
+  { to: "/study", label: "学习", hint: "计划与记录" },
+  { to: "/settings", label: "设置", hint: "AI Provider" },
 ];
 
 export default function AppShell() {
@@ -24,9 +24,9 @@ export default function AppShell() {
       <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
         <div className="border-b border-slate-100 px-5 py-4">
           <p className="text-sm font-semibold tracking-tight text-slate-900">
-            Personal Learning OS
+            个人学习 OS
           </p>
-          <p className="mt-0.5 text-xs text-slate-400">Local-first · Pre-MVP</p>
+          <p className="mt-0.5 text-xs text-slate-400">本地优先 · Pre-MVP</p>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {NAV.map((item) => (

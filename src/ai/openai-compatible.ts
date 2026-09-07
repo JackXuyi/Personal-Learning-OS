@@ -1,10 +1,9 @@
 /**
- * OpenAI-compatible HTTP provider.
+ * OpenAI 兼容的 HTTP Provider。
  *
- * Covers the README's local-first family out of the box, because Ollama
- * (`/v1/chat/completions`), llama.cpp server and LM Studio all expose an
- * OpenAI-compatible API. Cloud vendors with the same wire format
- * (OpenAI, DeepSeek) reuse it too.
+ * 开箱即覆盖 README 的本地优先家族：Ollama（`/v1/chat/completions`）、
+ * llama.cpp server 与 LM Studio 都暴露 OpenAI 兼容 API。
+ * 同构协议的云厂商（OpenAI、DeepSeek）也复用本实现。
  */
 import type {
   Answer,
@@ -84,7 +83,7 @@ export class OpenAICompatibleProvider implements AIProvider {
   isConfigured(): boolean {
     if (!this.baseUrl) return false;
     if (LOCAL_KINDS.has(this.kind) || this.kind === "custom") {
-      // Local servers usually need no key; custom endpoints are user's choice.
+      // 本地服务通常无需 Key；自定义端点交由用户自行决定。
       return true;
     }
     return Boolean(this.apiKey);
@@ -123,9 +122,9 @@ export class OpenAICompatibleProvider implements AIProvider {
     return { content };
   }
 
-  // The three knowledge-loop capabilities are AI-schema work, not wire-format
-  // work. They share the same transport as chat() — implement them in the next
-  // milestone once the extraction/assessment prompts are designed.
+  // 三项知识循环能力属于 AI schema（模式）层面的工作，而非传输格式
+  // 层面的工作。它们与 chat() 共用同一传输层——待提取/测评提示词
+  // 设计完成后在下一个里程碑实现。
   async extractKnowledge(_document: SourceDocument): Promise<KnowledgeUnit[]> {
     throw new AiProviderError(
       "not-implemented",

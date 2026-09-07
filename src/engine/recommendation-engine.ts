@@ -1,9 +1,8 @@
 /**
- * Recommendation Engine — the "Next Best Action" decision.
+ * 推荐引擎 —— 「下一步最佳动作」的决策。
  *
- * Picks the highest-priority action from the planner's output. Kept separate
- * from the planner so a future smarter model can replace this step without
- * touching gap analysis.
+ * 从规划器输出中挑选优先级最高的动作。与规划器分离，
+ * 以便未来更智能的模型可在不触碰缺口分析的前提下替换本步骤。
  */
 import type { NextAction } from "../domain";
 

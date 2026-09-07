@@ -1,9 +1,9 @@
 /**
- * Storage abstraction — everything that touches the user's local data.
+ * 存储抽象 —— 一切触及用户本地数据的入口。
  *
- * The contract keeps the app storage-agnostic: today it runs on an in-memory
- * + localStorage backend (browser preview), and later it will run on the
- * Tauri SQLite/filesystem backend without touching business logic.
+ * 该契约让应用与具体存储解耦：当前运行在内存 + localStorage 后端
+ * （浏览器预览），后续将切换到 Tauri 的 SQLite / 文件系统后端，
+ * 业务逻辑无需任何改动。
  */
 import type {
   KnowledgeGraph,
@@ -15,20 +15,20 @@ import type {
 export interface StorageAdapter {
   readonly name: string;
 
-  // Documents (Knowledge Base)
+  // 文档（知识库）
   listDocuments(): Promise<SourceDocument[]>;
   saveDocument(doc: SourceDocument): Promise<void>;
   deleteDocument(id: string): Promise<void>;
 
-  // Knowledge Graph
+  // 知识图谱
   getGraph(): Promise<KnowledgeGraph>;
   saveGraph(graph: KnowledgeGraph): Promise<void>;
 
-  // Learner State
+  // 学习者状态
   getLearnerState(): Promise<LearnerState>;
   saveLearnerState(state: LearnerState): Promise<void>;
 
-  // Goals
+  // 目标
   listGoals(): Promise<LearningGoal[]>;
   saveGoal(goal: LearningGoal): Promise<void>;
   deleteGoal(id: string): Promise<void>;

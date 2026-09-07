@@ -30,7 +30,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setApiKey: (apiKey) => set({ apiKey }),
 }));
 
-/** Build the active provider from the current settings (call after save). */
+/** 根据当前设置构建活跃的 Provider（在保存后调用）。 */
 export function buildActiveProvider(): AIProvider {
   const { kind, baseUrl, model, apiKey } = useSettingsStore.getState();
   return createProvider({

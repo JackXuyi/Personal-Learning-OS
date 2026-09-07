@@ -10,10 +10,10 @@ const bandStyles: Record<MasteryBand, string> = {
 
 export function BandBadge({ band }: { band: MasteryBand }) {
   const label: Record<MasteryBand, string> = {
-    "not-started": "Not started",
-    learning: "Learning",
-    proficient: "Proficient",
-    mastered: "Mastered",
+    "not-started": "未开始",
+    learning: "学习中",
+    proficient: "较熟练",
+    mastered: "已掌握",
   };
   return (
     <span

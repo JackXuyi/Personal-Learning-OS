@@ -1,14 +1,13 @@
 /**
- * Domain layer — the five core objects of Personal Learning OS.
+ * 领域层 —— Personal Learning OS 的五核心对象。
  *
- * 1. SourceDocument — the user's own knowledge sources.
- * 2. Knowledge (KnowledgeUnit) — semantic units extracted from documents.
- * 3. KnowledgeGraph — how knowledge units relate to each other.
- * 4. LearnerState — what the user actually masters right now.
- * 5. LearningGoal — the entry point of the whole system.
+ * 1. SourceDocument —— 用户自己的知识来源。
+ * 2. Knowledge（KnowledgeUnit）—— 从文档抽取出的语义单元。
+ * 3. KnowledgeGraph —— 知识单元之间如何关联。
+ * 4. LearnerState —— 用户此刻真正掌握了什么。
+ * 5. LearningGoal —— 整个系统的入口。
  *
- * Plus the supporting types for the learning loop: assessment, evidence,
- * gaps and next actions.
+ * 以及支撑学习闭环的类型：assessment、evidence、gaps 与 next actions。
  */
 
 export * from "./document";
@@ -18,7 +17,7 @@ export * from "./goal";
 export * from "./assessment";
 export * from "./plan";
 
-/** Deterministic, dependency-free id generator (local-first friendly). */
+/** 确定性的、无依赖的 id 生成器（契合 local-first 理念）。 */
 export function newId(prefix: string): string {
   const rand =
     typeof crypto !== "undefined" && "randomUUID" in crypto

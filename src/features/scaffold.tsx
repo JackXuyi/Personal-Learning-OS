@@ -18,11 +18,11 @@ export function ScaffoldPage({
       <SectionTitle title={title} subtitle={subtitle} />
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">Scope</h3>
+          <h3 className="mb-3 text-sm font-semibold text-slate-700">范围</h3>
           <CheckList items={scope} />
         </Card>
         <Card>
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">Next (MVP milestones)</h3>
+          <h3 className="mb-3 text-sm font-semibold text-slate-700">下一步（MVP 里程碑）</h3>
           <CheckList items={nextSteps} ghost />
         </Card>
       </div>

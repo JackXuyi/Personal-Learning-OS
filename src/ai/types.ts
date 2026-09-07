@@ -1,10 +1,10 @@
 /**
- * AI Provider abstraction — the contract the whole app depends on.
+ * AI Provider 抽象 —— 整个应用依赖的契约。
  *
- * Business logic must never talk to a concrete vendor. Every AI capability
- * goes through `AIProvider`, so local AI (Ollama / llama.cpp / LM Studio),
- * cloud AI (OpenAI / Anthropic / Gemini / DeepSeek) and future community
- * providers can be swapped freely.
+ * 业务逻辑绝不能直接面向某个具体厂商。每一项 AI 能力都经由 `AIProvider`
+ * 转发，因此本地 AI（Ollama / llama.cpp / LM Studio）、云端 AI
+ * （OpenAI / Anthropic / Gemini / DeepSeek）以及未来的社区
+ * Provider 都可以自由替换。
  */
 import type {
   Answer,
@@ -40,7 +40,7 @@ export interface ChatOutput {
 
 export interface ProviderConfig {
   kind: ProviderKind;
-  /** HTTP base URL of the OpenAI-compatible endpoint. */
+  /** OpenAI 兼容端点的 HTTP 基础地址。 */
   baseUrl?: string;
   /** Model name to use. */
   model?: string;

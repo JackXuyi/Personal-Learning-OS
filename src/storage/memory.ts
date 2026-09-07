@@ -1,9 +1,8 @@
 /**
- * In-memory storage — the zero-setup default.
+ * 内存存储（In-memory storage）——零配置默认方案。
  *
- * Used during development/browser preview and as a base class for the
- * persisted adapters. All methods are async so swapping in the SQLite
- * backend later does not change call sites.
+ * 用于开发/浏览器预览，并作为持久化适配器的基类。所有方法均为 async，
+ * 以便后续接入 SQLite 后端时无需改动调用点。
  */
 import type {
   KnowledgeGraph,

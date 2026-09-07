@@ -1,9 +1,9 @@
 /**
- * Core Object #4 — Learner State.
+ * 核心对象 #4 — Learner State（学习者状态）。
  *
- * Describes "what the user actually masters right now" for a knowledge unit.
- * A single score is not enough — we track confidence, attempts, cognitive
- * level, misconceptions, forgetting and application/interview ability.
+ * 描述"用户当前对某知识单元实际掌握了多少"。
+ * 单一分数不够——我们跟踪置信度、尝试次数、认知层级、
+ * 误解、遗忘以及应用/面试能力。
  */
 
 export type CognitiveLevel =

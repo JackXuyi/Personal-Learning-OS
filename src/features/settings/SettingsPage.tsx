@@ -5,14 +5,14 @@ import { useSettingsStore } from "../../stores/useSettingsStore";
 import type { ProviderKind } from "../../ai";
 
 const KINDS: { value: ProviderKind; label: string }[] = [
-  { value: "ollama", label: "Ollama (local)" },
-  { value: "llama.cpp", label: "llama.cpp (local)" },
-  { value: "lmstudio", label: "LM Studio (local)" },
+  { value: "ollama", label: "Ollama（本地）" },
+  { value: "llama.cpp", label: "llama.cpp（本地）" },
+  { value: "lmstudio", label: "LM Studio（本地）" },
   { value: "openai", label: "OpenAI" },
   { value: "anthropic", label: "Anthropic" },
   { value: "gemini", label: "Gemini" },
   { value: "deepseek", label: "DeepSeek" },
-  { value: "custom", label: "Custom (OpenAI-compatible)" },
+  { value: "custom", label: "自定义（OpenAI 兼容）" },
 ];
 
 export default function SettingsPage() {
@@ -32,15 +32,15 @@ export default function SettingsPage() {
   return (
     <PageContainer>
       <SectionTitle
-        title="Settings"
-        subtitle="AI provider configuration — used by the assessment & knowledge engines"
+        title="设置"
+        subtitle="AI Provider 配置——供测评与知识引擎使用"
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <h3 className="mb-1 text-sm font-semibold text-slate-700">AI Provider</h3>
           <p className="mb-4 text-xs text-slate-500">
-            Engines degrade gracefully without a provider — heuristics run fully offline.
+            未配置 Provider 时引擎会优雅降级——启发式逻辑完全离线运行。
           </p>
 
           <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -60,7 +60,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-3">
-            <Field label={local ? "Base URL (local server)" : "Base URL"}>
+            <Field label={local ? "Base URL（本地服务）" : "Base URL"}>
               <input
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
                 value={baseUrl}
@@ -69,7 +69,7 @@ export default function SettingsPage() {
                 spellCheck={false}
               />
             </Field>
-            <Field label="Model">
+            <Field label="模型">
               <input
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
                 value={model}
@@ -79,7 +79,7 @@ export default function SettingsPage() {
               />
             </Field>
             {!local ? (
-              <Field label="API key">
+              <Field label="API Key">
                 <input
                   type="password"
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
@@ -93,31 +93,31 @@ export default function SettingsPage() {
           </div>
 
           <p className="mt-4 text-xs text-slate-400">
-            Settings are UI-only at Phase 0 — persistence lands with the local storage adapter.
+            设置目前仅在 Phase 0 阶段为界面层——持久化将随本地存储适配器落地。
           </p>
         </Card>
 
         <div className="space-y-4">
           <Card>
-            <h3 className="mb-3 text-sm font-semibold text-slate-700">Provider status</h3>
+            <h3 className="mb-3 text-sm font-semibold text-slate-700">Provider 状态</h3>
             <FoundationRow>
-              <StatusPill label={local ? "Local (no key required)" : "Remote"} ok={local} />
-              <StatusPill label="Heuristic fallback ready" ok />
+              <StatusPill label={local ? "本地（无需 Key）" : "远程"} ok={local} />
+              <StatusPill label="启发式降级已就绪" ok />
             </FoundationRow>
             <p className="mt-3 text-xs leading-relaxed text-slate-500">
               {local
-                ? "Point the base URL at your local OpenAI-compatible server. Knowledge extraction and assessment generation will use it once implemented."
-                : "Supply the API key above. The OpenAI-compatible wire protocol is shared across providers."}
+                ? "将 Base URL 指向你本地的 OpenAI 兼容服务。知识抽取与测评生成在实装后将使用它。"
+                : "填入上方的 API Key。OpenAI 兼容的通信协议在各 Provider 间通用。"}
             </p>
           </Card>
 
           <Card>
-            <h3 className="mb-3 text-sm font-semibold text-slate-700">Current config</h3>
+            <h3 className="mb-3 text-sm font-semibold text-slate-700">当前配置</h3>
             <dl className="space-y-1 text-sm">
               <KV k="kind" v={kind} />
               <KV k="baseUrl" v={baseUrl} />
               <KV k="model" v={model} />
-              <KV k="apiKey" v={apiKey ? "••••••••" : "(empty)"} />
+              <KV k="apiKey" v={apiKey ? "••••••••" : "（空）"} />
             </dl>
           </Card>
         </div>

@@ -1,6 +1,6 @@
 /**
- * Mastery Engine — classifies mastery into bands and decides whether a unit
- * is a gap for a given goal. Shared thresholds live in the domain layer.
+ * Mastery Engine（掌握度引擎）—— 把掌握度归入档位，并判断某单元
+ * 对给定目标是否构成缺口。共享阈值定义在领域层。
  */
 import type { LearnerState } from "../domain";
 import { MASTERY_THRESHOLD } from "../domain";
@@ -15,7 +15,7 @@ export function bandOf(mastery: number): MasteryBand {
   return "mastered";
 }
 
-/** A unit is a gap when its current mastery is below the goal's threshold. */
+/** 当单元当前掌握度低于目标阈值时，即为缺口。 */
 export function isGap(
   state: LearnerState,
   unitId: string,

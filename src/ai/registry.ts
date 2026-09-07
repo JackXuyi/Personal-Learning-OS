@@ -1,9 +1,9 @@
 /**
- * Provider registry — the single place to construct an AIProvider from a kind.
+ * Provider registry（提供者注册表）——由 kind 构造 AIProvider 的唯一入口。
  *
- * Anthropic & Gemini use non-OpenAI wire formats; their adapters are a
- * separate milestone. Until then the registry returns a `NotImplementedProvider`
- * that fails loudly (never silently) with a typed error.
+ * Anthropic 与 Gemini 采用非 OpenAI 的传输格式；它们的适配器属于
+ * 单独的里程碑。在此之前，注册表返回一个 `NotImplementedProvider`，
+ * 它会以带类型的错误"大声失败"（绝不静默）。
  */
 import type { Answer, Evaluation, KnowledgeUnit, Question, SourceDocument } from "../domain";
 import { OpenAICompatibleProvider } from "./openai-compatible";

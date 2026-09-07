@@ -5,7 +5,7 @@
     "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 }
 
-/* Global base so the app never shows a flash of unstyled background */
+/* 全局基础样式，避免应用出现未加载样式的背景闪烁 */
 html,
 body,
 #root {

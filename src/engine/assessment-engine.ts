@@ -1,9 +1,8 @@
 /**
- * Assessment Engine — generates questions and evaluates answers.
+ * Assessment Engine（测评引擎）—— 生成题目并评估作答。
  *
- * With a configured provider it asks the model (next milestone prompt
- * pipeline); without one it falls back to deterministic local questions so
- * the loop is always demonstrable.
+ * 配置了 Provider 时交由模型出题与判分（下一里程碑的提示词流水线）；
+ * 未配置时退化为确定性的本地题目，让闭环始终可演示。
  */
 import type { AIProvider } from "../ai";
 import type {
@@ -61,7 +60,7 @@ export function createAssessmentEngine(provider?: AIProvider): AssessmentEngine 
           console.warn(`[assessment-engine] provider evaluation fell back to local: ${String(err)}`);
         }
       }
-      // Local heuristic scoring: without AI we only mark obvious self-checks.
+      // 本地启发式评分：没有 AI 时只标记明显的自测结果。
       const answered = answer.content.trim().length > 0;
       const matchesReference =
         Boolean(question.referenceAnswer) &&

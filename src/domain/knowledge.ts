@@ -1,9 +1,9 @@
 /**
- * Core Object #2 & #3 — Knowledge and Knowledge Graph.
+ * 核心对象 #2 & #3 —— Knowledge（知识）与 Knowledge Graph（知识图谱）。
  *
- * Knowledge is not a plain text chunk — it is a semantic unit with meaning
- * and relationships. The Knowledge Graph describes how units relate:
- * prerequisite / related / parent / child / example / contrast / application / source.
+ * 知识不是一段纯文本——而是带有含义与关系的语义单元。知识图谱描述
+ * 单元之间的关系：prerequisite / related / parent / child / example /
+ * contrast / application / source（八种关系类型）。
  */
 
 export type KnowledgeKind = "concept" | "skill" | "fact" | "procedure" | "principle";
@@ -16,7 +16,7 @@ export interface KnowledgeUnit {
   summary?: string;
   /** The source document this unit was extracted from (Evidence chain). */
   sourceDocumentId?: string;
-  /** Tags for light-weight organization before full graph tooling lands. */
+  /** 在完整图谱工具就绪前的轻量级归类标签。 */
   tags: string[];
   createdAt: number;
 }
@@ -36,13 +36,12 @@ export interface KnowledgeRelation {
   fromId: string;
   toId: string;
   type: RelationType;
-  /** Optional strength in [0, 1] — used later by Mastery/Recommendation engines. */
+  /** 可选的关系强度 [0, 1]——后续由 Mastery（掌握度）/Recommendation（推荐）引擎使用。 */
   strength?: number;
 }
 
 /**
- * Lightweight in-memory graph shape. Enough for the MVP loop; a persisted
- * graph store is planned for Phase 5.
+ * 轻量级内存图谱形态。对 MVP 闭环足够；持久化的图存储规划在 Phase 5。
  */
 export interface KnowledgeGraph {
   units: KnowledgeUnit[];
@@ -55,7 +54,7 @@ export function relationsOf(graph: KnowledgeGraph, unitId: string): KnowledgeRel
   return graph.relations.filter((r) => r.fromId === unitId || r.toId === unitId);
 }
 
-/** Units that must be mastered before the given unit makes sense. */
+/** 必须先于给定单元掌握的前置单元（掌握它，给定单元才讲得通）。 */
 export function prerequisitesOf(graph: KnowledgeGraph, unitId: string): KnowledgeUnit[] {
   const prereqIds = graph.relations
     .filter((r) => r.toId === unitId && r.type === "prerequisite")

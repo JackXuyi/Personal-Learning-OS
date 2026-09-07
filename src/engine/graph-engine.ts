@@ -1,6 +1,6 @@
 /**
- * Knowledge Graph Engine — builds and edits the graph of knowledge units.
- * Pure structural operations so the graph can be reasoned about & visualized.
+ * 知识图谱引擎 —— 构建并编辑知识单元组成的图谱。
+ * 采用纯结构操作，便于对图谱进行推理与可视化。
  */
 import type {
   KnowledgeGraph,

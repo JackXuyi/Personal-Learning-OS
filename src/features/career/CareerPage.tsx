@@ -3,18 +3,18 @@ import { ScaffoldPage } from "../scaffold";
 export default function CareerPage() {
   return (
     <ScaffoldPage
-      title="Career"
-      subtitle="One kind of Learning Goal — a job description that maps to skills & evidence."
+      title="职业"
+      subtitle="一种 Learning Goal——通过职位描述映射到技能与证据。"
       scope={[
-        "Career goals supported by the Learning Goal model (type: career)",
-        "Home dashboard demonstrates the AI Application Engineer example end-to-end",
-        "Skill gap detection + dependency-first plan are live in the engines",
+        "Career 目标由 Learning Goal 模型支持（type: career）",
+        "首页仪表盘端到端演示了 AI Application Engineer 示例",
+        "技能差距检测 + 依赖优先计划已在引擎中实装",
       ]}
       nextSteps={[
-        "Paste a job description and auto-derive required units",
-        "Evidence tracking: projects, interviews, assessments per skill",
-        "Interview ability scoring & interview readiness report",
-        "Resume ↔ skill graph mapping (out of MVP, tracked in roadmap Phase 3)",
+        "粘贴职位描述并自动推导所需单元",
+        "证据追踪：每个技能对应的项目、面试、测评",
+        "面试能力评分与面试就绪报告",
+        "简历 ↔ 技能图谱映射（超出 MVP，列入路线图 Phase 3）",
       ]}
     />
   );

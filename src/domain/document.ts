@@ -1,8 +1,8 @@
 /**
- * Core Object #1 — SourceDocument.
+ * 核心对象 #1 —— SourceDocument（源文档）。
  *
- * The user's own knowledge source. The principle is simple:
- * "Your raw material always belongs to you."
+ * 用户自己的知识来源。原则很简单：
+ * 「你的原始素材永远属于你。」
  */
 export type DocumentFormat =
   | "pdf"
@@ -31,6 +31,6 @@ export interface SourceDocument {
   importedAt: number;
   status: DocumentStatus;
   rawSizeBytes?: number;
-  /** Optional plain-text snapshot used by the Knowledge Engine while parsing is unsupported. */
+  /** 可选的纯文本快照，在解析尚未支持时由 Knowledge Engine 使用。 */
   textPreview?: string;
 }

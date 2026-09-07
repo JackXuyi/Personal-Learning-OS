@@ -1,8 +1,7 @@
 /**
- * Learning plan / gap / next-action types.
+ * 学习计划 / 缺口 / 下一步动作类型。
  *
- * Outputs of the Learning Planner & Recommendation Engine — everything an
- * "adaptive" system needs to decide the next best action.
+ * 学习规划器与推荐引擎的输出——自适应系统据此决定「最佳下一步」。
  */
 
 export type ActionKind =
@@ -16,9 +15,9 @@ export type ActionKind =
 export interface SkillGap {
   unitId: string;
   currentMastery: number;
-  /** Mastery required by the goal (defaults to 0.8). */
+  /** 该目标要求达到的掌握度（默认 0.8）。 */
   targetMastery: number;
-  /** Why this gap matters (Explainable principle). */
+  /** 为什么这个缺口重要（可解释原则）。 */
   reasons: string[];
 }
 
@@ -26,7 +25,7 @@ export interface NextAction {
   id: string;
   kind: ActionKind;
   unitId: string;
-  /** Lower number = higher priority. */
+  /** 数值越小优先级越高。 */
   priority: number;
   /** Human-readable justification, kept so the UI can answer "why?". */
   reasons: string[];

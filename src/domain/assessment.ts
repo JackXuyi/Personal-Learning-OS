@@ -1,8 +1,8 @@
 /**
- * Adaptive Assessment support types.
+ * 自适应测评支撑类型。
  *
- * Question types follow the README (Recall … Interview), cognitive levels
- * follow Bloom's taxonomy. Evaluations feed the Learner Model with evidence.
+ * 题目类型遵循 README（Recall … Interview），认知层级遵循
+ * Bloom 分类法。测评结果以证据形式回喂给学习者模型。
  */
 
 import type { CognitiveLevel } from "./learner";
@@ -55,6 +55,6 @@ export interface Evidence {
   description?: string;
   sourceDocumentId?: string;
   at: number;
-  /** Quality of the evidence in [0, 1]. */
+  /** 证据质量 [0, 1]。 */
   quality?: number;
 }

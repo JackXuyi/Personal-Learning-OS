@@ -20,12 +20,12 @@ export default function KnowledgePage() {
   return (
     <PageContainer>
       <SectionTitle
-        title="Knowledge"
-        subtitle="Knowledge units from your sources, with live mastery from the Learner State."
+        title="知识"
+        subtitle="来自你资料源的知识单元，掌握度实时取自 Learner State。"
       />
       <Card>
         {!graph ? (
-          <p className="text-sm text-slate-500">Loading graph…</p>
+          <p className="text-sm text-slate-500">图谱加载中…</p>
         ) : (
           <ul className="divide-y divide-slate-100">
             {graph.units.map((unit) => {

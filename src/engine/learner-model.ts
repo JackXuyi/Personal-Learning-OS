@@ -1,9 +1,9 @@
 /**
- * Learner Model — keeps the persistent LearnerState honest.
+ * Learner Model（学习者模型）—— 让持久化的 LearnerState 保持可信。
  *
- * Every assessment produces evidence; evidence updates mastery. Wrong answers
- * register misconceptions, right answers push the cognitive level forward.
- * All functions are pure — callers (engines / stores) persist the result.
+ * 每次测评都会产生证据；证据驱动掌握度更新。答错会登记误解，
+ * 答对会把认知层级向前推。所有函数都是纯函数——由调用方
+ * （引擎 / store）负责持久化结果。
  */
 import type { Evaluation } from "../domain";
 import type { CognitiveLevel, LearnerState, UnitMastery } from "../domain";
@@ -58,8 +58,8 @@ export function applyEvaluation(
     ? prev.misconceptions.filter((m) => !evaluation.misconceptionsDetected.includes(m))
     : dedupe([...prev.misconceptions, ...evaluation.misconceptionsDetected]);
 
-  // Confidence moves toward observed accuracy; application/interview ability
-  // follow mastery until real evidence (projects, interviews) arrives.
+  // 置信度向「观测到的正确率」靠拢；在真实证据（项目、面试）
+  // 到来之前，应用/面试能力先跟随掌握度。
   const observed = accuracyOf({ ...prev, correctCount, attempts });
   const confidence = clamp01(prev.confidence + (observed - prev.confidence) * 0.2);
   const cognitiveLevel = nextCognitiveLevel(prev.cognitiveLevel, correct, mastery);
@@ -86,8 +86,8 @@ export function applyEvaluation(
 }
 
 /**
- * Forgetting curve (Phase 2 simplified): if a unit has not been reviewed for
- * `halfLifeDays`, mastery decays toward the floor. Pure — returns new state.
+ * 遗忘曲线（Phase 2 简化版）：若某知识单元超过 `halfLifeDays` 天未被复习，
+ * 其掌握度会向底线衰减。纯函数 —— 返回新的状态。
  */
 export function applyForgetting(
   state: LearnerState,
@@ -122,7 +122,7 @@ function nextCognitiveLevel(
   after: number,
 ): CognitiveLevel {
   if (!correct) {
-    // Drop one level on clear failure from a high band.
+    // 高位档明显答错时下调一级。
     if (after < 0.4) return current === "remember" ? current : "understand";
     return current;
   }

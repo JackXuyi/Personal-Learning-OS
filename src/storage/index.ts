@@ -1,9 +1,9 @@
 /**
- * Storage factory.
+ * 存储工厂。
  *
- * The persisted localStorage adapter is the default so the scaffold behaves
- * like a real local-first app even in the browser. When the Tauri SQLite
- * backend lands, switch this factory to return it and nothing else changes.
+ * 默认使用可持久化的 localStorage 适配器，让脚手架即使在浏览器里
+ * 也表现得像真正的本地优先应用。Tauri SQLite 后端就绪后，只需让
+ * 本工厂改返回它即可，其余一切不变。
  */
 import { LocalStorageAdapter } from "./local";
 import { InMemoryStorage } from "./memory";
@@ -29,7 +29,7 @@ function detectBestBackend(): StorageBackend {
     localStorage.removeItem(probe);
     return "local";
   } catch {
-    return "memory"; // e.g. non-browser environments without localStorage
+    return "memory"; // 例如没有 localStorage 的非浏览器环境
   }
 }
 

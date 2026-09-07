@@ -3,8 +3,8 @@ import { createStorage, type StorageAdapter } from "../storage";
 import { runLearningLoop, type LoopSnapshot } from "../engine";
 
 /**
- * The single storage instance for the whole app. localStorage-backed by
- * default (see src/storage) — swap to the SQLite adapter here later.
+ * 整个应用唯一的存储实例。默认由 localStorage 支撑
+ * （见 src/storage）——后续可在此处切换为 SQLite 适配器。
  */
 export const storage: StorageAdapter = createStorage();
 

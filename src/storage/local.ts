@@ -1,9 +1,9 @@
 /**
- * localStorage-persisted adapter — survives reloads in browser preview.
+ * localStorage 持久化适配器——在浏览器预览中可跨刷新保留。
  *
- * This is the *placeholder* for the production SQLite backend (Tauri side).
- * Data model and keys stay identical, so the switch later is a one-line
- * factory change. Note: localStorage must not be used for secrets.
+ * 这是生产级 SQLite 后端（Tauri 侧）的*占位*实现。
+ * 数据模型与 key 保持一致，因此后续切换只需改动一行的
+ * 工厂函数。注意：localStorage 不得用于存放密钥。
  */
 import type {
   KnowledgeGraph,
