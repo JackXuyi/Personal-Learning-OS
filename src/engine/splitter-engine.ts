@@ -277,16 +277,11 @@ function cleanTitle(raw: string): string {
 }
 
 /**
- * 取章正文用于摘要：定位正文中「首个标题行」（章自带标题，位于切片开头），
- * 取其后内容——避免「## 章名」之类标题文本成为要点。
+ * 取章正文用于摘要：移除正文中所有标题行（章切片可能含文档主标题 / 章标题），
+ * 避免「## 章名」之类标题文本成为要点；contentRef 不受影响。
  */
 function firstBodyLines(body: string): string {
-  const m = /^#{1,6}\s+.*$/m.exec(body);
-  if (m) {
-    const after = body.slice(m.index + m[0].length);
-    return after.replace(/^\n+/, "");
-  }
-  return body;
+  return body.replace(/^#{1,6}\s+.*$/gm, "").replace(/^\n+/, "");
 }
 
 /** 本地兜底要点：正文首句，截断至 max 字符。 */
@@ -306,8 +301,8 @@ export function renameChapter(chapters: Chapter[], chapterId: string, title: str
 }
 
 /**
- * 合并同一文档中连续的一段章节（含 fromId..toId，均需存在且相邻）。
- * 区间取合并段的并集，标题保留首章，keyPoints 合并截断。
+ * 合并同一文档中连续的一段章节（含 fromId..toId，均需存在且相邻；入参按 order 升序）。
+ * 区间取合并段的并集，标题保留首章，keyPoints 合并截断；合并章落在被合并段原位。
  */
 export function mergeChapters(
   chapters: Chapter[],
@@ -319,17 +314,17 @@ export function mergeChapters(
   const to = ids.indexOf(toId);
   if (from === -1 || to === -1 || from > to) return { chapters, merged: undefined };
 
-  const kept = chapters.filter((_, i) => i < from || i > to);
   const merged: Chapter = {
     ...chapters[from],
     contentRef: { start: chapters[from].contentRef.start, end: chapters[to].contentRef.end },
     title: chapters[from].title,
     keyPoints: [...chapters[from].keyPoints, ...chapters[to].keyPoints].slice(0, 5),
   };
-  return { chapters: renumber([...kept, merged]), merged };
+  const next = [...chapters.slice(0, from), merged, ...chapters.slice(to + 1)];
+  return { chapters: renumber(next), merged };
 }
 
-/** 按指定 id 顺序重排章节并重写 order。 */
+/** 按指定 id 顺序重排章节并重写 order；未列出的保持原相对顺序附后。 */
 export function reorderChapters(chapters: Chapter[], orderedIds: string[]): Chapter[] {
   const byId = new Map(chapters.map((c) => [c.id, c]));
   const next: Chapter[] = [];
@@ -344,9 +339,10 @@ export function reorderChapters(chapters: Chapter[], orderedIds: string[]): Chap
   return renumber(next);
 }
 
-/** 重写 order 为连续 1..n（merge/reorder 后保持不变量）。 */
+/**
+ * 重写 order 为连续 1..n（merge/reorder 后保持不变量）。
+ * 注意：保持传入数组顺序，不做排序——调用方负责传入有序列表。
+ */
 function renumber(chapters: Chapter[]): Chapter[] {
-  return chapters
-    .sort((a, b) => a.order - b.order || a.contentRef.start - b.contentRef.start)
-    .map((c, i) => ({ ...c, order: i + 1 }));
+  return chapters.map((c, i) => ({ ...c, order: i + 1 }));
 }
