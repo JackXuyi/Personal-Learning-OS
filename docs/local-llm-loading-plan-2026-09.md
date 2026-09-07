@@ -2,7 +2,7 @@
 
 > 目标:参考 [Zackriya-Solutions/meetily](https://github.com/Zackriya-Solutions/meetily) 的本地模型加载机制,在本项目实现"应用内置、开箱即用"的本地 LLM——用户不再需要自己安装 Ollama / llama.cpp / 手动下载模型。
 >
-> 状态:方案定稿(v2)· 五项决策已确认,可进入 N0 实现 · 日期:2026-09-07
+> 状态:已落地 N0–N3(2026-09-07)——llama-helper 推理链路、内置模型管理、builtin Provider 与设置 UI 均已实现并通过中文推理冒烟;N4 打磨待续 · 方案定稿 v2
 
 ---
 

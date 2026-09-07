@@ -386,8 +386,8 @@ Personal Learner Model
 │   SQLite · Local Files · Vector Index        │
 ├──────────────────────────────────────────────┤
 │                AI Layer                      │
-│   Ollama · llama.cpp · LM Studio             │
-│   OpenAI-compatible APIs · Custom Providers  │
+│   Built-in Local LLM (llama-helper)          │
+│   Ollama · llama.cpp · OpenAI-compatible     │
 └──────────────────────────────────────────────┘
 ```
 
@@ -400,9 +400,9 @@ Personal Learner Model
 | 桌面端     | Tauri · Rust                                                  |
 | 前端       | React · TypeScript · Vite · TailwindCSS · Zustand            |
 | 存储       | SQLite · 本地文件系统 · 本地向量索引                          |
-| AI         | Ollama · llama.cpp · LM Studio · OpenAI · Anthropic · Gemini · DeepSeek · 自定义 OpenAI-compatible |
+| AI         | 内置本地模型（builtin，llama-helper 推理）· Ollama · llama.cpp · LM Studio · OpenAI · Anthropic · Gemini · DeepSeek · 自定义 OpenAI-compatible |
 
-用户可以**完全使用本地模型**运行整个产品。
+**默认内置 Qwen3.5 本地模型**（应用自带下载与加载，开箱即用、完全离线；也可切换 Ollama / llama.cpp / 云端服务）。
 
 ---
 
@@ -424,7 +424,8 @@ Learning History（学习历史）· Assessment（测评）· Interview Answers�
 核心能力不依赖云端：
 
 ```text
-下载 → 安装 → 导入文档 → 配置 Ollama → 开始学习
+下载 → 安装 → 导入文档 → 配置 AI Provider → 开始学习
+(默认启用内置本地 Qwen3.5 模型 —— 无需额外安装任何东西)
 ```
 
 无需：注册账号 · 上传数据 · 云端数据库 · 强制 API Key
@@ -652,7 +653,7 @@ npm run build       # 类型检查 + 生产构建 → dist/
 ```text
 src/
   domain/      五核心对象 + goal/assessment/plan 类型（纯 TS）
-  ai/          AI Provider 抽象 —— Ollama · llama.cpp · OpenAI 兼容 …
+  ai/          AI Provider 抽象 —— builtin（内置本地模型）· Ollama · OpenAI 兼容 …
   storage/     StorageAdapter —— 内存 + localStorage（SQLite/Tauri 预留）
   engine/      七大引擎 + loop.ts 学习闭环编排 demo
   stores/      zustand 状态 —— 闭环快照、Provider 配置

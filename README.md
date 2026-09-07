@@ -377,8 +377,8 @@ Which answers:
 │   SQLite · Local Files · Vector Index        │
 ├──────────────────────────────────────────────┤
 │                AI Layer                      │
-│   Ollama · llama.cpp · LM Studio             │
-│   OpenAI-compatible APIs · Custom Providers  │
+│   Built-in Local LLM (llama-helper)          │
+│   Ollama · llama.cpp · OpenAI-compatible     │
 └──────────────────────────────────────────────┘
 ```
 
@@ -391,7 +391,9 @@ Which answers:
 | Desktop     | Tauri · Rust                                                 |
 | Frontend    | React · TypeScript · Vite · TailwindCSS · Zustand           |
 | Storage     | SQLite · Local Filesystem · Local Vector Index              |
-| AI          | Ollama · llama.cpp · LM Studio · OpenAI · Anthropic · Gemini · DeepSeek · Custom OpenAI-compatible |
+| AI          | Built-in local model (builtin, llama-helper inference) · Ollama · llama.cpp · LM Studio · OpenAI · Anthropic · Gemini · DeepSeek · Custom OpenAI-compatible |
+
+**A Qwen3.5 local model is bundled by default** — the app downloads and loads it itself (out-of-the-box, fully offline); Ollama / llama.cpp / cloud providers remain switchable.
 
 You can run the whole product on **fully local models**.
 
@@ -415,7 +417,8 @@ All of it belongs to you.
 Core capabilities never depend on the cloud:
 
 ```text
-Download → Install → Import Documents → Configure Ollama → Start Learning
+Download → Install → Import Documents → Configure AI Provider → Start Learning
+(the built-in local Qwen3.5 model is active by default — nothing else to install)
 ```
 
 No account registration · No data upload · No cloud database · No mandatory API key
@@ -642,7 +645,7 @@ npm run build       # typecheck + production build → dist/
 ```text
 src/
   domain/      five core objects + goal/assessment/plan types (pure TS)
-  ai/          AI Provider abstraction — Ollama · llama.cpp · OpenAI-compatible …
+  ai/          AI Provider abstraction — builtin (local model) · Ollama · OpenAI-compatible …
   storage/     StorageAdapter — in-memory + localStorage (SQLite/Tauri later)
   engine/      seven engines + loop.ts orchestration demo
   stores/      zustand state — loop snapshot, provider settings
