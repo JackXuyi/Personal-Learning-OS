@@ -2,7 +2,7 @@
 
 > 目标:参考 [Zackriya-Solutions/meetily](https://github.com/Zackriya-Solutions/meetily) 的本地模型加载机制,在本项目实现"应用内置、开箱即用"的本地 LLM——用户不再需要自己安装 Ollama / llama.cpp / 手动下载模型。
 >
-> 状态:方案稿(v1)· 待确认后进入 N0 实现 · 日期:2026-09-07
+> 状态:方案定稿(v2)· 五项决策已确认,可进入 N0 实现 · 日期:2026-09-07
 
 ---
 
@@ -10,9 +10,19 @@
 
 - **参考对象**:meetily 的 `llama-helper`(进程内推理 sidecar)+ `ModelDef 声明式模型清单` + `模型管理器`三件套,是"应用自己把开源模型加载起来"的最小可靠范式,建议**同构移植**。
 - **现状差距**:本项目 AI 层已为 `ollama / llama.cpp / lmstudio` 预留 OpenAI 兼容 HTTP 适配,但**模型加载依赖用户手动装服务**——不是"本地模型加载",只是"本地服务连接"。要达成 meetily 的 local-first 闭环,需新增 Rust 侧推理进程 + 模型下载管理 + TS Provider。
-- **选型结论**:以 **Qwen3.5-2B / 4B(Q4_K_M,Unsloth Dynamic GGUF)** 为主推(meetily 默认同款、中文强、16GB Mac 流畅),0.8B / 9B 作为低配与高质两档扩展;下载源主 **ModelScope(魔搭)**、备 **HuggingFace**。
-- **落地形态**:新增 `src-tauri/llama-helper` 独立 crate(llama-cpp-2 进程内推理、Metal 加速、模型常驻缓存、JSON over stdio),Tauri 命令面暴露模型管理 + 生成,TS 侧新增 `builtin` ProviderKind,现有 engine 零改动接入。
+- **选型结论**:以 **Qwen3.5-4B(Q4_K_M,~2.5GB,Unsloth Dynamic GGUF)为默认档**(中文强、16GB Mac 流畅,meetily 高质档同款);**2B(~1.2GB)作为轻量备选**(低配机器/后台常驻轻量场景),0.8B / 9B 作为低配与高质两档扩展;下载源主 **ModelScope(魔搭)**、备 **HuggingFace**。
+- **落地形态**:新增 `src-tauri/llama-helper` 独立 crate(llama-cpp-2 进程内推理、Metal 加速、模型常驻缓存、JSON over stdio),Tauri 命令面暴露模型管理 + 生成,TS 侧新增 `builtin` ProviderKind 并**设为默认**,现有 engine 零改动接入。
 - **不做什么**:不做 ASR / 语音类模型(meetily 的 Whisper/Parakeet 与本项目无关);多模态(mmproj)与流式输出列为后续里程碑。
+
+### 0.1 已确认决策(2026-09-07)
+
+| # | 决策项 | 结论 |
+| --- | --- | --- |
+| Q1 | `builtin`(内置本地模型)设为默认 Provider | ✅ 是(云端/外部服务保留在设置中可切换) |
+| Q2 | 默认模型档位 | ✅ **Qwen3.5-4B** 为默认;2B 作为轻量备选一并预置 |
+| Q3 | 下载双源 | ✅ ModelScope(魔搭)主 + HuggingFace 备,失败自动切换 |
+| Q4 | Metal GPU 加速(仅 mac arm64) | ✅ 本期启用 |
+| Q5 | scope | ✅ 仅 LLM 文本推理,不做语音类 |
 
 ---
 
@@ -74,11 +84,12 @@ meetily 已在生产验证 **Qwen3.5 走 llama.cpp 的完整链路**(且官方�
 | 档位 | 模型(GGUF) | 文件大小 | 运行内存 | 定位 | 建议 |
 | --- | --- | --- | --- | --- | --- |
 | L0 超轻量 | Qwen3.5-0.8B-Q4_K_M | ~0.7 GB | ~2 GB | 低配机器/纯浏览 | 可选 |
-| **L1 默认(推荐)** | **Qwen3.5-2B-Q4_K_M** | ~1.2 GB | ~3.5 GB | 中文讲解/问答/轻量出题;后台常驻无压力 | **默认随附推荐** |
-| **L2 高质量(推荐)** | **Qwen3.5-4B-Q4_K_M** | ~2.5 GB | ~5.5 GB | 复杂出题/作答评估/计划推理 | 16GB 机器舒适档,建议一并预置 |
+| L1 轻量备选 | Qwen3.5-2B-Q4_K_M | ~1.2 GB | ~3.5 GB | 后台常驻轻盈 / 低配机器 | **一并预置** |
+| **L2 默认(已定)** | **Qwen3.5-4B-Q4_K_M** | ~2.5 GB | ~5.5 GB | 讲解/出题/评估/计划推理 | **默认随附,激活默认档** |
 | L3 旗舰可选 | Qwen3.5-9B-Q4_K_M | ~5.5 GB | ~7-10 GB | 需要最高本地质量时 | 可选,按用户内存提示 |
 
 - **为什么是 Qwen**:开源中文能力第一梯队;Apache-2.0 无商用限制;Unsloth Dynamic 2.0 量化质量好;与 meetily 已锁定的 `llama-cpp-2 =0.1.146` 完全兼容。
+- **为什么默认 4B 而不是 2B**:本机 16GB Apple Silicon 运行 4B Q4(~2.5GB 权重 + KV cache ≈ 4~6GB 常驻)完全流畅;4B 在出题/评估等需要推理的任务上质量显著高于 2B——而这是学习系统的核心价值场景。2B 仍预置,供"后台常驻极致轻量 / 更低配机器"切换。
 - **为什么不是 Gemma3 / Llama3.1**:当前 TS 默认模型写着 `llama3.1`,仅作为 Ollama 演示默认值,无历史包袱;Gemma3 中文弱于 Qwen;没必要引入第二套模板(新增模板面 = 维护成本)。Gemma 可作 L4 预留。
 - **下载源(国内关键)**:主 **ModelScope 魔搭**(unsloth 官方镜像,直连快),备 **HuggingFace**(meetily 原 URL)。两源 URL 均写进 `ModelDef`,下载失败自动切换。
 
@@ -159,7 +170,7 @@ src-tauri/
 
 ### 5.3 Rust 主应用侧
 
-**`llm/models.rs`**:ModelDef 清单,每档含 name(`qwen3.5:2b` 风格)、gguf_file、**双 download_url(modelscope→hf)**、size_mb、context_size(32768,实际按任务截断)、layer_count(2B=24 / 4B=32 / 9B 待查)、sampling 预设、template。模板常量(`QWEN35_NONTHINKING_TEMPLATE`)与转义函数随文件携带(含单测)。
+**`llm/models.rs`**:ModelDef 清单(**默认档 Qwen3.5-4B 排首位**,其次 2B/0.8B/9B),每档含 name(`qwen3.5:4b` 风格)、gguf_file、**双 download_url(modelscope→hf)**、size_mb、context_size(32768,实际按任务截断)、layer_count(2B=24 / 4B=32 / 9B 待查)、sampling 预设、template。模板常量(`QWEN35_NONTHINKING_TEMPLATE`)与转义函数随文件携带(含单测)。
 
 **`llm/manager.rs`**:
 - 模型目录:`app_data_dir/models/llm`(tauri `path().app_data_dir()`),不做进安装包;
@@ -188,9 +199,9 @@ src-tauri/
 - `src/ai/types.ts`:`ProviderKind` 增 `"builtin"`;`ProviderConfig` 无需 baseUrl/apiKey。
 - `src/ai/builtin.ts`:实现 `AIProvider`——`isConfigured()` = 运行于 Tauri 且 `llm_list_models` 中存在 Ready 模型;`chat()` 薄转发 `invoke("llm_generate")`;`extractKnowledge/generateAssessment/evaluateAnswer` 沿用既有 AIProvider 契约(依赖后续 prompt pipeline 里程碑,与"加载"解耦)。
 - `src/ai/registry.ts`:kind 映射 builtin 实现;OpenAI 兼容族不变。
-- `src/stores/useSettingsStore.ts`:kind 默认改为 `builtin`(待确认 §8-Q1);model 默认 `qwen3.5:2b`;保留 ollama/llama.cpp/云端入口。
+- `src/stores/useSettingsStore.ts`:kind 默认改为 **`builtin`(已定)**;model 默认 **`qwen3.5:4b`**;保留 ollama/llama.cpp/云端入口。
 - 浏览器降级:非 Tauri 环境(纯 `vite dev`)下 builtin 明确报 `not-configured`,提示"本地模型需在桌面端使用"。
-- **SettingsPage 模型管理区**:展示 ModelDef 卡片(名称/大小/状态/进度条)、下载/删除/取消按钮、切换激活模型;首次进入且无 Ready 模型 → 引导一键下载默认档。
+- **SettingsPage 模型管理区**:展示 ModelDef 卡片(名称/大小/状态/进度条)、下载/删除/取消按钮、切换激活模型;首次进入且无 Ready 模型 → 引导一键下载**默认档(Qwen3.5-4B)**,并提供"改为 2B 轻量档"选项。
 
 ### 5.5 与学习引擎的衔接
 
@@ -216,7 +227,7 @@ src-tauri/
 | 阶段 | 内容 | 验收标准 | 风险点 |
 | --- | --- | --- | --- |
 | **N0 骨架** | src-tauri 改 workspace;新增 llama-helper crate(仅 ping/pong);binaries/ 打包约定 | `cargo run -p llama-helper` 手动喂 `{"type":"ping"}` 得 `pong` | workspace 化对现有 tauri 构建的影响(验证 `tauri dev`) |
-| **N1 推理链路** | 移植 main.rs 全量(协议/M3 缓存/M4 GPU/采样清洗)+ 单测 | 下载 0.8B GGUF,冒烟生成中文句子;Metal 层数正确、二次请求不重载 | llama-cpp-2 编译耗时与 API 差异(锁 0.1.146) |
+| **N1 推理链路** | 移植 main.rs 全量(协议/M3 缓存/M4 GPU/采样清洗)+ 单测 | 下载默认 **4B** GGUF 冒烟生成中文句子;Metal 层数正确、二次请求不重载(网络慢时可先以 0.8B 快速验证链路,再切 4B 复验) | llama-cpp-2 编译耗时与 API 差异(锁 0.1.146) |
 | **N2 Rust 管理面** | llm/{models,manager,sidecar}.rs + Tauri 命令 + 事件 | `llm_list_models` 反映磁盘真实状态;下载带进度可取消;helper 空闲回收 | 下载失败/中断处理;目录权限 |
 | **N3 TS 接入** | `builtin` kind + Provider + Settings UI + 默认模型引导 | 桌面端"下载→激活→引擎调用"全链路跑通(chat) | 浏览器降级体验;UI 状态机 |
 | **N4 打磨** | 结构化预设调优(JSON 出题/评估样例集)、默认模型安装策略、externalBin 打包验证、更新 README | release 包开箱即用;文档归档 | 安装包 externalBin triple 命名;构建产物体积 |
@@ -230,24 +241,23 @@ src-tauri/
 | 级别 | 风险 | 影响 | 缓解 |
 | --- | --- | --- | --- |
 | P0 | llama-cpp-2 首次编译耗时(metal,20min+)拖慢迭代 | 开发效率 | 锁 `=0.1.146`;仅 mac arm64 编 metal;N1 用 0.8B 模型冒烟;CI 缓存 target |
-| P0 | GGUF(1.2~2.5GB)国内下载失败/中断 | 功能不可用 | ModelScope 主源 + HF 备源自动切换;进度/断点校验;可取消;文件大小校验防损坏 |
-| P1 | 小模型结构化(JSON)输出不稳定 | 出题/评估质量 | 4B 档 + `tight_structured` 预设;模板防注入转义;后续 schema pipeline 做容错重试 |
-| P1 | 模型常驻内存(~1.3GB@2B + KV cache) | 后台占用 | 空闲 300s 自动 unload;context 按任务截断(默认不拉满 32K);设置页可视化"占用/卸载" |
+| P0 | GGUF(默认 4B ≈2.5GB)国内下载失败/中断 | 功能不可用 | ModelScope 主源 + HF 备源自动切换;进度/断点校验;可取消;文件大小校验防损坏;网络差时可先选 2B 档 |
+| P1 | 结构化(JSON)输出不稳定 | 出题/评估质量 | 默认 4B 已显著缓解;`tight_structured` 预设 + 模板防注入转义 + 后续 schema pipeline 容错重试兜底 |
+| P1 | 模型常驻内存(4B Q4 权重 ~2.5GB + KV cache ≈4~6GB) | 后台占用 | 空闲 300s 自动 unload;context 按任务截断(默认不拉满 32K);设置页可视化"占用/卸载"并提示可切 2B 轻量档 |
 | P1 | sidecar 并发:单进程串行生成,多请求排队 | 并发卡顿 | 学习场景低频,串行可接受;RequestGuard 排队;必要时二期扩展流式/双 slot |
 | P2 | Qwen3.5 多模态 mmproj 分离(Ollama 不支持) | 生态依赖 | 纯文本任务只需主 GGUF;vision 能力列入远期,不进本期 |
 | P2 | externalBin 打包(target-triple 改名)在 release 生效验证 | 发版 | N4 出 release 包专门验收;开发模式走编译产物路径 |
 
 ---
 
-## 9. 待确认问题(开工前)
+## 9. 决策记录
 
-| # | 问题 | 建议 | 说明 |
-| --- | --- | --- | --- |
-| Q1 | 是否将 `builtin`(内置本地模型)设为**默认 Provider**? | 是 | 更贴合 local-first 定位;云端/外部服务保留在设置中 |
-| Q2 | 默认模型档位? | L1 2B 为默认 + 预置 L2 4B 可选 | 16GB 机器两者皆流畅;2B 保后台轻盈 |
-| Q3 | 下载源是否按"魔搭主 + HF 备"双源实现? | 是 | 国内网络必需;meetily 仅 HF,需自行补魔搭 resolve 逻辑 |
-| Q4 | 本期是否启用 Metal GPU 加速(仅 mac arm64)? | 是 | 编译期 feature,默认关会明显变慢 |
-| Q5 | scope 确认:本期只做 **LLM 文本推理**,不做语音类(meetily Whisper/Parakeet)? | 是 | 与产品形态一致 |
+五项关键决策已于 2026-09-07 全部确认(见 §0.1):`builtin` 为默认 Provider、默认档 Qwen3.5-4B、下载双源(魔搭主+HF 备)、本期启用 Metal(mac arm64)、scope 仅 LLM 文本。
+
+**实现期遗留的开放项**(不阻塞 N0–N3,进入对应阶段时再定):
+- 9B 档的准确 `layer_count` 与魔搭/HF 直链 HEAD 校验(下载器需先探测镜像分支 `master`/`main`);
+- 是否提供"下载前可自由切换默认档位"的首次引导文案顺序(默认推 4B,弱网提示 2B);
+- `builtin` 与 `llama.cpp`(外部 server)kind 在设置页的分组与文案区隔,避免用户混淆"内置加载"与"外部服务"。
 
 ---
 
