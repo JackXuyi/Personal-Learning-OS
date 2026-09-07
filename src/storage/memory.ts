@@ -5,16 +5,19 @@
  * 以便后续接入 SQLite 后端时无需改动调用点。
  */
 import type {
+  Chapter,
   KnowledgeGraph,
   LearnerState,
   LearningGoal,
   SourceDocument,
 } from "../domain";
+import { sortChaptersByOrder } from "../domain";
 import type { StorageAdapter } from "./types";
 
 export class InMemoryStorage implements StorageAdapter {
   readonly name: string = "memory";
   protected documents = new Map<string, SourceDocument>();
+  protected chaptersByDocument = new Map<string, Chapter[]>();
   protected graph: KnowledgeGraph = { units: [], relations: [] };
   protected learnerState: LearnerState = { byUnit: {} };
   protected goals = new Map<string, LearningGoal>();
@@ -27,6 +30,15 @@ export class InMemoryStorage implements StorageAdapter {
   }
   async deleteDocument(id: string): Promise<void> {
     this.documents.delete(id);
+    // 级联清理：删除文档时一并移除其章节，保持数据一致性。
+    this.chaptersByDocument.delete(id);
+  }
+
+  async listChapters(documentId: string): Promise<Chapter[]> {
+    return sortChaptersByOrder(this.chaptersByDocument.get(documentId) ?? []);
+  }
+  async saveChapters(documentId: string, chapters: Chapter[]): Promise<void> {
+    this.chaptersByDocument.set(documentId, sortChaptersByOrder(chapters));
   }
 
   async getGraph(): Promise<KnowledgeGraph> {

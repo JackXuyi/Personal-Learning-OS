@@ -6,6 +6,7 @@
  * 业务逻辑无需任何改动。
  */
 import type {
+  Chapter,
   KnowledgeGraph,
   LearnerState,
   LearningGoal,
@@ -19,6 +20,10 @@ export interface StorageAdapter {
   listDocuments(): Promise<SourceDocument[]>;
   saveDocument(doc: SourceDocument): Promise<void>;
   deleteDocument(id: string): Promise<void>;
+
+  // 章节（V2 章节化学习主对象；切分/微调后整批写回）
+  listChapters(documentId: string): Promise<Chapter[]>;
+  saveChapters(documentId: string, chapters: Chapter[]): Promise<void>;
 
   // 知识图谱
   getGraph(): Promise<KnowledgeGraph>;

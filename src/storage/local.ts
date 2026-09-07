@@ -6,6 +6,7 @@
  * 工厂函数。注意：localStorage 不得用于存放密钥。
  */
 import type {
+  Chapter,
   KnowledgeGraph,
   LearnerState,
   LearningGoal,
@@ -15,6 +16,7 @@ import { InMemoryStorage } from "./memory";
 import type { StorageAdapter } from "./types";
 
 const KEY_DOCUMENTS = "plos.documents";
+const KEY_CHAPTERS = "plos.chapters";
 const KEY_GRAPH = "plos.graph";
 const KEY_LEARNER = "plos.learner";
 const KEY_GOALS = "plos.goals";
@@ -36,6 +38,9 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     this.documents = new Map(
       load<SourceDocument[]>(KEY_DOCUMENTS, []).map((d) => [d.id, d]),
     );
+    this.chaptersByDocument = new Map(
+      Object.entries(load<Record<string, Chapter[]>>(KEY_CHAPTERS, {})),
+    );
     this.graph = load<KnowledgeGraph>(KEY_GRAPH, { units: [], relations: [] });
     this.learnerState = load<LearnerState>(KEY_LEARNER, { byUnit: {} });
     this.goals = new Map(load<LearningGoal[]>(KEY_GOALS, []).map((g) => [g.id, g]));
@@ -43,6 +48,10 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
 
   private persist() {
     localStorage.setItem(KEY_DOCUMENTS, JSON.stringify([...this.documents.values()]));
+    localStorage.setItem(
+      KEY_CHAPTERS,
+      JSON.stringify(Object.fromEntries(this.chaptersByDocument)),
+    );
     localStorage.setItem(KEY_GRAPH, JSON.stringify(this.graph));
     localStorage.setItem(KEY_LEARNER, JSON.stringify(this.learnerState));
     localStorage.setItem(KEY_GOALS, JSON.stringify([...this.goals.values()]));
@@ -54,6 +63,10 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
   }
   override async deleteDocument(id: string): Promise<void> {
     await super.deleteDocument(id);
+    this.persist();
+  }
+  override async saveChapters(documentId: string, chapters: Chapter[]): Promise<void> {
+    await super.saveChapters(documentId, chapters);
     this.persist();
   }
   override async saveGraph(graph: KnowledgeGraph): Promise<void> {

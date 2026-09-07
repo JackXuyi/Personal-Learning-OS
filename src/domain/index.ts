@@ -8,6 +8,10 @@
  * 5. LearningGoal —— 整个系统的入口。
  *
  * 以及支撑学习闭环的类型：assessment、evidence、gaps 与 next actions。
+ *
+ * V2（章节化学习）新增核心对象：
+ * 6. Chapter —— 资料切分出的章节（文档 → 章 → 概念 的中间层），
+ *    学习 / 出卷 / 掌握度 / 计划的主单位。
  */
 
 export * from "./document";
@@ -16,6 +20,7 @@ export * from "./learner";
 export * from "./goal";
 export * from "./assessment";
 export * from "./plan";
+export * from "./chapter";
 
 /** 确定性的、无依赖的 id 生成器（契合 local-first 理念）。 */
 export function newId(prefix: string): string {
