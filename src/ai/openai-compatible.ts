@@ -31,9 +31,14 @@ const LOCAL_KINDS: ReadonlySet<ProviderKind> = new Set([
   "llama.cpp",
   "lmstudio",
 ]);
+// NOTE: "builtin" 不在此列——它不是 HTTP 服务，由 src/ai/builtin.ts 经
+// Tauri 命令直连应用内置的 llama-helper 推理进程。
 
 export function normalizeOpenAiBaseUrl(kind: ProviderKind): string {
   switch (kind) {
+    case "builtin":
+    case "custom":
+      return "";
     case "ollama":
       return "http://localhost:11434/v1";
     case "llama.cpp":
@@ -51,6 +56,8 @@ export function normalizeOpenAiBaseUrl(kind: ProviderKind): string {
 
 export function defaultModelOf(kind: ProviderKind): string {
   switch (kind) {
+    case "builtin":
+      return "qwen3.5:4b";
     case "ollama":
       return "llama3.1";
     case "deepseek":

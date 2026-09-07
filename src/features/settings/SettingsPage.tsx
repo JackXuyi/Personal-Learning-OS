@@ -8,8 +8,10 @@ import {
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { defaultModelOf, normalizeOpenAiBaseUrl } from "../../ai/openai-compatible";
 import type { ProviderConfig, ProviderKind } from "../../ai";
+import BuiltinModelsPanel from "./BuiltinModelsPanel";
 
 const KINDS: { value: ProviderKind; label: string }[] = [
+  { value: "builtin", label: "内置本地模型（推荐）" },
   { value: "ollama", label: "Ollama（本地）" },
   { value: "llama.cpp", label: "llama.cpp（本地）" },
   { value: "lmstudio", label: "LM Studio（本地）" },
@@ -82,12 +84,21 @@ export default function SettingsPage() {
   });
   const [test, setTest] = useState<TestStatus>({ state: "idle" });
   const [savedFlash, setSavedFlash] = useState(false);
+  /** kind=builtin 时,激活的本地模型是否已就绪(下载完成)。 */
+  const [builtinReady, setBuiltinReady] = useState(false);
 
   const dirty = useMemo(
     () => !sameConfig(draft, { kind: saved.kind, baseUrl: saved.baseUrl, model: saved.model, apiKey: saved.apiKey }),
     [draft, saved],
   );
   const local = LOCAL_KINDS.has(draft.kind);
+  const builtinMode = draft.kind === "builtin";
+
+  const onBuiltinModelChange = (name: string, ready: boolean) => {
+    setDraft((d) => ({ ...d, model: name }));
+    setBuiltinReady(ready);
+    setTest({ state: "idle" });
+  };
 
   const update =
     (key: keyof Draft) =>
@@ -102,6 +113,7 @@ export default function SettingsPage() {
   };
 
   const runTest = async () => {
+    if (builtinMode) return; // 内置模型不做 HTTP 测试
     setTest({ state: "testing" });
     const result: ConnectionTestResult = await testConnection(toProviderConfig(draft));
     if (result.ok) {
@@ -112,15 +124,24 @@ export default function SettingsPage() {
   };
 
   const runSave = () => {
-    save(draft, {
-      testedOk: test.state === "ok",
-      latencyMs: test.state === "ok" ? test.latencyMs : undefined,
-    });
+    if (builtinMode) {
+      // 内置模型:面板激活且就绪即视为「就绪」
+      save(
+        { ...draft, baseUrl: "", apiKey: "" },
+        { testedOk: builtinReady, latencyMs: undefined },
+      );
+    } else {
+      save(draft, {
+        testedOk: test.state === "ok",
+        latencyMs: test.state === "ok" ? test.latencyMs : undefined,
+      });
+    }
     setSavedFlash(true);
     window.setTimeout(() => setSavedFlash(false), 2500);
   };
 
   const ready = saved.providerReady;
+  const kindLabel = KINDS.find((k) => k.value === saved.kind)?.label ?? saved.kind;
 
   return (
     <PageContainer>
@@ -155,47 +176,65 @@ export default function SettingsPage() {
             ))}
           </div>
 
-          <div className="space-y-3">
-            <Field label={local ? "Base URL（本地服务）" : "Base URL"}>
-              <input
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
-                value={draft.baseUrl}
-                onChange={(e) => update("baseUrl")(e.target.value)}
-                placeholder="http://localhost:11434/v1"
-                spellCheck={false}
+          {builtinMode ? (
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-4">
+              <p className="mb-3 text-xs font-medium text-indigo-700">
+                下载并激活一个本地模型 —— 默认档 Qwen3.5-4B(约 2.5 GB),激活即生效。
+              </p>
+              <BuiltinModelsPanel
+                selectedModel={draft.model}
+                onModelChange={onBuiltinModelChange}
               />
-            </Field>
-            <Field label="模型">
-              <input
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
-                value={draft.model}
-                onChange={(e) => update("model")(e.target.value)}
-                placeholder="qwen2.5:7b"
-                spellCheck={false}
-              />
-            </Field>
-            {!local ? (
-              <Field label="API Key">
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <Field label={local ? "Base URL（本地服务）" : "Base URL"}>
                 <input
-                  type="password"
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
-                  value={draft.apiKey}
-                  onChange={(e) => update("apiKey")(e.target.value)}
-                  placeholder="sk-..."
+                  value={draft.baseUrl}
+                  onChange={(e) => update("baseUrl")(e.target.value)}
+                  placeholder="http://localhost:11434/v1"
                   spellCheck={false}
                 />
               </Field>
-            ) : null}
-          </div>
+              <Field label="模型">
+                <input
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                  value={draft.model}
+                  onChange={(e) => update("model")(e.target.value)}
+                  placeholder="qwen2.5:7b"
+                  spellCheck={false}
+                />
+              </Field>
+              {!local ? (
+                <Field label="API Key">
+                  <input
+                    type="password"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                    value={draft.apiKey}
+                    onChange={(e) => update("apiKey")(e.target.value)}
+                    placeholder="sk-..."
+                    spellCheck={false}
+                  />
+                </Field>
+              ) : null}
+            </div>
+          )}
 
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => void runTest()}
-              disabled={test.state === "testing"}
-              className="rounded-lg border border-indigo-200 bg-white px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {test.state === "testing" ? "正在测试…" : "测试连接"}
-            </button>
+            {builtinMode ? (
+              <span className="text-xs text-slate-400">
+                内置模型状态由上方「激活 / 下载」管理,点「保存」即写入配置。
+              </span>
+            ) : (
+              <button
+                onClick={() => void runTest()}
+                disabled={test.state === "testing"}
+                className="rounded-lg border border-indigo-200 bg-white px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {test.state === "testing" ? "正在测试…" : "测试连接"}
+              </button>
+            )}
             <button
               onClick={runSave}
               className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
@@ -236,7 +275,7 @@ export default function SettingsPage() {
           <Card>
             <h3 className="mb-3 text-sm font-semibold text-slate-700">已保存配置</h3>
             <dl className="space-y-1 text-sm">
-              <KV k="kind" v={saved.kind} />
+              <KV k="kind" v={kindLabel} />
               <KV k="baseUrl" v={saved.baseUrl || "（空）"} />
               <KV k="model" v={saved.model || "（空）"} />
               <KV k="apiKey" v={saved.apiKey ? "••••••••" : "（空）"} />

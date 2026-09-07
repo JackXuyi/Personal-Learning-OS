@@ -37,6 +37,7 @@ function isLocal(kind: ProviderKind): boolean {
 
 /** 本地服务默认端口（用于超时时的排障提示）。 */
 const LOCAL_PORT_HINT: Record<ProviderKind, string> = {
+  builtin: "",
   ollama: "Ollama 默认 11434",
   "llama.cpp": "llama.cpp 默认 8080",
   lmstudio: "LM Studio 默认 1234",

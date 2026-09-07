@@ -2,7 +2,8 @@
  * AI Provider 抽象 —— 整个应用依赖的契约。
  *
  * 业务逻辑绝不能直接面向某个具体厂商。每一项 AI 能力都经由 `AIProvider`
- * 转发，因此本地 AI（Ollama / llama.cpp / LM Studio）、云端 AI
+ * 转发，因此内置本地模型（builtin：应用自带 llama-helper 推理进程）、
+ * 本地 AI（Ollama / llama.cpp / LM Studio）、云端 AI
  * （OpenAI / Anthropic / Gemini / DeepSeek）以及未来的社区
  * Provider 都可以自由替换。
  */
@@ -15,6 +16,7 @@ import type {
 } from "../domain";
 
 export type ProviderKind =
+  | "builtin"
   | "ollama"
   | "llama.cpp"
   | "lmstudio"

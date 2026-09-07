@@ -6,6 +6,7 @@
  * 它会以带类型的错误"大声失败"（绝不静默）。
  */
 import type { Answer, Evaluation, KnowledgeUnit, Question, SourceDocument } from "../domain";
+import { BuiltinProvider } from "./builtin";
 import { OpenAICompatibleProvider } from "./openai-compatible";
 import type {
   AIProvider,
@@ -47,6 +48,9 @@ class NotImplementedProvider implements AIProvider {
 }
 
 export function createProvider(config: ProviderConfig): AIProvider {
+  if (config.kind === "builtin") {
+    return new BuiltinProvider(config);
+  }
   if (DEFERRED.has(config.kind)) {
     return new NotImplementedProvider(config.kind);
   }

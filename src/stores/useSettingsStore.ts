@@ -36,9 +36,10 @@ interface SettingsState extends SavedSettings {
 }
 
 const DEFAULTS: SavedSettings = {
-  kind: "ollama",
-  baseUrl: normalizeOpenAiBaseUrl("ollama"),
-  model: defaultModelOf("ollama"),
+  // 决策 Q1:内置本地模型(builtin)为默认 Provider;云端/外部服务保留可切换。
+  kind: "builtin",
+  baseUrl: normalizeOpenAiBaseUrl("builtin"),
+  model: defaultModelOf("builtin"),
   apiKey: "",
   providerReady: false,
 };
