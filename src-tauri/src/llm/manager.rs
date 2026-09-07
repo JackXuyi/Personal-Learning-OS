@@ -396,3 +396,38 @@ impl Drop for ActiveGuard {
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    #[test]
+    fn device_detection_on_mac_arm() {
+        let d = current_device();
+        assert_eq!(d.os, "macos");
+        assert_eq!(d.arch, "aarch64");
+        assert!(d.metal, "Metal is enabled for mac arm64");
+        assert!(d.ram_gb > 0, "sysctl hw.memsize should be readable on macOS");
+    }
+
+    /// 不依赖具体机型的内在一致性:支持判定与 min_ram/ram 大小关系一致。
+    #[test]
+    fn support_is_consistent_with_ram_and_platform() {
+        let d = current_device();
+        let platform_ok = d.os == "macos" && d.arch == "aarch64";
+        for m in get_available_models() {
+            let s = model_support(&m, &d);
+            if !platform_ok {
+                assert!(!s.ok, "{} must be unsupported off mac-arm", m.name);
+                continue;
+            }
+            // 平台 OK 时:仅当 RAM 未知(0)或充足才 ok
+            let ram_ok = d.ram_gb == 0 || d.ram_gb >= m.min_ram_gb;
+            assert_eq!(s.ok, ram_ok, "{} support mismatch", m.name);
+            if !s.ok {
+                assert_eq!(s.reason.as_deref(), Some("ram_below_min"));
+            }
+        }
+    }
+}
