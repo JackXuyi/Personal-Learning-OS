@@ -6,6 +6,7 @@ import KnowledgePage from "./features/knowledge/KnowledgePage";
 import AssessmentPage from "./features/assessment/AssessmentPage";
 import CareerPage from "./features/career/CareerPage";
 import StudyPage from "./features/study/StudyPage";
+import ReviewSession from "./features/study/ReviewSession";
 import SettingsPage from "./features/settings/SettingsPage";
 
 export default function App() {
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="assessment" element={<AssessmentPage />} />
           <Route path="career" element={<CareerPage />} />
           <Route path="study" element={<StudyPage />} />
+          <Route path="study/session" element={<ReviewSession />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<HomePage />} />
         </Route>

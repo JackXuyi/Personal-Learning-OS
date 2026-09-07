@@ -52,14 +52,35 @@ export function SectionTitle({
   );
 }
 
-export function Bar({ value, className = "" }: { value: number; className?: string }) {
+export function Bar({
+  value,
+  className = "",
+  target,
+  targetLabel,
+}: {
+  value: number;
+  className?: string;
+  /** 目标刻度（0..1），在进度条上画一条刻度线。 */
+  target?: number;
+  targetLabel?: string;
+}) {
   const pct = Math.round(value * 100);
+  const targetPct = target !== undefined ? Math.round(target * 100) : undefined;
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-      <div
-        className={`h-full rounded-full transition-all ${className || "bg-indigo-500"}`}
-        style={{ width: `${Math.min(100, pct)}%` }}
-      />
+    <div className="relative">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+        <div
+          className={`h-full rounded-full transition-all ${className || "bg-indigo-500"}`}
+          style={{ width: `${Math.min(100, pct)}%` }}
+        />
+      </div>
+      {targetPct !== undefined ? (
+        <div
+          className="absolute top-1/2 z-10 h-3.5 w-0.5 -translate-y-1/2 rounded-full bg-slate-400"
+          style={{ left: `${Math.min(100, Math.max(0, targetPct))}%` }}
+          title={targetLabel ?? `目标 ${targetPct}%`}
+        />
+      ) : null}
     </div>
   );
 }

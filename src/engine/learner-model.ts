@@ -6,12 +6,38 @@
  * （引擎 / store）负责持久化结果。
  */
 import type { Evaluation } from "../domain";
-import type { CognitiveLevel, LearnerState, UnitMastery } from "../domain";
+import type { CognitiveLevel, LearnerState, SelfRating, UnitMastery } from "../domain";
 import { accuracyOf } from "../domain";
 
 /** Mastery delta applied when the model has nothing else to go on. */
 const UP_STEP = 0.08;
 const DOWN_STEP = 0.12;
+
+/** 四档自评对应的掌握度增量（启发式，非测量值）。 */
+const RATING_STEP: Record<SelfRating, number> = {
+  forget: -DOWN_STEP,
+  hard: 0.04,
+  good: UP_STEP,
+  easy: 0.12,
+};
+
+/** 四档自评对应的「下次复习」间隔天数（启发式）。 */
+const RATING_INTERVAL_DAYS: Record<SelfRating, number> = {
+  forget: 1,
+  hard: 2,
+  good: 4,
+  easy: 7,
+};
+
+/** 自评 → 下次复习间隔（天）。 */
+export function nextReviewInDays(rating: SelfRating): number {
+  return RATING_INTERVAL_DAYS[rating];
+}
+
+/** 自评 → 掌握度增量（供 UI 预览「忘记→1 天…」与 DeltaBadge）。 */
+export function ratingStep(rating: SelfRating): number {
+  return RATING_STEP[rating];
+}
 
 const COGNITIVE_ORDER: readonly CognitiveLevel[] = [
   "remember",
@@ -114,6 +140,36 @@ export function applyForgetting(
     };
   }
   return changed ? { ...state, byUnit } : state;
+}
+
+/**
+ * 复习会话的四档自评（忘记/困难/记得/轻松）——纯函数。
+ *
+ * 自评不是「对错」证据，因此不走 applyEvaluation（它维护 correctCount 与
+ * 认知层级）；自评只把掌握度沿评分方向移动、轻微调整置信度，并刷新
+ * lastReviewedAt。间隔建议由 `nextReviewInDays` 单独给出。
+ */
+export function applyRating(
+  state: LearnerState,
+  unitId: string,
+  rating: SelfRating,
+  now: number,
+): LearnerState {
+  const prev = state.byUnit[unitId] ?? emptyUnit(now);
+  const step = RATING_STEP[rating];
+  return {
+    ...state,
+    byUnit: {
+      ...state.byUnit,
+      [unitId]: {
+        ...prev,
+        mastery: clamp01(prev.mastery + step),
+        confidence: clamp01(prev.confidence + step * 0.5),
+        attempts: prev.attempts + 1,
+        lastReviewedAt: now,
+      },
+    },
+  };
 }
 
 function nextCognitiveLevel(

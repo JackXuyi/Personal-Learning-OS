@@ -7,6 +7,9 @@
 
 import type { CognitiveLevel } from "./learner";
 
+/** 复习会话中的四档自评（Brainscape / RemNote 式）。 */
+export type SelfRating = "forget" | "hard" | "good" | "easy";
+
 export type QuestionType =
   | "recall"
   | "understanding"
