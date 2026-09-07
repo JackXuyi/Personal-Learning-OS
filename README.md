@@ -1,62 +1,93 @@
-# Personal Learning OS
+# 📚 Personal Learning OS
 
 > **An open-source, local-first AI learning system that turns your knowledge into an adaptive learning experience.**
 
-一个 **开源、免费、Local-first、Privacy-first 的个人 AI 学习操作系统**。
+[English](README.md) · [简体中文](README.zh-CN.md)
 
-它不是单纯的 AI 知识库，也不是传统 AI Tutor。
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)
+![Status](https://img.shields.io/badge/Status-Pre--MVP-orange)
+![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen)
 
-它的目标是：
+**Personal Learning OS (PLOS)** is an open-source, free, **local-first** and **privacy-first** personal AI learning operating system.
 
-> **让 AI 理解你的知识、学习目标和掌握程度，并持续决定“你下一步应该学什么”。**
+It is not just an AI knowledge base. It is not a traditional AI tutor.
+
+Its mission:
+
+> **Let AI understand your knowledge, your learning goals, and your level of mastery — and continuously decide what you should learn next.**
+
+---
+
+## Table of Contents
+
+- [✨ Vision](#-vision)
+- [🎯 Product Positioning](#-product-positioning)
+- [🧠 Core Concept](#-core-concept)
+- [🔄 Learning Loop](#-learning-loop)
+- [🎓 Learning Modes](#-learning-modes)
+- [🧪 Adaptive Assessment](#-adaptive-assessment)
+- [🧠 Learner Model](#-learner-model)
+- [🗺️ Product Architecture](#️-product-architecture)
+- [💻 Tech Stack](#-tech-stack)
+- [🔐 Privacy & Local-first](#-privacy--local-first)
+- [🔌 Model-Agnostic Providers](#-model-agnostic-providers)
+- [📦 Open Source & Pro Strategy](#-open-source--pro-strategy)
+- [🛣️ Roadmap](#️-roadmap)
+- [📐 Product Principles](#-product-principles)
+- [📊 Success Metrics](#-success-metrics)
+- [🏁 Status](#-status)
+- [🚀 Getting Started](#-getting-started)
+- [🤝 Contributing](#-contributing)
+- [📄 License](#-license)
 
 ---
 
 ## ✨ Vision
 
-传统知识库解决的是：
+A traditional knowledge base answers:
 
 ```text
-我把资料存在哪里？
-        ↓
-我如何找到它？
-        ↓
-我如何询问 AI？
+Where do I store my material?
+            ↓
+How do I find it?
+            ↓
+How do I ask AI?
 ```
 
-Personal Learning OS 希望解决的是：
+Personal Learning OS answers a much deeper chain:
 
 ```text
-我有什么知识？
-        ↓
-我想学什么？
-        ↓
-我已经掌握了什么？
-        ↓
-我还缺什么？
-        ↓
-为什么没掌握？
-        ↓
-我下一步应该学什么？
-        ↓
-我真的学会了吗？
-        ↓
-下一步是什么？
+What do I know?
+      ↓
+What do I want to learn?
+      ↓
+What have I already mastered?
+      ↓
+What am I still missing?
+      ↓
+Why haven't I mastered it?
+      ↓
+What should I learn next?
+      ↓
+Did I really learn it?
+      ↓
+What comes next?
 ```
 
-最终形成一个持续运行的学习闭环：
+This forms a continuously running learning loop:
 
 ```text
         ┌──────────────┐
-        │   Knowledge  │
+        │  Knowledge   │
         └──────┬───────┘
                ↓
         ┌──────────────┐
-        │   Understand │
+        │  Understand  │
         └──────┬───────┘
                ↓
         ┌──────────────┐
-        │   Practice   │
+        │  Practice    │
         └──────┬───────┘
                ↓
         ┌──────────────┐
@@ -64,102 +95,53 @@ Personal Learning OS 希望解决的是：
         └──────┬───────┘
                ↓
         ┌──────────────┐
-        │ Learner State│
+        │Learner State │
         └──────┬───────┘
                ↓
         ┌──────────────┐
         │ Next Action  │
         └──────┬───────┘
                │
-               └──────────────→ Learn
+               └─────────────→ Learn
 ```
 
 ---
 
-# 🎯 Product Positioning
+## 🎯 Product Positioning
 
-## Open-source Personal Learning OS
+**Not:**
 
-核心不是：
+- AI Knowledge Base
+- AI Chatbot
+- AI Tutor
+- AI Resume Builder
+- AI Job Search
 
-* AI Knowledge Base
-* AI Chatbot
-* AI Tutor
-* AI Resume Builder
-* AI Job Search
-
-而是：
+**But:**
 
 > **Personal Learner Model + Knowledge Graph + Adaptive Learning**
 
-产品围绕一个核心问题构建：
+The product is built around one core question:
 
-> **“基于我已有的知识、目标和学习历史，我现在最应该学什么？”**
-
----
-
-# 🧠 Core Concept
-
-产品由五个核心模型组成：
-
-```text
-┌───────────────────────────────────────┐
-│             Personal Model            │
-│                                       │
-│  Knowledge                            │
-│  Skills                               │
-│  Experience                           │
-│  Evidence                             │
-│  Learning History                     │
-└───────────────────┬───────────────────┘
-                    ↓
-             Knowledge Graph
-                    ↓
-             Learner State
-                    ↓
-              Skill / Gap
-                    ↓
-           Adaptive Learning
-                    ↓
-              Assessment
-                    ↓
-             Mastery Update
-                    │
-                    └──────→ Next Action
-```
+> **"Based on my existing knowledge, goals, and learning history — what should I learn right now?"**
 
 ---
 
-# 🧩 Core Objects
+## 🧠 Core Concept
 
-## 1. Document
+The product is made of five core objects:
 
-用户自己的知识来源。
+### 1. Document
 
-支持：
+The user's own knowledge sources.
 
-* PDF
-* Markdown
-* TXT
-* DOCX
-* EPUB
-* Web Page
-* Notes
-* Code
-* 图片 / OCR
-* 自定义文本
+Supported formats: **PDF · Markdown · TXT · DOCX · EPUB · Web pages · Notes · Code · Images / OCR · Custom text**
 
-原则：
+> **Your raw material always belongs to you.**
 
-> **原始资料永远属于用户。**
+### 2. Knowledge
 
----
-
-## 2. Knowledge
-
-从 Document 中提取结构化知识。
-
-例如：
+Structured knowledge extracted from documents. Example — the domain tree of RAG:
 
 ```text
 RAG
@@ -171,13 +153,11 @@ RAG
 └── Generation
 ```
 
-Knowledge 不只是文本 Chunk，而是具有语义和关系的知识单元。
+Knowledge is not a plain text chunk — it is a semantic knowledge unit with meaning and relationships.
 
----
+### 3. Knowledge Graph
 
-## 3. Knowledge Graph
-
-描述知识之间的关系：
+Describes the relationships between knowledge:
 
 ```text
 Concept
@@ -191,7 +171,7 @@ Concept
 └── source
 ```
 
-例如：
+Example:
 
 ```text
 Reranking
@@ -202,15 +182,11 @@ Reranking
     └── application → RAG
 ```
 
----
+### 4. Learner State
 
-## 4. Learner State
+Describes **"what the user actually masters right now"**.
 
-描述：
-
-> **“用户现在到底掌握了什么？”**
-
-例如：
+Example — mastery of the RAG tree:
 
 ```text
 RAG
@@ -222,73 +198,36 @@ RAG
 └── Production       36%
 ```
 
-不仅记录分数，还记录：
+Beyond a single score, it tracks:
 
-* Mastery
-* Confidence
-* Attempts
-* Correctness
-* Cognitive Level
-* Misconceptions
-* Last Reviewed
-* Forgetting
-* Application Ability
-* Interview Ability
+- Mastery · Confidence · Attempts · Correctness
+- Cognitive Level · Misconceptions · Last Reviewed · Forgetting
+- Application Ability · Interview Ability
+
+### 5. Learning Goal
+
+The goal is the main entry point to the whole system:
+
+```text
+Career · Study · Exam · Personal · Research · Project
+```
+
+Examples:
+
+| Type     | Goal                          |
+| -------- | ----------------------------- |
+| Career   | AI Application Engineer       |
+| Study    | Computer Network final exam   |
+| Personal | Deep dive into RAG            |
+| Research | Understand Agent architecture |
+
+Every goal flows into the **same Learning Engine**.
 
 ---
 
-## 5. Learning Goal
+## 🔄 Learning Loop
 
-学习目标是整个系统的重要入口。
-
-支持：
-
-```text
-Career
-Study
-Exam
-Personal
-Research
-Project
-```
-
-例如：
-
-### Career
-
-```text
-目标：
-AI Application Engineer
-```
-
-### Student
-
-```text
-目标：
-计算机网络期末考试
-```
-
-### Personal
-
-```text
-目标：
-深入学习 RAG
-```
-
-### Research
-
-```text
-目标：
-理解 Agent Architecture
-```
-
-底层全部进入同一个 Learning Engine。
-
----
-
-# 🔄 Learning Loop
-
-系统的核心工作方式：
+How the system works:
 
 ```text
 Learning Goal
@@ -316,360 +255,176 @@ Update Mastery
 Select Next Action
 ```
 
-最终形成：
-
-> **Learn → Prove → Adapt**
+Ultimately: **Learn → Prove → Adapt**
 
 ---
 
-# 🎓 Learning Modes
+## 🎓 Learning Modes
 
-## Self Learning
+### Self Learning
 
 ```text
-PDF / Book / Notes
-        ↓
-Knowledge Graph
-        ↓
-Learning Plan
-        ↓
-Adaptive Practice
+PDF / Book / Notes → Knowledge Graph → Learning Plan → Adaptive Practice
 ```
 
-适合：
+For: programming · technical learning · reading books · exploring new domains
 
-* 编程
-* 技术学习
-* 阅读书籍
-* 新领域探索
+### Student Mode
+
+```text
+Textbook → Course knowledge → Knowledge points → Chapter mastery
+→ Wrong answers → Adaptive practice → Exam preparation
+```
+
+### Exam Mode
+
+```text
+Exam syllabus → Knowledge Graph → Coverage analysis
+→ Adaptive assessment → Weak knowledge → Targeted review
+```
+
+### Career Mode
+
+```text
+Job description → Requirements → Personal skills → Evidence
+→ Skill gap → Learning plan → Interview assessment
+```
+
+> Job analysis is just one kind of Learning Goal — not the product itself.
 
 ---
 
-## Student Mode
+## 🧪 Adaptive Assessment
+
+Assessment is one of the core capabilities. Supported question types:
 
 ```text
-教材
- ↓
-课程知识
- ↓
-知识点
- ↓
-章节掌握度
- ↓
-错题
- ↓
-自适应练习
- ↓
-考试准备
+Recall · Understanding · Comparison · Application · Debugging · Design
+Case Study · Coding · Interview
 ```
 
----
-
-## Exam Mode
+Cognitive levels follow Bloom's taxonomy:
 
 ```text
-Exam Syllabus
-      ↓
-Knowledge Graph
-      ↓
-Coverage Analysis
-      ↓
-Adaptive Assessment
-      ↓
-Weak Knowledge
-      ↓
-Targeted Review
+Remember → Understand → Apply → Analyze → Evaluate → Create
 ```
 
----
-
-## Career Mode
+The system picks the next question dynamically based on the learner's state:
 
 ```text
-Job Description
-       ↓
-Requirements
-       ↓
-Personal Skills
-       ↓
-Evidence
-       ↓
-Skill Gap
-       ↓
-Learning Plan
-       ↓
-Interview Assessment
-```
+Answered correctly → raise difficulty
 
-岗位分析只是产品的一种 Learning Goal，而不是产品本身。
-
----
-
-# 💼 Career Example
-
-目标：
-
-```text
-AI Application Engineer
-```
-
-系统分析：
-
-| Skill         | Importance | Mastery | Gap |
-| ------------- | ---------: | ------: | --- |
-| React         |       High |     92% | 🟢  |
-| TypeScript    |       High |     89% | 🟢  |
-| Python        |     Medium |     73% | 🟢  |
-| RAG           |       High |     72% | 🟡  |
-| Vector Search |       High |     61% | 🟡  |
-| Reranking     |       High |     43% | 🔴  |
-| Evaluation    |       High |     28% | 🔴  |
-| Agent         |       High |     35% | 🔴  |
-
-系统不会简单告诉用户：
-
-> “你缺少 Reranking。”
-
-而是继续判断：
-
-```text
-Reranking
-   ↓
-Knowledge       48%
-Application     32%
-Interview       21%
-Evidence        Weak
-```
-
-最终给出：
-
-> **Reranking 是当前最值得学习的知识点。**
-
----
-
-# 🧪 Adaptive Assessment
-
-Assessment 是核心能力之一。
-
-支持：
-
-* Recall
-* Understanding
-* Comparison
-* Application
-* Debugging
-* Design
-* Case Study
-* Coding
-* Interview
-
-认知层级可以参考：
-
-```text
-Remember
-   ↓
-Understand
-   ↓
-Apply
-   ↓
-Analyze
-   ↓
-Evaluate
-   ↓
-Create
-```
-
-系统根据用户状态动态决定下一道题。
-
-例如：
-
-```text
-回答正确
-   ↓
-提高难度
-
-回答错误
-   ↓
-降低难度
-   ↓
-检查 prerequisite
-   ↓
-发现基础知识缺失
-   ↓
-生成 remediation
+Answered incorrectly → lower difficulty
+    ↓
+check prerequisites
+    ↓
+foundational knowledge missing
+    ↓
+generate remediation
 ```
 
 ---
 
-# 🧠 Learner Model
+## 🧠 Learner Model
 
-长期目标不是保存：
+The long-term goal is not to store:
 
 ```text
 Quiz Score = 72
 ```
 
-而是形成：
+but to build a persistent model:
 
 ```text
 Personal Learner Model
-
-Knowledge
-Skills
-Mastery
-Confidence
-Misconceptions
-Learning History
-Evidence
-Experience
-Goals
-Preferences
+├── Knowledge
+├── Skills
+├── Mastery
+├── Confidence
+├── Misconceptions
+├── Learning History
+├── Evidence
+├── Experience
+├── Goals
+└── Preferences
 ```
 
-最终回答：
+Which answers:
 
-> **“这个人现在知道什么、不知道什么、容易在哪些地方犯错，以及下一步应该学什么。”**
+> **"What this person knows, doesn't know, commonly gets wrong — and what they should learn next."**
 
 ---
 
-# 🗺️ Product Architecture
+## 🗺️ Product Architecture
 
 ```text
-┌─────────────────────────────────────────────┐
-│                 Tauri App                   │
-│                                             │
-│ React + TypeScript + Vite + TailwindCSS    │
-│ Zustand                                     │
-├─────────────────────────────────────────────┤
-│              Application Layer              │
-│                                             │
-│ Learning Spaces                             │
-│ Knowledge                                   │
-│ Assessment                                  │
-│ Career                                      │
-│ Study                                       │
-├─────────────────────────────────────────────┤
-│                Core Engine                  │
-│                                             │
-│ Knowledge Engine                            │
-│ Knowledge Graph                             │
-│ Learner Model                               │
-│ Mastery Engine                              │
-│ Assessment Engine                           │
-│ Learning Planner                            │
-│ Recommendation Engine                       │
-├─────────────────────────────────────────────┤
-│                 Local Data                  │
-│                                             │
-│ SQLite                                      │
-│ Local Files                                 │
-│ Vector Index                                │
-├─────────────────────────────────────────────┤
-│                 AI Layer                    │
-│                                             │
-│ Ollama                                      │
-│ llama.cpp                                   │
-│ LM Studio                                   │
-│ OpenAI-compatible APIs                      │
-│ Custom Providers                            │
-└─────────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│                 Tauri App                    │
+│   React + TypeScript + Vite + TailwindCSS    │
+│                   Zustand                    │
+├──────────────────────────────────────────────┤
+│             Application Layer                │
+│   Learning Spaces · Knowledge · Assessment   │
+│   Career · Study                             │
+├──────────────────────────────────────────────┤
+│               Core Engine                    │
+│   Knowledge Engine · Knowledge Graph         │
+│   Learner Model · Mastery Engine             │
+│   Assessment Engine · Learning Planner       │
+│   Recommendation Engine                      │
+├──────────────────────────────────────────────┤
+│                Local Data                    │
+│   SQLite · Local Files · Vector Index        │
+├──────────────────────────────────────────────┤
+│                AI Layer                      │
+│   Ollama · llama.cpp · LM Studio             │
+│   OpenAI-compatible APIs · Custom Providers  │
+└──────────────────────────────────────────────┘
 ```
 
 ---
 
-# 💻 Technology Stack
+## 💻 Tech Stack
 
-## Desktop
+| Layer       | Technology                                                  |
+| ----------- | ----------------------------------------------------------- |
+| Desktop     | Tauri · Rust                                                 |
+| Frontend    | React · TypeScript · Vite · TailwindCSS · Zustand           |
+| Storage     | SQLite · Local Filesystem · Local Vector Index              |
+| AI          | Ollama · llama.cpp · LM Studio · OpenAI · Anthropic · Gemini · DeepSeek · Custom OpenAI-compatible |
 
-* Tauri
-* Rust
-
-## Frontend
-
-* React
-* TypeScript
-* Vite
-* TailwindCSS
-* Zustand
-
-## Storage
-
-* SQLite
-* Local Filesystem
-* Local Vector Index
-
-## AI
-
-Provider abstraction：
-
-```text
-AIProvider
-├── Ollama
-├── llama.cpp
-├── LM Studio
-├── OpenAI
-├── Anthropic
-├── Gemini
-├── DeepSeek
-└── Custom OpenAI-compatible
-```
-
-用户可以完全使用本地模型。
+You can run the whole product on **fully local models**.
 
 ---
 
-# 🔐 Privacy First
+## 🔐 Privacy & Local-first
 
-产品默认：
+The product defaults to:
 
 > **No Account. No Cloud. No Required Backend.**
 
-用户的数据默认保存在本机：
+Your data lives on your machine by default:
 
 ```text
-Documents
-Resume
-Notes
-Knowledge
-Skills
-Learning History
-Assessment
-Interview Answers
-Learner State
+Documents · Resume · Notes · Knowledge · Skills
+Learning History · Assessment · Interview Answers · Learner State
 ```
 
-全部属于用户。
+All of it belongs to you.
+
+Core capabilities never depend on the cloud:
+
+```text
+Download → Install → Import Documents → Configure Ollama → Start Learning
+```
+
+No account registration · No data upload · No cloud database · No mandatory API key
 
 ---
 
-# 🌐 Local-first
+## 🔌 Model-Agnostic Providers
 
-核心能力不依赖云端：
-
-```text
-Download
-   ↓
-Install
-   ↓
-Import Documents
-   ↓
-Configure Ollama
-   ↓
-Start Learning
-```
-
-无需：
-
-* 注册账号
-* 上传数据
-* 云端数据库
-* 强制 API Key
-
----
-
-# 🔌 Provider Architecture
-
-AI 能力必须与业务逻辑解耦。
+AI capabilities are decoupled from business logic:
 
 ```ts
 interface AIProvider {
@@ -690,381 +445,72 @@ interface AIProvider {
 }
 ```
 
-这样：
-
-```text
-Local AI
-Cloud AI
-Community Provider
-Pro Provider
-```
-
-都可以独立实现。
+So local AI, cloud AI, community providers and Pro providers can each implement the interface independently.
 
 ---
 
-# 📦 Open Source Strategy
+## 📦 Open Source & Pro Strategy
 
-采用：
+**Open Core + Local-first.** The core learning capabilities stay open source.
 
-> **Open Core + Local-first**
-
-核心学习能力保持开源。
-
-## Open Source
+**Open source:**
 
 ```text
-Knowledge Engine
-Knowledge Graph
-Learner Model
-Mastery Engine
-Assessment Engine
-Learning Planner
-Career Engine
-Local Storage
-AI Provider SDK
-Import / Export
+Knowledge Engine · Knowledge Graph · Learner Model · Mastery Engine
+Assessment Engine · Learning Planner · Career Engine · Local Storage
+AI Provider SDK · Import / Export
 ```
 
-任何用户都可以：
+Anyone can use the full core learning loop — **free, offline, complete**.
 
-> 免费、离线、完整使用核心学习闭环。
-
----
-
-# ⭐ Pro Strategy
-
-Pro 不出售数据，也不锁定核心学习能力。
-
-Pro 主要提供：
+**Pro** does not sell your data or lock away the core. Pro mainly adds:
 
 ```text
-Cloud AI
-Encrypted Sync
-Advanced AI Models
-Deep Research
-Automatic Job Monitoring
-Advanced Assessment
-Multi-model Orchestration
-Advanced Analytics
-Cross-device Sync
+Cloud AI · Encrypted Sync · Advanced AI Models · Deep Research
+Automatic Job Monitoring · Advanced Assessment
+Multi-model Orchestration · Advanced Analytics · Cross-device Sync
 ```
-
-原则：
 
 > **OSS owns the engine. Pro sells the service.**
 
 ---
 
-# 🛣️ Roadmap
+## 🛣️ Roadmap
 
-## Phase 0 — Foundation
+### Phase 0 — Foundation
+Stable local-first desktop base: Tauri Desktop · React + TypeScript · SQLite · Local Files · AI Provider abstraction · Ollama · OpenAI-compatible Provider · Import/Export · Settings
 
-目标：
+### Phase 1 — MVP
+**The first truly usable personal knowledge learning loop.**
 
-> 建立稳定的 Local-first Desktop 基础。
+Document → Knowledge → Knowledge Graph → Learning Goal → Assessment → Mastery → Next Learning Action
 
-### 功能
+- Knowledge Base: Learning Space, import PDF/MD/TXT, parsing, chunking, knowledge extraction, source citation
+- Knowledge Graph: knowledge points, parent/child, prerequisite, related, graph visualization
+- Learner State: mastery, confidence, attempts, correctness, last reviewed, history
+- Assessment: auto-generated questions, multiple question types, AI evaluation, mastery update
+- Learning Planner: gap detection, next best action, learning session, review
 
-* [ ] Tauri Desktop
-* [ ] React + TypeScript
-* [ ] SQLite
-* [ ] Local Files
-* [ ] AI Provider abstraction
-* [ ] Ollama
-* [ ] OpenAI-compatible Provider
-* [ ] Import / Export
-* [ ] 基础设置
+**MVP success criteria** — a user can import a technical book → auto-build a knowledge system → start learning → answer questions → the system judges mastery → finds weak knowledge → recommends the next step.
 
----
+### Phase 2 — Personal Learning OS
+From "knowledge base" to "personal learning system":
 
-# 🚀 Phase 1 — MVP
+- Learner Model: misconceptions, cognitive level, forgetting curve, spaced repetition, application ability, confidence calibration
+- Adaptive Learning: dynamic difficulty, prerequisite diagnosis, remediation, personalized learning path, next best action
+- Personal Knowledge: multiple knowledge bases, cross-base links, personal skill graph, knowledge timeline
 
-目标：
+### Phase 3 — Learning Modes
+Serve different scenarios with one engine: Student (course/exam/wrong answers) · Career (resume/JD/interview) · Research (papers/citation graph) · Personal (books/projects/hobbies)
 
-> **完成第一个真正可用的个人知识学习闭环。**
+### Phase 4 — AI Learning Agent
+From "waiting for the user to learn" to "AI proactively helps the user learn": monitor learner state → detect gaps → plan → generate material & assessment → evaluate → update the model → schedule review.
 
-核心流程：
+### Phase 5 — Personal AI Knowledge Graph
+Build a long-term personal graph of Knowledge + Skills + Experience so the system understands: **who you are, what you know, what you've done, what you want to become, and what you still lack.**
 
-```text
-Document
-   ↓
-Knowledge
-   ↓
-Knowledge Graph
-   ↓
-Learning Goal
-   ↓
-Assessment
-   ↓
-Mastery
-   ↓
-Next Learning Action
-```
-
-### P0
-
-#### Knowledge Base
-
-* [ ] 创建 Learning Space
-* [ ] 导入 PDF / Markdown / TXT
-* [ ] 文档解析
-* [ ] Chunk
-* [ ] Knowledge Extraction
-* [ ] Source Citation
-
-#### Knowledge Graph
-
-* [ ] Knowledge Point
-* [ ] Parent / Child
-* [ ] Prerequisite
-* [ ] Related
-* [ ] Graph Visualization
-
-#### Learner State
-
-* [ ] Mastery
-* [ ] Confidence
-* [ ] Attempts
-* [ ] Correctness
-* [ ] Last Reviewed
-* [ ] Learning History
-
-#### Assessment
-
-* [ ] 自动生成题目
-* [ ] 多种题型
-* [ ] AI Answer Evaluation
-* [ ] Mastery Update
-
-#### Learning Planner
-
-* [ ] Gap Detection
-* [ ] Next Best Action
-* [ ] Learning Session
-* [ ] Review
-
-### MVP 成功标准
-
-用户可以：
-
-```text
-导入一本技术书
-        ↓
-自动生成知识体系
-        ↓
-开始学习
-        ↓
-回答问题
-        ↓
-系统判断掌握程度
-        ↓
-发现薄弱知识
-        ↓
-自动推荐下一步学习内容
-```
-
----
-
-# 🚀 Phase 2 — Personal Learning OS
-
-目标：
-
-> 从“知识库”升级为“个人学习系统”。
-
-### Learner Model
-
-* [ ] Misconception
-* [ ] Cognitive Level
-* [ ] Forgetting Curve
-* [ ] Spaced Repetition
-* [ ] Application Ability
-* [ ] Confidence Calibration
-
-### Adaptive Learning
-
-* [ ] 动态题目难度
-* [ ] Prerequisite Diagnosis
-* [ ] Remediation
-* [ ] Personalized Learning Path
-* [ ] Next Best Action
-
-### Personal Knowledge
-
-* [ ] 多 Knowledge Base
-* [ ] 跨 Knowledge Base 关联
-* [ ] Personal Skill Graph
-* [ ] Knowledge Timeline
-* [ ] Learning History
-
-目标状态：
-
-```text
-                     YOU
-                      │
-        ┌─────────────┼─────────────┐
-        ▼             ▼             ▼
-    Knowledge       Skills       Experience
-        │             │             │
-        └─────────────┼─────────────┘
-                      ▼
-                Learner Model
-                      │
-             ┌────────┴────────┐
-             ▼                 ▼
-           Goals            Mastery
-             │                 │
-             └────────┬────────┘
-                      ▼
-              Next Best Action
-```
-
----
-
-# 🚀 Phase 3 — Learning Modes
-
-目标：
-
-> 让同一个 Learning Engine 服务不同场景。
-
-### Student
-
-* [ ] Course
-* [ ] Syllabus
-* [ ] Exam
-* [ ] Homework
-* [ ] Wrong Answers
-* [ ] Exam Readiness
-
-### Career
-
-* [ ] Resume
-* [ ] JD
-* [ ] Skill Requirements
-* [ ] Evidence
-* [ ] Skill Gap
-* [ ] Interview
-* [ ] Career Readiness
-
-### Research
-
-* [ ] Papers
-* [ ] Research Notes
-* [ ] Citation Graph
-* [ ] Concept Graph
-* [ ] Research Questions
-
-### Personal
-
-* [ ] Books
-* [ ] Articles
-* [ ] Projects
-* [ ] Hobbies
-* [ ] Personal Goals
-
----
-
-# 🚀 Phase 4 — AI Learning Agent
-
-目标：
-
-> 从“等待用户学习”升级为“AI 主动帮助用户学习”。
-
-AI Agent 可以：
-
-```text
-Monitor Learner State
-        ↓
-Detect Knowledge Gap
-        ↓
-Plan Learning
-        ↓
-Generate Material
-        ↓
-Generate Assessment
-        ↓
-Evaluate
-        ↓
-Update Learner Model
-        ↓
-Schedule Review
-```
-
-例如：
-
-> 发现用户连续三次在 Reranking 的 Application 类问题上失败。
-
-系统主动：
-
-```text
-1. 分析错误
-2. 判断 prerequisite
-3. 生成针对性解释
-4. 生成实例
-5. 出一道基础题
-6. 再出一道应用题
-7. 更新 Mastery
-8. 安排复习
-```
-
----
-
-# 🚀 Phase 5 — Personal AI Knowledge Graph
-
-目标：
-
-> 建立长期 Personal Knowledge Graph。
-
-```text
-                         YOU
-                          │
-         ┌────────────────┼────────────────┐
-         ▼                ▼                ▼
-      Knowledge         Skills          Experience
-         │                │                │
-         ▼                ▼                ▼
-      Concepts         Evidence         Projects
-         │                │                │
-         └────────────────┼────────────────┘
-                          ▼
-                    Learner Model
-                          │
-              ┌───────────┼───────────┐
-              ▼           ▼           ▼
-            Career      Study      Personal
-              │           │           │
-              └───────────┼───────────┘
-                          ▼
-                    Learning Goals
-```
-
-最终让系统理解：
-
-> **“你是谁、你知道什么、你做过什么、你想成为什么、你还缺什么。”**
-
----
-
-# 🚀 Phase 6 — Community Knowledge Ecosystem
-
-目标：
-
-> 从一个 App 发展成开放的 Knowledge / Learning Ecosystem。
-
-允许社区贡献：
-
-```text
-Knowledge Packs
-Skill Graphs
-Career Paths
-Course Structures
-Exam Knowledge
-Assessment Sets
-Learning Strategies
-AI Providers
-Plugins
-```
-
-例如：
+### Phase 6 — Community Knowledge Ecosystem
+From an app to an open knowledge/learning ecosystem where the community contributes Knowledge Packs, Skill Graphs, Career Paths, Course Structures, Exam Knowledge, Assessment Sets, Learning Strategies, AI Providers and Plugins.
 
 ```text
 community/
@@ -1078,296 +524,55 @@ community/
 └── english
 ```
 
-用户可以直接安装：
+Install an `AI Engineer Knowledge Pack` and start learning right away.
+
+---
+
+## 📐 Product Principles
+
+1. **User owns the data** — your data belongs to you.
+2. **Local-first** — connectivity is an enhancement, not a dependency.
+3. **Open source** — the core learning engine stays open.
+4. **Model agnostic** — never locked to any single AI model.
+5. **Evidence-based** — every learning judgment has a traceable basis:
 
 ```text
-AI Engineer Knowledge Pack
+Source → Knowledge → Question → Answer → Evaluation → Mastery
 ```
 
-然后开始学习。
-
----
-
-# 🌍 Long-term Vision
-
-最终形成：
+6. **Adaptive** — not everyone learns the same content; the next step is decided by each person's Learner State.
+7. **Explainable** — the system can always answer *"why am I learning this?"*:
 
 ```text
-                   Personal Learning OS
-                            │
-          ┌─────────────────┼─────────────────┐
-          │                 │                 │
-          ▼                 ▼                 ▼
-       Knowledge          Learner           Goals
-        Engine             Model           Engine
-          │                 │                 │
-          └─────────────────┼─────────────────┘
-                            ▼
-                    Adaptive Learning
-                            │
-                            ▼
-                     AI Learning Agent
-                            │
-                            ▼
-                  Personal Knowledge Graph
-                            │
-                            ▼
-                     Lifelong Learning
-```
-
-最终产品不是：
-
-> 一个 AI 学习 App。
-
-而是：
-
-> **一个属于用户自己的长期 Learning Model。**
-
----
-
-# 🧭 Product Principles
-
-## 1. User Owns the Data
-
-用户的数据属于用户。
-
----
-
-## 2. Local-first
-
-联网是增强，而不是依赖。
-
----
-
-## 3. Open Source
-
-核心学习引擎开放。
-
----
-
-## 4. Model Agnostic
-
-不绑定任何 AI 模型。
-
----
-
-## 5. Evidence-based
-
-学习判断应该有依据：
-
-```text
-Source
- ↓
-Knowledge
- ↓
-Question
- ↓
-Answer
- ↓
-Evaluation
- ↓
-Mastery
+Recommended: RAG Evaluation
+Reasons:
+1. Goal requires High importance
+2. Current mastery is 28%
+3. Prerequisites are already mastered
+4. Last 3 assessments were weak
+5. It is the key bottleneck in the current Knowledge Graph
 ```
 
 ---
 
-## 6. Adaptive
+## 📊 Success Metrics
 
-不是：
+The core metric is not "chat count". What matters more:
 
-> 所有人学习同样的内容。
+- **Knowledge** — coverage, graph completeness, source coverage
+- **Learning** — mastery improvement, efficiency, retention, assessment accuracy
+- **Learner** — gap reduction, misconception reduction, confidence calibration
+- **Goal** — goal readiness, required-knowledge coverage, time-to-readiness
 
-而是：
-
-> **根据每个人的 Learner State 决定下一步。**
-
----
-
-## 7. Explainable
-
-系统推荐：
-
-> “为什么让我学习这个？”
-
-必须能够回答。
-
-例如：
-
-```text
-推荐学习：
-
-RAG Evaluation
-
-原因：
-
-1. 目标要求 High
-2. 当前 Mastery 28%
-3. 相关 prerequisite 已掌握
-4. 最近 3 次 Assessment 表现较差
-5. 它是当前 Knowledge Graph 的关键瓶颈
-```
+> **The ultimate metric: is the user getting closer to their Learning Goal?**
 
 ---
 
-# 📊 Success Metrics
-
-产品不以：
-
-> Chat 次数
-
-作为核心指标。
-
-更重要的是：
-
-### Knowledge
-
-* Knowledge Coverage
-* Graph Completeness
-* Source Coverage
-
-### Learning
-
-* Mastery Improvement
-* Learning Efficiency
-* Retention
-* Assessment Accuracy
-
-### Learner
-
-* Gap Reduction
-* Misconception Reduction
-* Confidence Calibration
-
-### Goal
-
-* Goal Readiness
-* Required Knowledge Coverage
-* Time-to-Readiness
-
-最终核心指标：
-
-> **用户是否越来越接近自己的 Learning Goal。**
-
----
-
-# 🏁 Short-term Goal
-
-短期只做一件事：
-
-> ## **证明“个人知识库可以变成一个真正会自主调整的学习系统”。**
-
-MVP 不需要：
-
-* Job Search
-* Resume Builder
-* 社交
-* 云同步
-* Team
-* 移动端
-* 自动投递
-* 大量第三方集成
-
-只需要做好：
-
-```text
-Import
-  ↓
-Knowledge
-  ↓
-Graph
-  ↓
-Assess
-  ↓
-Mastery
-  ↓
-Learn
-  ↓
-Re-assess
-  ↓
-Next Action
-```
-
-如果这个闭环成立，产品就成立。
-
----
-
-# 🔭 Medium-term Goal
-
-建立完整的：
-
-> **Personal Learner Model**
-
-让系统逐渐知道：
-
-```text
-用户知道什么
-用户不知道什么
-用户容易错什么
-用户学得快不快
-用户多久会遗忘
-用户擅长什么
-用户正在学习什么
-用户想成为什么
-```
-
-并能够主动决定：
-
-> **下一步最值得做什么。**
-
----
-
-# 🌌 Long-term Goal
-
-成为：
-
-> ## **Open-source Personal Learning OS**
-
-让用户拥有一个长期存在的：
-
-```text
-Personal Knowledge Graph
-+
-Personal Learner Model
-+
-Personal Learning History
-+
-Personal Goals
-```
-
-并通过 AI 持续维护。
-
-最终：
-
-```text
-                 Your Knowledge
-                       +
-                 Your Experience
-                       +
-                  Your Goals
-                       +
-                 Your Learning
-                       ↓
-              ┌────────────────┐
-              │ Personal AI    │
-              │ Learning OS    │
-              └───────┬────────┘
-                      ↓
-              Understand Yourself
-                      ↓
-                Learn Anything
-                      ↓
-                 Master More
-                      ↓
-              Achieve Your Goals
-```
-
----
-
-# 📝 Status
+## 🏁 Status
 
 > **Early Stage / Pre-MVP**
 
-当前重点：
+Current focus:
 
 1. Core Domain Model
 2. Knowledge Graph
@@ -1376,20 +581,71 @@ Personal Goals
 5. Next Best Learning Action
 6. Local-first Architecture
 
-暂不追求功能数量。
+We are not chasing feature count.
 
-**先证明 Learning Loop，再扩展 Learning OS。**
+> **Prove the Learning Loop first, then scale the Learning OS.**
+
+Short-term goal — prove one thing: a personal knowledge base can become a learning system that truly adjusts itself.
+
+MVP explicitly excludes: job search, resume builder, social features, cloud sync, team features, mobile, auto-applying, and large third-party integrations.
+
+```text
+Import → Knowledge → Graph → Assess → Mastery → Learn → Re-assess → Next Action
+```
+
+If this loop works, the product works.
+
+Medium-term: build a complete **Personal Learner Model** — the system gradually learns what you know, don't know, get wrong, learn fast/slow, forget quickly/slowly, what you're good at, what you're learning, and who you want to become.
+
+Long-term: become an **open-source Personal Learning OS** where a Personal Knowledge Graph + Personal Learner Model + Learning History + Goals live with you for life, continuously maintained by AI.
 
 ---
 
-# 🤝 Philosophy
+## 🚀 Getting Started
 
-> **Your knowledge should belong to you.**
->
-> **Your learning history should belong to you.**
->
-> **Your learner model should belong to you.**
->
-> **AI should help you understand what you know — and what you should learn next.**
+> ⚠️ This repository is currently **Pre-MVP**. The core domain model, architecture and roadmap are being finalized; runnable code is not published yet.
+
+For early adopters and contributors, the best way to get involved right now:
+
+1. Read the [Roadmap](#️-roadmap) and the product concept above.
+2. Open an [issue](https://github.com/) with ideas, feedback or use cases.
+3. Join the discussion and help shape the MVP scope.
+
+The **MVP acceptance target** — after it ships, a user should be able to:
+
+```text
+Import a technical book
+        ↓
+Auto-generate a knowledge system
+        ↓
+Start learning
+        ↓
+Answer questions
+        ↓
+System judges mastery
+        ↓
+Discover weak knowledge
+        ↓
+Get a recommended next step automatically
+```
 
 ---
+
+## 🤝 Contributing
+
+Contributions are welcome — this project is at the ideal stage to shape its foundations.
+
+- **Ideas & feedback** — open an issue to discuss the domain model, learning loop or roadmap.
+- **Design** — help with knowledge graph modeling, assessment design or learner model.
+- **Code** — check the roadmap for an unclaimed phase and open a PR.
+- **Documentation** — improve this README or add design docs.
+
+Please follow standard GitHub flow: fork → branch → PR. Be kind and constructive.
+
+---
+
+## 📄 License
+
+[MIT](LICENSE) © 2026 JackXuyi
+
+Your knowledge belongs to you. Your learning history belongs to you. Your learner model belongs to you. AI should help you understand what you know — and what you should learn next.
