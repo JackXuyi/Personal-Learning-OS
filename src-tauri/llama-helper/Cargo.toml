@@ -12,21 +12,22 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 encoding_rs = "0.8"
 
-# === N1 milestone wiring (kept commented until then) ===
-# llama-cpp-2 is added when generation is implemented. Version is pinned to the
-# revision meetily validated (`=0.1.146`) so upstream API churn can't break the build.
-# [dependencies]
-# llama-cpp-2 = "=0.1.146"
-#
-# GPU backends are opt-in at build time. macOS Apple Silicon enables `metal`
-# (default decision for this phase); cuda/vulkan are reserved for later phases.
-# [features]
-# default = []
-# metal = ["llama-cpp-2/metal"]
-# cuda = ["llama-cpp-2/cuda"]
-# vulkan = ["llama-cpp-2/vulkan"]
+# llama-cpp-2 pinned to the revision meetily validated (`=0.1.146`) so upstream
+# API churn can't break the build (e.g. token_to_piece_bytes semantics).
+# llama-cpp-sys-2 must ALSO be pinned to =0.1.146: llama-cpp-2 0.1.146 only
+# requires "^0.1.146", so cargo would otherwise resolve the newest sys crate
+# whose llama.cpp bindings no longer match the 0.1.146 wrapper (30 build errors).
+llama-cpp-2 = "=0.1.146"
+llama-cpp-sys-2 = "=0.1.146"
 
-[profile.release]
-codegen-units = 1
-lto = true
-opt-level = "s" # Optimize for size for faster loading
+[features]
+# GPU backends are opt-in at build time. macOS Apple Silicon enables `metal`
+# (decision Q4); cuda/vulkan are reserved for later phases.
+default = []
+metal = ["llama-cpp-2/metal"]
+cuda = ["llama-cpp-2/cuda"]
+vulkan = ["llama-cpp-2/vulkan"]
+
+# NOTE: no [profile.*] here — profiles are inherited from the workspace root
+# (src-tauri/Cargo.toml), whose release profile already matches meetily's
+# intent for the helper (opt-level = "s", lto, codegen-units = 1).

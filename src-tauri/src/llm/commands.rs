@@ -1,0 +1,165 @@
+//! llm 命令面:模型管理(list/download/cancel/delete)与生成(generate)。
+
+use std::sync::Arc;
+
+use serde::Deserialize;
+use serde_json::json;
+use tauri::{AppHandle, Emitter, State};
+
+use super::manager::{DownloadProgress, ModelInfo, ModelManager};
+use super::models::{
+    get_default_model, get_model_by_name, render_prompt, ChatMessage, ChatRole,
+};
+use super::sidecar::Sidecar;
+
+/// 下载进度事件名(前端经 `@tauri-apps/api/event` 监听)。
+pub const DOWNLOAD_PROGRESS_EVENT: &str = "llm://download-progress";
+
+/// 汇总的应用状态,由 `lib.rs` setup 创建并 `manage`。
+pub struct LlmState {
+    pub manager: Arc<ModelManager>,
+    pub sidecar: Arc<Sidecar>,
+}
+
+/// 前端传来的消息(与 src/ai/types.ts 的 ChatMessage 对应)。
+#[derive(Debug, Deserialize)]
+pub struct JsonChatMessage {
+    #[serde(rename = "role")]
+    pub role: String,
+    #[serde(rename = "content")]
+    pub content: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GenerateRequest {
+    /// 模型名,如 "qwen3.5:4b"。
+    #[serde(rename = "model")]
+    pub model: String,
+    #[serde(rename = "messages")]
+    pub messages: Vec<JsonChatMessage>,
+    #[serde(rename = "maxTokens")]
+    pub max_tokens: Option<i32>,
+}
+
+#[tauri::command]
+pub async fn llm_list_models(state: State<'_, LlmState>) -> Result<Vec<ModelInfo>, String> {
+    Ok(state.manager.scan_models().await)
+}
+
+#[tauri::command]
+pub async fn llm_download(
+    app: AppHandle,
+    state: State<'_, LlmState>,
+    model: String,
+) -> Result<(), String> {
+    if get_model_by_name(&model).is_none() {
+        return Err(format!("unknown model: {model}"));
+    }
+    let manager = state.manager.clone();
+    let app = app.clone();
+    let model_name = model.clone();
+
+    manager
+        .download(
+            &model,
+            Box::new(move |p: DownloadProgress| {
+                let _ = app.emit(
+                    DOWNLOAD_PROGRESS_EVENT,
+                    json!({ "model": model_name, "percent": p.percent, "downloadedBytes": p.downloaded_bytes, "totalBytes": p.total_bytes, "mbps": p.mbps }),
+                );
+            }),
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn llm_cancel_download(state: State<'_, LlmState>, model: String) -> Result<(), String> {
+    state.manager.request_cancel(&model).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn llm_delete(state: State<'_, LlmState>, model: String) -> Result<(), String> {
+    state.manager.delete(&model).await.map_err(|e| e.to_string())
+}
+
+/// 生成文本。模型未就绪 / helper 不可用 / 推理失败均返回人类可读错误。
+#[tauri::command]
+pub async fn llm_generate(
+    state: State<'_, LlmState>,
+    request: GenerateRequest,
+) -> Result<String, String> {
+    // 1. 模型存在且已下载
+    let def = get_model_by_name(&request.model)
+        .ok_or_else(|| format!("unknown model: {}", request.model))?;
+    if !state.manager.is_model_ready(&request.model).await {
+        return Err(format!(
+            "model '{}' is not downloaded yet. Call llm_download first.",
+            request.model
+        ));
+    }
+    let model_path = state
+        .manager
+        .path_of(&request.model)
+        .ok_or_else(|| "model path unavailable".to_string())?;
+    let model_path_str = model_path.to_string_lossy().to_string();
+
+    // 2. 消息 → 单条 prompt(模板/转义在 models.rs)
+    let messages: Vec<ChatMessage> = request
+        .messages
+        .iter()
+        .map(|m| ChatMessage {
+            role: match m.role.as_str() {
+                "system" => ChatRole::System,
+                "user" => ChatRole::User,
+                "assistant" => ChatRole::Assistant,
+                _ => ChatRole::User, // 未知角色按 user 处理,避免丢内容
+            },
+            content: m.content.clone(),
+        })
+        .collect();
+    if messages.is_empty() {
+        return Err("messages must not be empty".to_string());
+    }
+    let prompt = render_prompt(&messages);
+
+    // 3. 组装 generate 请求(采样默认取该模型的预设)
+    let request_json = json!({
+        "type": "generate",
+        "prompt": prompt,
+        "max_tokens": request.max_tokens.unwrap_or(2048),
+        "context_size": def.context_size,
+        "model_path": model_path_str,
+        "temperature": def.sampling.temperature,
+        "top_k": def.sampling.top_k,
+        "top_p": def.sampling.top_p,
+        "presence_penalty": def.sampling.presence_penalty,
+        "frequency_penalty": def.sampling.frequency_penalty,
+        "repeat_penalty": def.sampling.repeat_penalty,
+        "penalty_last_n": def.sampling.penalty_last_n,
+        "stop_tokens": &def.sampling.stop_tokens,
+    })
+    .to_string();
+
+    // 4. helper 推理
+    state.sidecar.generate(request_json).await.map_err(|e| e.to_string())
+}
+
+/// 供设置页展示默认模型名。
+#[tauri::command]
+pub async fn llm_default_model() -> String {
+    get_default_model().name
+}
+
+/// 供设置页/诊断使用:当前 helper 是否健康(返回错误则说明不可用)。
+#[tauri::command]
+pub async fn llm_status(state: State<'_, LlmState>) -> Result<serde_json::Value, String> {
+    let ready = state.sidecar.ping().await;
+    let def = get_default_model();
+    Ok(json!({
+        "helper_ready": ready,
+        "default_model": def.name,
+        "helper_path": state.sidecar.helper_path().to_string_lossy(),
+    }))
+}
