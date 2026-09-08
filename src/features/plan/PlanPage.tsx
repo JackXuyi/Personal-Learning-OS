@@ -34,7 +34,7 @@ export default function PlanPage() {
   const [busyId, setBusyId] = useState<string | undefined>();
 
   useEffect(() => {
-    void refresh();
+    void refresh(m);
   }, [refresh]);
 
   const chapterById = useMemo(() => {

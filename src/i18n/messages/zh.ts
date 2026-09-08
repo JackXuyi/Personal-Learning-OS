@@ -773,6 +773,46 @@ export const zh = {
       falseLabel: "错 ✗",
     },
   },
+
+  /** 引擎运行时文案（learning-planner / assessment-engine / loop 注入，默认 zh）。 */
+  engine: {
+    // —— learning-planner 概念层（buildPlan reasons）——
+    goalRequired: (g: { title: string; importance: string }) =>
+      `目标「${g.title}」所需（重要度：${g.importance}）。`,
+    currentMastery: (cur: number, target: number) =>
+      `当前掌握度为 ${cur}%，目标 ${target}%。`,
+    bottleneckPrereq: (names: string) =>
+      `关键瓶颈 —— 以下内容的先决条件：${names}。`,
+    knownMisconception: "近期测评中发现的已知误解。",
+    // —— learning-planner 章级（specForChapter reasons，title 为章原始标题）——
+    chapterDue: (title: string, days: number) =>
+      `《${title}》已达标，但距上次复习已过 ${days} 天，进入遗忘窗口。`,
+    reviewResetsSchedule: "重读要点完成复习，可刷新下次复习安排。",
+    retakePending: (title: string) => `《${title}》处于待补考状态。`,
+    retakePlanNote: (target: number) =>
+      `补考卷自动降一档难度，达标（${target}%）后章状态回 mastered。`,
+    lowScoreReread: (title: string, score: number, low: number) =>
+      `《${title}》卷面仅 ${score}%（低于 ${low}%），建议重读本幕后补考。`,
+    thresholds: (target: number, floor: number) =>
+      `达标线 ${target}%，及格线 ${floor}%。`,
+    belowFloorRetake: (title: string, score: number, floor: number) =>
+      `《${title}》卷面 ${score}% 未达及格线（${floor}%），建议补考。`,
+    retakeEasier: "补考卷自动降一档难度。",
+    nearTargetReview: (title: string, score: number, target: number) =>
+      `《${title}》掌握度 ${score}% 距达标线（${target}%）一步之遥。`,
+    reviewThenQuiz: "复习章内要点后可直考综合测。",
+    chapterDoneVerify: (title: string) =>
+      `《${title}》已标记学完，出单元测验证掌握度。`,
+    chapterNotStarted: (title: string) =>
+      `《${title}》尚未学习——按顺序推进本章。`,
+    // —— assessment-engine feedback ——
+    notAnswered: "未作答。",
+    pendingSubjective:
+      "主观题需 AI 精确判分——未配置 Provider，本答案暂不计入对错。",
+    // —— loop / store 运行时错误 ——
+    goalNotFound: "未找到学习目标。",
+    duplicateSubmit: "该单元刚提交过，可撤销后重试。",
+  },
 };
 
 /** 文案结构类型 = typeof zh（en.ts 以它同构约束）。 */

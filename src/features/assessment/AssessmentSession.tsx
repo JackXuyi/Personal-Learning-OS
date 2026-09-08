@@ -91,7 +91,7 @@ export default function AssessmentSession({
       if (stage !== "grade") return;
       setSubmitError(undefined);
       try {
-        const result = await submitAnswer(unit.id, { correct });
+        const result = await submitAnswer(unit.id, { correct }, m);
         if (!activeRef.current) return;
         sessionRecord({
           unitId: unit.id,

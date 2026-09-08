@@ -21,6 +21,8 @@ import type {
 import { MASTERY_FLOOR, MASTERY_THRESHOLD, newId } from "../domain";
 import { isDueReview, prerequisitesOf, sortChaptersByOrder } from "../domain";
 import { bandOf, masteryOfUnit } from "./mastery-engine";
+import type { Messages } from "../i18n/messages/zh";
+import { zh } from "../i18n/messages/zh";
 
 export interface PlanInput {
   goal: LearningGoal;
@@ -43,7 +45,7 @@ function kindForMastery(mastery: number): NextAction["kind"] {
   }
 }
 
-export function createLearningPlanner(): LearningPlanner {
+export function createLearningPlanner(m: Messages = zh): LearningPlanner {
   return {
     buildPlan({ goal, graph, learnerState }) {
       const gaps = goal.requiredUnitIds.filter(
@@ -97,17 +99,17 @@ export function createLearningPlanner(): LearningPlanner {
         );
 
         const reasons: string[] = [
-          `目标「${goal.title}」所需（重要度：${goal.importance}）。`,
-          `当前掌握度为 ${Math.round(mastery * 100)}%，目标 ${MASTERY_THRESHOLD * 100}%。`,
+          m.engine.goalRequired({ title: goal.title, importance: goal.importance }),
+          m.engine.currentMastery(Math.round(mastery * 100), MASTERY_THRESHOLD * 100),
         ];
         if (blockedDependents.length > 0) {
           const names = blockedDependents
             .map((id) => graph.units.find((u) => u.id === id)?.title ?? id)
             .join("、");
-          reasons.push(`关键瓶颈 —— 以下内容的先决条件：${names}。`);
+          reasons.push(m.engine.bottleneckPrereq(names));
         }
         if (unit?.tags.includes("remediation")) {
-          reasons.push("近期测评中发现的已知误解。");
+          reasons.push(m.engine.knownMisconception);
         }
 
         actions.push({
@@ -161,19 +163,20 @@ function specForChapter(
   chapter: Chapter,
   unit: UnitMastery | undefined,
   now: number,
+  m: Messages,
 ): ChapterActionSpec | undefined {
-  const m = unit?.mastery ?? 0;
+  const mastery = unit?.mastery ?? 0;
   // 已达标（卷面 ≥0.8）且非 retake 态：仅当到复习日（T9 防遗忘）才入队低优先级复习。
-  if (m >= MASTERY_THRESHOLD && chapter.status !== "retake") {
+  if (mastery >= MASTERY_THRESHOLD && chapter.status !== "retake") {
     if (!isDueReview(unit, now)) return undefined;
     const dueIn = Math.max(0, Math.round((now - (unit?.nextReviewAt ?? now)) / 86_400_000));
     return {
-      kind: "review-points", cls: 4, mastery: m, order: chapter.order,
+      kind: "review-points", cls: 4, mastery, order: chapter.order,
       chapterId: chapter.id, title: `《${chapter.title}》`,
       dueAt: unit?.nextReviewAt,
       reasons: [
-        `《${chapter.title}》已达标，但距上次复习已过 ${dueIn} 天，进入遗忘窗口。`,
-        "重读要点完成复习，可刷新下次复习安排。",
+        m.engine.chapterDue(chapter.title, dueIn),
+        m.engine.reviewResetsSchedule,
       ],
     };
   }
@@ -182,44 +185,44 @@ function specForChapter(
   // 状态机显式待补考 → 补考。
   if (chapter.status === "retake") {
     return {
-      kind: "retake-quiz", cls: 1, mastery: m, order: chapter.order,
+      kind: "retake-quiz", cls: 1, mastery, order: chapter.order,
       chapterId: chapter.id, title,
       reasons: [
-        `${title}处于待补考状态。`,
-        `补考卷自动降一档难度，达标（${MASTERY_THRESHOLD * 100}%）后章状态回 mastered。`,
+        m.engine.retakePending(chapter.title),
+        m.engine.retakePlanNote(MASTERY_THRESHOLD * 100),
       ],
     };
   }
 
   const examined = (unit?.attempts ?? 0) > 0; // 是否有卷面证据
   if (examined) {
-    if (m < MASTERY_FLOOR) {
+    if (mastery < MASTERY_FLOOR) {
       // 低掌握：<0.4 建议重读（重学弱章），0.4–0.6 直接补考。
-      if (m < 0.4) {
+      if (mastery < 0.4) {
         return {
-          kind: "learn-chapter", cls: 0, mastery: m, order: chapter.order,
+          kind: "learn-chapter", cls: 0, mastery, order: chapter.order,
           chapterId: chapter.id, title,
           reasons: [
-            `${title}卷面仅 ${pct(m)}%（低于 40%），建议重读本幕后补考。`,
-            `达标线 ${MASTERY_THRESHOLD * 100}%，及格线 ${MASTERY_FLOOR * 100}%。`,
+            m.engine.lowScoreReread(chapter.title, pct(mastery), MASTERY_FLOOR * 100),
+            m.engine.thresholds(MASTERY_THRESHOLD * 100, MASTERY_FLOOR * 100),
           ],
         };
       }
       return {
-        kind: "retake-quiz", cls: 1, mastery: m, order: chapter.order,
+        kind: "retake-quiz", cls: 1, mastery, order: chapter.order,
         chapterId: chapter.id, title,
         reasons: [
-          `${title}卷面 ${pct(m)}% 未达及格线（${MASTERY_FLOOR * 100}%），建议补考。`,
-          "补考卷自动降一档难度。",
+          m.engine.belowFloorRetake(chapter.title, pct(mastery), MASTERY_FLOOR * 100),
+          m.engine.retakeEasier,
         ],
       };
     }
     return {
-      kind: "review-points", cls: 2, mastery: m, order: chapter.order,
+      kind: "review-points", cls: 2, mastery, order: chapter.order,
       chapterId: chapter.id, title,
       reasons: [
-        `${title}掌握度 ${pct(m)}% 距达标线（${MASTERY_THRESHOLD * 100}%）一步之遥。`,
-        "复习章内要点后可直考综合测。",
+        m.engine.nearTargetReview(chapter.title, pct(mastery), MASTERY_THRESHOLD * 100),
+        m.engine.reviewThenQuiz,
       ],
     };
   }
@@ -227,18 +230,18 @@ function specForChapter(
   // 尚无卷面证据：学完待测 → 单元测；未学/学习中 → 推进学习。
   if (chapter.status === "ready" || chapter.status === "mastered") {
     return {
-      kind: "chapter-quiz", cls: 3, mastery: m, order: chapter.order,
+      kind: "chapter-quiz", cls: 3, mastery, order: chapter.order,
       chapterId: chapter.id, title,
       reasons: [
-        `${title}已标记学完，出单元测验证掌握度。`,
+        m.engine.chapterDoneVerify(chapter.title),
       ],
     };
   }
   return {
-    kind: "learn-chapter", cls: 5, mastery: m, order: chapter.order,
+    kind: "learn-chapter", cls: 5, mastery, order: chapter.order,
     chapterId: chapter.id, title,
     reasons: [
-      `${title}尚未学习——按顺序推进本章。`,
+      m.engine.chapterNotStarted(chapter.title),
     ],
   };
 }
@@ -253,10 +256,13 @@ function specForChapter(
  * 已过，T9 防遗忘）才以低优先级复习动作入队，否则不产生动作。
  * 每个动作携带可解释理由（P7 计划页直接展示 reasons）。
  */
-export function buildChapterPlan(input: ChapterPlanInput): NextAction[] {
+export function buildChapterPlan(
+  input: ChapterPlanInput,
+  m: Messages = zh,
+): NextAction[] {
   const { learnerState, now = Date.now() } = input;
   const specs = sortChaptersByOrder(input.chapters)
-    .map((chapter) => specForChapter(chapter, learnerState.byUnit[chapter.id], now))
+    .map((chapter) => specForChapter(chapter, learnerState.byUnit[chapter.id], now, m))
     .filter((s): s is ChapterActionSpec => s !== undefined)
     .sort(
       (a, b) =>

@@ -14,6 +14,8 @@ import type {
   QuestionType,
 } from "../domain";
 import { newId } from "../domain";
+import type { Messages } from "../i18n/messages/zh";
+import { zh } from "../i18n/messages/zh";
 
 export interface AssessmentEngine {
   generateForUnit(
@@ -24,7 +26,10 @@ export interface AssessmentEngine {
   evaluate(question: Question, answer: Answer): Promise<Evaluation>;
 }
 
-export function createAssessmentEngine(provider?: AIProvider): AssessmentEngine {
+export function createAssessmentEngine(
+  provider?: AIProvider,
+  m: Messages = zh,
+): AssessmentEngine {
   const askProvider = Boolean(provider?.isConfigured());
 
   return {
@@ -66,7 +71,7 @@ export function createAssessmentEngine(provider?: AIProvider): AssessmentEngine 
           questionId: question.id,
           correct: false,
           score: 0,
-          feedback: "未作答。",
+          feedback: m.engine.notAnswered,
           misconceptionsDetected: [],
         };
       }
@@ -74,7 +79,7 @@ export function createAssessmentEngine(provider?: AIProvider): AssessmentEngine 
         questionId: question.id,
         correct: false,
         score: undefined, // pending：不计入得分，不更新掌握度
-        feedback: "主观题需 AI 精确判分——未配置 Provider，本答案暂不计入对错。",
+        feedback: m.engine.pendingSubjective,
         misconceptionsDetected: [],
       };
     },

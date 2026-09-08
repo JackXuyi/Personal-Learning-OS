@@ -155,7 +155,7 @@ export default function CommandPalette() {
               navigate(`/quiz/${paper.id}`);
             }
           })();
-          void refresh();
+          void refresh(m);
         },
       });
     }

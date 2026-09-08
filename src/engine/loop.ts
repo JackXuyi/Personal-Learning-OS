@@ -21,6 +21,8 @@ import type { StorageAdapter } from "../storage";
 import { applyForgetting } from "./learner-model";
 import { buildChapterPlan, createLearningPlanner } from "./learning-planner";
 import { createRecommendationEngine } from "./recommendation-engine";
+import type { Messages } from "../i18n/messages/zh";
+import { zh } from "../i18n/messages/zh";
 
 const MS_PER_DAY = 86_400_000;
 const NOW = Date.now();
@@ -147,12 +149,13 @@ export interface LoopSnapshot {
 export async function runLearningLoop(
   storage: StorageAdapter,
   goalId?: string,
+  m: Messages = zh,
 ): Promise<LoopSnapshot> {
   await seedDemoIfEmpty(storage);
 
   const goals = await storage.listGoals();
   const goal = goals.find((g) => g.id === goalId) ?? goals[0];
-  if (!goal) throw new Error("未找到学习目标。");
+  if (!goal) throw new Error(m.engine.goalNotFound);
 
   const graph = await storage.getGraph();
   // 读时遗忘衰减（V2 T9）：展示/规划基于「遗忘后的当前掌握度」视图。
@@ -160,7 +163,7 @@ export async function runLearningLoop(
   const rawLearner = await storage.getLearnerState();
   const learnerState = applyForgetting(rawLearner, Date.now());
 
-  const actions = createLearningPlanner().buildPlan({ goal, graph, learnerState });
+  const actions = createLearningPlanner(m).buildPlan({ goal, graph, learnerState });
   const next = createRecommendationEngine().recommendNext(actions);
 
   const mastered = goal.requiredUnitIds.filter(
@@ -221,6 +224,7 @@ export interface ChapterLoopSnapshot {
 /** 章级快照聚合（编排层，读 storage；范围 = 全部已切分文档的章）。 */
 export async function runChapterLoop(
   storage: StorageAdapter,
+  m: Messages = zh,
 ): Promise<ChapterLoopSnapshot> {
   const [goals, docs, rawLearner] = await Promise.all([
     storage.listGoals(),
@@ -253,7 +257,7 @@ export async function runChapterLoop(
   const mastered = allChapters.filter(
     (c) => (learner.byUnit[c.id]?.mastery ?? 0) >= MASTERY_THRESHOLD,
   ).length;
-  const actions = buildChapterPlan({ chapters: allChapters, learnerState: learner });
+  const actions = buildChapterPlan({ chapters: allChapters, learnerState: learner }, m);
 
   return {
     goal: goals[0],

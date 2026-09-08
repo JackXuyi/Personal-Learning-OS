@@ -125,7 +125,7 @@ export default function QuizReportPage() {
   const togglePlan = () => {
     setPlanOpen((open) => !open);
     if (!planOpen && !plan && data) {
-      setPlan(buildChapterPlan({ chapters: data.scopeChapters, learnerState: data.learner }));
+      setPlan(buildChapterPlan({ chapters: data.scopeChapters, learnerState: data.learner }, m));
     }
   };
 

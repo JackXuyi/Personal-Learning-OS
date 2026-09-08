@@ -20,7 +20,7 @@ export default function CareerPage() {
   const { m } = useI18n();
 
   useEffect(() => {
-    void refresh();
+    void refresh(m);
   }, [refresh]);
 
   if (error) {

@@ -809,4 +809,47 @@ export const en: Messages = {
       falseLabel: "False ✗",
     },
   },
+
+  /** Engine runtime copy (learning-planner / assessment-engine / loop; defaults to zh). */
+  engine: {
+    // —— learning-planner concept layer (buildPlan reasons) ——
+    goalRequired: (g: { title: string; importance: string }) =>
+      `Required for goal “${g.title}” (importance: ${g.importance}).`,
+    currentMastery: (cur: number, target: number) =>
+      `Current mastery is ${cur}%, target ${target}%.`,
+    bottleneckPrereq: (names: string) =>
+      `Key bottleneck — prerequisite for: ${names}.`,
+    knownMisconception: "Known misconception found in recent assessments.",
+    // —— learning-planner chapter layer (specForChapter reasons; title is the raw chapter title) ——
+    chapterDue: (title: string, days: number) =>
+      `“${title}” is above target, but ${days} day(s) have passed since the last review — entering the forgetting window.`,
+    reviewResetsSchedule:
+      "Reviewing the key points resets your next review schedule.",
+    retakePending: (title: string) => `“${title}” is flagged for a retake.`,
+    retakePlanNote: (target: number) =>
+      `The retake drops one difficulty tier; hitting ${target}% returns the chapter to mastered.`,
+    lowScoreReread: (title: string, score: number, low: number) =>
+      `“${title}” scored only ${score}% (below ${low}%) — reread the chapter before retaking.`,
+    thresholds: (target: number, floor: number) =>
+      `Target ${target}%, pass line ${floor}%.`,
+    belowFloorRetake: (title: string, score: number, floor: number) =>
+      `“${title}” scored ${score}%, under the pass line (${floor}%) — consider a retake.`,
+    retakeEasier: "The retake drops one difficulty tier.",
+    nearTargetReview: (title: string, score: number, target: number) =>
+      `“${title}” is at ${score}% mastery, one step from the target (${target}%).`,
+    reviewThenQuiz:
+      "Review the chapter's key points, then go straight to the comprehensive test.",
+    chapterDoneVerify: (title: string) =>
+      `“${title}” is marked as studied — take the unit test to verify mastery.`,
+    chapterNotStarted: (title: string) =>
+      `“${title}” hasn't been studied yet — proceed through chapters in order.`,
+    // —— assessment-engine feedback ——
+    notAnswered: "No answer.",
+    pendingSubjective:
+      "Subjective answers need AI grading — no Provider configured, so this answer isn't counted as right or wrong for now.",
+    // —— loop / store runtime errors ——
+    goalNotFound: "No learning goal found.",
+    duplicateSubmit:
+      "This unit was just submitted — undo and retry within the window.",
+  },
 };

@@ -258,7 +258,7 @@ export default function ReviewSession() {
   // 6) 撤销：回滚状态并移除本次会话记录。
   const undo = useCallback(async () => {
     if (!current) return;
-    const ok = await undoReview(current.unitId);
+    const ok = await undoReview(current.unitId, m);
     if (!ok) return;
     sessionRemove(current.unitId);
     setSessionItems((items) => items.filter((it) => it.action.unitId !== current.unitId));

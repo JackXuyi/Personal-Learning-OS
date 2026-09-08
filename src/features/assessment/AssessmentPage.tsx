@@ -29,7 +29,7 @@ export default function AssessmentPage() {
 
   useEffect(() => {
     void (async () => {
-      if (!useLoopStore.getState().snapshot) await refresh();
+      if (!useLoopStore.getState().snapshot) await refresh(m);
       setGraph(await storage.getGraph());
     })();
   }, [refresh]);

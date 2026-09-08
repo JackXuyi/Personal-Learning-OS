@@ -9,6 +9,8 @@ import {
 import { applyEvaluation, applyForgetting, applyRating, nextReviewInDays } from "../engine";
 import { newId } from "../domain";
 import type { Evaluation, LearnerState, SelfRating } from "../domain";
+import type { Messages } from "../i18n/messages/zh";
+import { zh } from "../i18n/messages/zh";
 
 /**
  * 整个应用唯一的存储实例。默认由 localStorage 支撑
@@ -35,11 +37,16 @@ interface LoopStoreState {
   chapterPlan: ChapterLoopSnapshot | undefined;
   loading: boolean;
   error: string | undefined;
-  refresh: () => Promise<void>;
+  /** 重算快照；m = 当前界面语言（引擎 reason 文案随语言注入，默认中文）。 */
+  refresh: (m?: Messages) => Promise<void>;
   /** 提交一次自评/作答并回写 Learner State。幂等：5s 撤销窗口内同一单元拒绝重复提交。 */
-  submitAnswer: (unitId: string, evidence: ReviewEvidence) => Promise<SubmitResult>;
+  submitAnswer: (
+    unitId: string,
+    evidence: ReviewEvidence,
+    m?: Messages,
+  ) => Promise<SubmitResult>;
   /** 撤销窗口内的回滚（保存提交前的状态快照）。返回是否成功撤销。 */
-  undoReview: (unitId: string) => Promise<boolean>;
+  undoReview: (unitId: string, m?: Messages) => Promise<boolean>;
 }
 
 /** 撤销窗口（毫秒）。 */
@@ -54,13 +61,13 @@ export const useLoopStore = create<LoopStoreState>((set, get) => ({
   loading: false,
   error: undefined,
 
-  refresh: async () => {
+  refresh: async (m?: Messages) => {
     set({ loading: true, error: undefined });
     try {
       // 概念层（runLearningLoop 含空库播种）与章级快照并行刷新。
       const [snapshot, chapterPlan] = await Promise.all([
-        runLearningLoop(storage),
-        runChapterLoop(storage),
+        runLearningLoop(storage, undefined, m),
+        runChapterLoop(storage, m),
       ]);
       set({ snapshot, chapterPlan, loading: false });
     } catch (err) {
@@ -68,10 +75,10 @@ export const useLoopStore = create<LoopStoreState>((set, get) => ({
     }
   },
 
-  submitAnswer: async (unitId, evidence) => {
+  submitAnswer: async (unitId, evidence, m?: Messages) => {
     const pending = undoStack.get(unitId);
     if (pending && Date.now() - pending.at < UNDO_WINDOW_MS) {
-      throw new Error("该单元刚提交过，可撤销后重试。");
+      throw new Error(m?.engine.duplicateSubmit ?? zh.engine.duplicateSubmit);
     }
 
     const state = await storage.getLearnerState();
@@ -99,12 +106,12 @@ export const useLoopStore = create<LoopStoreState>((set, get) => ({
     undoStack.set(unitId, { prevState, at: Date.now() });
 
     // 重算闭环快照（就绪度/缺口/下一步随之变化）。
-    await get().refresh();
+    await get().refresh(m);
 
     return { masteryDelta: Math.round((nextMastery - prevMastery) * 100) / 100, nextReviewInDays: intervalDays };
   },
 
-  undoReview: async (unitId) => {
+  undoReview: async (unitId, m?: Messages) => {
     const entry = undoStack.get(unitId);
     if (!entry) return false;
     if (Date.now() - entry.at >= UNDO_WINDOW_MS) {
@@ -113,7 +120,7 @@ export const useLoopStore = create<LoopStoreState>((set, get) => ({
     }
     await storage.saveLearnerState(entry.prevState);
     undoStack.delete(unitId);
-    await get().refresh();
+    await get().refresh(m);
     return true;
   },
 }));

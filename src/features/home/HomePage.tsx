@@ -32,7 +32,7 @@ export default function HomePage() {
 
   useEffect(() => {
     void (async () => {
-      await refresh();
+      await refresh(m);
       setChecked(true);
     })();
   }, [refresh]);

@@ -82,7 +82,7 @@ export default function ChapterReaderPage() {
     const next = applyKeyPointRating(ls, chapter.id, "good", Date.now());
     await storage.saveLearnerState(next);
     setLearner(next);
-    await useLoopStore.getState().refresh();
+    await useLoopStore.getState().refresh(m);
   };
 
   if (missing) {
