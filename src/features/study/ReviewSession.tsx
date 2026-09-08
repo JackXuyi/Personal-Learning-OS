@@ -3,8 +3,10 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { BandBadge, Card, SectionTitle } from "../../components/primitives";
 import { PageContainer } from "../../components/layout/AppShell";
 import { DeltaBadge } from "../../components/DeltaBadge";
-import { bandOf } from "../../engine";
-import type { SelfRating, NextAction } from "../../domain";
+import { bandOf, createLearningPlanner } from "../../engine";
+import { subgraphOf } from "../../engine/graph-engine";
+import type { SelfRating, NextAction, Chapter } from "../../domain";
+import { newId } from "../../domain";
 import { storage, useLoopStore, type SubmitResult } from "../../stores/useLoopStore";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { actionKindLabel, unitTitle } from "../units";
@@ -30,6 +32,9 @@ export default function ReviewSession() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const unitParam = params.get("unit");
+  /** N5 概念层回归：带 chapterId = 章内概念复习（图谱「去复习」入口）。 */
+  const chapterParam = params.get("chapterId");
+  const conceptMode = chapterParam !== null;
 
   const snapshot = useLoopStore((s) => s.snapshot);
   const refresh = useLoopStore((s) => s.refresh);
@@ -41,6 +46,11 @@ export default function ReviewSession() {
   const [ready, setReady] = useState(false);
   const [queue, setQueue] = useState<NextAction[]>([]);
   const [summaries, setSummaries] = useState<Record<string, string>>({});
+  /** 概念模式：unitId → 概念标题（图谱概念不在静态 unitTitle 表内）。 */
+  const [titles, setTitles] = useState<Record<string, string>>({});
+  /** 概念模式：unitId → 掌握度（无全局 snapshot，直接从 learnerState 派生）。 */
+  const [conceptMastery, setConceptMastery] = useState<Record<string, number>>({});
+  const [missingChapter, setMissingChapter] = useState(false);
   const [index, setIndex] = useState(0);
   const [stage, setStage] = useState<Stage>("show");
   const [revealed, setRevealed] = useState(false);
@@ -53,20 +63,90 @@ export default function ReviewSession() {
   const [submitError, setSubmitError] = useState<string | undefined>();
   const activeRef = useRef(true);
 
-  // 1) 确保闭环快照就绪（直接访问会话 URL 时）。
+  /** 退出目标：概念模式回章图谱，否则 /study（重定向 /plan）。 */
+  const goBack = conceptMode && chapterParam ? `/learn/${chapterParam}/graph` : "/study";
+  const goBackLabel = conceptMode ? "返回章图谱" : "返回学习页";
+  const titleOf = (unitId: string): string => titles[unitId] ?? unitTitle(unitId);
+
+  // 1) 数据就绪：概念模式 = 章概念缺口队列（先决 DFS 优先，复用概念 buildPlan）；
+  //    非概念模式 = 全局闭环快照队列（V1 语义保留，直接访问会话 URL 时）。
   useEffect(() => {
     void (async () => {
+      if (conceptMode && chapterParam) {
+        const [docs, g, ls] = await Promise.all([
+          storage.listDocuments(),
+          storage.getGraph(),
+          storage.getLearnerState(),
+        ]);
+        let found: Chapter | undefined;
+        for (const d of docs) {
+          const chapters = await storage.listChapters(d.id);
+          const f = chapters.find((c) => c.id === chapterParam);
+          if (f) {
+            found = f;
+            break;
+          }
+        }
+        if (!activeRef.current) return;
+        if (!found) {
+          setMissingChapter(true);
+          setReady(true);
+          return;
+        }
+        const sub = subgraphOf(g, found.unitIds);
+        const titleMap: Record<string, string> = {};
+        for (const u of sub.units) titleMap[u.id] = u.title;
+        setTitles(titleMap);
+        const masteryMap: Record<string, number> = {};
+        for (const [id, m] of Object.entries(ls.byUnit)) masteryMap[id] = m.mastery;
+        setConceptMastery(masteryMap);
+        const planActions = createLearningPlanner().buildPlan({
+          goal: {
+            id: `goal-ch-${found.id}`,
+            type: "study",
+            title: found.title || `第 ${found.order} 章`,
+            importance: "high",
+            requiredUnitIds: found.unitIds,
+            createdAt: 0,
+          },
+          graph: sub,
+          learnerState: ls,
+        });
+        let q = planActions;
+        if (unitParam) {
+          const idx = q.findIndex((a) => a.unitId === unitParam);
+          if (idx >= 0) {
+            q = q.slice(idx);
+          } else if (q.length === 0 && sub.units.some((u) => u.id === unitParam)) {
+            // 该概念已达标（不在缺口内）→ 单概念复习（自评顺延，不伪造缺口）。
+            q = [
+              {
+                id: newId("action"),
+                kind: "review",
+                unitId: unitParam,
+                priority: 0,
+                reasons: ["复习本章概念，自评刷新下次复习安排。"],
+                createdAt: Date.now(),
+              },
+            ];
+          }
+        }
+        setQueue(q);
+        setReady(true);
+        return;
+      }
+      // 非概念模式：确保闭环快照就绪。
       if (!useLoopStore.getState().snapshot) await refresh();
       setReady(true);
     })();
     return () => {
       activeRef.current = false;
     };
-  }, [refresh]);
+  }, [conceptMode, chapterParam, unitParam, refresh]);
 
-  // 2) 快照就绪后固定会话队列（从指定单元起，或整个队列），记录起始就绪度。
+  // 2) 快照就绪后固定会话队列（非概念模式；从指定单元起，或整个队列），记录起始就绪度。
   useEffect(() => {
-    if (!ready || !snapshot || queue.length > 0) return;
+    if (conceptMode || !ready || !snapshot || queue.length > 0) return;
     let q = snapshot.actions;
     if (unitParam) {
       const startIdx = q.findIndex((a) => a.unitId === unitParam);
@@ -74,7 +154,7 @@ export default function ReviewSession() {
     }
     setQueue(q);
     setStartReadiness(snapshot.readiness);
-  }, [ready, snapshot, unitParam, queue.length]);
+  }, [conceptMode, ready, snapshot, unitParam, queue.length]);
 
   // 3) 加载当前单元摘要作为「参考要点」。
   const current = queue[index];
@@ -152,7 +232,7 @@ export default function ReviewSession() {
       if (e.key === "Escape") {
         const changed = sessionItems.length > 0 && undoLeft > 0;
         if (!changed || window.confirm("本次作答尚未提交或可撤销，确定退出？")) {
-          navigate("/study");
+          navigate(goBack);
         }
         return;
       }
@@ -170,7 +250,7 @@ export default function ReviewSession() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [stage, onRate, next, finished, navigate, sessionItems, undoLeft]);
+  }, [stage, onRate, next, finished, navigate, sessionItems, undoLeft, goBack]);
 
   // 6) 撤销：回滚状态并移除本次会话记录。
   const undo = useCallback(async () => {
@@ -185,14 +265,40 @@ export default function ReviewSession() {
     setRevealed(false);
   }, [current, undoReview, sessionRemove]);
 
-  const masteryNow = current ? (snapshot?.masteryByUnit[current.unitId] ?? 0) : 0;
+  const masteryNow = current
+    ? conceptMode
+      ? (conceptMastery[current.unitId] ?? 0)
+      : (snapshot?.masteryByUnit[current.unitId] ?? 0)
+    : 0;
 
   // 完成汇总态
   if (finished) {
-    return <SummaryView items={sessionItems} startReadiness={startReadiness} />;
+    return (
+      <SummaryView
+        items={sessionItems}
+        startReadiness={startReadiness}
+        titles={titles}
+        conceptMode={conceptMode}
+        goBack={goBack}
+        goBackLabel={goBackLabel}
+      />
+    );
   }
 
-  if (!ready || !snapshot) {
+  if (missingChapter) {
+    return (
+      <PageContainer>
+        <Card>
+          <p className="text-sm text-slate-500">章节不存在或已被移除。</p>
+          <Link to="/learn" className="mt-2 inline-block text-sm text-indigo-600 hover:underline">
+            ← 返回章节目录
+          </Link>
+        </Card>
+      </PageContainer>
+    );
+  }
+
+  if (!ready || (!conceptMode && !snapshot)) {
     return (
       <PageContainer>
         <Card>
@@ -206,9 +312,13 @@ export default function ReviewSession() {
     return (
       <PageContainer>
         <Card>
-          <p className="text-sm text-slate-500">当前没有待复习的缺口单元。</p>
-          <Link to="/study" className="mt-2 inline-block text-sm text-indigo-600 hover:underline">
-            ← 返回学习页
+          <p className="text-sm text-slate-500">
+            {conceptMode
+              ? "本章概念没有待复习的缺口——都已达标，或本章尚未提炼概念。"
+              : "当前没有待复习的缺口单元。"}
+          </p>
+          <Link to={goBack} className="mt-2 inline-block text-sm text-indigo-600 hover:underline">
+            ← {goBackLabel}
           </Link>
         </Card>
       </PageContainer>
@@ -223,7 +333,7 @@ export default function ReviewSession() {
       const ok = window.confirm("本次作答尚未提交或可撤销，确定退出？");
       if (!ok) return;
     }
-    navigate("/study");
+    navigate(goBack);
   };
 
   return (
@@ -251,7 +361,7 @@ export default function ReviewSession() {
               {actionKindLabel(current.kind)}
             </span>
             <span className="text-base font-semibold text-slate-900">
-              {unitTitle(current.unitId)}
+              {titleOf(current.unitId)}
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -354,17 +464,33 @@ export default function ReviewSession() {
 function SummaryView({
   items,
   startReadiness,
+  titles,
+  conceptMode = false,
+  goBack,
+  goBackLabel,
 }: {
   items: SessionItem[];
   startReadiness: number;
+  titles?: Record<string, string>;
+  conceptMode?: boolean;
+  goBack: string;
+  goBackLabel: string;
 }) {
   const navigate = useNavigate();
   const snapshot = useLoopStore((s) => s.snapshot);
   const nowReadiness = snapshot?.readiness ?? startReadiness;
   const delta = Math.round((nowReadiness - startReadiness) * 100);
+  const titleOf = (unitId: string): string => titles?.[unitId] ?? unitTitle(unitId);
   return (
     <PageContainer>
-      <SectionTitle title="本次复习完成 🎉" subtitle="掌握度变化为启发式估计。" />
+      <SectionTitle
+        title={conceptMode ? "本章概念复习完成 🎉" : "本次复习完成 🎉"}
+        subtitle={
+          conceptMode
+            ? "概念层无卷面——自评即该概念的掌握度证据，复习调度随评分顺延。"
+            : "掌握度变化为启发式估计。"
+        }
+      />
       <Card>
         {items.length === 0 ? (
           <p className="text-sm text-slate-500">本次没有完成任何单元。</p>
@@ -376,7 +502,7 @@ function SummaryView({
                 className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2"
               >
                 <span className="text-sm font-medium text-slate-700">
-                  {unitTitle(it.action.unitId)}
+                  {titleOf(it.action.unitId)}
                   <span className="ml-2 text-xs font-normal text-slate-400">
                     {ratingLabel(it.rating)}
                   </span>
@@ -386,7 +512,7 @@ function SummaryView({
             ))}
           </ul>
         )}
-        {snapshot ? (
+        {!conceptMode && snapshot ? (
           <div className="mt-6 rounded-lg border border-indigo-100 bg-indigo-50/50 px-4 py-3">
             <p className="text-sm font-medium text-slate-800">
               就绪度{" "}
@@ -417,17 +543,26 @@ function SummaryView({
           >
             回到首页
           </button>
+          {conceptMode ? (
+            <button
+              onClick={() => navigate(goBack)}
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              {goBackLabel} →
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate("/assessment")}
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              继续测评巩固 →
+            </button>
+          )}
           <button
-            onClick={() => navigate("/assessment")}
+            onClick={() => navigate(conceptMode ? "/learn" : "/study")}
             className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
-            继续测评巩固 →
-          </button>
-          <button
-            onClick={() => navigate("/study")}
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            返回学习页
+            {conceptMode ? "返回章节目录" : "返回学习页"}
           </button>
         </div>
       </Card>

@@ -4,6 +4,7 @@ import HomePage from "./features/home/HomePage";
 import SpacesPage from "./features/spaces/SpacesPage";
 import ChapterCatalogPage from "./features/learn/ChapterCatalogPage";
 import ChapterReaderPage from "./features/learn/ChapterReaderPage";
+import ChapterGraphPage from "./features/knowledge/ChapterGraphPage";
 import QuizCenterPage from "./features/quiz/QuizCenterPage";
 import NewQuizPage from "./features/quiz/NewQuizPage";
 import QuizAnswerPage from "./features/quiz/QuizAnswerPage";
@@ -22,10 +23,12 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route index element={<HomePage />} />
           <Route path="spaces" element={<SpacesPage />} />
-          {/* 原 /knowledge 图谱列表被 V2 章节目录取代（docs §4 P1）；图谱延后 N5 */}
+          {/* 原 /knowledge 图谱列表被 V2 章节目录取代（docs §4 P1）；N5 图谱回归为章内概念图谱 */}
           <Route path="knowledge" element={<Navigate to="/learn" replace />} />
           <Route path="learn" element={<ChapterCatalogPage />} />
           <Route path="learn/:chapterId" element={<ChapterReaderPage />} />
+          {/* N5 概念层回归：章概念图谱（AI 提炼 + GraphView 可视化 + 概念复习入口） */}
+          <Route path="learn/:chapterId/graph" element={<ChapterGraphPage />} />
           {/* V2 试卷中心（P3/P4/P5/P6；出卷向导 / 答题 / 判卷 / 报告） */}
           <Route path="quiz" element={<QuizCenterPage />} />
           <Route path="quiz/new" element={<NewQuizPage />} />

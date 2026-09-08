@@ -176,6 +176,22 @@ export default function ChapterReaderPage() {
               <p className="mt-2 text-sm text-slate-400">暂无要点摘要。</p>
             )}
           </Card>
+
+          {/* N5 概念层回归：章概念图谱入口（AI 提炼 + 可视化 + 概念复习） */}
+          <Card className="p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+              概念图谱
+            </p>
+            <p className="mt-2 text-xs leading-5 text-slate-400">
+              AI 把本章拆成可单独记忆与复习的知识概念，掌握度一目了然。
+            </p>
+            <Link
+              to={`/learn/${chapter.id}/graph`}
+              className="mt-3 inline-block text-sm font-medium text-indigo-600 hover:underline"
+            >
+              打开本章概念图谱 →
+            </Link>
+          </Card>
         </div>
       </div>
 

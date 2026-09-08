@@ -68,6 +68,11 @@ interface GraphViewProps {
   highlightIds?: string[];
   /** Detail 态：切到列表并高亮该来源文档（unit.sourceDocumentId 存在时调用）。 */
   onOpenDocument?: (docId: string) => void;
+  /**
+   * N5 概念层回归：替代默认「/study/session?unit=」跳转，由宿主（章图谱页）
+   * 注入带章上下文的复习入口（?chapterId=&unit=）。缺省回退 V1 直链。
+   */
+  onReviewUnit?: (unitId: string) => void;
 }
 
 const TEXT_COLOR = "#334155";
@@ -88,6 +93,7 @@ export default function GraphView({
   requiredUnitIds,
   highlightIds = [],
   onOpenDocument,
+  onReviewUnit,
 }: GraphViewProps) {
   const navigate = useNavigate();
   const [focusId, setFocusId] = useState<string | undefined>();
@@ -322,7 +328,11 @@ export default function GraphView({
               )}
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
-                  onClick={() => navigate(`/study/session?unit=${focusUnit.id}`)}
+                  onClick={() =>
+                    onReviewUnit
+                      ? onReviewUnit(focusUnit.id)
+                      : navigate(`/study/session?unit=${focusUnit.id}`)
+                  }
                   className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
                 >
                   去复习 ▶

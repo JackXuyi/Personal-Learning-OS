@@ -18,7 +18,15 @@
  * 诚实降级：任何管道失败（未配置 / 网络 / 解析）都向上抛错或返回空，绝不
  * 伪造内容（P0-3）；调用方统一回退到本地确定性实现。
  */
-import type { Chapter, Paper, PaperQuestion } from "../domain";
+import type {
+  Chapter,
+  KnowledgeRelation,
+  KnowledgeUnit,
+  Paper,
+  PaperQuestion,
+  RelationType,
+} from "../domain";
+import { newId } from "../domain";
 import type { ChapterRefine } from "../engine/splitter-engine";
 import { applyChapterRefine } from "../engine/splitter-engine";
 import type { AIProvider, ChatMessage } from "./types";
@@ -40,10 +48,12 @@ export const PIPELINE_LIMITS = {
   quizExcerptChars: 700,
   /** 主观批改单请求最大条数（超出分批）。 */
   gradeChunkSize: 8,
+  /** 概念抽取的章正文最大字符数（超出拒绝——图谱应聚焦单章）。 */
+  conceptMaxTextChars: 40_000,
 };
 
 /** 温度：精修/出题偏稳定，批改最低（事实判定）。 */
-const TEMPERATURE = { refine: 0.2, quiz: 0.3, grade: 0.1 };
+const TEMPERATURE = { refine: 0.2, quiz: 0.3, grade: 0.1, concept: 0.2 };
 
 /** 取章正文的摘录（去掉标题行与多余空白；maxChars 截断）。 */
 function chapterExcerpt(text: string, start: number, end: number, maxChars: number): string {
@@ -441,4 +451,174 @@ export async function gradeSubjectiveWithAi(
     out.push(...parseSubjectiveGrades(raw, group));
   }
   return out;
+}
+
+/* ------------------------------------------------------------------ */
+/* 4) 章概念 AI 抽取（概念层回归 N5/T14）                              */
+/* ------------------------------------------------------------------ */
+
+/** AI 认可的概念类型（与 domain.KnowledgeKind 白名单一致；缺省 concept）。 */
+const CONCEPT_KINDS = new Set([
+  "concept",
+  "skill",
+  "fact",
+  "procedure",
+  "principle",
+]);
+
+/** 画边的关系类型（图谱可视层只画这四类；其余类型留给概念侧栏文本）。 */
+const CONCEPT_REL_TYPES: ReadonlySet<RelationType> = new Set([
+  "prerequisite",
+  "related",
+  "parent",
+  "child",
+]);
+
+const CONCEPT_SYSTEM =
+  "你是严谨的学习资料概念分析师。用户会给出一章正文，请把这一章拆成有学习价值的" +
+  "知识概念（KnowledgeUnit），并指出概念间关系。\n" +
+  "要求：\n" +
+  "- 概念粒度适中：一章 6–14 个，宁缺毋滥——只收录正文真正讲到、值得单独记忆/复习的原子概念，不编造正文外的内容；\n" +
+  "- kind：concept 概念 / skill 技能 / fact 事实 / procedure 流程 / principle 原理（拿不准用 concept）；\n" +
+  "- summary：≤120 字的一句话总结，让复习时能快速回忆；tags：0–3 个 ≤12 字的归类标签；\n" +
+  "- relations：概念之间的关键关系，只用 prerequisite（前置依赖）/ related（相关）/ parent-child（上下位）；\n" +
+  "  关系两端用 units 数组下标（从 0 起）引用，仅画有信息量的边（6–14 个概念建议 ≤16 条），无强关联可不给。\n" +
+  "只输出一个 JSON 对象（不要 markdown 围栏与多余文字），格式：" +
+  '{"units":[{"title":"向量化","kind":"concept","summary":"…","tags":["嵌入"]}],"relations":[{"from":0,"to":1,"type":"prerequisite"}]}。';
+
+/** 纯函数：构建章概念抽取提示词。 */
+export function buildConceptMessages(input: {
+  chapterTitle: string;
+  text: string;
+}): ChatMessage[] {
+  return [
+    { role: "system", content: CONCEPT_SYSTEM },
+    {
+      role: "user",
+      content: `章「${input.chapterTitle || "(未命名章)"}」正文如下（${input.text.length} 字）：\n\n${input.text}`,
+    },
+  ];
+}
+
+/** 单概念草稿（title/kind/summary/tags 内容字段；id/来源由执行器分配）。 */
+export interface AiConceptDraft {
+  title: string;
+  kind: KnowledgeUnit["kind"];
+  summary?: string;
+  tags: string[];
+}
+
+/** 单关系草稿：from/to 为 units 数组下标（0 起）。 */
+export interface AiRelationDraft {
+  from: number;
+  to: number;
+  type: RelationType;
+}
+
+function isRelType(v: unknown): v is RelationType {
+  return typeof v === "string" && CONCEPT_REL_TYPES.has(v as RelationType);
+}
+
+/** 纯函数：解析 AI 概念响应 → 规范化草稿（越界下标 / 非法类型丢弃）。 */
+export function parseConceptDrafts(raw: unknown): {
+  units: AiConceptDraft[];
+  relations: AiRelationDraft[];
+} {
+  if (!isRecord(raw)) {
+    throw new AiProviderError("request-failed", "AI 概念抽取响应不是对象。");
+  }
+  const rawUnits = Array.isArray(raw.units) ? raw.units : [];
+  const units: AiConceptDraft[] = [];
+  for (const item of rawUnits) {
+    if (!isRecord(item)) continue;
+    const title = str(item.title)?.trim();
+    if (!title || title.length > 40) continue;
+    const kind = typeof item.kind === "string" && CONCEPT_KINDS.has(item.kind)
+      ? (item.kind as KnowledgeUnit["kind"])
+      : "concept";
+    const summary = str(item.summary)?.trim();
+    const tags = Array.isArray(item.tags)
+      ? item.tags.filter((t): t is string => typeof t === "string")
+          .map((t) => t.trim().slice(0, 12))
+          .filter((t) => t.length > 0)
+          .slice(0, 3)
+      : [];
+    units.push({
+      title,
+      kind,
+      ...(summary && summary.length <= 120 ? { summary } : summary ? { summary: `${summary.slice(0, 120)}…` } : {}),
+      tags,
+    });
+  }
+  if (units.length === 0) {
+    throw new AiProviderError("request-failed", "AI 概念抽取未返回任何合规概念。");
+  }
+  const rawRels = Array.isArray(raw.relations) ? raw.relations : [];
+  const relations: AiRelationDraft[] = [];
+  for (const item of rawRels) {
+    if (!isRecord(item)) continue;
+    const from = item.from;
+    const to = item.to;
+    if (
+      typeof from !== "number" || !Number.isInteger(from) ||
+      typeof to !== "number" || !Number.isInteger(to) ||
+      from === to || from < 0 || to < 0 || from >= units.length || to >= units.length
+    ) continue;
+    if (!isRelType(item.type)) continue;
+    relations.push({ from, to, type: item.type });
+  }
+  // 去重（同向同型只留一条）。
+  const seen = new Set<string>();
+  const deduped = relations.filter((r) => {
+    const k = `${r.from}\u0001${r.to}\u0001${r.type}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  return { units, relations: deduped };
+}
+
+/** 章概念抽取执行器：AI 从章正文抽概念与关系（未配置/失败抛类型化错误）。 */
+export async function extractChapterConceptsWithAi(
+  provider: AIProvider,
+  input: {
+    /** 章标题（提示词上下文）。 */
+    chapterTitle: string;
+    /** 章正文（纯净文本；超长抛错，图谱应聚焦单章）。 */
+    text: string;
+  },
+): Promise<{ units: KnowledgeUnit[]; relations: KnowledgeRelation[] }> {
+  const text = input.text.trim();
+  if (text.length === 0) {
+    throw new AiProviderError("request-failed", "章正文为空，无法提炼概念。");
+  }
+  if (text.length > PIPELINE_LIMITS.conceptMaxTextChars) {
+    throw new AiProviderError(
+      "request-failed",
+      `本章正文过长（${text.length} 字，上限 ${PIPELINE_LIMITS.conceptMaxTextChars}），无法整章提炼——请先精简资料或拆分章节。`,
+    );
+  }
+  const raw = await chatJson(
+    provider,
+    buildConceptMessages({ chapterTitle: input.chapterTitle, text }),
+    TEMPERATURE.concept,
+  );
+  const { units, relations } = parseConceptDrafts(raw);
+  const now = Date.now();
+  const created: KnowledgeUnit[] = units.map((u) => ({
+    id: newId("unit"),
+    title: u.title,
+    kind: u.kind,
+    ...(u.summary ? { summary: u.summary } : {}),
+    tags: u.tags,
+    createdAt: now,
+  }));
+  const unitIds = created.map((u) => u.id);
+  const createdRels: KnowledgeRelation[] = relations.map((r) => ({
+    id: newId("rel"),
+    fromId: unitIds[r.from],
+    toId: unitIds[r.to],
+    type: r.type,
+  }));
+  return { units: created, relations: createdRels };
 }
