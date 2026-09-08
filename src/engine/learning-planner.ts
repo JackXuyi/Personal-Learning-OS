@@ -6,8 +6,9 @@
  * 都携带其背后的理由（可解释原则）。
  *
  * V2 章级（docs §5.5 / P7）：章集合 + 章掌握度 → 状态机排序动作。队列顺序
- * 遵循「重学弱章 > 补考弱章 > 复习要点 > 测已学章 > 推进下一未学章」；
- * 章掌握度唯一写方为卷面（T3 双证据原则），补考判定用 MASTERY_FLOOR。
+ * 遵循「重学弱章 > 补考弱章 > 复习要点 > 测已学章 > 到期复习(防遗忘) > 推进
+ * 下一未学章」；章掌握度唯一写方为卷面（T3 双证据原则），补考判定用 MASTERY_FLOOR。
+ * 到期复习（T9）：已达标章 nextReviewAt 过期后以低优先级复习动作重新入队。
  */
 import type {
   Chapter,
@@ -18,7 +19,7 @@ import type {
   UnitMastery,
 } from "../domain";
 import { MASTERY_FLOOR, MASTERY_THRESHOLD, newId } from "../domain";
-import { prerequisitesOf, sortChaptersByOrder } from "../domain";
+import { isDueReview, prerequisitesOf, sortChaptersByOrder } from "../domain";
 import { bandOf, masteryOfUnit } from "./mastery-engine";
 
 export interface PlanInput {
@@ -137,7 +138,7 @@ export interface ChapterPlanInput {
   now?: number;
 }
 
-/** 队列类型序号：越小越前（重学弱章 > 补考 > 复习要点 > 测已学章 > 推进未学章）。 */
+/** 队列类型序号：越小越前（重学弱章 > 补考 > 复习要点 > 到期复习 > 测已学章 > 推进未学章）。 */
 type ChapterActionSpec = {
   kind: "learn-chapter" | "chapter-quiz" | "retake-quiz" | "review-points";
   cls: number;
@@ -146,18 +147,36 @@ type ChapterActionSpec = {
   chapterId: string;
   title: string;
   reasons: string[];
+  /** 到期复习专属：下次复习时间（越早到期越先复习）。非到期动作缺省。 */
+  dueAt?: number;
 };
 
 const pct = (v: number): number => Math.round(v * 100);
 
-/** 单章决策：已掌握 → 无动作；否则按 状态机 × 卷面证据 给一个最高优先动作。 */
+/**
+ * 单章决策：已掌握 → 若到期复习（nextReviewAt 已过）给低优先级复习动作，
+ * 否则无动作；未达标按 状态机 × 卷面证据 给一个最高优先动作。
+ */
 function specForChapter(
   chapter: Chapter,
   unit: UnitMastery | undefined,
+  now: number,
 ): ChapterActionSpec | undefined {
   const m = unit?.mastery ?? 0;
-  // 已达标（卷面 ≥0.8）→ 无动作；retake 状态例外（状态机显式要求补考）。
-  if (m >= MASTERY_THRESHOLD && chapter.status !== "retake") return undefined;
+  // 已达标（卷面 ≥0.8）且非 retake 态：仅当到复习日（T9 防遗忘）才入队低优先级复习。
+  if (m >= MASTERY_THRESHOLD && chapter.status !== "retake") {
+    if (!isDueReview(unit, now)) return undefined;
+    const dueIn = Math.max(0, Math.round((now - (unit?.nextReviewAt ?? now)) / 86_400_000));
+    return {
+      kind: "review-points", cls: 4, mastery: m, order: chapter.order,
+      chapterId: chapter.id, title: `《${chapter.title}》`,
+      dueAt: unit?.nextReviewAt,
+      reasons: [
+        `《${chapter.title}》已达标，但距上次复习已过 ${dueIn} 天，进入遗忘窗口。`,
+        "重读要点完成复习，可刷新下次复习安排。",
+      ],
+    };
+  }
   const title = `《${chapter.title}》`;
 
   // 状态机显式待补考 → 补考。
@@ -216,7 +235,7 @@ function specForChapter(
     };
   }
   return {
-    kind: "learn-chapter", cls: 4, mastery: m, order: chapter.order,
+    kind: "learn-chapter", cls: 5, mastery: m, order: chapter.order,
     chapterId: chapter.id, title,
     reasons: [
       `${title}尚未学习——按顺序推进本章。`,
@@ -228,18 +247,21 @@ function specForChapter(
  * 章级计划：为每章产出「下一步」动作并排序。
  *
  * 队列顺序（cls）：重学弱章(0) > 补考(1) > 复习要点(2) > 测已学章(3) >
- * 推进未学章(4)；同类内掌握度低者在前（更弱先补），同掌握度按章 order。
- * 已达标章（mastery ≥ MASTERY_THRESHOLD 且非 retake 态）不产生动作。
+ * 到期复习(4) > 推进未学章(5)；同类内掌握度低者在前（更弱先补），到期复习按
+ * 到期先后（最久未复习的先复习），同掌握度按章 order。
+ * 已达标章（mastery ≥ MASTERY_THRESHOLD 且非 retake 态）：到期（nextReviewAt
+ * 已过，T9 防遗忘）才以低优先级复习动作入队，否则不产生动作。
  * 每个动作携带可解释理由（P7 计划页直接展示 reasons）。
  */
 export function buildChapterPlan(input: ChapterPlanInput): NextAction[] {
   const { learnerState, now = Date.now() } = input;
   const specs = sortChaptersByOrder(input.chapters)
-    .map((chapter) => specForChapter(chapter, learnerState.byUnit[chapter.id]))
+    .map((chapter) => specForChapter(chapter, learnerState.byUnit[chapter.id], now))
     .filter((s): s is ChapterActionSpec => s !== undefined)
     .sort(
       (a, b) =>
         a.cls - b.cls ||
+        (a.dueAt ?? Number.POSITIVE_INFINITY) - (b.dueAt ?? Number.POSITIVE_INFINITY) ||
         a.mastery - b.mastery ||
         a.order - b.order,
     );

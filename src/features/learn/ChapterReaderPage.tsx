@@ -13,9 +13,10 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Bar, Card } from "../../components/primitives";
-import { MASTERY_THRESHOLD } from "../../domain";
+import { MASTERY_THRESHOLD, isDueReview } from "../../domain";
 import type { Chapter, LearnerState, SourceDocument } from "../../domain";
-import { storage } from "../../stores/useLoopStore";
+import { applyKeyPointRating } from "../../engine";
+import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { chapterBadge } from "./chapter-badge";
 
 export default function ChapterReaderPage() {
@@ -57,6 +58,8 @@ export default function ChapterReaderPage() {
 
   const mastery = chapter ? (learner?.byUnit[chapter.id]?.mastery ?? 0) : 0;
   const badge = chapter ? chapterBadge(chapter.status, mastery) : undefined;
+  /** 到期复习（T9）：已达标且 nextReviewAt 已过 → 引导「复习完成」顺延。 */
+  const dueReview = !!chapter && !!learner && isDueReview(learner.byUnit[chapter.id], Date.now());
 
   /** 标记学完：learning / not-started → ready。 */
   const markReady = async () => {
@@ -67,6 +70,16 @@ export default function ChapterReaderPage() {
     );
     await storage.saveChapters(doc.id, updated);
     setChapter(updated.find((c) => c.id === chapter.id));
+  };
+
+  /** 复习完成：按「good」自评顺延下次复习（T9 到期动作闭环；只做调度不改掌握度）。 */
+  const markReviewed = async () => {
+    if (!chapter) return;
+    const ls = await storage.getLearnerState();
+    const next = applyKeyPointRating(ls, chapter.id, "good", Date.now());
+    await storage.saveLearnerState(next);
+    setLearner(next);
+    await useLoopStore.getState().refresh();
   };
 
   if (missing) {
@@ -169,15 +182,26 @@ export default function ChapterReaderPage() {
       {/* 底部主行动 */}
       <div className="sticky bottom-4 z-10 mt-6 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white/90 px-5 py-3.5 shadow-lg backdrop-blur">
         <p className="hidden text-xs text-slate-400 sm:block">
-          {chapter.status === "ready" ? "已标记学完——下一步是「测本章」，检验掌握程度。" : "读完正文后标记学完，即可进入本章测验。"}
+          {dueReview
+            ? "已到复习日——重读要点后点「复习完成」，下次复习自动顺延。"
+            : chapter.status === "ready"
+              ? "已标记学完——下一步是「测本章」，检验掌握程度。"
+              : "读完正文后标记学完，即可进入本章测验。"}
         </p>
         <div className="flex items-center gap-2">
-          {mastery >= MASTERY_THRESHOLD ? (
+          {mastery >= MASTERY_THRESHOLD && !dueReview ? (
             <span className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
               ✓ 已达 {Math.round(MASTERY_THRESHOLD * 100)}%，可直接综合测
             </span>
           ) : null}
-          {chapter.status === "ready" ? (
+          {dueReview ? (
+            <button
+              onClick={markReviewed}
+              className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+            >
+              ✓ 复习完成 · 顺延复习
+            </button>
+          ) : chapter.status === "ready" ? (
             <button
               onClick={() =>
                 navigate(

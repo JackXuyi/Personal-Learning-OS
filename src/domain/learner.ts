@@ -49,6 +49,14 @@ export function accuracyOf(unit: UnitMastery): number {
   return unit.attempts > 0 ? unit.correctCount / unit.attempts : 0;
 }
 
+/**
+ * 到期复习判定（V2 T9）：已安排过复习（nextReviewAt 有值）且已到复习日。
+ * 到期章即便掌握度仍达标，也应重新入队复习（防遗忘衰减）。
+ */
+export function isDueReview(unit: UnitMastery | undefined, now: number): boolean {
+  return unit?.nextReviewAt !== undefined && unit.nextReviewAt <= now;
+}
+
 /** The RAG example from the README, provided as sample seed data. */
 export const RAG_UNIT_IDS = {
   retrieval: "rag-retrieval",

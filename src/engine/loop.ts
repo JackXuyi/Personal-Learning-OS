@@ -18,6 +18,7 @@ import type {
 } from "../domain";
 import { MASTERY_THRESHOLD, RAG_UNIT_IDS, sortChaptersByOrder } from "../domain";
 import type { StorageAdapter } from "../storage";
+import { applyForgetting } from "./learner-model";
 import { buildChapterPlan, createLearningPlanner } from "./learning-planner";
 import { createRecommendationEngine } from "./recommendation-engine";
 
@@ -154,7 +155,10 @@ export async function runLearningLoop(
   if (!goal) throw new Error("未找到学习目标。");
 
   const graph = await storage.getGraph();
-  const learnerState = await storage.getLearnerState();
+  // 读时遗忘衰减（V2 T9）：展示/规划基于「遗忘后的当前掌握度」视图。
+  // 不写回持久层 —— 每次从原始状态出发折算，天然幂等，避免多次衰减累积。
+  const rawLearner = await storage.getLearnerState();
+  const learnerState = applyForgetting(rawLearner, Date.now());
 
   const actions = createLearningPlanner().buildPlan({ goal, graph, learnerState });
   const next = createRecommendationEngine().recommendNext(actions);
@@ -218,11 +222,13 @@ export interface ChapterLoopSnapshot {
 export async function runChapterLoop(
   storage: StorageAdapter,
 ): Promise<ChapterLoopSnapshot> {
-  const [goals, docs, learner] = await Promise.all([
+  const [goals, docs, rawLearner] = await Promise.all([
     storage.listGoals(),
     storage.listDocuments(),
     storage.getLearnerState(),
   ]);
+  // 读时遗忘衰减（V2 T9）：章级规划与就绪度基于衰减视图（幂等，不写回）。
+  const learner = applyForgetting(rawLearner, Date.now());
   const docList = [...docs].sort((a, b) => a.importedAt - b.importedAt);
 
   const entries = await Promise.all(

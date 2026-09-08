@@ -17,7 +17,7 @@ import { PageContainer } from "../../components/layout/AppShell";
 import { MASTERY_THRESHOLD } from "../../domain";
 import type { Chapter, LearnerState, SourceDocument } from "../../domain";
 import { sortChaptersByOrder } from "../../domain";
-import { splitDocument } from "../../engine";
+import { applyForgetting, splitDocument } from "../../engine";
 import { storage } from "../../stores/useLoopStore";
 import { chapterBadge, isChapterUnmet } from "./chapter-badge";
 import ImportModal from "./ImportModal";
@@ -41,12 +41,14 @@ export default function ChapterCatalogPage() {
       storage.listDocuments(),
       storage.getLearnerState(),
     ]);
+    // 读时遗忘衰减（V2 T9）：目录就绪进度与首页/计划同口径（衰减视图，幂等不写回）。
+    const learner = applyForgetting(ls, Date.now());
     const withChapters = await Promise.all(
       ds.map(async (d) => [d.id, sortChaptersByOrder(await storage.listChapters(d.id))] as const),
     );
     setDocs(ds);
     setChaptersByDoc(Object.fromEntries(withChapters));
-    setLearner(ls);
+    setLearner(learner);
   };
 
   useEffect(() => {
