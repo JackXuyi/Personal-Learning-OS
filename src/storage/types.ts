@@ -36,9 +36,10 @@ export interface StorageAdapter {
   getPaperDraft(paperId: string): Promise<PaperAnswers | undefined>;
   savePaperDraft(paperId: string, answers: PaperAnswers): Promise<void>;
 
-  // 判卷结果（T6 交卷即落库；T7 报告页消费）
+  // 判卷结果（T6 交卷即落库；T7 报告页消费 / 判卷撤销回滚）
   listPaperResults(): Promise<PaperResult[]>;
   savePaperResult(result: PaperResult): Promise<void>;
+  deletePaperResult(paperId: string): Promise<void>;
 
   // 知识图谱
   getGraph(): Promise<KnowledgeGraph>;

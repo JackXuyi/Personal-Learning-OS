@@ -65,6 +65,9 @@ export class InMemoryStorage implements StorageAdapter {
   async savePaperResult(result: PaperResult): Promise<void> {
     this.paperResults.set(result.paperId, result);
   }
+  async deletePaperResult(paperId: string): Promise<void> {
+    this.paperResults.delete(paperId);
+  }
 
   async getGraph(): Promise<KnowledgeGraph> {
     return this.graph;

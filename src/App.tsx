@@ -7,6 +7,8 @@ import ChapterReaderPage from "./features/learn/ChapterReaderPage";
 import QuizCenterPage from "./features/quiz/QuizCenterPage";
 import NewQuizPage from "./features/quiz/NewQuizPage";
 import QuizAnswerPage from "./features/quiz/QuizAnswerPage";
+import QuizGradingPage from "./features/quiz/QuizGradingPage";
+import QuizReportPage from "./features/quiz/QuizReportPage";
 import AssessmentPage from "./features/assessment/AssessmentPage";
 import CareerPage from "./features/career/CareerPage";
 import StudyPage from "./features/study/StudyPage";
@@ -24,10 +26,12 @@ export default function App() {
           <Route path="knowledge" element={<Navigate to="/learn" replace />} />
           <Route path="learn" element={<ChapterCatalogPage />} />
           <Route path="learn/:chapterId" element={<ChapterReaderPage />} />
-          {/* V2 试卷中心（P3/P4；/quiz/new 三步向导，/quiz/:paperId 答题） */}
+          {/* V2 试卷中心（P3/P4/P5/P6；出卷向导 / 答题 / 判卷 / 报告） */}
           <Route path="quiz" element={<QuizCenterPage />} />
           <Route path="quiz/new" element={<NewQuizPage />} />
+          <Route path="quiz/:paperId/grading" element={<QuizGradingPage />} />
           <Route path="quiz/:paperId" element={<QuizAnswerPage />} />
+          <Route path="report/:paperId" element={<QuizReportPage />} />
           <Route path="assessment" element={<AssessmentPage />} />
           <Route path="career" element={<CareerPage />} />
           <Route path="study" element={<StudyPage />} />

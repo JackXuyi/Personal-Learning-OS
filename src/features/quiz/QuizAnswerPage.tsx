@@ -1,42 +1,41 @@
 /**
- * P4 答题页（/quiz/:paperId）—— V2 三步闭环「考一卷」的作答页（T6）。
+ * P4 答题页（/quiz/:paperId）—— V2 三步闭环「考一卷」的作答页（T6，T7 接入判卷流）。
  *
  * 交互（docs §4.2 P4）：
  * - 逐题流：进度 x/y + 范围标签；← 上一题 / → 下一题；
- * - 控件按题型：选择 → 选项卡（键盘 1–4）；判断 → 对/错；问答与应用 → textarea
- *   （T6 卷内无主观题，AI 判分 T7 接入后恢复）；
+ * - 控件按题型：选择 → 选项卡（键盘 1–4）；判断 → 对/错；问答与应用 → textarea；
  * - 草稿：每答一题自动暂存（storage.savePaperDraft），中途离开可续答；
- * - 交卷：未答二次确认 → gradeAndApply 客观判分 + 章掌握度平滑回写 →
- *   落 PaperResult + paper.status=done → 内嵌结果摘要（总分/错题/逐章前后掌握度）。
+ * - 交卷（T7 判卷流）：存最终草稿 → paper.status=grading → 跳 /quiz/:paperId/grading，
+ *   判分/掌握度回写/章状态流转在该判卷页完成（5s 内可撤销）。
  *
- * done 态再次打开（从试卷中心「查看结果」）→ 展示同一份结果摘要；
- * 独立 /report 报告页（P6）属 T7，届时结果摘要升级为完整报告入口。
+ * 态迁移兼容：
+ * - done（已有判卷结果）→ 重定向 /report/:paperId；
+ * - grading（交卷后未完成判卷 / 中断恢复）→ 重定向判卷页继续；
+ *   （报告页 / 判卷页见 QuizReportPage / QuizGradingPage）
  */
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { Bar, Card } from "../../components/primitives";
-import { MASTERY_THRESHOLD } from "../../domain";
-import type { Paper, PaperAnswers, PaperQuestion, PaperResult } from "../../domain";
+import type { Paper, PaperAnswers, PaperQuestion } from "../../domain";
 import { PAPER_MODE_LABEL } from "../../domain";
-import { gradeAndApply } from "../../engine";
 import { storage } from "../../stores/useLoopStore";
-import { scopeLabel } from "./meta";
 
-type Phase = "answering" | "confirm-submit" | "done";
+type Phase = "answering" | "confirm-submit";
 
 export default function QuizAnswerPage() {
   const { paperId = "" } = useParams();
+  const navigate = useNavigate();
   const [paper, setPaper] = useState<Paper | undefined>();
-  const [context, setContext] = useState<string>("");
-  const [chapterTitles, setChapterTitles] = useState<Record<string, string>>({});
+  const [context, setContext] = useState("");
   const [answers, setAnswers] = useState<PaperAnswers>({});
-  const [result, setResult] = useState<PaperResult | undefined>();
   const [phase, setPhase] = useState<Phase>("answering");
   const [index, setIndex] = useState(0);
   const [missing, setMissing] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** 重定向目标：done → 报告；grading → 判卷页（载入后跳转）。 */
+  const [redirectTo, setRedirectTo] = useState<string | undefined>();
 
-  // 载入试卷 + 章标题表 + 草稿 + 既有结果（done 卷直接展示）。
+  // 载入试卷 + 范围标签 + 草稿；按态迁移决定视图。
   useEffect(() => {
     void (async () => {
       const papers = await storage.listPapers();
@@ -45,22 +44,20 @@ export default function QuizAnswerPage() {
         setMissing(true);
         return;
       }
-      setPaper(found);
-      const { context: ctx, titles } = await contextOf(found);
-      setContext(ctx);
-      setChapterTitles(titles);
-
-      const [draft, results] = await Promise.all([
-        storage.getPaperDraft(found.id),
-        storage.listPaperResults(),
-      ]);
-      const prevResult = results.find((r) => r.paperId === found.id);
-      if (found.status === "done" && prevResult) {
-        setResult(prevResult);
-        setPhase("done");
-      } else if (draft) {
-        setAnswers(draft);
+      if (found.status === "grading") {
+        setRedirectTo(`/quiz/${found.id}/grading`);
+        return;
       }
+      if (found.status === "done") {
+        const results = await storage.listPaperResults();
+        const hasResult = results.some((r) => r.paperId === found.id);
+        setRedirectTo(hasResult ? `/report/${found.id}` : `/quiz/${found.id}/grading`);
+        return;
+      }
+      setPaper(found);
+      setContext(await contextLabel(found));
+      const draft = await storage.getPaperDraft(found.id);
+      if (draft) setAnswers(draft);
     })();
   }, [paperId]);
 
@@ -105,27 +102,23 @@ export default function QuizAnswerPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [paper, q, phase, answer]);
 
-  /** 交卷：客观判分 + 掌握度回写 + 结果落库。 */
+  /**
+   * 交卷：只做「提交」动作——保底草稿 + 置 grading，真正的判分/掌握度回写
+   * 在判卷页统一执行（T7 判卷流，5s 撤销窗口内可回滚）。
+   */
   const submit = async () => {
     if (!paper || busy) return;
     setBusy(true);
     try {
-      const learnerState = await storage.getLearnerState();
-      const { result: r, learnerState: nextState } = gradeAndApply({
-        paper,
-        answers,
-        learnerState,
-      });
-      await storage.saveLearnerState(nextState);
-      await storage.savePaper({ ...paper, status: "done", submittedAt: r.createdAt });
-      await storage.savePaperResult(r);
-      await storage.savePaperDraft(paper.id, {}); // 清草稿
-      setResult(r);
-      setPhase("done");
+      await storage.savePaperDraft(paper.id, answers); // 保底作答快照（判卷页据此判分）
+      await storage.savePaper({ ...paper, status: "grading" });
+      navigate(`/quiz/${paper.id}/grading`, { replace: true });
     } finally {
       setBusy(false);
     }
   };
+
+  if (redirectTo) return <Navigate to={redirectTo} replace />;
 
   if (missing) {
     return (
@@ -143,16 +136,6 @@ export default function QuizAnswerPage() {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
         <p className="text-sm text-slate-500">正在打开试卷…</p>
-      </div>
-    );
-  }
-
-  if (phase === "done") {
-    return result ? (
-      <ResultView result={result} chapterTitles={chapterTitles} />
-    ) : (
-      <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-sm text-slate-500">正在加载结果…</p>
       </div>
     );
   }
@@ -255,10 +238,11 @@ export default function QuizAnswerPage() {
                 还有 {unansweredCount} 题未作答——未答的客观题将判为错误。
               </p>
             ) : (
-              <p className="mt-2 text-sm text-slate-500">
-                全部题目已作答，交卷后立即判分并更新章节掌握度。
-              </p>
+              <p className="mt-2 text-sm text-slate-500">全部题目已作答，交卷后立即判分。</p>
             )}
+            <p className="mt-2 text-xs leading-5 text-slate-400">
+              客观题即时判定；问答/应用题待 AI 判分接入（未配置 AI 时不计入得分）。
+            </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={() => setPhase("answering")}
@@ -271,7 +255,7 @@ export default function QuizAnswerPage() {
                 disabled={busy}
                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
               >
-                {busy ? "判分中…" : "确认交卷"}
+                {busy ? "提交中…" : "确认交卷"}
               </button>
             </div>
           </Card>
@@ -375,92 +359,6 @@ function QuestionCard({
   );
 }
 
-/** 判卷结果摘要（done 态；T7 升级为独立 /report 报告页）。 */
-function ResultView({
-  result,
-  chapterTitles,
-}: {
-  result: PaperResult;
-  chapterTitles: Record<string, string>;
-}) {
-  const score = Math.round(result.totalScore * 100);
-  const passed = score >= 80;
-  const wrongCount = result.wrongQuestions.length;
-  const chapterIds = Object.keys(result.perChapter);
-  return (
-    <div className="mx-auto max-w-3xl px-8 py-10">
-      <Link to="/quiz" className="text-xs text-slate-400 hover:text-indigo-600">
-        ← 试卷中心
-      </Link>
-
-      {/* 总分 */}
-      <Card className="mt-4 text-center">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">卷面得分</p>
-        <p
-          className={`mt-2 text-5xl font-bold tabular-nums ${
-            passed ? "text-emerald-600" : score >= 60 ? "text-amber-600" : "text-red-500"
-          }`}
-        >
-          {score}
-        </p>
-        <p className="mt-1 text-sm text-slate-500">
-          满分 100 · 达标 {Math.round(MASTERY_THRESHOLD * 100)}
-        </p>
-        <p className="mt-4 text-sm leading-6 text-slate-600">
-          {passed
-            ? "已达标——掌握度按「0.65×卷面 + 0.35×历史」平滑更新。"
-            : score >= 60
-              ? "接近达标——建议复习错题要点后补考（报告页将提供补考入口）。"
-              : "未达标——建议重读薄弱章节后再测。"}
-        </p>
-        <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-slate-50 px-4 py-1.5 text-xs text-slate-500">
-          客观题错 {wrongCount} 题 · 掌握度已回写（0.65 卷面 + 0.35 历史）
-        </div>
-      </Card>
-
-      {/* 逐章前后掌握度 */}
-      {chapterIds.length > 0 ? (
-        <Card className="mt-4">
-          <p className="text-sm font-semibold text-slate-800">章节掌握度变化</p>
-          <div className="mt-3 space-y-3">
-            {chapterIds.map((chapterId) => {
-              const ch = result.perChapter[chapterId];
-              const delta = Math.round((ch.mastery - ch.previousMastery) * 100);
-              return (
-                <div key={chapterId}>
-                  <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="text-slate-500">
-                      {chapterTitles[chapterId] ?? chapterId}
-                    </span>
-                    <span className="tabular-nums text-slate-600">
-                      {Math.round(ch.previousMastery * 100)}% → {Math.round(ch.mastery * 100)}%
-                      <span
-                        className={`ml-1.5 font-medium ${delta >= 0 ? "text-emerald-600" : "text-red-500"}`}
-                      >
-                        {delta >= 0 ? `+${delta}` : delta}
-                      </span>
-                    </span>
-                  </div>
-                  <Bar value={ch.mastery} target={MASTERY_THRESHOLD} targetLabel="达标线" />
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      ) : null}
-
-      <div className="mt-6 flex justify-center">
-        <Link
-          to="/quiz"
-          className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
-        >
-          返回试卷中心
-        </Link>
-      </div>
-    </div>
-  );
-}
-
 function typeLabel(type: PaperQuestion["type"]): string {
   switch (type) {
     case "choice":
@@ -474,20 +372,20 @@ function typeLabel(type: PaperQuestion["type"]): string {
   }
 }
 
-/** 试卷范围 → 上下文文案 + 章标题表（跨文档查，一次遍历完成）。 */
-async function contextOf(paper: Paper): Promise<{
-  context: string;
-  titles: Record<string, string>;
-}> {
+/** 试卷范围 → 上下文文案（如「《RAG 指南》 · 第 1–3 章」；跨文档查，命中即返回）。 */
+async function contextLabel(paper: Paper): Promise<string> {
   const docs = await storage.listDocuments();
-  const titles: Record<string, string> = {};
   for (const d of docs) {
     const chapters = await storage.listChapters(d.id);
-    const hit = chapters.filter((c) => paper.scope.chapterIds.includes(c.id));
-    for (const c of hit) titles[c.id] = c.title || `第 ${c.order} 章`;
+    const hit = chapters
+      .filter((c) => paper.scope.chapterIds.includes(c.id))
+      .sort((a, b) => a.order - b.order);
     if (hit.length > 0) {
-      return { context: `${d.title} · ${scopeLabel(paper.scope, hit)}`, titles };
+      const first = hit[0].order;
+      const last = hit[hit.length - 1].order;
+      const range = first === last ? `第 ${first} 章` : `第 ${first}–${last} 章`;
+      return `${d.title} · ${range}`;
     }
   }
-  return { context: "资料已移除", titles };
+  return "资料已移除";
 }

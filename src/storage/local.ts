@@ -103,6 +103,10 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     await super.savePaperResult(result);
     this.persist();
   }
+  override async deletePaperResult(paperId: string): Promise<void> {
+    await super.deletePaperResult(paperId);
+    this.persist();
+  }
   override async saveGraph(graph: KnowledgeGraph): Promise<void> {
     await super.saveGraph(graph);
     this.persist();

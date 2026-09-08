@@ -12,6 +12,7 @@
  * 而非数据迁移 + 语义重构。引擎通过 MasterySubject 接口同时服务 chapter 与
  * concept（复用算法、不复用类型）。
  */
+import { MASTERY_FLOOR, MASTERY_THRESHOLD } from "./plan";
 
 /** 章节学习状态（章状态机，docs §3 步骤 1）。 */
 export type ChapterStatus =
@@ -73,4 +74,23 @@ export function asMasterySubject(chapter: Chapter): {
 /** 按 order 升序排序（存储写入与读取统一使用，保证确定性）。 */
 export function sortChaptersByOrder(chapters: Chapter[]): Chapter[] {
   return [...chapters].sort((a, b) => a.order - b.order);
+}
+
+/**
+ * 卷面判卷后的章状态写回（T7 编排；threshold 与 plan.ts 同源）。
+ *
+ * 规则（对齐状态机与掌握度档）：
+ *   - mastery ≥ 达标线 → mastered（含 retake 达标 → 回 mastered）；
+ *   - mastery < 及格线：仅 ready / mastered / retake 显式转 retake（待补考），
+ *     未学完（not-started / learning）保持原态（先测后学也允许）；
+ *   - 及格线 ≤ mastery < 达标线：retake 退为 ready（脱离强制补考，进入
+ *     review-points 区间）；其余保持原态。
+ */
+export function statusAfterExam(status: ChapterStatus, mastery: number): ChapterStatus {
+  if (mastery >= MASTERY_THRESHOLD) return "mastered";
+  if (mastery < MASTERY_FLOOR) {
+    if (status === "ready" || status === "mastered" || status === "retake") return "retake";
+    return status;
+  }
+  return status === "retake" ? "ready" : status;
 }

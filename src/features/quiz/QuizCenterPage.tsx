@@ -4,10 +4,11 @@
  * 内容：
  * - 主行动「＋ 新建试卷」→ /quiz/new 三步向导（范围 → 模式 → 生成）；
  * - 历史试卷列表（storage.listPapers，createdAt 倒序）：模式徽标 + 范围/
- *   题量/时间；open（有草稿）→「继续作答」，done →「查看结果」；
+ *   题量/时间；open（有草稿）→「继续作答」，grading →「完成判卷」，
+ *   done →「查看报告」（/report/:paperId）；
  * - 空态：无章节时引导去 /learn 导入资料。
  *
- * 判卷结果摘要内嵌在答题页（done 态），独立报告页属 P6（T7）。
+ * 判卷流与报告页见 QuizGradingPage（P5）/ QuizReportPage（P6，T7）。
  */
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
@@ -95,7 +96,8 @@ export default function QuizCenterPage() {
   }, [load]);
 
   const openPaper = rows?.find((r) => r.paper.status === "open");
-  const donePapers = rows?.filter((r) => r.paper.status !== "open") ?? [];
+  const gradingPapers = rows?.filter((r) => r.paper.status === "grading") ?? [];
+  const donePapers = rows?.filter((r) => r.paper.status === "done") ?? [];
 
   return (
     <PageContainer>
@@ -163,6 +165,28 @@ export default function QuizCenterPage() {
             />
           ) : null}
 
+          {gradingPapers.length > 0 ? (
+            <>
+              <p className="pt-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+                判卷中
+              </p>
+              {gradingPapers.map((row) => (
+                <PaperRowCard
+                  key={row.paper.id}
+                  row={row}
+                  primaryAction={
+                    <button
+                      onClick={() => navigate(`/quiz/${row.paper.id}/grading`)}
+                      className="rounded-lg border border-indigo-200 bg-indigo-50 px-3.5 py-1.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+                    >
+                      完成判卷 →
+                    </button>
+                  }
+                />
+              ))}
+            </>
+          ) : null}
+
           {donePapers.length > 0 ? (
             <>
               <p className="pt-2 text-xs font-medium uppercase tracking-wide text-slate-400">
@@ -174,10 +198,12 @@ export default function QuizCenterPage() {
                   row={row}
                   primaryAction={
                     <button
-                      onClick={() => navigate(`/quiz/${row.paper.id}`)}
+                      onClick={() =>
+                        navigate(row.result ? `/report/${row.paper.id}` : `/quiz/${row.paper.id}`)
+                      }
                       className="rounded-lg border border-slate-200 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
                     >
-                      {row.result ? "查看结果" : "查看试卷"}
+                      {row.result ? "查看报告" : "查看试卷"}
                     </button>
                   }
                 />
@@ -185,7 +211,7 @@ export default function QuizCenterPage() {
             </>
           ) : null}
 
-          {openPaper === undefined && donePapers.length === 0 ? (
+          {openPaper === undefined && gradingPapers.length === 0 && donePapers.length === 0 ? (
             <p className="py-2 text-center text-xs text-slate-400">
               （没有历史试卷——从上面的「新建试卷」开始）
             </p>
@@ -208,6 +234,8 @@ function PaperRowCard({
   const { paper, context } = row;
   const mode = PAPER_MODE_LABEL[paper.scope.mode];
   const score = row.result ? Math.round(row.result.totalScore * 100) : undefined;
+  const statusLabel =
+    paper.status === "open" ? "未完成" : paper.status === "grading" ? "判卷中" : "已完成";
   return (
     <Card
       className={`flex items-center gap-4 p-4 ${highlight ? "border-indigo-200 ring-1 ring-indigo-100" : ""}`}
@@ -243,7 +271,7 @@ function PaperRowCard({
           )}
         </div>
         <p className="mt-0.5 truncate text-xs text-slate-400">
-          {paper.status === "open" ? "未完成" : "已完成"} · {context} · {paper.questions.length} 题 ·{" "}
+          {statusLabel} · {context} · {paper.questions.length} 题 ·{" "}
           {ago(paper.createdAt)}
         </p>
       </div>
