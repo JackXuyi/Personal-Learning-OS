@@ -433,6 +433,8 @@ export interface GradedPaper {
   perChapter: Record<string, GradedChapter>;
   /** 全卷客观难度加权正确率 0..1（无可判客观题时为 0）。 */
   totalScore: number;
+  /** 客观题证据快照（难度权重与得分；AI 主观分并入口径重算用，见 PaperResult.objective）。 */
+  objective?: { weight: number; earned: number };
   wrongQuestions: PaperResult["wrongQuestions"];
   submittedAt: number;
 }
@@ -505,6 +507,7 @@ export function gradePaper(
     questions,
     perChapter,
     totalScore: totalW > 0 ? earnedW / totalW : 0,
+    objective: { weight: totalW, earned: earnedW },
     wrongQuestions,
     submittedAt: now,
   };
@@ -561,6 +564,7 @@ export function gradeAndApply(input: GradeAndApplyInput): {
     result: {
       paperId: paper.id,
       totalScore: graded.totalScore,
+      objective: graded.objective,
       perChapter,
       wrongQuestions: graded.wrongQuestions,
       createdAt: now,
@@ -589,42 +593,123 @@ export interface SubjectiveGradeFeed {
 }
 
 /**
- * 把 AI 主观判分并入 PaperResult（纯函数，T12 判卷流回填点）。
+ * 把 AI 主观判分合并进 PaperResult（N3 双证据 · T12 attachSubjectiveGrades 的升级）。
  *
- * 只把「低于通过线」的主观作答追加进 wrongQuestions（附 aiFeedback + point），
- * 供报告页错题回顾展示批语（P0-3：无 AI 不伪造——本函数只在拿到真实 AI 结果
- * 时被调用）；已通过的作答不入错题。score 本身不参与总分/掌握度计算——
- * 卷面掌握度仍以客观证据为准（主观分并入公式属 N3+ 打磨，避免破坏既有
- * 双证据原则回写的确定性）。
+ * 证据线设计（写入 docs §5.6 的 N3 打磨口径）：
+ *  - 掌握度回写（gradeAndApply 已写入的 perChapter.mastery 与 learnerState）只吃
+ *    客观确定性证据 —— 本函数不触碰 perChapter / 不回写 learnerState，保证平滑
+ *    回写可复算、不受模型/重试波动影响；
+ *  - AI 主观分只进「卷面展示口径 totalScore」：当卷内所有「已作答」主观题均拿到
+ *    AI 分（missing 为空）时并入；未作答主观题按确定性 0 分参与并入（与客观题
+ *    未答判错对称，无需 AI 也不伪造）。存在缺 AI 分的已作答题（部分失败）→
+ *    totalScore 保持基线口径，待报告页重试补齐后再次并入。
+ *
+ * 副作用（错题回顾）：主观 < pass 的 AI 批改题与未作答（0 分）题追加进
+ * wrongQuestions（附 aiFeedback / point）；已通过的主观题不入错题。
+ * 同时写入主观作答快照 subjectiveAnswers 与每题得分 subjectiveScores
+ * （报告页据此展示批改状态并提供「重试 AI 批改」，N3b）。
+ *
+ * 幂等：wrongQuestions 已含的 questionId 不重复追加；重复并入只覆盖 totalScore
+ * 与 scores（无重复副作用）。纯函数，由调用方持久化。
  */
-export function attachSubjectiveGrades(
-  result: PaperResult,
-  paper: Paper,
-  answers: PaperAnswers,
-  grades: readonly SubjectiveGradeFeed[],
-  pass = SUBJECTIVE_PASS,
-): PaperResult {
-  if (grades.length === 0) return result;
+export function mergeSubjectiveGrades(input: {
+  result: PaperResult;
+  paper: Paper;
+  answers: PaperAnswers;
+  aiGrades: readonly SubjectiveGradeFeed[];
+  pass?: number;
+}): PaperResult {
+  const { result, paper, answers, aiGrades, pass = SUBJECTIVE_PASS } = input;
+  const subjects = paper.questions.filter((q) => isSubjectiveType(q.type));
+  if (subjects.length === 0) return result;
+
+  const aiById = new Map(aiGrades.map((g) => [g.questionId, g]));
+  const scores: Record<string, number> = {};
+  const subjectiveAnswers: Record<string, string> = {};
+  const missing: string[] = []; // 已作答但缺 AI 分（pending，可重试补齐）
+
+  for (const s of subjects) {
+    const answerText = (answers[s.id] ?? "").trim();
+    if (!answerText) {
+      // 未作答：确定性 0 分（进分母惩罚，与客观题未答判错一致；无需 AI）。
+      scores[s.id] = 0;
+      continue;
+    }
+    subjectiveAnswers[s.id] = answerText;
+    const ai = aiById.get(s.id);
+    if (ai && Number.isFinite(ai.score)) {
+      scores[s.id] = Math.min(1, Math.max(0, ai.score));
+    } else {
+      missing.push(s.id); // 保持 pending，报告页可重试
+    }
+  }
+
+  // —— 卷面并入（仅当所有已作答主观题都有 AI 分）——
+  // 客观部分优先取 result.objective 快照（gradeAndApply 写入；merge 幂等——对已
+  // 并入的 result 再次调用也精确）；旧数据（无快照）由 paper 客观题难度与基线
+  // 总分反推——旧 result 尚未并入、totalScore 为纯客观口径，反推成立，并回填
+  // 快照保证后续幂等。
+  let totalScore = result.totalScore;
+  let objWeight = 0;
+  let objEarnedW = 0;
+  if (missing.length === 0) {
+    const subWeight = subjects.reduce((n, s) => n + s.difficulty, 0);
+    const subW = subjects.reduce((n, s) => n + (scores[s.id] ?? 0) * s.difficulty, 0);
+    if (result.objective) {
+      objWeight = result.objective.weight;
+      objEarnedW = result.objective.earned;
+    } else {
+      objWeight = paper.questions.reduce(
+        (n, q) => n + (isSubjectiveType(q.type) ? 0 : q.difficulty),
+        0,
+      );
+      objEarnedW = result.totalScore * objWeight;
+    }
+    const denom = objWeight + subWeight;
+    if (denom > 0) {
+      totalScore = Math.min(1, Math.max(0, (objEarnedW + subW) / denom));
+    }
+  }
+
+  // —— 错题回顾（AI 分 < pass 与未作答 0 分；幂等去重）——
   const wrong = [...result.wrongQuestions];
   const existing = new Set(wrong.map((w) => w.questionId));
-
-  for (const g of grades) {
-    if (!Number.isFinite(g.score) || g.score >= pass) continue;
-    if (existing.has(g.questionId)) continue;
-    const q = paper.questions.find((qq) => qq.id === g.questionId);
+  for (const [qid, sc] of Object.entries(scores)) {
+    if (sc >= pass || existing.has(qid)) continue;
+    const q = paper.questions.find((qq) => qq.id === qid);
     if (!q || !isSubjectiveType(q.type)) continue;
-    existing.add(g.questionId);
-    const feedback = (g.feedback ?? "").trim();
-    const point = (g.point ?? "").trim();
+    existing.add(qid);
+    const ai = aiById.get(qid);
+    const feedback = (ai?.feedback ?? "").trim();
+    const point = (ai?.point ?? "").trim();
     wrong.push({
-      questionId: q.id,
-      yourAnswer: (answers[q.id] ?? "").trim() || "（未作答）",
-      aiFeedback: feedback.length > 0 ? feedback : undefined,
-      point: point.length > 0 ? point : undefined,
+      questionId: qid,
+      yourAnswer: (answers[qid] ?? "").trim() || "（未作答）",
+      ...(feedback.length > 0 ? { aiFeedback: feedback } : {}),
+      ...(point.length > 0 ? { point } : {}),
     });
   }
 
-  return wrong.length === result.wrongQuestions.length
-    ? result
-    : { ...result, wrongQuestions: wrong };
+  const answersSnapshot = Object.keys(subjectiveAnswers).length > 0 ? subjectiveAnswers : undefined;
+  const scoresSnapshot = Object.keys(scores).length > 0 ? scores : undefined;
+  // 回填客观证据快照（缺失且本次完成并入）：让任何经本函数并入过的 result 都带
+  // 快照，后续重试 / 重复并入不再依赖反推（幂等）。
+  const objectiveSnapshot =
+    missing.length === 0 && !result.objective ? { weight: objWeight, earned: objEarnedW } : undefined;
+  const unchanged =
+    totalScore === result.totalScore &&
+    wrong.length === result.wrongQuestions.length &&
+    answersSnapshot === undefined &&
+    scoresSnapshot === undefined &&
+    objectiveSnapshot === undefined;
+  if (unchanged) return result;
+
+  return {
+    ...result,
+    totalScore,
+    wrongQuestions: wrong,
+    ...(objectiveSnapshot ? { objective: objectiveSnapshot } : {}),
+    ...(answersSnapshot ? { subjectiveAnswers: answersSnapshot } : {}),
+    ...(scoresSnapshot ? { subjectiveScores: scoresSnapshot } : {}),
+  };
 }

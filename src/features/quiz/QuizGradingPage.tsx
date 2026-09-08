@@ -4,11 +4,12 @@
  * 职责：交卷后在此统一执行判分闭环（幂等，可重入）：
  *   1. 载入作答快照（草稿保底）→ gradeAndApply：客观题本地判分 + 章掌握度
  *      平滑回写（0.65×卷面 + 0.35×历史）+ nextReviewAt；
- *   2. T12 主观题 AI 批改：Provider 就绪且存在主观作答时，逐题调用 AI 批改
- *      （0-1 得分 + 批语 + 定位要点），把未通过（< 0.6）的作答并入错题回顾
- *      （aiFeedback / point 回填，报告页展示）；失败/未配置 → 保持 pending，
- *      不伪造判分（P0-3）。AI 批改不改变总分/掌握度（仍以客观证据为准，
- *      主观分并入公式属 N3+ 打磨）；
+ *   2. N3 主观题 AI 批改（双证据）：Provider 就绪且卷含主观题时，已作答的逐题调
+ *      AI 批改（0-1 得分 + 批语 + 定位要点），结果 merge 回 PaperResult——低于 0.6
+ *      的作答并入错题回顾（aiFeedback / point），全部已作答题拿到 AI 分后卷面
+ *      totalScore 并入主观分（未作答主观题按确定性 0 分并入）；失败/未配置 →
+ *      保留 pending，不伪造判分（P0-3），报告页可「重试 AI 批改」（N3b）。
+ *      掌握度回写仍只吃客观确定性证据（双证据：卷面展示口径 ≠ 掌握度回写口径）；
  *   3. 写 learnerState / PaperResult / paper.status=done，并按 statusAfterExam
  *      回写章状态机（mastered / retake 流转，T7 编排收口）；
  *   4. 展示逐题对错 + 总分 → 5 秒撤销窗口（回滚 learner + result + paper），
@@ -31,7 +32,7 @@ import type {
 import { isSubjectiveType, MASTERY_FLOOR, MASTERY_THRESHOLD } from "../../domain";
 import { statusAfterExam } from "../../domain";
 import type { GradedPaper } from "../../engine";
-import { attachSubjectiveGrades, gradeAndApply, SUBJECTIVE_PASS } from "../../engine";
+import { gradeAndApply, mergeSubjectiveGrades, SUBJECTIVE_PASS } from "../../engine";
 import { gradeSubjectiveWithAi } from "../../ai";
 import type { SubjectiveGradeItem } from "../../ai";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
@@ -58,8 +59,6 @@ export default function QuizGradingPage() {
   const [left, setLeft] = useState(5); // 撤销倒计时（秒）
   /** 主观题 AI 批改阶段（T12；only meaningful when paper has subjective）。 */
   const [aiPhase, setAiPhase] = useState<AiPhase>("idle");
-  /** questionId → AI 得分（0..1，仅被 AI 批改过的主观题）。 */
-  const [aiScores, setAiScores] = useState<Record<string, number>>({});
 
   // 判分只执行一次（React StrictMode 双调 effect 防护 + 换卷重置）。
   const gradedFor = useRef<string | undefined>(undefined);
@@ -122,26 +121,32 @@ export default function QuizGradingPage() {
     snapshotRef.current = { learner };
     originalRef.current = { ...found, status: "open" };
 
-    // T12：主观题 AI 批改 → 批语/定位要点回填错题回顾（掌握度仍以客观证据为准）。
-    // 未配置 / 调用失败 → 保持 pending，不伪造判分（P0-3）。
+    // N3 主观题 AI 批改 → 批语回填 + 卷面并入（双证据：掌握度仍只吃客观确定性证据）。
+    // Provider 就绪且卷含主观题时：已作答的走 AI 批改（失败保留 pending，报告页
+    // 可重试）；未作答的按确定性 0 分并入（无需 AI）。未配置 → 全卷保持 pending，
+    // 不伪造判分（P0-3）。
     let finalResult = r;
     const provider = buildActiveProvider();
-    const subjectiveAttempts = found.questions.filter(
-      (q) => isSubjectiveType(q.type) && (answers[q.id] ?? "").trim().length > 0,
-    );
-    if (provider.isConfigured() && subjectiveAttempts.length > 0) {
-      setAiPhase("grading");
-      try {
-        const items = await buildGradeItems(subjectiveAttempts, answers);
-        const grades = await gradeSubjectiveWithAi(provider, items);
-        if (grades.length > 0) {
-          finalResult = attachSubjectiveGrades(r, found, answers, grades);
-          setAiScores(Object.fromEntries(grades.map((gd) => [gd.questionId, gd.score])));
+    const subjectiveQs = found.questions.filter((q) => isSubjectiveType(q.type));
+    if (subjectiveQs.length > 0 && provider.isConfigured()) {
+      const attempts = subjectiveQs.filter((q) => (answers[q.id] ?? "").trim().length > 0);
+      if (attempts.length > 0) {
+        setAiPhase("grading");
+        try {
+          const items = await buildGradeItems(attempts, answers);
+          const grades = await gradeSubjectiveWithAi(provider, items);
+          finalResult = mergeSubjectiveGrades({ result: r, paper: found, answers, aiGrades: grades });
+          setAiPhase(grades.length > 0 ? "done" : "failed");
+        } catch (err) {
+          console.warn("主观题 AI 批改失败，暂按客观计分（报告页可重试）：", err);
+          // 失败也落主观作答快照 + 未作答 0 分，供报告页「重试 AI 批改」补齐。
+          finalResult = mergeSubjectiveGrades({ result: r, paper: found, answers, aiGrades: [] });
+          setAiPhase("failed");
         }
-        setAiPhase(grades.length > 0 ? "done" : "failed");
-      } catch (err) {
-        console.warn("主观题 AI 批改失败，按纯客观判分：", err);
-        setAiPhase("failed");
+      } else {
+        // 卷含主观但全部未作答：确定性 0 分并入（无需 AI，进分母惩罚）。
+        finalResult = mergeSubjectiveGrades({ result: r, paper: found, answers, aiGrades: [] });
+        setAiPhase("done");
       }
     }
 
@@ -219,9 +224,12 @@ export default function QuizGradingPage() {
   const passed = result.totalScore >= MASTERY_THRESHOLD;
   const near = result.totalScore >= MASTERY_FLOOR;
   const wrongCount = result.wrongQuestions.length;
-  const subjectiveCount = paper.questions.filter((q) => isSubjectiveType(q.type)).length;
-  const aiGradedCount = Object.keys(aiScores).length;
-  const pendingSubjective = Math.max(0, subjectiveCount - aiGradedCount);
+  const subjectiveQs = paper.questions.filter((q) => isSubjectiveType(q.type));
+  const subjectiveCount = subjectiveQs.length;
+  // 已得分主观题（AI 批改分 + 未作答确定性 0 分）；pending = 已作答但缺 AI 分。
+  const subScores = result.subjectiveScores ?? {};
+  const scoredCount = subjectiveQs.filter((q) => q.id in subScores).length;
+  const pendingSubjective = Math.max(0, subjectiveCount - scoredCount);
 
   return (
     <div className="mx-auto max-w-3xl px-8 py-10">
@@ -265,22 +273,28 @@ export default function QuizGradingPage() {
                 </div>
               );
             }
-            // 主观题：AI 已批 → 按 0.6 通过线显示对错；否则待 AI（灰）。
-            const ai = aiScores[q.id];
-            const aiPass = ai !== undefined && ai >= SUBJECTIVE_PASS;
+            // 主观题：有确定得分（AI 批改 / 未作答 0 分）→ 按 0.6 通过线显示对错；
+            // 否则待 AI（灰 = pending，报告页可重试）。
+            const sc = subScores[q.id];
+            const scPass = sc !== undefined && sc >= SUBJECTIVE_PASS;
+            const unanswered = sc === 0 && !(result.subjectiveAnswers?.[q.id] ?? "").trim();
+            const detail =
+              sc === undefined
+                ? "待 AI 批改"
+                : `得分 ${Math.round(sc * 100)}${unanswered ? "（未作答）" : "（AI 批改）"}`;
             return (
               <div
                 key={q.id}
-                title={`${i + 1}. ${q.prompt}${ai !== undefined ? ` · AI 得分 ${Math.round(ai * 100)}` : ""}`}
+                title={`${i + 1}. ${q.prompt} · ${detail}`}
                 className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-semibold ${
-                  ai === undefined
+                  sc === undefined
                     ? "bg-slate-100 text-slate-400"
-                    : aiPass
+                    : scPass
                       ? "bg-emerald-50 text-emerald-700"
                       : "bg-red-50 text-red-500"
                 }`}
               >
-                {ai === undefined ? "AI" : aiPass ? "✓" : "✗"}
+                {sc === undefined ? "AI" : scPass ? "✓" : "✗"}
               </div>
             );
           })}
@@ -288,13 +302,13 @@ export default function QuizGradingPage() {
         <p className="mt-3 text-[11px] text-slate-400">
           选择/判断题本地即时判定
           {subjectiveCount > 0
-            ? aiPhase === "done"
-              ? `；${aiGradedCount} 道主观题已由 AI 批改${
-                  pendingSubjective > 0 ? `（${pendingSubjective} 道未作答）` : ""
-                }`
-              : aiPhase === "failed"
-                ? "；主观题 AI 批改失败——按纯客观判分，未伪造批语"
-                : "；主观题待批改（未配置 AI 或未作答，不计入得分）"
+            ? pendingSubjective > 0
+              ? aiPhase === "failed"
+                ? `；${pendingSubjective} 道主观题批改失败——暂按客观计分，可在报告页重试`
+                : `；${pendingSubjective} 道主观题待 AI 批改（未计入卷面）`
+              : scoredCount > 0
+                ? `；${scoredCount} 道主观题 AI 批改已并入卷面`
+                : ""
             : ""}
           {wrongCount > 0 ? `；错 ${wrongCount} 题` : ""}
         </p>
@@ -311,7 +325,8 @@ export default function QuizGradingPage() {
           {score}
         </p>
         <p className="mt-1 text-sm text-slate-500">
-          满分 100 · 达标 {Math.round(MASTERY_THRESHOLD * 100)} · 章掌握度按「0.65×卷面 + 0.35×历史」回写
+          满分 100 · 达标 {Math.round(MASTERY_THRESHOLD * 100)} · 掌握度按客观题证据回写
+          {scoredCount > 0 && pendingSubjective === 0 ? " · 主观分已并入卷面" : ""}
         </p>
 
         <div className="mt-6 flex items-center justify-center gap-2">

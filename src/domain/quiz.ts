@@ -97,19 +97,34 @@ export type PaperAnswers = Record<string, string>;
 /** 判分 + 掌握度回写的完整产物（quiz-engine gradeAndApply 返回，供报告页消费）。 */
 export interface PaperResult {
   paperId: string;
-  /** 全卷总分 0..1（客观难度加权正确率；主观 pending 不计入）。 */
+  /**
+   * 全卷总分 0..1，口径随证据完整度（N3 双证据）：
+   *   - 基线 = Σ客观(难度×对错) / Σ客观难度（gradePaper / gradeAndApply 产出）；
+   *   - AI 主观分并入后 = (Σ客观难度得分 + Σ主观难度×AI分) / Σ全部难度
+   *     （仅当卷内所有「已作答」主观题均拿到 AI 分；未作答主观题按确定性 0 分
+   *     并入，与客观题未答判错对称）。存在缺 AI 分的已作答题 → 保持基线口径。
+   */
   totalScore: number;
-  /** 逐章：score = 卷面分；previousMastery / mastery = 回写前后掌握度。 */
+  /** 逐章：score = 卷面客观分；previousMastery / mastery = 回写前后掌握度（只吃客观证据）。 */
   perChapter: Record<
     string,
     { score: number; previousMastery: number; mastery: number }
   >;
-  /** 错题回顾：客观错题（含未答）；主观 pending 不在此列（AI 批语回填后进 aiFeedback）。 */
+  /**
+   * 错题回顾：客观错题（含未答）；主观题 <0.6（AI 批改，附 aiFeedback/point）与
+   * 未作答主观题（确定性 0 分）也进此列。
+   */
   wrongQuestions: {
     questionId: string;
     yourAnswer: string;
     aiFeedback?: string;
     point?: string;
   }[];
+  /** 客观题证据快照（难度权重与得分；卷面并入重算用——重试批改无需再持客观作答）。 */
+  objective?: { weight: number; earned: number };
+  /** 主观题作答快照（questionId → 作答原文；N3b 报告页重试 AI 批改的数据源）。 */
+  subjectiveAnswers?: Record<string, string>;
+  /** 已确定得分的主观题（questionId → 0..1：AI 批改分；未作答为确定性 0 分）。 */
+  subjectiveScores?: Record<string, number>;
   createdAt: number;
 }

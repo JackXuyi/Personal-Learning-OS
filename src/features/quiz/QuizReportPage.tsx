@@ -17,13 +17,16 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Bar, Card } from "../../components/primitives";
 import { DeltaBadge } from "../../components/DeltaBadge";
 import {
+  isSubjectiveType,
   MASTERY_FLOOR,
   MASTERY_THRESHOLD,
   PAPER_MODE_LABEL,
   sortChaptersByOrder,
 } from "../../domain";
 import type { Chapter, LearnerState, NextAction, Paper, PaperQuestion, PaperResult } from "../../domain";
-import { buildChapterPlan, createRetakePaper, reviewIntervalDaysForScore } from "../../engine";
+import { buildChapterPlan, createRetakePaper, mergeSubjectiveGrades, reviewIntervalDaysForScore } from "../../engine";
+import { gradeSubjectiveWithAi } from "../../ai";
+import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { makeRetakePaper } from "../plan/chapter-action";
 import { storage } from "../../stores/useLoopStore";
 import { actionKindLabel } from "../units";
@@ -72,6 +75,10 @@ export default function QuizReportPage() {
   const [planOpen, setPlanOpen] = useState(false);
   const [plan, setPlan] = useState<NextAction[] | undefined>();
   const [retaking, setRetaking] = useState<string | undefined>();
+  /** 主观题 AI 重试批改中（N3b）。 */
+  const [aiRetrying, setAiRetrying] = useState(false);
+  /** 主观题批改状态行文案（N3b）。 */
+  const [aiMsg, setAiMsg] = useState("");
 
   useEffect(() => {
     void (async () => {
@@ -146,6 +153,61 @@ export default function QuizReportPage() {
       navigate(`/quiz/${paper.id}`);
     } finally {
       setRetaking(undefined);
+    }
+  };
+
+  /**
+   * N3b 重试批改：对 pending 主观题（已作答但缺 AI 分）重新调用 AI 批改并并入卷面。
+   * 数据源 = PaperResult.subjectiveAnswers 快照（判卷后草稿已清，作答保存在结果里）。
+   * 幂等：mergeSubjectiveGrades 重算 totalScore / 追加错题去重；掌握度不二次回写
+   * （双证据——回写只发生在判卷时的客观证据路径）。
+   */
+  const retrySubjectiveGrading = async () => {
+    if (!data || aiRetrying) return;
+    const { result, paper, index } = data;
+    const subAnswers = result.subjectiveAnswers ?? {};
+    const subScores = result.subjectiveScores ?? {};
+    const pending = paper.questions.filter(
+      (q) =>
+        isSubjectiveType(q.type) &&
+        !(q.id in subScores) &&
+        (subAnswers[q.id] ?? "").trim().length > 0,
+    );
+    if (pending.length === 0) return;
+    const provider = buildActiveProvider();
+    if (!provider.isConfigured()) {
+      setAiMsg("未配置 AI 判分——请先到「设置 → AI 模型中心」配置判分模型。");
+      return;
+    }
+    setAiRetrying(true);
+    setAiMsg("");
+    try {
+      const items = pending.map((q, i) => {
+        const c = index.get(q.chapterId)?.chapter;
+        return {
+          questionId: q.id,
+          label: `q${i + 1}`,
+          chapterTitle: c?.title ?? "",
+          keyPoints: c?.keyPoints ?? [],
+          prompt: q.prompt,
+          referenceAnswer: q.referenceAnswer,
+          answerText: subAnswers[q.id] ?? "",
+        };
+      });
+      const grades = await gradeSubjectiveWithAi(provider, items);
+      if (grades.length === 0) {
+        setAiMsg("AI 未返回批改结果，请稍后重试。");
+        return;
+      }
+      const merged = mergeSubjectiveGrades({ result, paper, answers: subAnswers, aiGrades: grades });
+      await storage.savePaperResult(merged);
+      setData({ ...data, result: merged });
+      setAiMsg(`已批改 ${grades.length} 道主观题并并入卷面，总分已更新。`);
+    } catch (err) {
+      console.warn("主观题重试批改失败：", err);
+      setAiMsg("批改失败：模型暂不可用，请稍后重试。");
+    } finally {
+      setAiRetrying(false);
     }
   };
 
@@ -229,6 +291,19 @@ export default function QuizReportPage() {
   const near = score >= Math.round(MASTERY_FLOOR * 100);
   const wrongCount = result.wrongQuestions.length;
 
+  // 主观题批改状态（N3 双证据：totalScore 已并入 AI 主观分；掌握度仍客观口径）。
+  const subjectiveQs = paper.questions.filter((q) => isSubjectiveType(q.type));
+  const subjectiveCount = subjectiveQs.length;
+  const subScores = result.subjectiveScores ?? {};
+  const scoredCount = subjectiveQs.filter((q) => q.id in subScores).length;
+  const pendingSubjective = Math.max(0, subjectiveCount - scoredCount);
+  // 可重试 = 存在「已作答（有快照）但缺 AI 分」的主观题。
+  const retryable =
+    pendingSubjective > 0 &&
+    subjectiveQs.some(
+      (q) => !(q.id in subScores) && (result.subjectiveAnswers?.[q.id] ?? "").trim().length > 0,
+    );
+
   return (
     <div className="mx-auto max-w-4xl px-8 py-8">
       {/* 顶栏 */}
@@ -266,8 +341,46 @@ export default function QuizReportPage() {
         <p className="mt-3 text-xs text-slate-400">
           {paper.questions.length} 题 · 客观题错 {wrongCount} 题 · 达标{" "}
           {Math.round(MASTERY_THRESHOLD * 100)} / 及格 {Math.round(MASTERY_FLOOR * 100)} · 掌握度按
-          「0.65×卷面 + 0.35×历史」回写
+          客观题证据回写
         </p>
+
+        {/* 主观题批改状态（N3）：全批 → 并入提示；有 pending → 状态行 + 重试入口 */}
+        {subjectiveCount > 0 ? (
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-xs">
+            {pendingSubjective > 0 ? (
+              <>
+                <span className="font-medium text-amber-600">
+                  还有 {pendingSubjective} 道主观题待 AI 批改 · 卷面暂按客观计分
+                </span>
+                {retryable ? (
+                  buildActiveProvider().isConfigured() ? (
+                    <button
+                      onClick={() => void retrySubjectiveGrading()}
+                      disabled={aiRetrying}
+                      className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                    >
+                      {aiRetrying ? "批改中…" : "重试 AI 批改"}
+                    </button>
+                  ) : (
+                    <Link to="/settings" className="text-indigo-600 hover:underline">
+                      去配置 AI →
+                    </Link>
+                  )
+                ) : (
+                  <span className="text-slate-400">（判卷时未保留作答副本，无法补批）</span>
+                )}
+              </>
+            ) : scoredCount > 0 ? (
+              <span className="font-medium text-emerald-600">
+                卷面已并入 {scoredCount} 道主观题（AI 批改）
+              </span>
+            ) : (
+              <span className="text-slate-400">本卷主观题判分时 AI 不可用，未计入卷面</span>
+            )}
+          </div>
+        ) : null}
+        {aiMsg ? <p className="mt-2 text-xs text-slate-500">{aiMsg}</p> : null}
+
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
           <button
             onClick={togglePlan}
@@ -450,6 +563,10 @@ export default function QuizReportPage() {
                             </span>
                           ) : null}
                         </div>
+                      ) : isSubjectiveType(q.type) && w.yourAnswer === "（未作答）" ? (
+                        <p className="mt-2 text-[11px] leading-4 text-amber-600/80">
+                          未作答——先对照参考答案学一遍要点，再做一次本章测验。
+                        </p>
                       ) : (
                         <p className="mt-2 text-[11px] leading-4 text-slate-400">
                           AI 批语：配置 AI 判分后自动生成（主观题批语 + 定位到章节要点）。
