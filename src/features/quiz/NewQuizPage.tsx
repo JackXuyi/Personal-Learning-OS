@@ -10,8 +10,10 @@
  *   /quiz/new?doc=DOC_ID&chapters=c1,c2&mode=unit-test
  *   满足单文档+单章+unit-test 时自动生成并跳答题页，跳过向导。
  *
- * T6 诚实降级：当前一律 allowSubjective=false（AI 判分引擎 T7 接入，
- * 在此之前问答/应用题不出卷，避免交了卷没有批改反馈）。
+ * T6 诚实降级：无 AI 时一律客观题（本地确定性题库）；N3/T12 起 allowSubjective
+ * 门按 buildActiveProvider().isConfigured() 动态开——AI 就绪才出问答/应用
+ * （交了卷有 AI 批改），且题面由 generateQuizQuestionsWithAi 即时生成、
+ * 失败静默回退本地卷（P0-3 不伪造）。
  */
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -20,6 +22,8 @@ import { PageContainer } from "../../components/layout/AppShell";
 import type { Chapter, LearnerState, PaperMode, PaperScope, SourceDocument } from "../../domain";
 import { PAPER_MODE_DURATION_MIN, PAPER_MODE_LABEL } from "../../domain";
 import { createPaper, QUIZ_QUOTA_PREVIEW } from "../../engine";
+import { generateQuizQuestionsWithAi } from "../../ai";
+import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { storage } from "../../stores/useLoopStore";
 import { sortChaptersByOrder } from "../../domain";
 import { MODE_MIN_CHAPTERS, modeHint } from "./meta";
@@ -59,6 +63,8 @@ export default function NewQuizPage() {
   const [autoDone, setAutoDone] = useState(false);
   /** URL 是否带 mode（= 来自「去测本章」等直达入口，允许自动创建）。 */
   const autoRequested = searchParams.get("mode") !== null;
+  /** T12：AI 判分/出题就绪门（allowSubjective 与题面 AI 生成共用）。 */
+  const aiReady = buildActiveProvider().isConfigured();
 
   // 载入全部资料 + 章节 + 学习者状态（难度自适应用）。
   useEffect(() => {
@@ -141,13 +147,36 @@ export default function NewQuizPage() {
   const createAndStart = async () => {
     if (!docId || sortedSelected.length === 0 || !mode) return;
     const scope: PaperScope = { chapterIds: sortedSelected.map((c) => c.id), mode };
-    const paper = createPaper({
+    // T12：allowSubjective 门按 Provider 实时就绪动态开（有 AI 批改才出主观题）。
+    const provider = buildActiveProvider();
+    const aiReady = provider.isConfigured();
+    const local = createPaper({
       scope,
       chapters: sortedSelected,
       allChapters: chapters,
       learnerState: learner,
-      allowSubjective: false, // T6：AI 判分接入前不出主观题
+      allowSubjective: aiReady,
     });
+    let paper = local;
+    if (aiReady && local.questions.length > 0) {
+      try {
+        const text = docs.find((d) => d.id === docId)?.textPreview ?? "";
+        if (text) {
+          // 题面 AI 即时生成（题型/配额与本地卷一致）；失败静默回退本地确定性卷。
+          paper = {
+            ...local,
+            questions: await generateQuizQuestionsWithAi({
+              provider,
+              paper: local,
+              chapters: sortedSelected,
+              text,
+            }),
+          };
+        }
+      } catch (err) {
+        console.warn("AI 出题失败，回退本地题库：", err);
+      }
+    }
     await storage.savePaper(paper);
     navigate(`/quiz/${paper.id}`, { replace: autoRequested });
   };
@@ -316,7 +345,9 @@ export default function NewQuizPage() {
                   </p>
                   {enabled ? (
                     <p className="mt-1 text-[10px] leading-3 text-slate-300">
-                      当前仅客观题（AI 判分接入后含问答/应用）
+                      {aiReady
+                        ? "AI 就绪：题面即时生成 · 问答/应用由 AI 批改"
+                        : "未配置 AI：仅客观题（本地确定性题库）"}
                     </p>
                   ) : null}
                 </button>

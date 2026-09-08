@@ -14,6 +14,8 @@ import { useState } from "react";
 import type { DocumentFormat, SourceDocument } from "../../domain";
 import { newId } from "../../domain";
 import { splitDocument } from "../../engine";
+import { refineSplitResult } from "../../ai";
+import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { storage } from "../../stores/useLoopStore";
 
 interface ImportModalProps {
@@ -41,6 +43,8 @@ export default function ImportModal({ onClose, onImported }: ImportModalProps) {
     docTitle: string;
     chapterIds: string[];
     chapterTitles: string[];
+    /** 是否经过了 AI 精修（标题/要点/过碎合并）。 */
+    refined?: boolean;
   }>();
 
   const splitFormat = FORMAT_OPTIONS.find((o) => o.value === format)?.split ?? "auto";
@@ -62,11 +66,20 @@ export default function ImportModal({ onClose, onImported }: ImportModalProps) {
       };
       await storage.saveDocument(doc);
 
-      const { chapters } = splitDocument(
+      const { chapters: heuristic } = splitDocument(
         { documentId: doc.id, text: body, format: splitFormat },
         // TXT 段落聚类偏小章更利于逐章学完；Markdown 标题切分默认 #/##
         { targetCharsPerChapter: 1_600, minParagraphsPerChapter: 3 },
       );
+      // T12：Provider 就绪时对启发式结果做 AI 精修（标题/要点/过碎合并）；
+      // 失败或未配置 → 静默回退启发式章节，不阻断导入。
+      let chapters = heuristic;
+      let refined = false;
+      if (heuristic.length > 0) {
+        const out = await refineSplitResult(buildActiveProvider(), heuristic, body);
+        chapters = out.chapters;
+        refined = out.refined;
+      }
       if (chapters.length > 0) {
         await storage.saveChapters(doc.id, chapters);
       }
@@ -75,6 +88,7 @@ export default function ImportModal({ onClose, onImported }: ImportModalProps) {
         docTitle: doc.title,
         chapterIds: chapters.map((c) => c.id),
         chapterTitles: chapters.map((c) => c.title),
+        refined,
       });
       if (chapters.length === 0) {
         setNotice(
@@ -180,6 +194,11 @@ export default function ImportModal({ onClose, onImported }: ImportModalProps) {
               <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 px-4 py-3">
                 <p className="text-sm font-medium text-slate-800">
                   「{preview.docTitle}」切出 {preview.chapterTitles.length} 个章节
+                  {preview.refined ? (
+                    <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-600">
+                      AI 精修
+                    </span>
+                  ) : null}
                 </p>
                 {preview.chapterTitles.length > 0 ? (
                   <ol className="mt-2 max-h-40 list-decimal space-y-1 overflow-y-auto pl-5 text-xs text-slate-600">

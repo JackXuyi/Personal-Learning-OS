@@ -293,6 +293,90 @@ export function summarize(text: string, max = 80): string[] {
   return sliced.length > 0 ? [sliced] : [];
 }
 
+// ------------------------------------------------- AI 精修应用（N3/T12 提示词管线消费）
+
+/** 单章 AI 精修建议（index 为 chapters 按 order 升序后的下标；引擎侧应用，纯函数）。 */
+export interface ChapterRefine {
+  /** 章节在输入数组中的下标（0-based）。 */
+  index: number;
+  /** 精修后的章标题（空/缺省 → 保持原样）。 */
+  title?: string;
+  /** 精修后的学习要点（替换原 keyPoints；空数组 → 保持原样）。 */
+  keyPoints?: string[];
+  /** 该章内容过碎，并入上一章（边界修正；下标 0 忽略）。 */
+  mergeIntoPrevious?: boolean;
+}
+
+/**
+ * 把 AI 精修建议应用到启发式切分结果（纯函数，T12 消费点调用）。
+ *
+ * 规则：
+ * - 只接受 index 合法且去重的建议（后者覆盖前者）；title/keyPoints 各自
+ *   清洗后应用（title 截断至 40 字去换行；keyPoints 每条约 80 字、至多 5 条）；
+ * - mergeIntoPrevious：把该章并入其上一章（区间取并集、标题留首章、要点合并
+ *   截断至 6 条）；连续的 merge 会自然累积成同一章（第 i 章并入上一章后，
+ *   第 i+1 章再并入「上一章」即并入累积后的章）；
+ * - 返回数组保持输入顺序并重写 order（order 不变量不被破坏）。
+ */
+export function applyChapterRefine(
+  chapters: Chapter[],
+  refines: readonly ChapterRefine[],
+): Chapter[] {
+  if (refines.length === 0) return chapters;
+
+  const byIndex = new Map<number, ChapterRefine>();
+  for (const r of refines) {
+    if (Number.isInteger(r.index) && r.index >= 0 && r.index < chapters.length) {
+      byIndex.set(r.index, r);
+    }
+  }
+  if (byIndex.size === 0) return chapters;
+
+  const out: Chapter[] = [];
+  for (let i = 0; i < chapters.length; i++) {
+    let cur = chapters[i];
+    const refine = byIndex.get(i);
+    if (refine) {
+      const title = cleanRefinedTitle(refine.title);
+      const keyPoints = cleanRefinedKeyPoints(refine.keyPoints);
+      cur = {
+        ...cur,
+        title: title ?? cur.title,
+        keyPoints: keyPoints ?? cur.keyPoints,
+      };
+      if (refine.mergeIntoPrevious && out.length > 0) {
+        const prev = out[out.length - 1];
+        out[out.length - 1] = {
+          ...prev,
+          contentRef: { start: prev.contentRef.start, end: cur.contentRef.end },
+          keyPoints: [...prev.keyPoints, ...cur.keyPoints].slice(0, 6),
+        };
+        continue;
+      }
+    }
+    out.push(cur);
+  }
+
+  return out.map((c, i) => ({ ...c, order: i + 1 }));
+}
+
+/** 清洗 AI 标题：去空白换行、截断至 40 字；空串返回 undefined（保持原样）。 */
+function cleanRefinedTitle(title: string | undefined): string | undefined {
+  if (!title) return undefined;
+  const t = title.replace(/\s+/g, " ").trim();
+  return t.length === 0 ? undefined : t.slice(0, 40);
+}
+
+/** 清洗 AI 要点：每条去空白截断至 80 字、剔空、至多 5 条；无有效条目返回 undefined。 */
+function cleanRefinedKeyPoints(keyPoints: string[] | undefined): string[] | undefined {
+  if (!keyPoints || keyPoints.length === 0) return undefined;
+  const cleaned = keyPoints
+    .map((k) => k.replace(/\s+/g, " ").trim())
+    .filter((k) => k.length > 0)
+    .map((k) => (k.length <= 80 ? k : `${k.slice(0, 80)}…`));
+  return cleaned.length === 0 ? undefined : cleaned.slice(0, 5);
+}
+
 // ------------------------------------------------- 人工微调原语（N1 切分预览 UI 使用）
 
 /** 重命名章节（返回新数组；不改 order / 区间）。 */

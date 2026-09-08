@@ -439,11 +439,16 @@ export default function QuizReportPage() {
                         </p>
                       </div>
 
-                      {/* AI 批语槽（P0-3：未配置 AI 不伪造；接入后回填批语与定位要点） */}
+                      {/* AI 批语槽（P0-3：未配置 AI 不伪造；T12 起回填批语与定位要点） */}
                       {w.aiFeedback ? (
                         <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-xs leading-5 text-slate-700">
                           <span className="font-medium text-indigo-700">AI 批语：</span>
                           {w.aiFeedback}
+                          {w.point ? (
+                            <span className="mt-1 block text-[11px] text-indigo-600/80">
+                              定位要点：{w.point}
+                            </span>
+                          ) : null}
                         </div>
                       ) : (
                         <p className="mt-2 text-[11px] leading-4 text-slate-400">

@@ -8,3 +8,4 @@
 export * from "./types";
 export { OpenAICompatibleProvider } from "./openai-compatible";
 export { createProvider } from "./registry";
+export * from "./pipelines";

@@ -18,6 +18,8 @@ import { MASTERY_THRESHOLD } from "../../domain";
 import type { Chapter, LearnerState, SourceDocument } from "../../domain";
 import { sortChaptersByOrder } from "../../domain";
 import { applyForgetting, splitDocument } from "../../engine";
+import { refineSplitResult } from "../../ai";
+import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { storage } from "../../stores/useLoopStore";
 import { chapterBadge, isChapterUnmet } from "./chapter-badge";
 import ImportModal from "./ImportModal";
@@ -83,13 +85,18 @@ export default function ChapterCatalogPage() {
     if (chapterIds[0]) navigate(`/learn/${chapterIds[0]}`);
   };
 
-  /** 对旧资料（有正文但无章节）补一次切分。 */
+  /** 对旧资料（有正文但无章节）补一次切分（T12：Provider 就绪时附 AI 精修）。 */
   const splitNow = async (docId: string) => {
     const doc = docs.find((d) => d.id === docId);
     if (!doc?.textPreview) return;
     setBusyDocId(docId);
     try {
-      const { chapters } = splitDocument({ documentId: doc.id, text: doc.textPreview });
+      const { chapters: heuristic } = splitDocument({ documentId: doc.id, text: doc.textPreview });
+      let chapters = heuristic;
+      if (heuristic.length > 0) {
+        const out = await refineSplitResult(buildActiveProvider(), heuristic, doc.textPreview);
+        chapters = out.chapters;
+      }
       if (chapters.length > 0) await storage.saveChapters(doc.id, chapters);
       await load();
     } finally {

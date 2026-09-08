@@ -569,3 +569,62 @@ export function gradeAndApply(input: GradeAndApplyInput): {
     graded,
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* 主观题 AI 批语回填（N3/T12）—— 判卷流消费                          */
+/* ------------------------------------------------------------------ */
+
+/** 主观题达到该分即视为通过（与及格线语义对齐；报告/芯片用同一阈值）。 */
+export const SUBJECTIVE_PASS = 0.6;
+
+/** AI 对一道主观题的判分结果（提示词管线产出，供 attach 回填）。 */
+export interface SubjectiveGradeFeed {
+  questionId: string;
+  /** 0..1。 */
+  score: number;
+  /** 批语（≤120 字）。 */
+  feedback: string;
+  /** 定位到的章节要点（可为空）。 */
+  point?: string;
+}
+
+/**
+ * 把 AI 主观判分并入 PaperResult（纯函数，T12 判卷流回填点）。
+ *
+ * 只把「低于通过线」的主观作答追加进 wrongQuestions（附 aiFeedback + point），
+ * 供报告页错题回顾展示批语（P0-3：无 AI 不伪造——本函数只在拿到真实 AI 结果
+ * 时被调用）；已通过的作答不入错题。score 本身不参与总分/掌握度计算——
+ * 卷面掌握度仍以客观证据为准（主观分并入公式属 N3+ 打磨，避免破坏既有
+ * 双证据原则回写的确定性）。
+ */
+export function attachSubjectiveGrades(
+  result: PaperResult,
+  paper: Paper,
+  answers: PaperAnswers,
+  grades: readonly SubjectiveGradeFeed[],
+  pass = SUBJECTIVE_PASS,
+): PaperResult {
+  if (grades.length === 0) return result;
+  const wrong = [...result.wrongQuestions];
+  const existing = new Set(wrong.map((w) => w.questionId));
+
+  for (const g of grades) {
+    if (!Number.isFinite(g.score) || g.score >= pass) continue;
+    if (existing.has(g.questionId)) continue;
+    const q = paper.questions.find((qq) => qq.id === g.questionId);
+    if (!q || !isSubjectiveType(q.type)) continue;
+    existing.add(g.questionId);
+    const feedback = (g.feedback ?? "").trim();
+    const point = (g.point ?? "").trim();
+    wrong.push({
+      questionId: q.id,
+      yourAnswer: (answers[q.id] ?? "").trim() || "（未作答）",
+      aiFeedback: feedback.length > 0 ? feedback : undefined,
+      point: point.length > 0 ? point : undefined,
+    });
+  }
+
+  return wrong.length === result.wrongQuestions.length
+    ? result
+    : { ...result, wrongQuestions: wrong };
+}
