@@ -9,6 +9,7 @@
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "test:i18n": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/i18n-alignment.test.ts",
     "tauri": "tauri"
   },
   "engines": {
