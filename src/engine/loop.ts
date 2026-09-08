@@ -221,10 +221,17 @@ export interface ChapterLoopSnapshot {
   next: NextAction | undefined;
 }
 
-/** 章级快照聚合（编排层，读 storage；范围 = 全部已切分文档的章）。 */
+/**
+ * 章级快照聚合（编排层，读 storage；docs/ui-workbench-plan-2026-09.md §7.3）。
+ *
+ * 作用域裁剪（多目标上下文）：传 goalId 时按该目标解析；目标带 requiredChapterIds
+ * 则章计划/就绪度只覆盖目标章范围，否则回退「全部已切分文档的章」（现状行为）。
+ * 纯读取路径参数化，buildChapterPlan 算法零改动。
+ */
 export async function runChapterLoop(
   storage: StorageAdapter,
   m: Messages = zh,
+  goalId?: string,
 ): Promise<ChapterLoopSnapshot> {
   const [goals, docs, rawLearner] = await Promise.all([
     storage.listGoals(),
@@ -235,21 +242,30 @@ export async function runChapterLoop(
   const learner = applyForgetting(rawLearner, Date.now());
   const docList = [...docs].sort((a, b) => a.importedAt - b.importedAt);
 
+  // 目标解析：显式 goalId 命中优先，否则回退首个目标（空目标 = 无 scope）。
+  const goal = goals.find((g) => g.id === goalId) ?? goals[0];
+  const scopeIds =
+    goal?.requiredChapterIds && goal.requiredChapterIds.length > 0
+      ? new Set(goal.requiredChapterIds)
+      : undefined;
+
   const entries = await Promise.all(
     docList.map(
       async (d) => [d.id, sortChaptersByOrder(await storage.listChapters(d.id))] as const,
     ),
   );
-  const chaptersByDoc: Record<string, Chapter[]> = Object.fromEntries(
-    entries.filter(([, chapters]) => chapters.length > 0),
-  );
 
+  const docTitleByDocId = new Map(docList.map((d) => [d.id, d.title]));
+  const chaptersByDoc: Record<string, Chapter[]> = {};
   const docTitleOf: Record<string, string> = {};
   const allChapters: Chapter[] = [];
-  for (const d of docList) {
-    for (const c of chaptersByDoc[d.id] ?? []) {
+  for (const [docId, chapters] of entries) {
+    const kept = scopeIds ? chapters.filter((c) => scopeIds.has(c.id)) : chapters;
+    if (kept.length === 0) continue;
+    chaptersByDoc[docId] = kept;
+    for (const c of kept) {
       allChapters.push(c);
-      docTitleOf[c.id] = d.title;
+      docTitleOf[c.id] = docTitleByDocId.get(docId) ?? docId;
     }
   }
 
@@ -260,7 +276,7 @@ export async function runChapterLoop(
   const actions = buildChapterPlan({ chapters: allChapters, learnerState: learner }, m);
 
   return {
-    goal: goals[0],
+    goal,
     docs: docList,
     chaptersByDoc,
     docTitleOf,
