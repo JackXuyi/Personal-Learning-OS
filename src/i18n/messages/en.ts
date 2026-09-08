@@ -148,6 +148,124 @@ export const en: Messages = {
       current: (lang: "zh" | "en") =>
         `Currently active: ${lang === "zh" ? "中文" : "English"}`,
     },
+    /** Settings · AI Model Center (local model downloads + API model config). */
+    models: {
+      pageTitle: "Settings · AI Model Center",
+      pageSubtitle:
+        "Pick your “current model”: knowledge extraction / quiz generation & grading / Q&A and progress summaries all run through it.",
+      timeToday: "Today",
+      savedOk: "Saved ✓",
+      currentUse: "Currently in use",
+      banner: {
+        activePrefix: "In use:",
+        untitledModel: "(no model)",
+        localReady:
+          "Local model · Ready · data stays on this machine and works offline; AI tasks like knowledge extraction and quiz grading run through it",
+        localNotReady:
+          "Local model · Not ready (download one under “Local models” and set it current first)",
+        apiReady:
+          "API model · Connected, cloud inference; AI tasks like knowledge extraction and quiz grading run through it",
+        apiNotReady:
+          "API model · Not tested yet (try “Test connection” before using)",
+        noneTitle: "No model selected",
+        noneDesc:
+          "Learning features will run on offline heuristics. Download a local model or configure an API model to unlock full AI capability.",
+      },
+      tabLocal: "Local models (download & run)",
+      tabApi: "API models (requests)",
+      localHint:
+        "Download and activate a local model — default tier Qwen3.5-4B (~2.5 GB); clicking “Set current” takes effect right away, no save needed.",
+      aiStatus: "AI status",
+      savedPassed: "Passed test when saved",
+      savedFailed: "Did not pass when saved",
+      noModel: "No model selected",
+      heuristicAlways: "Offline heuristic engine always available",
+      runtime: "Runtime",
+      runtimeHeuristic: "Engine runs on offline heuristics",
+      runtimeCallable: "Current model is callable",
+      runtimeMissingCfg: "Missing key config (model file / Key / URL)",
+      retesting: "Testing…",
+      retestConnection: "Retest connection",
+      retestOk: (ms: number) => `Retest passed · ${ms}ms latency`,
+      keychainNote:
+        "API Key is stored in the system Keychain, never kept in plaintext on this machine; read/written by the app, settings only shows a mask.",
+      statusLegend:
+        "“Passed test when saved” records the last save result; “Runtime” decides in real time whether the current model can be called. When not ready, the engine degrades to local heuristics (never crashes).",
+      currentConfig: "Current config",
+      kv: {
+        source: "Source",
+        model: "Model",
+        provider: "Provider",
+        status: "Status",
+        sourceLocal: "Local model",
+        sourceApi: "API model",
+        none: "(none)",
+        empty: "(empty)",
+        testedPass: (t: string, latMs: number | null) =>
+          latMs ? `Test passed · ${t} · ${latMs}ms` : `Test passed · ${t}`,
+        notTested: "Not passed / not ready",
+      },
+      api: {
+        presetProvider: "Preset provider",
+        presetHint:
+          "Picking one auto-fills the default Base URL and suggested model; both can be edited below.",
+        configTitle: (name: string) => `Config: ${name}`,
+        configPlain: "Config",
+        configNote: "(Base URL / model name both editable)",
+        modelLabel: "Model",
+        testing: "Testing…",
+        testConnection: "Test connection",
+        useModel: "Use this model",
+        validHintCloud:
+          "Cloud models need an API Key; Base URL and model name are required.",
+        validHint: "Base URL and model name are required.",
+        keychainNote:
+          "On “Use this model”, the API Key is written to the system Keychain — never kept in plaintext on this machine.",
+        localStorageNote:
+          "Pure browser preview: API Key is stored as plaintext in local localStorage, used only by this app to call the endpoint.",
+        testNote:
+          "“Test connection” sends one minimal request against the current form values (tests even when unsaved).",
+        testRunning: "Testing connection…",
+        testOk: (ms: number) => `✅ Connected · ${ms}ms latency · model online`,
+      },
+      builtin: {
+        previewNoticeHead: "Built-in local models require the desktop app. Run ",
+        previewNoticeTail:
+          " or open the installed app; this is a pure browser preview.",
+        aboutGb: (n: string) => `~${n} GB`,
+        aboutMb: (n: string) => `~${n} MB`,
+        unsupportedPlatform: (os: string, arch: string) =>
+          `Local models need the macOS Apple Silicon desktop app (current ${os}/${arch})`,
+        ramBelowMin: (ram: string, name: string, min: string) =>
+          `This machine has ${ram}GB RAM; running ${name} needs ≥${min}GB`,
+        unsupportedGeneric: "This device cannot run this model",
+        status: {
+          not_found: "Not downloaded",
+          downloading: "Downloading",
+          ready: "Ready",
+          corrupted: "Corrupted",
+        },
+        devicePrefix: "This machine: ",
+        downloadNoteHead:
+          "Models are downloaded by the app into a local data folder (",
+        downloadNoteTail: "); sources: ModelScope first, HuggingFace fallback.",
+        refresh: "Refresh",
+        deviceMatchNote:
+          "Matched against this machine: models needing too much RAM / unsupported platforms are disabled (cannot download or enable).",
+        deviceUnsupported: "Unsupported",
+        tapToActivate: "Click a card to switch to it",
+        download: "Download",
+        retryDownload: "Retry download",
+        cancel: "Cancel",
+        setActive: "Set current",
+        confirmDelete: (name: string) => `Delete model ${name}?`,
+        deleteWarnActive:
+          "In use right now; deleting it falls back to offline heuristics.",
+        deleteWarnNormal: "You can re-download it later.",
+        downloadTip:
+          "First download of the recommended tier is ~2.5 GB (Qwen3.5-4B) and takes a few minutes depending on speed; downloads run in the background and can be cancelled anytime.",
+      },
+    },
   },
   chapter: {
     ordinal: (n: number) => `Chapter ${n}`,

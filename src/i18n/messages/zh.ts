@@ -153,6 +153,116 @@ export const zh = {
       autoHint: "自动按系统语言选择；手动选择后始终使用该语言。",
       current: (lang: "zh" | "en") => `当前生效：${lang === "zh" ? "中文" : "English"}`,
     },
+    /** 设置 · AI 模型中心（本地模型下载 + API 模型配置）。 */
+    models: {
+      pageTitle: "设置 · AI 模型中心",
+      pageSubtitle:
+        "选择「当前使用模型」：知识抽取 / 测评出题判分 / 答疑与学习进度总结都由它完成。",
+      timeToday: "今天",
+      savedOk: "已保存 ✓",
+      currentUse: "当前使用",
+      banner: {
+        activePrefix: "当前使用:",
+        untitledModel: "(未填模型)",
+        localReady:
+          "本地模型 · 已就绪 · 数据不出本机,离线可用;知识抽取 / 测评出题判分等 AI 任务将由它完成",
+        localNotReady: "本地模型 · 未就绪(需先在「本地模型」页下载并设为当前)",
+        apiReady:
+          "API 模型 · 已连接,云端推理;知识抽取 / 测评出题判分等 AI 任务将由它完成",
+        apiNotReady: "API 模型 · 尚未测试通过(建议先「测试连接」再使用)",
+        noneTitle: "未选择任何模型",
+        noneDesc:
+          "学习功能将以离线启发式运行。下载一个本地模型,或配置一个 API 模型,即可解锁完整 AI 能力。",
+      },
+      tabLocal: "本地模型(下载运行)",
+      tabApi: "API 模型(请求)",
+      localHint:
+        "下载并激活一个本地模型 —— 默认档 Qwen3.5-4B(约 2.5 GB);点选「设为当前」即生效,无需保存。",
+      aiStatus: "AI 状态",
+      savedPassed: "保存时已通过测试",
+      savedFailed: "保存时未通过测试",
+      noModel: "未选择模型",
+      heuristicAlways: "离线启发式引擎始终可用",
+      runtime: "运行时",
+      runtimeHeuristic: "引擎走离线启发式",
+      runtimeCallable: "当前模型可调用",
+      runtimeMissingCfg: "缺关键配置(模型文件 / Key / 地址)",
+      retesting: "测试中…",
+      retestConnection: "重新测试连接",
+      retestOk: (ms: number) => `重新测试通过 · 延迟 ${ms}ms`,
+      keychainNote:
+        "API Key 已存入系统钥匙串(Keychain),不在本机明文保存;由应用读写,设置页仅显示掩码。",
+      statusLegend:
+        "「保存时已通过测试」记录上次保存结果;「运行时」实时判定当前能否调用。未就绪时引擎自动以本地启发式逻辑降级运行(不崩溃)。",
+      currentConfig: "当前配置",
+      kv: {
+        source: "来源",
+        model: "模型",
+        provider: "供应商",
+        status: "状态",
+        sourceLocal: "本地模型",
+        sourceApi: "API 模型",
+        none: "（未选择）",
+        empty: "（空）",
+        testedPass: (t: string, latMs: number | null) =>
+          latMs ? `测试通过 · ${t} · ${latMs}ms` : `测试通过 · ${t}`,
+        notTested: "未通过测试 / 尚未就绪",
+      },
+      api: {
+        presetProvider: "预置供应商",
+        presetHint: "选择后自动带入默认 Base URL 与建议模型,下方均可修改。",
+        configTitle: (name: string) => `配置:${name}`,
+        configPlain: "配置",
+        configNote: "(Base URL / 模型名均可改)",
+        modelLabel: "模型",
+        testing: "正在测试…",
+        testConnection: "测试连接",
+        useModel: "使用该模型",
+        validHintCloud: "云端模型需填 API Key;Base URL 与模型名必填。",
+        validHint: "Base URL 与模型名必填。",
+        keychainNote:
+          "API Key 在「使用该模型」时写入系统钥匙串(Keychain),不在本机明文保存。",
+        localStorageNote:
+          "纯浏览器预览:API Key 以明文保存在本机 localStorage,仅供本应用调用对应端点。",
+        testNote: "「测试连接」向当前表单值(未保存也测)发一次最小请求。",
+        testRunning: "正在测试连接…",
+        testOk: (ms: number) => `✅ 已连接 · 延迟 ${ms}ms · 模型在线`,
+      },
+      builtin: {
+        previewNoticeHead: "内置本地模型需在桌面端使用。请运行 ",
+        previewNoticeTail: " 或安装包打开应用;当前是纯浏览器预览。",
+        aboutGb: (n: string) => `约 ${n} GB`,
+        aboutMb: (n: string) => `约 ${n} MB`,
+        unsupportedPlatform: (os: string, arch: string) =>
+          `本地模型需 macOS Apple Silicon 桌面端(当前 ${os}/${arch})`,
+        ramBelowMin: (ram: string, name: string, min: string) =>
+          `本机 ${ram}GB 内存,运行 ${name} 需 ≥${min}GB`,
+        unsupportedGeneric: "当前设备不支持运行该模型",
+        status: {
+          not_found: "未下载",
+          downloading: "下载中",
+          ready: "已就绪",
+          corrupted: "文件异常",
+        },
+        devicePrefix: "本机:",
+        downloadNoteHead: "模型由应用下载到本机数据目录(",
+        downloadNoteTail: "),下载源:ModelScope 优先、HuggingFace 兜底。",
+        refresh: "刷新",
+        deviceMatchNote:
+          "已按本机设备匹配:内存不足 / 平台不支持的模型已禁用(不可下载、不可启用)。",
+        deviceUnsupported: "设备不支持",
+        tapToActivate: "点击卡片即切换为当前使用",
+        download: "下载",
+        retryDownload: "重试下载",
+        cancel: "取消",
+        setActive: "设为当前",
+        confirmDelete: (name: string) => `删除模型 ${name}？`,
+        deleteWarnActive: "当前正在使用,删除后将回退到离线启发式。",
+        deleteWarnNormal: "需要时可重新下载。",
+        downloadTip:
+          "首次下载设备推荐档约 2.5 GB(Qwen3.5-4B),视网速需要几分钟;下载在后台进行,可随时取消。",
+      },
+    },
   },
   chapter: {
     ordinal: (n: number) => `第 ${n} 章`,

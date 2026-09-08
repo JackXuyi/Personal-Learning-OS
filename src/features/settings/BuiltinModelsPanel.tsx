@@ -24,37 +24,32 @@ import {
   type LlmDownloadProgress,
   type LlmModelInfo,
 } from "../../ai/builtin";
+import { useI18n, type Messages } from "../../i18n";
 
-function formatSize(bytes: number): string {
+function formatSize(bytes: number, b: Messages["settings"]["models"]["builtin"]): string {
   const gb = bytes / 1_000_000_000;
-  return gb >= 1 ? `约 ${gb.toFixed(1)} GB` : `约 ${Math.round(bytes / 1_000_000)} MB`;
+  return gb >= 1 ? b.aboutGb(gb.toFixed(1)) : b.aboutMb(String(Math.round(bytes / 1_000_000)));
 }
 
 /** 设备禁用原因 → 卡内说明(带具体数值)。 */
 function unsupportedReason(
-  m: LlmModelInfo,
+  b: Messages["settings"]["models"]["builtin"],
+  model: LlmModelInfo,
   device: LlmDeviceInfo | null,
 ): string {
-  switch (m.supported?.reason) {
+  switch (model.supported?.reason) {
     case "unsupported_platform":
-      return `本地模型需 macOS Apple Silicon 桌面端(当前 ${device?.os ?? "?"}/${
-        device?.arch ?? "?"
-      })`;
+      return b.unsupportedPlatform(`${device?.os ?? "?"}`, `${device?.arch ?? "?"}`);
     case "ram_below_min":
-      return `本机 ${device?.ram_gb ?? "?"}GB 内存,运行 ${m.name} 需 ≥${
-        m.min_ram_gb ?? "?"
-      }GB`;
+      return b.ramBelowMin(
+        `${device?.ram_gb ?? "?"}`,
+        model.name,
+        `${model.min_ram_gb ?? "?"}`,
+      );
     default:
-      return "当前设备不支持运行该模型";
+      return b.unsupportedGeneric;
   }
 }
-
-const STATUS_LABEL: Record<LlmModelInfo["status"], string> = {
-  not_found: "未下载",
-  downloading: "下载中",
-  ready: "已就绪",
-  corrupted: "文件异常",
-};
 
 const STATUS_STYLE: Record<
   LlmModelInfo["status"],
@@ -86,6 +81,10 @@ export default function BuiltinModelsPanel({
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<Record<string, number>>({});
   const unlistenRef = useRef<UnlistenFn | null>(null);
+
+  const { m: msg } = useI18n();
+  const b = msg.settings.models.builtin;
+  const mod = msg.settings.models;
 
   const refresh = useCallback(async () => {
     try {
@@ -143,8 +142,9 @@ export default function BuiltinModelsPanel({
   if (!isBuiltinAvailable()) {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-800">
-        内置本地模型需在桌面端使用。请运行 <code className="rounded bg-amber-100 px-1">npm run tauri dev</code>{" "}
-        或安装包打开应用;当前是纯浏览器预览。
+        {b.previewNoticeHead}
+        <code className="rounded bg-amber-100 px-1">npm run tauri dev</code>
+        {b.previewNoticeTail}
       </div>
     );
   }
@@ -189,7 +189,7 @@ export default function BuiltinModelsPanel({
   };
 
   const deviceChip = device
-    ? `本机:${device.os === "macos" ? "macOS" : device.os} · ${
+    ? `${b.devicePrefix}${device.os === "macos" ? "macOS" : device.os} · ${
         device.arch === "aarch64" ? "Apple Silicon" : device.arch
       } · ${device.ram_gb}GB${device.metal ? " · Metal" : ""}`
     : null;
@@ -198,9 +198,9 @@ export default function BuiltinModelsPanel({
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs leading-relaxed text-slate-500">
-          模型由应用下载到本机数据目录(
+          {b.downloadNoteHead}
           <code className="rounded bg-slate-100 px-1">models/llm</code>
-          ),下载源:ModelScope 优先、HuggingFace 兜底。
+          {b.downloadNoteTail}
           {deviceChip ? <span className="ml-1 font-medium text-slate-600">{deviceChip}</span> : null}
         </p>
         <button
@@ -208,7 +208,7 @@ export default function BuiltinModelsPanel({
           disabled={busy}
           className="shrink-0 rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
         >
-          刷新
+          {b.refresh}
         </button>
       </div>
 
@@ -220,7 +220,7 @@ export default function BuiltinModelsPanel({
 
       {device ? (
         <p className="mb-3 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-xs text-slate-500">
-          已按本机设备匹配:内存不足 / 平台不支持的模型已禁用(不可下载、不可启用)。
+          {b.deviceMatchNote}
         </p>
       ) : null}
 
@@ -253,25 +253,25 @@ export default function BuiltinModelsPanel({
                     <p className="text-sm font-semibold text-slate-800">{m.display_name}</p>
                     {active && !blocked ? (
                       <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                        当前使用
+                        {mod.currentUse}
                       </span>
                     ) : null}
                     {blocked ? (
                       <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                        设备不支持
+                        {b.deviceUnsupported}
                       </span>
                     ) : null}
                   </div>
                   <p className="mt-0.5 truncate text-xs text-slate-400">
-                    {formatSize(m.approx_bytes)} · {m.description}
+                    {formatSize(m.approx_bytes, b)} · {m.description}
                   </p>
                   {blocked ? (
                     <p className="mt-0.5 text-xs text-slate-400">
-                      ⚠ {unsupportedReason(m, device)}
+                      ⚠ {unsupportedReason(b, m, device)}
                     </p>
                   ) : null}
                   {!blocked && m.status === "ready" && !active ? (
-                    <p className="mt-0.5 text-[11px] text-indigo-500">点击卡片即切换为当前使用</p>
+                    <p className="mt-0.5 text-[11px] text-indigo-500">{b.tapToActivate}</p>
                   ) : null}
                 </div>
 
@@ -289,7 +289,7 @@ export default function BuiltinModelsPanel({
                   <span
                     className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLE[m.status]}`}
                   >
-                    {STATUS_LABEL[m.status]}
+                    {b.status[m.status]}
                   </span>
                 ) : null}
 
@@ -300,7 +300,7 @@ export default function BuiltinModelsPanel({
                       disabled={busy || isDownloading}
                       className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
                     >
-                      {m.status === "corrupted" ? "重试下载" : "下载"}
+                      {m.status === "corrupted" ? b.retryDownload : b.download}
                     </button>
                   ) : null}
                   {!blocked && isDownloading ? (
@@ -308,7 +308,7 @@ export default function BuiltinModelsPanel({
                       onClick={() => void runCancel(m.name)}
                       className="rounded-md border border-slate-200 px-3 py-1 text-xs text-slate-600 transition hover:bg-slate-50"
                     >
-                      取消
+                      {b.cancel}
                     </button>
                   ) : null}
                   {!blocked && m.status === "ready" ? (
@@ -317,7 +317,7 @@ export default function BuiltinModelsPanel({
                       disabled={active}
                       className="rounded-md border border-indigo-200 px-3 py-1 text-xs font-medium text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      设为当前
+                      {b.setActive}
                     </button>
                   ) : null}
                   {hasFile ? (
@@ -325,10 +325,8 @@ export default function BuiltinModelsPanel({
                       onClick={() => {
                         if (
                           window.confirm(
-                            `删除模型 ${m.display_name}？${
-                              activeModel === m.name
-                                ? "当前正在使用,删除后将回退到离线启发式。"
-                                : "需要时可重新下载。"
+                            `${b.confirmDelete(m.display_name)}${
+                              activeModel === m.name ? b.deleteWarnActive : b.deleteWarnNormal
                             }`,
                           )
                         ) {
@@ -337,7 +335,7 @@ export default function BuiltinModelsPanel({
                       }}
                       className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-500 transition hover:bg-red-50 hover:text-red-600"
                     >
-                      删除
+                      {msg.common.delete}
                     </button>
                   ) : null}
                 </div>
@@ -347,7 +345,7 @@ export default function BuiltinModelsPanel({
         })}
       </ul>
       <p className="mt-2 text-[11px] text-slate-400">
-        首次下载设备推荐档约 2.5 GB(Qwen3.5-4B),视网速需要几分钟;下载在后台进行,可随时取消。
+        {b.downloadTip}
       </p>
     </div>
   );

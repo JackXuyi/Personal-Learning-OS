@@ -34,12 +34,12 @@ type Retest =
 const apiActiveOf = (a: ActiveSource | null) =>
   a && a.source === "api" ? a : null;
 
-function formatTime(ts: number): string {
+function formatTime(ts: number, today: string): string {
   const d = new Date(ts);
   const now = new Date();
   const sameDay = d.toDateString() === now.toDateString();
   const hm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  return sameDay ? `今天 ${hm}` : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
+  return sameDay ? `${today} ${hm}` : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
 }
 
 export default function SettingsPage() {
@@ -49,6 +49,7 @@ export default function SettingsPage() {
   const langMode = useLangStore((s) => s.mode);
   const setLangMode = useLangStore((s) => s.setMode);
   const { lang, m } = useI18n();
+  const s = m.settings.models;
 
   const [tab, setTab] = useState<Tab>(
     saved.active?.source === "api" ? "api" : "local",
@@ -106,20 +107,15 @@ export default function SettingsPage() {
   let bannerTone: "ok" | "warn" | "empty" = "warn";
   if (active?.source === "local") {
     bannerTitle = labelOfLocalModel(active.model);
-    bannerDesc = providerReady
-      ? "本地模型 · 已就绪 · 数据不出本机,离线可用;知识抽取 / 测评出题判分等 AI 任务将由它完成"
-      : "本地模型 · 未就绪(需先在「本地模型」页下载并设为当前)";
+    bannerDesc = providerReady ? s.banner.localReady : s.banner.localNotReady;
     bannerTone = providerReady ? "ok" : "warn";
   } else if (active?.source === "api") {
-    bannerTitle = `${labelOfProvider(active.provider)} · ${active.model || "(未填模型)"}`;
-    bannerDesc = providerReady
-      ? "API 模型 · 已连接,云端推理;知识抽取 / 测评出题判分等 AI 任务将由它完成"
-      : "API 模型 · 尚未测试通过(建议先「测试连接」再使用)";
+    bannerTitle = `${labelOfProvider(active.provider)} · ${active.model || s.banner.untitledModel}`;
+    bannerDesc = providerReady ? s.banner.apiReady : s.banner.apiNotReady;
     bannerTone = providerReady ? "ok" : "warn";
   } else {
-    bannerTitle = "未选择任何模型";
-    bannerDesc =
-      "学习功能将以离线启发式运行。下载一个本地模型,或配置一个 API 模型,即可解锁完整 AI 能力。";
+    bannerTitle = s.banner.noneTitle;
+    bannerDesc = s.banner.noneDesc;
     bannerTone = "empty";
   }
 
@@ -133,8 +129,8 @@ export default function SettingsPage() {
   return (
     <PageContainer>
       <SectionTitle
-        title="设置 · AI 模型中心"
-        subtitle="选择「当前使用模型」：知识抽取 / 测评出题判分 / 答疑与学习进度总结都由它完成。"
+        title={s.pageTitle}
+        subtitle={s.pageSubtitle}
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -144,7 +140,7 @@ export default function SettingsPage() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-800">
-                  {active ? "当前使用:" : ""}
+                  {active ? s.banner.activePrefix : ""}
                   <span
                     className={
                       bannerTone === "ok"
@@ -160,7 +156,7 @@ export default function SettingsPage() {
                 </p>
                 <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{bannerDesc}</p>
               </div>
-              {savedFlash ? <span className="shrink-0 text-sm text-emerald-600">已保存 ✓</span> : null}
+              {savedFlash ? <span className="shrink-0 text-sm text-emerald-600">{s.savedOk}</span> : null}
             </div>
           </div>
 
@@ -168,8 +164,8 @@ export default function SettingsPage() {
           <div className="mb-4 flex gap-1 rounded-lg border border-slate-200 bg-slate-100/60 p-1">
             {(
               [
-                ["local", "本地模型(下载运行)"],
-                ["api", "API 模型(请求)"],
+                ["local", s.tabLocal],
+                ["api", s.tabApi],
               ] as [Tab, string][]
             ).map(([value, label]) => (
               <button
@@ -189,7 +185,7 @@ export default function SettingsPage() {
           {tab === "local" ? (
             <div>
               <p className="mb-3 text-xs font-medium text-indigo-700">
-                下载并激活一个本地模型 —— 默认档 Qwen3.5-4B(约 2.5 GB);点选「设为当前」即生效,无需保存。
+                {s.localHint}
               </p>
               <BuiltinModelsPanel
                 activeModel={active?.source === "local" ? active.model : null}
@@ -239,26 +235,26 @@ export default function SettingsPage() {
           </Card>
 
           <Card>
-            <h3 className="mb-3 text-sm font-semibold text-slate-700">AI 状态</h3>
+            <h3 className="mb-3 text-sm font-semibold text-slate-700">{s.aiStatus}</h3>
             <div className="flex flex-wrap items-center gap-2">
               {active ? (
                 providerReady ? (
-                  <ReadyPill label="保存时已通过测试" ok />
+                  <ReadyPill label={s.savedPassed} ok />
                 ) : (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
                     <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                    保存时未通过测试
+                    {s.savedFailed}
                   </span>
                 )
               ) : (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
                   <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                  未选择模型
+                  {s.noModel}
                 </span>
               )}
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                离线启发式引擎始终可用
+                {s.heuristicAlways}
               </span>
             </div>
 
@@ -267,19 +263,19 @@ export default function SettingsPage() {
                 清等场景立即反映为不可用。 */}
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
               <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                运行时
+                {s.runtime}
               </span>
               {active === null ? (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
                   <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                  引擎走离线启发式
+                  {s.runtimeHeuristic}
                 </span>
               ) : liveReady ? (
-                <ReadyPill label="当前模型可调用" ok />
+                <ReadyPill label={s.runtimeCallable} ok />
               ) : (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                  缺关键配置(模型文件 / Key / 地址)
+                  {s.runtimeMissingCfg}
                 </span>
               )}
               {active?.source === "api" ? (
@@ -288,13 +284,13 @@ export default function SettingsPage() {
                   disabled={retest.state === "testing"}
                   className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {retest.state === "testing" ? "测试中…" : "重新测试连接"}
+                  {retest.state === "testing" ? s.retesting : s.retestConnection}
                 </button>
               ) : null}
             </div>
             {retest.state === "ok" ? (
               <p className="mt-2 text-xs text-emerald-600">
-                重新测试通过 · 延迟 {retest.latencyMs}ms
+                {s.retestOk(retest.latencyMs)}
               </p>
             ) : retest.state === "fail" ? (
               <div className="mt-2 rounded-lg border border-red-200 bg-red-50/60 px-3 py-2">
@@ -304,44 +300,45 @@ export default function SettingsPage() {
             ) : null}
             {active?.source === "api" && hasKeyring() ? (
               <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] leading-relaxed text-slate-500">
-                API Key 已存入系统钥匙串(Keychain),不在本机明文保存;由应用读写,设置页仅显示掩码。
+                {s.keychainNote}
               </p>
             ) : null}
             <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
-              「保存时已通过测试」记录上次保存结果;「运行时」实时判定当前能否调用。未就绪时引擎自动以本地启发式逻辑降级运行(不崩溃)。
+              {s.statusLegend}
             </p>
           </Card>
 
           <Card>
-            <h3 className="mb-3 text-sm font-semibold text-slate-700">当前配置</h3>
+            <h3 className="mb-3 text-sm font-semibold text-slate-700">{s.currentConfig}</h3>
             <dl className="space-y-1 text-sm">
               <KV
-                k="来源"
+                k={s.kv.source}
                 v={
                   active?.source === "local"
-                    ? "本地模型"
+                    ? s.kv.sourceLocal
                     : active?.source === "api"
-                      ? "API 模型"
-                      : "（未选择）"
+                      ? s.kv.sourceApi
+                      : s.kv.none
                 }
               />
-              {active?.source === "local" ? <KV k="模型" v={labelOfLocalModel(active.model)} /> : null}
+              {active?.source === "local" ? <KV k={s.kv.model} v={labelOfLocalModel(active.model)} /> : null}
               {active?.source === "api" ? (
                 <>
-                  <KV k="供应商" v={labelOfProvider(active.provider)} />
-                  <KV k="模型" v={active.model || "（空）"} />
-                  <KV k="Base URL" v={active.baseUrl || "（空）"} />
-                  <KV k="API Key" v={active.apiKey ? "••••••••" : "（空）"} />
+                  <KV k={s.kv.provider} v={labelOfProvider(active.provider)} />
+                  <KV k={s.kv.model} v={active.model || s.kv.empty} />
+                  <KV k="Base URL" v={active.baseUrl || s.kv.empty} />
+                  <KV k="API Key" v={active.apiKey ? "••••••••" : s.kv.empty} />
                 </>
               ) : null}
               <KV
-                k="状态"
+                k={s.kv.status}
                 v={
                   providerReady && saved.testedAt
-                    ? `测试通过 · ${formatTime(saved.testedAt)}${
-                        saved.lastLatencyMs ? ` · ${saved.lastLatencyMs}ms` : ""
-                      }`
-                    : "未通过测试 / 尚未就绪"
+                    ? s.kv.testedPass(
+                        formatTime(saved.testedAt, s.timeToday),
+                        saved.lastLatencyMs ?? null,
+                      )
+                    : s.kv.notTested
                 }
               />
             </dl>

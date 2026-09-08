@@ -18,6 +18,7 @@ import {
 } from "../../ai/presets";
 import { testConnection } from "../../ai/connection";
 import { hasKeyring } from "../../ai/vault";
+import { useI18n } from "../../i18n";
 
 /** API 侧草稿(provider 必选,其余为表单值)。 */
 export interface ApiDraft {
@@ -77,6 +78,9 @@ function initialDraft(saved: Props["saved"]): ApiDraft {
 }
 
 export default function ApiModelsTab({ saved, onUse }: Props) {
+  const { m } = useI18n();
+  const mod = m.settings.models;
+  const s = mod.api;
   const [draft, setDraft] = useState<ApiDraft>(() => initialDraft(saved));
   const [test, setTest] = useState<TestStatus>({ state: "idle" });
   const [savedFlash, setSavedFlash] = useState(false);
@@ -141,7 +145,7 @@ export default function ApiModelsTab({ saved, onUse }: Props) {
   return (
     <div className="space-y-5">
       {/* 预置供应商下拉:选中即带入默认端点与建议模型 */}
-      <Field label="预置供应商">
+      <Field label={s.presetProvider}>
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={draft.provider}
@@ -161,20 +165,20 @@ export default function ApiModelsTab({ saved, onUse }: Props) {
           {isSaved ? (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
               <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
-              当前使用
+              {mod.currentUse}
             </span>
           ) : null}
         </div>
         <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
-          选择后自动带入默认 Base URL 与建议模型,下方均可修改。
+          {s.presetHint}
         </p>
       </Field>
 
       {/* 配置表单 */}
       <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/40 p-4">
         <p className="text-xs font-medium text-slate-600">
-          {preset ? `配置:${preset.label}` : "配置"}{" "}
-          <span className="font-normal text-slate-400">(Base URL / 模型名均可改)</span>
+          {preset ? s.configTitle(preset.label) : s.configPlain}{" "}
+          <span className="font-normal text-slate-400">{s.configNote}</span>
         </p>
         <Field label="Base URL">
           <input
@@ -185,7 +189,7 @@ export default function ApiModelsTab({ saved, onUse }: Props) {
             spellCheck={false}
           />
         </Field>
-        <Field label="模型">
+        <Field label={s.modelLabel}>
           <input
             className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
             value={draft.model}
@@ -213,19 +217,19 @@ export default function ApiModelsTab({ saved, onUse }: Props) {
             disabled={test.state === "testing" || !draft.baseUrl.trim()}
             className="rounded-lg border border-indigo-200 bg-white px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {test.state === "testing" ? "正在测试…" : "测试连接"}
+            {test.state === "testing" ? s.testing : s.testConnection}
           </button>
           <button
             onClick={runUse}
             disabled={!valid}
             className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            使用该模型
+            {s.useModel}
           </button>
-          {savedFlash ? <span className="text-sm text-emerald-600">已保存 ✓</span> : null}
+          {savedFlash ? <span className="text-sm text-emerald-600">{mod.savedOk}</span> : null}
           {!valid ? (
             <span className="text-xs text-slate-400">
-              {cloudLike ? "云端模型需填 API Key;Base URL 与模型名必填。" : "Base URL 与模型名必填。"}
+              {cloudLike ? s.validHintCloud : s.validHint}
             </span>
           ) : null}
         </div>
@@ -234,10 +238,8 @@ export default function ApiModelsTab({ saved, onUse }: Props) {
       <TestResultArea test={test} />
 
       <p className="text-[11px] leading-relaxed text-slate-400">
-        {hasKeyring()
-          ? "API Key 在「使用该模型」时写入系统钥匙串(Keychain),不在本机明文保存。"
-          : "纯浏览器预览:API Key 以明文保存在本机 localStorage,仅供本应用调用对应端点。"}
-        「测试连接」向当前表单值(未保存也测)发一次最小请求。
+        {hasKeyring() ? s.keychainNote : s.localStorageNote}
+        {s.testNote}
       </p>
     </div>
   );
@@ -253,6 +255,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function TestResultArea({ test }: { test: TestStatus }) {
+  const { m } = useI18n();
+  const s = m.settings.models.api;
   if (test.state === "idle") {
     return null;
   }
@@ -260,7 +264,7 @@ function TestResultArea({ test }: { test: TestStatus }) {
     return (
       <p className="flex items-center gap-2 text-sm text-slate-500">
         <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
-        正在测试连接…
+        {s.testRunning}
       </p>
     );
   }
@@ -268,7 +272,7 @@ function TestResultArea({ test }: { test: TestStatus }) {
     return (
       <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2">
         <p className="text-sm font-medium text-emerald-700">
-          ✅ 已连接 · 延迟 {test.latencyMs}ms · 模型在线
+          {s.testOk(test.latencyMs)}
         </p>
       </div>
     );
