@@ -1,9 +1,14 @@
 import { useState } from "react";
 import { Card, SectionTitle } from "../../components/primitives";
 import { PageContainer } from "../../components/layout/AppShell";
-import { useSettingsStore } from "../../stores/useSettingsStore";
+import {
+  buildActiveProvider,
+  useSettingsStore,
+} from "../../stores/useSettingsStore";
 import type { ActiveSource } from "../../ai/active";
 import { labelOfLocalModel, labelOfProvider } from "../../ai/presets";
+import { testConnection } from "../../ai/connection";
+import { hasKeyring } from "../../ai/vault";
 import BuiltinModelsPanel from "./BuiltinModelsPanel";
 import ApiModelsTab from "./ApiModelsTab";
 
@@ -17,6 +22,12 @@ import ApiModelsTab from "./ApiModelsTab";
  */
 
 type Tab = "local" | "api";
+
+type Retest =
+  | { state: "idle" }
+  | { state: "testing" }
+  | { state: "ok"; latencyMs: number }
+  | { state: "fail"; reason: string; hint: string };
 
 const apiActiveOf = (a: ActiveSource | null) =>
   a && a.source === "api" ? a : null;
@@ -38,9 +49,14 @@ export default function SettingsPage() {
     saved.active?.source === "api" ? "api" : "local",
   );
   const [savedFlash, setSavedFlash] = useState(false);
+  const [retest, setRetest] = useState<Retest>({ state: "idle" });
 
   const { active, providerReady } = saved;
   const apiSaved = apiActiveOf(active);
+
+  /** 实时就绪判定:直接问「当前 provider 能否调用」(非缓存 providerReady)。
+   *  模型文件被删 / Key 被清 → 这里立即反映为不可用。 */
+  const liveReady = active !== null && buildActiveProvider().isConfigured();
 
   const flash = () => {
     setSavedFlash(true);
@@ -58,6 +74,25 @@ export default function SettingsPage() {
     latencyMs?: number,
   ) => {
     saveActive(api, { testedOk, latencyMs });
+  };
+
+  /** 对「已保存的当前 API 模型」再做一次真实连接测试(不经表单草稿)。 */
+  const retestActive = async () => {
+    if (active?.source !== "api") return;
+    setRetest({ state: "testing" });
+    const cfg = {
+      kind: active.provider,
+      baseUrl: active.baseUrl.trim() || undefined,
+      model: active.model.trim() || undefined,
+      apiKey: active.apiKey.trim() || undefined,
+    };
+    const result = await testConnection(cfg);
+    if (result.ok) {
+      saveActive(active, { testedOk: true, latencyMs: result.latencyMs });
+      setRetest({ state: "ok", latencyMs: result.latencyMs });
+    } else {
+      setRetest({ state: "fail", reason: result.reason, hint: result.hint });
+    }
   };
 
   // ---- Active Banner 文案 ----
@@ -171,11 +206,11 @@ export default function SettingsPage() {
             <div className="flex flex-wrap items-center gap-2">
               {active ? (
                 providerReady ? (
-                  <ReadyPill label="当前模型就绪" ok />
+                  <ReadyPill label="保存时已通过测试" ok />
                 ) : (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
                     <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                    当前模型未就绪
+                    保存时未通过测试
                   </span>
                 )
               ) : (
@@ -189,8 +224,54 @@ export default function SettingsPage() {
                 离线启发式引擎始终可用
               </span>
             </div>
-            <p className="mt-3 text-xs leading-relaxed text-slate-500">
-              侧边栏「设置」绿点代表当前模型就绪。未就绪时引擎自动以本地启发式逻辑降级运行(不崩溃)。
+
+            {/* 运行时实时探活 —— buildActiveProvider 接线:isConfigured 判定当前
+                能否真实调用(而非盲信缓存 providerReady),模型文件被删 / Key 被
+                清等场景立即反映为不可用。 */}
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                运行时
+              </span>
+              {active === null ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
+                  <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                  引擎走离线启发式
+                </span>
+              ) : liveReady ? (
+                <ReadyPill label="当前模型可调用" ok />
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  缺关键配置(模型文件 / Key / 地址)
+                </span>
+              )}
+              {active?.source === "api" ? (
+                <button
+                  onClick={() => void retestActive()}
+                  disabled={retest.state === "testing"}
+                  className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {retest.state === "testing" ? "测试中…" : "重新测试连接"}
+                </button>
+              ) : null}
+            </div>
+            {retest.state === "ok" ? (
+              <p className="mt-2 text-xs text-emerald-600">
+                重新测试通过 · 延迟 {retest.latencyMs}ms
+              </p>
+            ) : retest.state === "fail" ? (
+              <div className="mt-2 rounded-lg border border-red-200 bg-red-50/60 px-3 py-2">
+                <p className="text-xs font-medium text-red-700">{retest.reason}</p>
+                <p className="mt-0.5 text-[11px] text-red-600/90">→ {retest.hint}</p>
+              </div>
+            ) : null}
+            {active?.source === "api" && hasKeyring() ? (
+              <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] leading-relaxed text-slate-500">
+                API Key 已存入系统钥匙串(Keychain),不在本机明文保存;由应用读写,设置页仅显示掩码。
+              </p>
+            ) : null}
+            <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+              「保存时已通过测试」记录上次保存结果;「运行时」实时判定当前能否调用。未就绪时引擎自动以本地启发式逻辑降级运行(不崩溃)。
             </p>
           </Card>
 

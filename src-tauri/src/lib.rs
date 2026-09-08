@@ -15,6 +15,7 @@ use serde_json::json;
 use tauri::Manager;
 
 mod llm;
+mod vault;
 
 use llm::commands::LlmState;
 use llm::manager::ModelManager;
@@ -76,6 +77,9 @@ pub fn run() {
             llm::commands::llm_generate,
             llm::commands::llm_default_model,
             llm::commands::llm_status,
+            vault::vault_set_secret,
+            vault::vault_get_secret,
+            vault::vault_delete_secret,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the Personal Learning OS shell");

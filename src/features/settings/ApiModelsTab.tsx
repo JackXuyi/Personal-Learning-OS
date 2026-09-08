@@ -17,6 +17,7 @@ import {
   type ProviderPreset,
 } from "../../ai/presets";
 import { testConnection } from "../../ai/connection";
+import { hasKeyring } from "../../ai/vault";
 
 /** API 侧草稿(provider 必选,其余为表单值)。 */
 export interface ApiDraft {
@@ -233,7 +234,9 @@ export default function ApiModelsTab({ saved, onUse }: Props) {
       <TestResultArea test={test} />
 
       <p className="text-[11px] leading-relaxed text-slate-400">
-        API Key 以明文保存在本机 localStorage,仅供本应用调用对应端点。
+        {hasKeyring()
+          ? "API Key 在「使用该模型」时写入系统钥匙串(Keychain),不在本机明文保存。"
+          : "纯浏览器预览:API Key 以明文保存在本机 localStorage,仅供本应用调用对应端点。"}
         「测试连接」向当前表单值(未保存也测)发一次最小请求。
       </p>
     </div>
