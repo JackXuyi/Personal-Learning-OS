@@ -4,11 +4,13 @@
  * 内容（docs §4.2 P6）：
  * - 总分 + 档位（达标 / 接近 / 未达标）+ 卷面元信息（题量 / 客观错题 / 时间）；
  * - 逐章掌握度：前后对比 + DeltaBadge（Δ 与下次复习间隔）+ 未达及格线的章内嵌
- *   「补考本章」（生成 retake 卷，降一档难度）；
+ *   「补考本章」（单章 retake 卷，降一档难度）；
  * - 错题回顾：题目 / 你的作答 / 参考答案 / AI 批语槽（客观题本地判定，
  *   主观题批语待 AI 判分接入后回填，P0-3 不伪造）+ 薄弱要点；
  * - 主行动「生成学习计划」：buildChapterPlan（重学 > 补考 > 复习要点 > 推进）
- *   内联展开，每项带 reasons 与直达入口（重读 / 测验 / 生成补考卷）。
+ *   内联展开，每项带 reasons 与直达入口（重读 / 测验 / 生成补考卷）；
+ * - 总分卡「补考 N 个弱章」（T10 · 仅错题章范围）：所有弱章合成一张补考卷
+ *   （engine.createRetakePaper，跨文档分组出卷，每章客观 3 · 降一档）。
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -21,7 +23,8 @@ import {
   sortChaptersByOrder,
 } from "../../domain";
 import type { Chapter, LearnerState, NextAction, Paper, PaperQuestion, PaperResult } from "../../domain";
-import { buildChapterPlan, createPaper, reviewIntervalDaysForScore } from "../../engine";
+import { buildChapterPlan, createRetakePaper, reviewIntervalDaysForScore } from "../../engine";
+import { makeRetakePaper } from "../plan/chapter-action";
 import { storage } from "../../stores/useLoopStore";
 import { actionKindLabel } from "../units";
 import { ago, typeBadgeText } from "./meta";
@@ -121,12 +124,23 @@ export default function QuizReportPage() {
     setRetaking(chapter.id);
     try {
       const allChapters = data.docChapters.get(chapter.documentId) ?? [chapter];
-      const paper = createPaper({
-        scope: { chapterIds: [chapter.id], mode: "retake" },
-        chapters: [chapter],
-        allChapters,
+      const paper = makeRetakePaper(chapter, allChapters, data.learner);
+      await storage.savePaper(paper);
+      navigate(`/quiz/${paper.id}`);
+    } finally {
+      setRetaking(undefined);
+    }
+  };
+
+  /** 聚合补考（T10 · 仅错题章范围）：所有弱章合成一张补考卷（跨文档自动分组）。 */
+  const startRetakeAll = async () => {
+    if (!data || weakChapters.length === 0 || retaking) return;
+    setRetaking("*");
+    try {
+      const paper = createRetakePaper({
+        chapters: weakChapters.map((r) => r.chapter),
+        docChapters: data.docChapters,
         learnerState: data.learner,
-        allowSubjective: false,
       });
       await storage.savePaper(paper);
       navigate(`/quiz/${paper.id}`);
@@ -263,7 +277,7 @@ export default function QuizReportPage() {
           </button>
           {weakChapters.length > 0 ? (
             <button
-              onClick={() => void startRetake(weakChapters[0].chapter)}
+              onClick={() => void startRetakeAll()}
               disabled={Boolean(retaking)}
               className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
             >

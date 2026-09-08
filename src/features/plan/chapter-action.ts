@@ -3,7 +3,7 @@
  * 首页主 CTA / /plan 计划页 / 报告页共用，避免各页维护一份 kind → 徽标/动词/跳转映射。
  */
 import type { Chapter, LearnerState, NextAction, Paper } from "../../domain";
-import { createPaper } from "../../engine";
+import { createRetakePaper } from "../../engine";
 
 export interface ChapterActionMeta {
   /** kind 徽标（tailwind 浅底深字圆角，与报告页 KIND_CHIP 同一套配色）。 */
@@ -67,18 +67,19 @@ export function actionPath(
 /**
  * 生成一份补考卷（retake：客观 3 题 · 降一档难度；干扰项取同文档其他章）。
  * 不落库 —— 由调用方 savePaper 后 navigate(`/quiz/${paper.id}`)。
+ *
+ * 单章便捷入口（首页主 CTA / /plan / ⌘K 用）：委托 engine.createRetakePaper，
+ * 与报告页「补考 N 个弱章」的聚合出卷共用同一实现（T10）。
  */
 export function makeRetakePaper(
   chapter: Chapter,
   docChapters: Chapter[],
   learnerState: LearnerState,
 ): Paper {
-  return createPaper({
-    scope: { chapterIds: [chapter.id], mode: "retake" },
+  return createRetakePaper({
     chapters: [chapter],
-    allChapters: docChapters,
+    docChapters: new Map([[chapter.documentId, docChapters]]),
     learnerState,
-    allowSubjective: false,
   });
 }
 

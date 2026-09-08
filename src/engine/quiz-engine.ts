@@ -23,7 +23,7 @@ import type {
   PaperScope,
   QuizType,
 } from "../domain";
-import { isSubjectiveType, newId, PAPER_MODE_LABEL } from "../domain";
+import { isSubjectiveType, newId, PAPER_MODE_LABEL, sortChaptersByOrder } from "../domain";
 import { applyPaperResult } from "./learner-model";
 
 /* ------------------------------------------------------------------ */
@@ -329,6 +329,67 @@ function assemble(scope: PaperScope, questions: PaperQuestion[], now: number): P
     scope,
     title,
     questions,
+    status: "open",
+    createdAt: now,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* 补考卷聚合出卷（T10 · 仅错题章范围）                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 补考卷（docs §4 模式表：仅错题章 · 每章 3 客观 · 主观剔除 · 降一档难度）。
+ *
+ * 与 createPaper(mode="retake") 的关系：当错题章跨越多个文档时，choice 的
+ * 干扰项必须取自「各章自己的文档」（同文档其他章要点），否则会把别的文档
+ * 内容泄作选项（P1 语义）。因此这里按 documentId 分组后分别调 createPaper
+ * （各组的 allChapters = 该文档全部章），再合并成一张 Paper。
+ *
+ * 纯函数；确定性规则与 createPaper 一致（同输入 → 同题型/同题面结构）。
+ * 空章输入返回空卷（不抛错，与 createPaper 无章时行为一致，由 UI 守卫）。
+ */
+export function createRetakePaper(input: {
+  /** 需要补考的章（错题章范围；内部按 order 升序）。 */
+  chapters: Chapter[];
+  /** docId → 该文档全部章（choice 干扰项源）；缺省时退化为用范围章自身。 */
+  docChapters?: ReadonlyMap<string, readonly Chapter[]>;
+  learnerState?: LearnerState;
+  /** 测试注入时间戳。 */
+  now?: number;
+}): Paper {
+  const { chapters, docChapters, learnerState, now = Date.now() } = input;
+  const ordered = sortChaptersByOrder(chapters);
+
+  // 按文档分组（保持 order 顺序）：每组 allChapters 取该文档全量章。
+  const groups: Chapter[][] = [];
+  const byDoc = new Map<string, Chapter[]>();
+  for (const chapter of ordered) {
+    let group = byDoc.get(chapter.documentId);
+    if (!group) {
+      group = [];
+      byDoc.set(chapter.documentId, group);
+      groups.push(group);
+    }
+    group.push(chapter);
+  }
+
+  const parts = groups.map((group) =>
+    createPaper({
+      scope: { chapterIds: group.map((c) => c.id), mode: "retake" },
+      chapters: group,
+      allChapters: [...(docChapters?.get(group[0].documentId) ?? group)],
+      learnerState,
+      allowSubjective: false,
+      now,
+    }),
+  );
+
+  return {
+    id: newId("paper"),
+    scope: { chapterIds: ordered.map((c) => c.id), mode: "retake" },
+    title: PAPER_MODE_LABEL.retake,
+    questions: parts.flatMap((p) => p.questions),
     status: "open",
     createdAt: now,
   };
