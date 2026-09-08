@@ -17,12 +17,15 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { Bar, Card } from "../../components/primitives";
 import type { Paper, PaperAnswers, PaperQuestion } from "../../domain";
-import { PAPER_MODE_LABEL } from "../../domain";
 import { storage } from "../../stores/useLoopStore";
+import { useI18n, type Messages } from "../../i18n";
+import { orderRange } from "./meta";
 
 type Phase = "answering" | "confirm-submit";
 
 export default function QuizAnswerPage() {
+  const { m } = useI18n();
+  const a = m.quiz.answer;
   const { paperId = "" } = useParams();
   const navigate = useNavigate();
   const [paper, setPaper] = useState<Paper | undefined>();
@@ -55,11 +58,11 @@ export default function QuizAnswerPage() {
         return;
       }
       setPaper(found);
-      setContext(await contextLabel(found));
+      setContext(await contextLabel(found, m));
       const draft = await storage.getPaperDraft(found.id);
       if (draft) setAnswers(draft);
     })();
-  }, [paperId]);
+  }, [paperId, m]);
 
   const q = paper?.questions[index];
   const answeredCount = paper
@@ -123,10 +126,10 @@ export default function QuizAnswerPage() {
   if (missing) {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-base font-semibold text-slate-900">试卷不存在</p>
-        <p className="mt-1 text-sm text-slate-500">它可能已被移除。</p>
+        <p className="text-base font-semibold text-slate-900">{a.missingTitle}</p>
+        <p className="mt-1 text-sm text-slate-500">{a.missingDesc}</p>
         <Link to="/quiz" className="mt-4 inline-block text-sm text-indigo-600 hover:underline">
-          ← 返回试卷中心
+          {a.backToCenter}
         </Link>
       </div>
     );
@@ -135,20 +138,20 @@ export default function QuizAnswerPage() {
   if (!paper || !context) {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-sm text-slate-500">正在打开试卷…</p>
+        <p className="text-sm text-slate-500">{a.opening}</p>
       </div>
     );
   }
 
   // —— 作答视图 ——
-  const modeLabel = PAPER_MODE_LABEL[paper.scope.mode];
+  const modeLabel = m.quiz.mode[paper.scope.mode];
   return (
     <div className="mx-auto max-w-3xl px-8 py-8">
       {/* 顶栏：范围标签 + 进度 */}
       <div className="mb-5 flex items-center justify-between gap-4">
         <div className="min-w-0">
           <Link to="/quiz" className="text-xs text-slate-400 hover:text-indigo-600">
-            ← 试卷中心
+            {a.backToCenter}
           </Link>
           <p className="mt-0.5 truncate text-xs text-slate-500">
             {modeLabel} · {context}
@@ -159,14 +162,14 @@ export default function QuizAnswerPage() {
             <span className="text-sm font-semibold tabular-nums text-slate-800">
               {answeredCount}/{paper.questions.length}
             </span>
-            <span className="text-xs text-slate-400"> 已答</span>
+            <span className="text-xs text-slate-400"> {a.answered}</span>
           </span>
           <button
             onClick={() => setPhase("confirm-submit")}
             disabled={answeredCount === 0}
             className="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 disabled:opacity-40"
           >
-            交卷
+            {a.submit}
           </button>
         </div>
       </div>
@@ -176,7 +179,7 @@ export default function QuizAnswerPage() {
           <Bar value={answeredCount / paper.questions.length} className="bg-indigo-500" />
         </div>
         <span className="text-xs tabular-nums text-slate-400">
-          第 {index + 1} / {paper.questions.length} 题
+          {a.qOf(index + 1, paper.questions.length)}
         </span>
       </div>
 
@@ -197,12 +200,12 @@ export default function QuizAnswerPage() {
           disabled={index === 0}
           className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
         >
-          ← 上一题
+          {a.prev}
         </button>
         <p className="hidden text-xs text-slate-400 sm:block">
           {index === paper.questions.length - 1
-            ? `还有 ${unansweredCount} 题未答（可返回检查）`
-            : "选择/判断题可用键盘 1–4 快速作答"}
+            ? a.unansweredTip(unansweredCount)
+            : a.keyboardTip}
         </p>
         {index < paper.questions.length - 1 ? (
           <button
@@ -210,7 +213,7 @@ export default function QuizAnswerPage() {
             disabled={!q || (answers[q.id] ?? "").trim().length === 0}
             className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-40"
           >
-            下一题 →
+            {a.next}
           </button>
         ) : (
           <button
@@ -218,7 +221,7 @@ export default function QuizAnswerPage() {
             disabled={paper.questions.length === 0}
             className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-40"
           >
-            交卷
+            {a.submit}
           </button>
         )}
       </div>
@@ -232,30 +235,28 @@ export default function QuizAnswerPage() {
           }}
         >
           <Card className="w-full max-w-sm">
-            <p className="text-base font-semibold text-slate-900">确认交卷？</p>
+            <p className="text-base font-semibold text-slate-900">{a.confirmTitle}</p>
             {unansweredCount > 0 ? (
               <p className="mt-2 text-sm leading-6 text-amber-700">
-                还有 {unansweredCount} 题未作答——未答的客观题将判为错误。
+                {a.confirmUnanswered(unansweredCount)}
               </p>
             ) : (
-              <p className="mt-2 text-sm text-slate-500">全部题目已作答，交卷后立即判分。</p>
+              <p className="mt-2 text-sm text-slate-500">{a.confirmAllDone}</p>
             )}
-            <p className="mt-2 text-xs leading-5 text-slate-400">
-              客观题即时判定；问答/应用题待 AI 判分接入（未配置 AI 时不计入得分）。
-            </p>
+            <p className="mt-2 text-xs leading-5 text-slate-400">{a.confirmNote}</p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={() => setPhase("answering")}
                 className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
               >
-                再检查一下
+                {a.recheck}
               </button>
               <button
                 onClick={() => void submit()}
                 disabled={busy}
                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
               >
-                {busy ? "提交中…" : "确认交卷"}
+                {busy ? a.submitting : a.confirmSubmit}
               </button>
             </div>
           </Card>
@@ -277,6 +278,9 @@ function QuestionCard({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const { m } = useI18n();
+  const a = m.quiz.answer;
+  const choiceFast = a.keyboardFast(q.options?.length ?? 0);
   return (
     <Card className="p-6">
       <div className="flex items-start gap-3">
@@ -286,9 +290,9 @@ function QuestionCard({
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-center gap-2 text-[11px]">
             <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-500">
-              {typeLabel(q.type)}
+              {m.quiz.type[q.type]}
             </span>
-            <span className="text-slate-300">难度 {q.difficulty}</span>
+            <span className="text-slate-300">{a.difficulty(q.difficulty)}</span>
           </div>
           <p className="text-[15px] font-medium leading-7 text-slate-900">{q.prompt}</p>
         </div>
@@ -322,14 +326,14 @@ function QuestionCard({
                 </button>
               );
             })}
-            <p className="pt-1 text-[11px] text-slate-300">按键盘 1–{q.options?.length} 快速选择</p>
+            <p className="pt-1 text-[11px] text-slate-300">{choiceFast}</p>
           </div>
         ) : q.type === "judge" ? (
           <div className="flex gap-2">
             {(
               [
-                ["true", "对 ✓"],
-                ["false", "错 ✗"],
+                ["true", a.trueLabel],
+                ["false", a.falseLabel],
               ] as const
             ).map(([val, label]) => (
               <button
@@ -350,7 +354,7 @@ function QuestionCard({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             rows={5}
-            placeholder={q.type === "application" ? "写出你的应用思路…" : "用你自己的话回答…"}
+            placeholder={q.type === "application" ? a.appPlaceholder : a.qaPlaceholder}
             className="w-full resize-y rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-300 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
           />
         )}
@@ -359,21 +363,8 @@ function QuestionCard({
   );
 }
 
-function typeLabel(type: PaperQuestion["type"]): string {
-  switch (type) {
-    case "choice":
-      return "选择题";
-    case "judge":
-      return "判断题";
-    case "qa":
-      return "问答题";
-    case "application":
-      return "应用题";
-  }
-}
-
 /** 试卷范围 → 上下文文案（如「《RAG 指南》 · 第 1–3 章」；跨文档查，命中即返回）。 */
-async function contextLabel(paper: Paper): Promise<string> {
+async function contextLabel(paper: Paper, m: Messages): Promise<string> {
   const docs = await storage.listDocuments();
   for (const d of docs) {
     const chapters = await storage.listChapters(d.id);
@@ -381,11 +372,9 @@ async function contextLabel(paper: Paper): Promise<string> {
       .filter((c) => paper.scope.chapterIds.includes(c.id))
       .sort((a, b) => a.order - b.order);
     if (hit.length > 0) {
-      const first = hit[0].order;
-      const last = hit[hit.length - 1].order;
-      const range = first === last ? `第 ${first} 章` : `第 ${first}–${last} 章`;
+      const range = orderRange(hit[0].order, hit[hit.length - 1].order, m);
       return `${d.title} · ${range}`;
     }
   }
-  return "资料已移除";
+  return m.quiz.answer.removedDoc;
 }

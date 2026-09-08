@@ -20,7 +20,6 @@ import {
   isSubjectiveType,
   MASTERY_FLOOR,
   MASTERY_THRESHOLD,
-  PAPER_MODE_LABEL,
   sortChaptersByOrder,
 } from "../../domain";
 import type { Chapter, LearnerState, NextAction, Paper, PaperQuestion, PaperResult } from "../../domain";
@@ -29,8 +28,8 @@ import { gradeSubjectiveWithAi } from "../../ai";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { makeRetakePaper } from "../plan/chapter-action";
 import { storage } from "../../stores/useLoopStore";
-import { actionKindLabel } from "../units";
-import { ago, typeBadgeText } from "./meta";
+import { useI18n, type Messages } from "../../i18n";
+import { ago, orderRange, typeBadgeText } from "./meta";
 
 interface ChapterRef {
   chapter: Chapter;
@@ -66,7 +65,12 @@ const KIND_CHIP: Record<string, string> = {
   "chapter-quiz": "border-indigo-200 bg-indigo-50 text-indigo-700",
 };
 
+/** 引擎判卷产出的「未作答」作答占位（quiz-engine 写死的数据标记，不随界面语言走）。 */
+const UNANSWERED_MARKER = "（未作答）";
+
 export default function QuizReportPage() {
+  const { m } = useI18n();
+  const r = m.quiz.report;
   const { paperId = "" } = useParams();
   const navigate = useNavigate();
   const [data, setData] = useState<ReportData | undefined>();
@@ -93,7 +97,7 @@ export default function QuizReportPage() {
         setMissing(true);
         return;
       }
-      const result = results.find((r) => r.paperId === paperId);
+      const result = results.find((rr) => rr.paperId === paperId);
       if (!result) {
         setNoResult(true);
         return;
@@ -145,7 +149,7 @@ export default function QuizReportPage() {
     setRetaking("*");
     try {
       const paper = createRetakePaper({
-        chapters: weakChapters.map((r) => r.chapter),
+        chapters: weakChapters.map((rw) => rw.chapter),
         docChapters: data.docChapters,
         learnerState: data.learner,
       });
@@ -176,7 +180,7 @@ export default function QuizReportPage() {
     if (pending.length === 0) return;
     const provider = buildActiveProvider();
     if (!provider.isConfigured()) {
-      setAiMsg("未配置 AI 判分——请先到「设置 → AI 模型中心」配置判分模型。");
+      setAiMsg(r.aiNotConfig);
       return;
     }
     setAiRetrying(true);
@@ -196,16 +200,16 @@ export default function QuizReportPage() {
       });
       const grades = await gradeSubjectiveWithAi(provider, items);
       if (grades.length === 0) {
-        setAiMsg("AI 未返回批改结果，请稍后重试。");
+        setAiMsg(r.aiNoResult);
         return;
       }
       const merged = mergeSubjectiveGrades({ result, paper, answers: subAnswers, aiGrades: grades });
       await storage.savePaperResult(merged);
       setData({ ...data, result: merged });
-      setAiMsg(`已批改 ${grades.length} 道主观题并并入卷面，总分已更新。`);
+      setAiMsg(r.aiGraded(grades.length));
     } catch (err) {
       console.warn("主观题重试批改失败：", err);
-      setAiMsg("批改失败：模型暂不可用，请稍后重试。");
+      setAiMsg(r.aiFailed);
     } finally {
       setAiRetrying(false);
     }
@@ -240,7 +244,7 @@ export default function QuizReportPage() {
   const weakChapters = useMemo(
     () =>
       perChapterRows
-        .filter((r) => r.entry.mastery < MASTERY_FLOOR)
+        .filter((row) => row.entry.mastery < MASTERY_FLOOR)
         .sort((a, b) => a.entry.mastery - b.entry.mastery),
     [perChapterRows],
   );
@@ -257,9 +261,9 @@ export default function QuizReportPage() {
   if (missing) {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-base font-semibold text-slate-900">试卷不存在</p>
+        <p className="text-base font-semibold text-slate-900">{r.missingTitle}</p>
         <Link to="/quiz" className="mt-4 inline-block text-sm text-indigo-600 hover:underline">
-          ← 返回试卷中心
+          {r.backToCenter}
         </Link>
       </div>
     );
@@ -268,10 +272,10 @@ export default function QuizReportPage() {
   if (noResult) {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-base font-semibold text-slate-900">暂无判卷记录</p>
-        <p className="mt-1 text-sm text-slate-500">这份试卷还没有判分结果，请先完成作答。</p>
+        <p className="text-base font-semibold text-slate-900">{r.noResultTitle}</p>
+        <p className="mt-1 text-sm text-slate-500">{r.noResultDesc}</p>
         <Link to="/quiz" className="mt-4 inline-block text-sm text-indigo-600 hover:underline">
-          ← 返回试卷中心
+          {r.backToCenter}
         </Link>
       </div>
     );
@@ -280,7 +284,7 @@ export default function QuizReportPage() {
   if (!data) {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-sm text-slate-500">正在打开报告…</p>
+        <p className="text-sm text-slate-500">{r.opening}</p>
       </div>
     );
   }
@@ -310,20 +314,20 @@ export default function QuizReportPage() {
       <div className="mb-5 flex items-center justify-between gap-4">
         <div className="min-w-0">
           <Link to="/quiz" className="text-xs text-slate-400 hover:text-indigo-600">
-            ← 试卷中心
+            {r.backToCenter}
           </Link>
           <p className="mt-0.5 truncate text-xs text-slate-500">
-            {PAPER_MODE_LABEL[paper.scope.mode]} · {contextTitle(scopeChapters)}
+            {m.quiz.mode[paper.scope.mode]} · {contextTitle(scopeChapters, m)}
           </p>
         </div>
         <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-500">
-          {ago(result.createdAt)}交卷
+          {r.submitted(ago(result.createdAt, m))}
         </span>
       </div>
 
       {/* 总分卡 */}
       <Card className="text-center">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">卷面得分</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{r.scoreEyebrow}</p>
         <p
           className={`mt-2 text-6xl font-bold tabular-nums ${
             passed ? "text-emerald-600" : near ? "text-amber-600" : "text-red-500"
@@ -332,16 +336,15 @@ export default function QuizReportPage() {
           {score}
         </p>
         <p className="mt-1 text-sm text-slate-500">
-          {passed
-            ? "已达标 —— 本章节可直接进入综合测或下一章。"
-            : near
-              ? "接近达标 —— 复习错题要点后即可冲击达标线。"
-              : "未达标 —— 建议补考或重读薄弱章节。"}
+          {passed ? r.passedDesc : near ? r.nearDesc : r.failDesc}
         </p>
         <p className="mt-3 text-xs text-slate-400">
-          {paper.questions.length} 题 · 客观题错 {wrongCount} 题 · 达标{" "}
-          {Math.round(MASTERY_THRESHOLD * 100)} / 及格 {Math.round(MASTERY_FLOOR * 100)} · 掌握度按
-          客观题证据回写
+          {r.meta(
+            paper.questions.length,
+            wrongCount,
+            Math.round(MASTERY_THRESHOLD * 100),
+            Math.round(MASTERY_FLOOR * 100),
+          )}
         </p>
 
         {/* 主观题批改状态（N3）：全批 → 并入提示；有 pending → 状态行 + 重试入口 */}
@@ -350,7 +353,7 @@ export default function QuizReportPage() {
             {pendingSubjective > 0 ? (
               <>
                 <span className="font-medium text-amber-600">
-                  还有 {pendingSubjective} 道主观题待 AI 批改 · 卷面暂按客观计分
+                  {r.pendingSubjective(pendingSubjective)}
                 </span>
                 {retryable ? (
                   buildActiveProvider().isConfigured() ? (
@@ -359,23 +362,21 @@ export default function QuizReportPage() {
                       disabled={aiRetrying}
                       className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
                     >
-                      {aiRetrying ? "批改中…" : "重试 AI 批改"}
+                      {aiRetrying ? r.aiRetrying : r.retryAI}
                     </button>
                   ) : (
                     <Link to="/settings" className="text-indigo-600 hover:underline">
-                      去配置 AI →
+                      {r.goConfigAI}
                     </Link>
                   )
                 ) : (
-                  <span className="text-slate-400">（判卷时未保留作答副本，无法补批）</span>
+                  <span className="text-slate-400">{r.noAnswerCopy}</span>
                 )}
               </>
             ) : scoredCount > 0 ? (
-              <span className="font-medium text-emerald-600">
-                卷面已并入 {scoredCount} 道主观题（AI 批改）
-              </span>
+              <span className="font-medium text-emerald-600">{r.mergedIn(scoredCount)}</span>
             ) : (
-              <span className="text-slate-400">本卷主观题判分时 AI 不可用，未计入卷面</span>
+              <span className="text-slate-400">{r.aiUnavailable}</span>
             )}
           </div>
         ) : null}
@@ -386,7 +387,7 @@ export default function QuizReportPage() {
             onClick={togglePlan}
             className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
           >
-            {planOpen ? "收起学习计划" : "生成学习计划"}
+            {planOpen ? r.planClose : r.planGenerate}
           </button>
           {weakChapters.length > 0 ? (
             <button
@@ -394,7 +395,7 @@ export default function QuizReportPage() {
               disabled={Boolean(retaking)}
               className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
             >
-              {retaking ? "生成中…" : `补考 ${weakChapters.length} 个弱章 →`}
+              {retaking ? m.plan.generating : r.retakeWeak(weakChapters.length)}
             </button>
           ) : null}
         </div>
@@ -404,15 +405,13 @@ export default function QuizReportPage() {
       {planOpen ? (
         <Card className="mt-4">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-slate-800">学习计划 · 优先做这些</p>
-            <span className="text-xs text-slate-400">由本卷报告驱动（仅覆盖本卷范围章）</span>
+            <p className="text-sm font-semibold text-slate-800">{r.planHeader}</p>
+            <span className="text-xs text-slate-400">{r.planDrivenBy}</span>
           </div>
           {plan === undefined ? (
-            <p className="mt-3 text-sm text-slate-400">生成中…</p>
+            <p className="mt-3 text-sm text-slate-400">{m.plan.generating}</p>
           ) : plan.length === 0 ? (
-            <p className="mt-3 text-sm text-emerald-700">
-              🎉 本卷范围内所有章节均已达标——可推进新章节或直接综合测。
-            </p>
+            <p className="mt-3 text-sm text-emerald-700">{r.planEmpty}</p>
           ) : (
             <div className="mt-3 space-y-2">
               {plan.map((action, i) => {
@@ -431,16 +430,16 @@ export default function QuizReportPage() {
                         <span
                           className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${chip}`}
                         >
-                          {actionKindLabel(action.kind)}
+                          {m.units.action[action.kind]}
                         </span>
                         <span className="text-sm font-medium text-slate-800">
                           {chapter ? `${chapter.order}. ${chapter.title}` : action.unitId}
                         </span>
                       </div>
                       <ul className="mt-1 space-y-0.5">
-                        {action.reasons.map((r, ri) => (
+                        {action.reasons.map((reason, ri) => (
                           <li key={ri} className="text-xs leading-5 text-slate-500">
-                            · {r}
+                            · {reason}
                           </li>
                         ))}
                       </ul>
@@ -450,12 +449,12 @@ export default function QuizReportPage() {
                       className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
                     >
                       {action.kind === "chapter-quiz"
-                        ? "去测验 →"
+                        ? r.goQuiz
                         : action.kind === "retake-quiz"
-                          ? "生成补考卷 →"
+                          ? r.goRetake
                           : action.kind === "learn-chapter"
-                            ? "去重读 →"
-                            : "去复习 →"}
+                            ? r.goRelearn
+                            : r.goReview}
                     </button>
                   </div>
                 );
@@ -467,10 +466,10 @@ export default function QuizReportPage() {
 
       {/* 逐章掌握度 */}
       <Card className="mt-4">
-        <p className="text-sm font-semibold text-slate-800">逐章掌握度</p>
-        <p className="mt-0.5 text-xs text-slate-400">卷面后回写 · 对比测验前</p>
+        <p className="text-sm font-semibold text-slate-800">{r.perChapterTitle}</p>
+        <p className="mt-0.5 text-xs text-slate-400">{r.perChapterSub}</p>
         {perChapterRows.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-400">本卷没有客观题证据，暂不更新掌握度。</p>
+          <p className="mt-3 text-sm text-slate-400">{r.noObjective}</p>
         ) : (
           <div className="mt-4 space-y-4">
             {perChapterRows.map(({ chapter, entry }) => {
@@ -499,12 +498,12 @@ export default function QuizReportPage() {
                           disabled={Boolean(retaking)}
                           className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
                         >
-                          {retaking === chapter.id ? "生成中…" : "补考本章"}
+                          {retaking === chapter.id ? m.plan.generating : r.weakRetake}
                         </button>
                       ) : null}
                     </div>
                   </div>
-                  <Bar value={entry.mastery} target={MASTERY_THRESHOLD} targetLabel="达标线" />
+                  <Bar value={entry.mastery} target={MASTERY_THRESHOLD} targetLabel={r.targetLine} />
                 </div>
               );
             })}
@@ -515,14 +514,12 @@ export default function QuizReportPage() {
       {/* 错题回顾 */}
       {wrongRows.length > 0 ? (
         <Card className="mt-4">
-          <p className="text-sm font-semibold text-slate-800">错题回顾</p>
-          <p className="mt-0.5 text-xs text-slate-400">
-            共 {wrongRows.length} 题 · 附参考答案与薄弱要点
-          </p>
+          <p className="text-sm font-semibold text-slate-800">{r.wrongTitle}</p>
+          <p className="mt-0.5 text-xs text-slate-400">{r.wrongSub(wrongRows.length)}</p>
           <div className="mt-4 space-y-4">
             {wrongRows.map(({ w, q }, i) => {
               const chapter = q.chapterId ? index.get(q.chapterId)?.chapter : undefined;
-              const correct = correctText(q);
+              const correct = correctText(q, r);
               return (
                 <div key={q.id} className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
                   <div className="flex items-start gap-3">
@@ -532,22 +529,22 @@ export default function QuizReportPage() {
                     <div className="min-w-0 flex-1">
                       <div className="mb-1 flex items-center gap-2 text-[11px]">
                         <span className="rounded bg-slate-200/70 px-1.5 py-0.5 font-medium text-slate-500">
-                          {typeBadgeText(q.type)}
+                          {typeBadgeText(q.type, m)}
                         </span>
                         {chapter ? (
-                          <span className="text-slate-400">第 {chapter.order} 章</span>
+                          <span className="text-slate-400">{r.chapterOf(chapter.order)}</span>
                         ) : null}
-                        <span className="text-slate-300">难度 {q.difficulty}</span>
+                        <span className="text-slate-300">{r.difficulty(q.difficulty)}</span>
                       </div>
                       <p className="text-sm font-medium leading-6 text-slate-900">{q.prompt}</p>
 
                       <div className="mt-2 space-y-1.5 text-xs leading-5">
                         <p className="text-slate-600">
-                          <span className="text-slate-400">你的作答：</span>
-                          {answerText(q, w.yourAnswer)}
+                          <span className="text-slate-400">{r.yourAnswerLead}</span>
+                          {answerText(q, w.yourAnswer, r)}
                         </p>
                         <p className="text-emerald-700">
-                          <span className="text-slate-400">参考答案：</span>
+                          <span className="text-slate-400">{r.refAnswerLead}</span>
                           {correct}
                         </p>
                       </div>
@@ -555,21 +552,21 @@ export default function QuizReportPage() {
                       {/* AI 批语槽（P0-3：未配置 AI 不伪造；T12 起回填批语与定位要点） */}
                       {w.aiFeedback ? (
                         <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-xs leading-5 text-slate-700">
-                          <span className="font-medium text-indigo-700">AI 批语：</span>
+                          <span className="font-medium text-indigo-700">{r.aiCommentLead}</span>
                           {w.aiFeedback}
                           {w.point ? (
                             <span className="mt-1 block text-[11px] text-indigo-600/80">
-                              定位要点：{w.point}
+                              {r.aiPointLead(w.point)}
                             </span>
                           ) : null}
                         </div>
-                      ) : isSubjectiveType(q.type) && w.yourAnswer === "（未作答）" ? (
+                      ) : isSubjectiveType(q.type) && w.yourAnswer === UNANSWERED_MARKER ? (
                         <p className="mt-2 text-[11px] leading-4 text-amber-600/80">
-                          未作答——先对照参考答案学一遍要点，再做一次本章测验。
+                          {r.unansweredHint}
                         </p>
                       ) : (
                         <p className="mt-2 text-[11px] leading-4 text-slate-400">
-                          AI 批语：配置 AI 判分后自动生成（主观题批语 + 定位到章节要点）。
+                          {r.aiPendingHint}
                         </p>
                       )}
                     </div>
@@ -586,13 +583,13 @@ export default function QuizReportPage() {
           to="/learn"
           className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
         >
-          回章节目录
+          {r.goCatalog}
         </Link>
         <Link
           to="/quiz"
           className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
         >
-          返回试卷中心
+          {r.backCenter}
         </Link>
       </div>
     </div>
@@ -604,26 +601,24 @@ export default function QuizReportPage() {
 /* ------------------------------------------------------------------ */
 
 /** 卷范围标题：单章 → 「第 x 章 · 1 章」；多章 → 「第 x–y 章 · n 章」。 */
-function contextTitle(chapters: Chapter[]): string {
-  if (chapters.length === 0) return "资料已移除";
-  const first = chapters[0].order;
-  const last = chapters[chapters.length - 1].order;
-  const range = first === last ? `第 ${first} 章` : `第 ${first}–${last} 章`;
-  return `${range} · ${chapters.length} 章`;
+function contextTitle(chapters: Chapter[], m: Messages): string {
+  if (chapters.length === 0) return m.quiz.report.removedDoc;
+  const range = orderRange(chapters[0].order, chapters[chapters.length - 1].order, m);
+  return m.quiz.rangeWithCount(range, chapters.length);
 }
 
 /** 将用户作答转为可读文本（choice → 选项内容；judge → 对/错；主观 → 原文）。 */
-function answerText(q: PaperQuestion, raw: string): string {
+function answerText(q: PaperQuestion, raw: string, r: Messages["quiz"]["report"]): string {
   const v = (raw ?? "").trim();
-  if (!v) return "（未作答）";
+  if (!v) return r.unanswered;
   if (q.type === "choice") return q.options?.[Number(v)] ?? v;
-  if (q.type === "judge") return v === "true" ? "对 ✓" : "错 ✗";
+  if (q.type === "judge") return v === "true" ? r.trueLabel : r.falseLabel;
   return v;
 }
 
 /** 参考答案文本（客观 → 正确选项/对错；主观 → referenceAnswer）。 */
-function correctText(q: PaperQuestion): string {
+function correctText(q: PaperQuestion, r: Messages["quiz"]["report"]): string {
   if (q.type === "choice") return q.options?.[Number(q.answer)] ?? "—";
-  if (q.type === "judge") return q.answer === "true" ? "对 ✓" : "错 ✗";
+  if (q.type === "judge") return q.answer === "true" ? r.trueLabel : r.falseLabel;
   return q.referenceAnswer ?? "—";
 }

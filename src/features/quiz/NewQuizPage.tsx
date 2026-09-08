@@ -20,12 +20,13 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, SectionTitle } from "../../components/primitives";
 import { PageContainer } from "../../components/layout/AppShell";
 import type { Chapter, LearnerState, PaperMode, PaperScope, SourceDocument } from "../../domain";
-import { PAPER_MODE_DURATION_MIN, PAPER_MODE_LABEL } from "../../domain";
-import { createPaper, QUIZ_QUOTA_PREVIEW } from "../../engine";
+import { PAPER_MODE_DURATION_MIN } from "../../domain";
+import { createPaper } from "../../engine";
 import { generateQuizQuestionsWithAi } from "../../ai";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { storage } from "../../stores/useLoopStore";
 import { sortChaptersByOrder } from "../../domain";
+import { useI18n } from "../../i18n";
 import { MODE_MIN_CHAPTERS, modeHint } from "./meta";
 
 const NEW_MODES: Exclude<PaperMode, "retake">[] = [
@@ -34,22 +35,9 @@ const NEW_MODES: Exclude<PaperMode, "retake">[] = [
   "final-test",
 ];
 
-/** 模式不可选原因（与 selectableModes 规则同源，供 UI 提示）。 */
-function disabledReason(m: PaperMode, n: number, total: number): string {
-  if (n === 0) return "先选择章节";
-  switch (m) {
-    case "unit-test":
-      return n === 1 ? "" : "单元测只测单章";
-    case "stage-test":
-      return n >= 2 ? "" : "阶段测需 ≥2 章";
-    case "final-test":
-      return n === total && total >= 3 ? "" : "综合测需选全本（≥3 章）";
-    default:
-      return "";
-  }
-}
-
 export default function NewQuizPage() {
+  const { m } = useI18n();
+  const np = m.quiz.newPaper;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [docs, setDocs] = useState<SourceDocument[]>([]);
@@ -65,6 +53,21 @@ export default function NewQuizPage() {
   const autoRequested = searchParams.get("mode") !== null;
   /** T12：AI 判分/出题就绪门（allowSubjective 与题面 AI 生成共用）。 */
   const aiReady = buildActiveProvider().isConfigured();
+
+  /** 模式不可选原因（与 selectableModes 规则同源，供 UI 提示）。 */
+  function disabledReason(mm: PaperMode, n: number, total: number): string {
+    if (n === 0) return np.drNone;
+    switch (mm) {
+      case "unit-test":
+        return n === 1 ? "" : np.drUnitNotOne;
+      case "stage-test":
+        return n >= 2 ? "" : np.drStageFew;
+      case "final-test":
+        return n === total && total >= 3 ? "" : np.drFinalAll;
+      default:
+        return "";
+    }
+  }
 
   // 载入全部资料 + 章节 + 学习者状态（难度自适应用）。
   useEffect(() => {
@@ -116,9 +119,9 @@ export default function NewQuizPage() {
   const selectableModes = useMemo(() => {
     const n = selected.size;
     const total = chapters.length;
-    const ok = (m: PaperMode) => {
+    const ok = (mm: PaperMode) => {
       if (n === 0) return false;
-      switch (m) {
+      switch (mm) {
         case "unit-test":
           return n === 1;
         case "stage-test":
@@ -149,16 +152,16 @@ export default function NewQuizPage() {
     const scope: PaperScope = { chapterIds: sortedSelected.map((c) => c.id), mode };
     // T12：allowSubjective 门按 Provider 实时就绪动态开（有 AI 批改才出主观题）。
     const provider = buildActiveProvider();
-    const aiReady = provider.isConfigured();
+    const aiReadyNow = provider.isConfigured();
     const local = createPaper({
       scope,
       chapters: sortedSelected,
       allChapters: chapters,
       learnerState: learner,
-      allowSubjective: aiReady,
+      allowSubjective: aiReadyNow,
     });
     let paper = local;
-    if (aiReady && local.questions.length > 0) {
+    if (aiReadyNow && local.questions.length > 0) {
       try {
         const text = docs.find((d) => d.id === docId)?.textPreview ?? "";
         if (text) {
@@ -186,15 +189,13 @@ export default function NewQuizPage() {
     return (
       <PageContainer>
         <Card className="border-dashed">
-          <p className="text-base font-semibold text-slate-900">还没有可出卷的资料</p>
-          <p className="mt-1 text-sm text-slate-500">
-            先导入一份资料并切分出章节，才能按章节出卷。
-          </p>
+          <p className="text-base font-semibold text-slate-900">{np.noDocTitle}</p>
+          <p className="mt-1 text-sm text-slate-500">{np.noDocDesc}</p>
           <button
             onClick={() => navigate("/learn?import=1")}
             className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
           >
-            去导入资料
+            {m.quiz.center.goImport}
           </button>
         </Card>
       </PageContainer>
@@ -205,7 +206,7 @@ export default function NewQuizPage() {
   if (autoRequested && mode === "unit-test" && sortedSelected.length === 1 && !autoDone) {
     return (
       <PageContainer>
-        <p className="text-sm text-slate-400">正在生成试卷…</p>
+        <p className="text-sm text-slate-400">{np.generating}</p>
       </PageContainer>
     );
   }
@@ -215,13 +216,13 @@ export default function NewQuizPage() {
   return (
     <PageContainer>
       <SectionTitle
-        title="新建试卷"
-        subtitle={mode ? undefined : "选章节与卷型，系统按要点自动出题。"}
+        title={np.title}
+        subtitle={mode ? undefined : np.subtitle}
       />
 
       {/* Step 1 · 范围 */}
       <Card className="mb-4">
-        <p className="text-sm font-semibold text-slate-800">1 · 选择范围</p>
+        <p className="text-sm font-semibold text-slate-800">{np.stepRange}</p>
         {docs.length > 1 ? (
           <div className="mt-3 flex flex-wrap gap-2">
             {docs.map((d) => (
@@ -248,7 +249,7 @@ export default function NewQuizPage() {
           <div className="mt-3">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs text-slate-400">
-                已选 {selected.size} 章 · 点卡片多选
+                {np.selectedInfo(selected.size)}
               </p>
               <button
                 onClick={() =>
@@ -257,7 +258,7 @@ export default function NewQuizPage() {
                 disabled={selected.size === chapters.length}
                 className="text-xs font-medium text-indigo-600 hover:underline disabled:opacity-40"
               >
-                全本 {chapters.length} 章
+                {np.selectAll(chapters.length)}
               </button>
             </div>
             <div className="grid max-h-72 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2">
@@ -293,7 +294,7 @@ export default function NewQuizPage() {
                     </span>
                     <span className="min-w-0 flex-1 truncate">
                       <span className="text-slate-800">
-                        {c.order}. {c.title || `第 ${c.order} 章`}
+                        {c.order}. {c.title || m.chapter.ordinal(c.order)}
                       </span>
                       {mastery > 0 ? (
                         <span className="ml-1.5 text-[11px] text-slate-400">
@@ -307,29 +308,27 @@ export default function NewQuizPage() {
             </div>
           </div>
         ) : (
-          <p className="mt-3 text-sm text-slate-400">
-            这份资料还没有章节——去 /learn 对它执行「立即切分」。
-          </p>
+          <p className="mt-3 text-sm text-slate-400">{np.noChapterOfDoc}</p>
         )}
       </Card>
 
       {/* Step 2 · 模式 */}
       <Card className="mb-4">
-        <p className="text-sm font-semibold text-slate-800">2 · 选择卷型</p>
+        <p className="text-sm font-semibold text-slate-800">{np.stepMode}</p>
         {!canNext ? (
-          <p className="mt-2 text-xs text-slate-400">先在左侧选至少一章，再选卷型。</p>
+          <p className="mt-2 text-xs text-slate-400">{np.pickChapterFirst}</p>
         ) : (
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            {NEW_MODES.map((m) => {
-              const enabled = selectableModes.includes(m);
-              const on = mode === m;
-              const label = PAPER_MODE_LABEL[m];
-              const reason = disabledReason(m, selected.size, chapters.length);
+            {NEW_MODES.map((mm) => {
+              const enabled = selectableModes.includes(mm);
+              const on = mode === mm;
+              const label = m.quiz.mode[mm];
+              const reason = disabledReason(mm, selected.size, chapters.length);
               return (
                 <button
-                  key={m}
+                  key={mm}
                   disabled={!enabled}
-                  onClick={() => setMode(on ? undefined : m)}
+                  onClick={() => setMode(on ? undefined : mm)}
                   className={`rounded-xl border p-3.5 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${
                     on
                       ? "border-indigo-400 bg-indigo-50 ring-1 ring-indigo-200"
@@ -338,16 +337,14 @@ export default function NewQuizPage() {
                 >
                   <p className="text-sm font-semibold text-slate-800">{label}</p>
                   <p className="mt-0.5 text-xs leading-5 text-slate-500">
-                    {enabled ? modeHint(m, sortedSelected.length) : reason}
+                    {enabled ? modeHint(mm, sortedSelected.length, m) : reason}
                   </p>
                   <p className="mt-1.5 text-[11px] leading-4 text-slate-400">
-                    {QUIZ_QUOTA_PREVIEW[m]}
+                    {m.quiz.quotaPreview[mm]}
                   </p>
                   {enabled ? (
                     <p className="mt-1 text-[10px] leading-3 text-slate-300">
-                      {aiReady
-                        ? "AI 就绪：题面即时生成 · 问答/应用由 AI 批改"
-                        : "未配置 AI：仅客观题（本地确定性题库）"}
+                      {aiReady ? np.aiReadyHint : np.noAiHint}
                     </p>
                   ) : null}
                 </button>
@@ -361,15 +358,15 @@ export default function NewQuizPage() {
       <div className="sticky bottom-4 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white/90 px-5 py-3.5 shadow-lg backdrop-blur">
         <p className="text-xs text-slate-500">
           {mode
-            ? `${PAPER_MODE_LABEL[mode]} · ${sortedSelected.length} 章 · 约 ${PAPER_MODE_DURATION_MIN[mode]} 分钟 · 题量按要点自动生成`
-            : "选好范围与卷型后即可出卷。"}
+            ? np.footerSummary(m.quiz.mode[mode], sortedSelected.length, PAPER_MODE_DURATION_MIN[mode])
+            : np.footerDefault}
         </p>
         <button
           disabled={!canNext || !mode || !selectableModes.includes(mode)}
           onClick={() => void createAndStart()}
           className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-40"
         >
-          生成并开始 →
+          {np.start}
         </button>
       </div>
     </PageContainer>

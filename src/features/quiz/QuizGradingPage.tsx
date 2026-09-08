@@ -37,6 +37,7 @@ import { gradeSubjectiveWithAi } from "../../ai";
 import type { SubjectiveGradeItem } from "../../ai";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { storage } from "../../stores/useLoopStore";
+import { useI18n } from "../../i18n";
 
 /** 撤销窗口（毫秒；与 useLoopStore.UNDO_WINDOW_MS 语义一致）。 */
 const UNDO_MS = 5_000;
@@ -47,6 +48,8 @@ type Phase = "loading" | "summary" | "error";
 type AiPhase = "idle" | "grading" | "done" | "failed";
 
 export default function QuizGradingPage() {
+  const { m } = useI18n();
+  const g = m.quiz.grading;
   const { paperId = "" } = useParams();
   const navigate = useNavigate();
 
@@ -104,14 +107,14 @@ export default function QuizGradingPage() {
       return;
     }
     if (found.status === "open" && !(await storage.getPaperDraft(found.id))) {
-      setMessage("这张卷还没有作答记录，无法判分。");
+      setMessage(g.noAnswer);
       setPhase("error");
       return;
     }
 
     const answers = (await storage.getPaperDraft(found.id)) ?? {};
     const learner = await storage.getLearnerState();
-    const { result: r, learnerState: nextState, graded: g } = gradeAndApply({
+    const { result: r, learnerState: nextState, graded: gradedOut } = gradeAndApply({
       paper: found,
       answers,
       learnerState: learner,
@@ -157,7 +160,7 @@ export default function QuizGradingPage() {
     await syncChapterStatus(finalResult);
 
     setResult(finalResult);
-    setGraded(g);
+    setGraded(gradedOut);
     setLeft(Math.ceil(UNDO_MS / 1_000));
     setPhase("summary");
   }
@@ -185,9 +188,9 @@ export default function QuizGradingPage() {
   if (missing) {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-base font-semibold text-slate-900">试卷不存在</p>
+        <p className="text-base font-semibold text-slate-900">{g.missingTitle}</p>
         <Link to="/quiz" className="mt-4 inline-block text-sm text-indigo-600 hover:underline">
-          ← 返回试卷中心
+          {g.backToCenter}
         </Link>
       </div>
     );
@@ -196,25 +199,24 @@ export default function QuizGradingPage() {
   if (phase === "error") {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-base font-semibold text-slate-900">无法判分</p>
+        <p className="text-base font-semibold text-slate-900">{g.cannotTitle}</p>
         <p className="mt-1 text-sm text-slate-500">{message}</p>
         <Link to="/quiz" className="mt-4 inline-block text-sm text-indigo-600 hover:underline">
-          ← 返回试卷中心
+          {g.backToCenter}
         </Link>
       </div>
     );
   }
 
   if (phase === "loading" || !paper || !graded || !result) {
+    const aiGrading = aiPhase === "grading";
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
         <p className="text-sm text-slate-500">
-          {aiPhase === "grading" ? "正在 AI 批改主观题…" : "正在判分…"}
+          {aiGrading ? g.aiLoading : g.loading}
         </p>
         <p className="mt-2 text-xs text-slate-400">
-          {aiPhase === "grading"
-            ? "客观题即时判定 · 主观题逐题 AI 批改（首次约需数秒）"
-            : "客观题即时判定 · 掌握度平滑回写中"}
+          {aiGrading ? g.aiLoadingSub : g.loadingSub}
         </p>
       </div>
     );
@@ -234,23 +236,23 @@ export default function QuizGradingPage() {
   return (
     <div className="mx-auto max-w-3xl px-8 py-10">
       <Link to="/quiz" className="text-xs text-slate-400 hover:text-indigo-600">
-        ← 试卷中心
+        {g.backToCenter}
       </Link>
 
       {/* 逐题对错（客观 ✓ / 客观 ✗ / 主观待 AI） */}
       <Card className="mt-4">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-semibold text-slate-800">判卷结果</p>
+          <p className="text-sm font-semibold text-slate-800">{g.resultTitle}</p>
           <div className="flex items-center gap-3 text-[11px] text-slate-500">
             <span className="flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> 正确
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> {g.legendCorrect}
             </span>
             <span className="flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-full bg-red-400" /> 错误
+              <span className="h-2.5 w-2.5 rounded-full bg-red-400" /> {g.legendWrong}
             </span>
             {pendingSubjective > 0 ? (
               <span className="flex items-center gap-1">
-                <span className="h-2.5 w-2.5 rounded-full bg-slate-300" /> 待 AI 批改
+                <span className="h-2.5 w-2.5 rounded-full bg-slate-300" /> {g.legendPending}
               </span>
             ) : null}
           </div>
@@ -258,18 +260,18 @@ export default function QuizGradingPage() {
 
         <div className="mt-4 flex flex-wrap gap-2">
           {paper.questions.map((q, i) => {
-            const g = graded.questions.find((x) => x.questionId === q.id);
-            if (g?.correct !== undefined) {
+            const gg = graded.questions.find((x) => x.questionId === q.id);
+            if (gg?.correct !== undefined) {
               // 客观题：本地即时判定。
               return (
                 <div
                   key={q.id}
                   title={`${i + 1}. ${q.prompt}`}
                   className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-semibold ${
-                    g.correct ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-500"
+                    gg.correct ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-500"
                   }`}
                 >
-                  {g.correct ? "✓" : "✗"}
+                  {gg.correct ? "✓" : "✗"}
                 </div>
               );
             }
@@ -280,8 +282,8 @@ export default function QuizGradingPage() {
             const unanswered = sc === 0 && !(result.subjectiveAnswers?.[q.id] ?? "").trim();
             const detail =
               sc === undefined
-                ? "待 AI 批改"
-                : `得分 ${Math.round(sc * 100)}${unanswered ? "（未作答）" : "（AI 批改）"}`;
+                ? g.pendingAI
+                : `${g.scored(Math.round(sc * 100))}${unanswered ? g.unansweredTag : g.aiTag}`;
             return (
               <div
                 key={q.id}
@@ -300,23 +302,23 @@ export default function QuizGradingPage() {
           })}
         </div>
         <p className="mt-3 text-[11px] text-slate-400">
-          选择/判断题本地即时判定
+          {g.objInstant}
           {subjectiveCount > 0
             ? pendingSubjective > 0
               ? aiPhase === "failed"
-                ? `；${pendingSubjective} 道主观题批改失败——暂按客观计分，可在报告页重试`
-                : `；${pendingSubjective} 道主观题待 AI 批改（未计入卷面）`
+                ? g.aiFailedTail(pendingSubjective)
+                : g.aiPendingTail(pendingSubjective)
               : scoredCount > 0
-                ? `；${scoredCount} 道主观题 AI 批改已并入卷面`
+                ? g.aiMergedTail(scoredCount)
                 : ""
             : ""}
-          {wrongCount > 0 ? `；错 ${wrongCount} 题` : ""}
+          {wrongCount > 0 ? g.wrongTail(wrongCount) : ""}
         </p>
       </Card>
 
       {/* 结果卡 + 撤销窗口 */}
       <Card className="mt-4 text-center">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">卷面得分</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{g.scoreEyebrow}</p>
         <p
           className={`mt-2 text-5xl font-bold tabular-nums ${
             passed ? "text-emerald-600" : near ? "text-amber-600" : "text-red-500"
@@ -325,8 +327,8 @@ export default function QuizGradingPage() {
           {score}
         </p>
         <p className="mt-1 text-sm text-slate-500">
-          满分 100 · 达标 {Math.round(MASTERY_THRESHOLD * 100)} · 掌握度按客观题证据回写
-          {scoredCount > 0 && pendingSubjective === 0 ? " · 主观分已并入卷面" : ""}
+          {g.scoreBase(Math.round(MASTERY_THRESHOLD * 100))}
+          {scoredCount > 0 && pendingSubjective === 0 ? g.subMerged : ""}
         </p>
 
         <div className="mt-6 flex items-center justify-center gap-2">
@@ -334,19 +336,17 @@ export default function QuizGradingPage() {
             onClick={() => void undo()}
             className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
           >
-            撤销判分（{left}s）
+            {g.undo(left)}
           </button>
           <button
             onClick={() => void finish()}
             className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
           >
-            查看报告 →
+            {g.viewReport}
           </button>
         </div>
         <p className="mt-3 text-xs text-slate-400">
-          {left > 0
-            ? "撤销可回滚掌握度与成绩（回到答题页续改）"
-            : "即将自动进入报告…（撤销窗口已结束）"}
+          {left > 0 ? g.undoHint : g.autoEnter}
         </p>
       </Card>
     </div>
