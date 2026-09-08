@@ -223,6 +223,40 @@ export const zh = {
       "列出文档并附带来源引用",
     ],
   },
+
+  learn: {
+    chapterBadge: {
+      "not-started": "未学",
+      learning: "学习中",
+      ready: "待测验",
+      mastered: "已掌握",
+      retake: "待补考",
+    },
+    catalog: {
+      title: "章节目录",
+      subtitleEmpty: "导入一份资料，系统会把它切分成章节，逐章学习。",
+      subtitleStats: (total: number, mastered: number, p: number) =>
+        `共 ${total} 章 · 已掌握 ${mastered} 章（达标 ${p}%）`,
+      filterAll: "全部",
+      filterUnmet: "仅未达标",
+      hint: "点击章卡片开始阅读 · 阅读完可标记学完",
+      emptyTitle: "还没有资料",
+      emptyDesc:
+        "导入第一份资料（Markdown / 笔记），系统会按标题自动切分成章节，之后就能逐章学习、逐章测验。",
+      emptyImport: "导入第一份资料",
+      doclessTitle: "资料还没有章节",
+      doclessDesc: (n: number) =>
+        `已有 ${n} 份资料未切分（旧数据或仅保存）。可对已有正文补切分，或重新导入。`,
+      chapterRange: (done: number, total: number) =>
+        `第 1–${total} 章 · 就绪 ${done}/${total}`,
+      targetLine: "达标线",
+      unmetEmpty: "没有未达标章节 🎉",
+      unsplitCount: (n: number) => `${n} 份资料尚未切分`,
+      unsplitHint: "这些资料已保存正文但还没有章节，可一键按标题切分。",
+      splitting: "切分中…",
+      splitNow: "立即切分",
+    },
+  },
 };
 
 /** 文案结构类型 = typeof zh（en.ts 以它同构约束）。 */

@@ -21,6 +21,7 @@ import { applyForgetting, splitDocument } from "../../engine";
 import { refineSplitResult } from "../../ai";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { storage } from "../../stores/useLoopStore";
+import { useI18n } from "../../i18n";
 import { chapterBadge, isChapterUnmet } from "./chapter-badge";
 import ImportModal from "./ImportModal";
 
@@ -37,6 +38,8 @@ export default function ChapterCatalogPage() {
     () => searchParams.get("import") === "1",
   );
   const [busyDocId, setBusyDocId] = useState<string | undefined>();
+  const { m } = useI18n();
+  const cat = m.learn.catalog;
 
   const load = async () => {
     const [ds, ls] = await Promise.all([
@@ -107,18 +110,22 @@ export default function ChapterCatalogPage() {
   return (
     <PageContainer>
       <SectionTitle
-        title="章节目录"
+        title={cat.title}
         subtitle={
           docs.length === 0
-            ? "导入一份资料，系统会把它切分成章节，逐章学习。"
-            : `共 ${chapterCount} 章 · 已掌握 ${masteredCount} 章（达标 ${Math.round(MASTERY_THRESHOLD * 100)}%）`
+            ? cat.subtitleEmpty
+            : cat.subtitleStats(
+                chapterCount,
+                masteredCount,
+                Math.round(MASTERY_THRESHOLD * 100),
+              )
         }
         action={
           <button
             onClick={() => setImportOpen(true)}
             className="rounded-lg bg-indigo-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
           >
-            ＋ 导入资料
+            ＋ {m.common.import}
           </button>
         }
       />
@@ -128,8 +135,8 @@ export default function ChapterCatalogPage() {
           <div className="flex rounded-lg border border-slate-200 bg-white p-0.5">
             {(
               [
-                ["all", "全部"],
-                ["unmet", "仅未达标"],
+                ["all", cat.filterAll],
+                ["unmet", cat.filterUnmet],
               ] as [Filter, string][]
             ).map(([v, label]) => (
               <button
@@ -145,31 +152,26 @@ export default function ChapterCatalogPage() {
               </button>
             ))}
           </div>
-          <p className="text-xs text-slate-400">点击章卡片开始阅读 · 阅读完可标记学完</p>
+          <p className="text-xs text-slate-400">{cat.hint}</p>
         </div>
       ) : null}
 
       {/* 空态：无任何资料 */}
       {docs.length === 0 ? (
         <Card className="border-dashed">
-          <p className="text-base font-semibold text-slate-900">还没有资料</p>
-          <p className="mt-1 text-sm text-slate-500">
-            导入第一份资料（Markdown / 笔记），系统会按标题自动切分成章节，之后就能逐章学习、
-            逐章测验。
-          </p>
+          <p className="text-base font-semibold text-slate-900">{cat.emptyTitle}</p>
+          <p className="mt-1 text-sm text-slate-500">{cat.emptyDesc}</p>
           <button
             onClick={() => setImportOpen(true)}
             className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
           >
-            导入第一份资料
+            {cat.emptyImport}
           </button>
         </Card>
       ) : visibleDocs.length === 0 ? (
         <Card className="border-dashed">
-          <p className="text-base font-semibold text-slate-900">资料还没有章节</p>
-          <p className="mt-1 text-sm text-slate-500">
-            已有 {docs.length} 份资料未切分（旧数据或仅保存）。可对已有正文补切分，或重新导入。
-          </p>
+          <p className="text-base font-semibold text-slate-900">{cat.doclessTitle}</p>
+          <p className="mt-1 text-sm text-slate-500">{cat.doclessDesc(docs.length)}</p>
         </Card>
       ) : (
         <div className="space-y-6">
@@ -186,14 +188,14 @@ export default function ChapterCatalogPage() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-slate-800">{doc.title}</p>
                     <p className="text-xs text-slate-400">
-                      第 1–{chapters.length} 章 · 就绪 {docMastered}/{chapters.length}
+                      {cat.chapterRange(docMastered, chapters.length)}
                     </p>
                   </div>
                   <div className="w-40 shrink-0">
                     <Bar
                       value={chapters.length > 0 ? docMastered / chapters.length : 0}
                       target={MASTERY_THRESHOLD}
-                      targetLabel={`达标 ${Math.round(MASTERY_THRESHOLD * 100)}%`}
+                      targetLabel={cat.targetLine}
                     />
                   </div>
                 </div>
@@ -201,13 +203,13 @@ export default function ChapterCatalogPage() {
                 {/* 章卡片 */}
                 {shown.length === 0 ? (
                   <p className="rounded-xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-400">
-                    没有未达标章节 🎉
+                    {cat.unmetEmpty}
                   </p>
                 ) : (
                   <div className="grid gap-2 sm:grid-cols-2">
                     {shown.map((chapter) => {
                       const mastery = masteryOf(chapter.id) ?? 0;
-                      const badge = chapterBadge(chapter.status, masteryOf(chapter.id));
+                      const badge = chapterBadge(chapter.status, masteryOf(chapter.id), m);
                       return (
                         <button
                           key={chapter.id}
@@ -219,7 +221,7 @@ export default function ChapterCatalogPage() {
                               {chapter.order}
                             </span>
                             <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">
-                              {chapter.title || `第 ${chapter.order} 章`}
+                              {chapter.title || m.chapter.ordinal(chapter.order)}
                             </span>
                             <span
                               className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${badge.cls}`}
@@ -229,7 +231,7 @@ export default function ChapterCatalogPage() {
                           </div>
                           <div className="mt-2.5 flex items-center gap-2 pl-8">
                             <div className="flex-1">
-                              <Bar value={mastery} target={MASTERY_THRESHOLD} targetLabel="达标线" />
+                              <Bar value={mastery} target={MASTERY_THRESHOLD} targetLabel={cat.targetLine} />
                             </div>
                             <span className="w-9 shrink-0 text-right text-xs tabular-nums text-slate-400">
                               {Math.round(mastery * 100)}%
@@ -250,8 +252,8 @@ export default function ChapterCatalogPage() {
       {doclessDocs.length > 0 ? (
         <Card className="mt-6 border-dashed">
           <SectionTitle
-            title={`${doclessDocs.length} 份资料尚未切分`}
-            subtitle="这些资料已保存正文但还没有章节，可一键按标题切分。"
+            title={cat.unsplitCount(doclessDocs.length)}
+            subtitle={cat.unsplitHint}
           />
           <div className="flex flex-wrap gap-2">
             {doclessDocs.map((d) => (
@@ -265,7 +267,7 @@ export default function ChapterCatalogPage() {
                   disabled={busyDocId === d.id || !d.textPreview}
                   className="rounded-md bg-white px-2 py-0.5 text-xs font-medium text-indigo-600 ring-1 ring-slate-200 hover:bg-indigo-50 disabled:opacity-40"
                 >
-                  {busyDocId === d.id ? "切分中…" : "立即切分"}
+                  {busyDocId === d.id ? cat.splitting : cat.splitNow}
                 </button>
               </div>
             ))}

@@ -221,4 +221,38 @@ export const en: Messages = {
       "List documents with source references",
     ],
   },
+
+  learn: {
+    chapterBadge: {
+      "not-started": "Not started",
+      learning: "Learning",
+      ready: "Quiz ready",
+      mastered: "Mastered",
+      retake: "Retake needed",
+    },
+    catalog: {
+      title: "Chapter catalog",
+      subtitleEmpty: "Import a document and the system will split it into chapters to learn one by one.",
+      subtitleStats: (total: number, mastered: number, p: number) =>
+        `${total} chapters · ${mastered} mastered (target ${p}%)`,
+      filterAll: "All",
+      filterUnmet: "Not ready",
+      hint: "Click a chapter to start reading · mark it learned when done",
+      emptyTitle: "No material yet",
+      emptyDesc:
+        "Import your first document (Markdown / notes) and the system will split it into chapters by heading — then learn and quiz chapter by chapter.",
+      emptyImport: "Import your first document",
+      doclessTitle: "Material has no chapters",
+      doclessDesc: (n: number) =>
+        `${n} document(s) not split yet (legacy or saved only). Split their text now, or re-import.`,
+      chapterRange: (done: number, total: number) =>
+        `Chapters 1–${total} · ${done}/${total} ready`,
+      targetLine: "Target line",
+      unmetEmpty: "No unmet chapters 🎉",
+      unsplitCount: (n: number) => `${n} document(s) not split yet`,
+      unsplitHint: "These documents have saved text but no chapters — split by heading in one click.",
+      splitting: "Splitting…",
+      splitNow: "Split now",
+    },
+  },
 };
