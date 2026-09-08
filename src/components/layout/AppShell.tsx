@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import type { ReactNode } from "react";
 import CommandPalette from "../../components/CommandPalette";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useI18n, type Messages } from "../../i18n";
 
 interface NavItem {
   to: string;
@@ -12,52 +13,55 @@ interface NavItem {
 
 /**
  * 导航分组（P2-4 / S6）：按「做什么」分组做视觉分隔，不改路由路径。
- * 学习空间 / 职业在 Pre-MVP 视觉降权但保留入口。
+ * 学习空间 / 职业在 Pre-MVP 视觉降权但保留入口。文案走 i18n 字典。
  */
-const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
-  {
-    title: "学习闭环",
-    items: [{ to: "/", label: "首页", hint: "今天做哪件事" }],
-  },
-  {
-    title: "开始学习",
-    items: [
-      { to: "/learn", label: "学习", hint: "章节目录与阅读" },
-      { to: "/plan", label: "计划", hint: "章级学习队列" },
-      { to: "/quiz", label: "测评", hint: "试卷 · 出卷 · 答题" },
-    ],
-  },
-  {
-    title: "内容",
-    items: [
-      { to: "/spaces", label: "学习空间", hint: "资料与空间" },
-    ],
-  },
-  {
-    title: "规划",
-    items: [{ to: "/career", label: "职业", hint: "目标就绪度" }],
-  },
-  {
-    title: "系统",
-    items: [{ to: "/settings", label: "设置", hint: "AI 服务" }],
-  },
-];
+function buildNavGroups(nav: Messages["nav"]) {
+  const groups: { title: string; items: NavItem[] }[] = [
+    {
+      title: nav.groupLearnLoop,
+      items: [{ to: "/", label: nav.home.label, hint: nav.home.hint }],
+    },
+    {
+      title: nav.groupStart,
+      items: [
+        { to: "/learn", label: nav.learn.label, hint: nav.learn.hint },
+        { to: "/plan", label: nav.plan.label, hint: nav.plan.hint },
+        { to: "/quiz", label: nav.quiz.label, hint: nav.quiz.hint },
+      ],
+    },
+    {
+      title: nav.groupContent,
+      items: [{ to: "/spaces", label: nav.spaces.label, hint: nav.spaces.hint }],
+    },
+    {
+      title: nav.groupPlan,
+      items: [{ to: "/career", label: nav.career.label, hint: nav.career.hint }],
+    },
+    {
+      title: nav.groupSystem,
+      items: [{ to: "/settings", label: nav.settings.label, hint: nav.settings.hint }],
+    },
+  ];
+  return groups;
+}
 
 export default function AppShell() {
   const providerReady = useSettingsStore((s) => s.providerReady);
+  const { m } = useI18n();
+  const groups = buildNavGroups(m.nav);
 
   return (
     <div className="flex h-full min-h-screen bg-slate-50 text-slate-900">
       <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
         <div className="border-b border-slate-100 px-5 py-4">
           <p className="text-sm font-semibold tracking-tight text-slate-900">
-            个人学习 OS
+            {m.nav.brand}
           </p>
-          <p className="mt-0.5 text-xs text-slate-400">本地优先 · 学习闭环</p>
+          <p className="mt-0.5 text-xs text-slate-400">{m.nav.brandSub}</p>
         </div>
         <nav className="flex-1 space-y-4 overflow-y-auto p-3">
-          {NAV_GROUPS.map((group) => (
-            <div key={group.title}>
+          {groups.map((group, gi) => (
+            <div key={gi}>
               <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                 {group.title}
               </p>
@@ -86,9 +90,9 @@ export default function AppShell() {
           ))}
         </nav>
         <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2.5 text-xs text-slate-400">
-          <span>⌘K 快速操作</span>
+          <span>{m.nav.footerHint}</span>
           <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
-            Pre-MVP
+            {m.nav.footerBadge}
           </span>
         </div>
       </aside>
@@ -107,6 +111,7 @@ function ShellNavContent({
   item: NavItem;
   readyDot?: boolean;
 }) {
+  const { m } = useI18n();
   return (
     <span className="flex items-center justify-between gap-2">
       <span className="flex flex-col">
@@ -118,7 +123,7 @@ function ShellNavContent({
       {readyDot ? (
         <span
           className="h-2 w-2 shrink-0 rounded-full bg-emerald-500"
-          title="AI Provider 已就绪"
+          title={m.nav.readyTooltip}
         />
       ) : null}
     </span>

@@ -5,6 +5,8 @@ import {
   buildActiveProvider,
   useSettingsStore,
 } from "../../stores/useSettingsStore";
+import { useLangStore } from "../../stores/useLangStore";
+import { useI18n } from "../../i18n";
 import type { ActiveSource } from "../../ai/active";
 import { labelOfLocalModel, labelOfProvider } from "../../ai/presets";
 import { testConnection } from "../../ai/connection";
@@ -44,6 +46,9 @@ export default function SettingsPage() {
   const saved = useSettingsStore();
   const saveActive = useSettingsStore((s) => s.saveActive);
   const clearActive = useSettingsStore((s) => s.clearActive);
+  const langMode = useLangStore((s) => s.mode);
+  const setLangMode = useLangStore((s) => s.setMode);
+  const { lang, m } = useI18n();
 
   const [tab, setTab] = useState<Tab>(
     saved.active?.source === "api" ? "api" : "local",
@@ -201,6 +206,38 @@ export default function SettingsPage() {
         </Card>
 
         <div className="space-y-4">
+          <Card>
+            <h3 className="mb-3 text-sm font-semibold text-slate-700">
+              {m.settings.lang.title}
+            </h3>
+            <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-100/60 p-1">
+              {(
+                [
+                  ["auto", m.settings.lang.auto],
+                  ["zh", m.settings.lang.zh],
+                  ["en", m.settings.lang.en],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  onClick={() => setLangMode(value)}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    langMode === value
+                      ? "bg-white text-indigo-700 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+              {langMode === "auto"
+                ? `${m.settings.lang.autoHint} ${m.settings.lang.current(lang)}`
+                : m.settings.lang.current(lang)}
+            </p>
+          </Card>
+
           <Card>
             <h3 className="mb-3 text-sm font-semibold text-slate-700">AI 状态</h3>
             <div className="flex flex-wrap items-center gap-2">

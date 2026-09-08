@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLoopStore, storage } from "../stores/useLoopStore";
 import { useSessionStore, type DoneRecord } from "../stores/useSessionStore";
-import { actionKindLabel, unitTitle } from "../features/units";
+import { unitTitle } from "../features/units";
 import type { Chapter } from "../domain";
+import { useI18n, type Messages } from "../i18n";
 import {
   actionPath,
   chapterDisplayTitle,
@@ -17,30 +18,29 @@ import {
  * 首条「行动」恒在顶部——不知道做什么时，⌘K 后直接回车即可启动今日闭环。
  */
 
+type SectionKey = "action" | "jump" | "recent";
+
 interface Command {
   id: string;
   label: string;
   hint?: string;
-  section: "行动" | "跳转" | "最近";
+  section: SectionKey;
   run: () => void;
   search: string;
 }
 
-/** 跳转项与侧边栏一一对应（不改路由）。 */
-const NAV_ENTRIES: { to: string; label: string; hint?: string }[] = [
-  { to: "/", label: "首页", hint: "今天做哪件事" },
-  { to: "/learn", label: "学习", hint: "章节目录与阅读" },
-  { to: "/plan", label: "计划", hint: "章级学习队列" },
-  { to: "/quiz", label: "测评", hint: "试卷 · 出卷 · 答题" },
-  { to: "/spaces", label: "学习空间", hint: "资料与空间" },
-  { to: "/career", label: "职业", hint: "目标就绪度" },
-  { to: "/settings", label: "设置", hint: "AI 服务" },
-];
+const SECTION_ORDER: SectionKey[] = ["action", "jump", "recent"];
 
-const REVIEW_LABEL: Record<DoneRecord["mode"], string> = {
-  review: "复习",
-  assessment: "测评",
-};
+/** 跳转项与侧边栏一一对应（不改路由；label/hint 取自当前语言字典）。 */
+const NAV_ENTRIES = [
+  "/",
+  "/learn",
+  "/plan",
+  "/quiz",
+  "/spaces",
+  "/career",
+  "/settings",
+] as const;
 
 export default function CommandPalette() {
   const [open, setOpen] = useState(false);
@@ -48,6 +48,7 @@ export default function CommandPalette() {
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const { m } = useI18n();
 
   const snapshot = useLoopStore((s) => s.snapshot);
   const chapterPlan = useLoopStore((s) => s.chapterPlan);
@@ -96,6 +97,28 @@ export default function CommandPalette() {
 
   const commands = useMemo<Command[]>(() => {
     const list: Command[] = [];
+    const navOf = (to: (typeof NAV_ENTRIES)[number]): string => {
+      switch (to) {
+        case "/": return m.nav.home.label;
+        case "/learn": return m.nav.learn.label;
+        case "/plan": return m.nav.plan.label;
+        case "/quiz": return m.nav.quiz.label;
+        case "/spaces": return m.nav.spaces.label;
+        case "/career": return m.nav.career.label;
+        case "/settings": return m.nav.settings.label;
+      }
+    };
+    const hintOf = (to: (typeof NAV_ENTRIES)[number]): string => {
+      switch (to) {
+        case "/": return m.nav.home.hint;
+        case "/learn": return m.nav.learn.hint;
+        case "/plan": return m.nav.plan.hint;
+        case "/quiz": return m.nav.quiz.hint;
+        case "/spaces": return m.nav.spaces.hint;
+        case "/career": return m.nav.career.hint;
+        case "/settings": return m.nav.settings.hint;
+      }
+    };
 
     // ── 行动 ──────────────────────────────────────────────
     // 今日主行动 = 章级计划头项（V2，T8）；补考需先就地生成补考卷。
@@ -105,12 +128,13 @@ export default function CommandPalette() {
       const title = chapter
         ? chapterDisplayTitle(chapter, chapterPlan?.docTitleOf[chapter.id])
         : next.unitId;
+      const actionLabel = m.units.action[next.kind];
       list.push({
         id: "act-next",
-        label: `开始今天的下一步 · ${actionKindLabel(next.kind)} ${title}`,
-        hint: "启动今日闭环",
-        section: "行动",
-        search: "开始 下一步 学习 复习 测评 今天 " + title,
+        label: `${m.cmd.startNext} · ${actionLabel} ${title}`,
+        hint: m.cmd.startNextHint,
+        section: "action",
+        search: `${m.cmd.searchWords.start} ${actionLabel} ${title}`,
         run: () => {
           void (async () => {
             if (!chapterPlan) return;
@@ -139,31 +163,32 @@ export default function CommandPalette() {
     if (chapterPlan && chapterPlan.total > 0 && !next) {
       list.push({
         id: "act-quiz",
-        label: "出综合测 · 全部章节已达标",
-        hint: "巩固章就绪度",
-        section: "行动",
-        search: "测评 测验 试卷 综合 达标 巩固",
+        label: m.cmd.quizAll,
+        hint: m.cmd.quizAllHint,
+        section: "action",
+        search: m.cmd.searchWords.quiz,
         run: () => navigate("/quiz/new"),
       });
     }
     list.push({
       id: "act-import",
-      label: "导入资料",
-      hint: "粘贴 → 切分章节 → 逐章学习",
-      section: "行动",
-      search: "导入 资料 粘贴 章节 学习",
+      label: m.cmd.import,
+      hint: m.cmd.importHint,
+      section: "action",
+      search: m.cmd.searchWords.import,
       run: () => navigate("/learn?import=1"),
     });
 
     // ── 跳转 ──────────────────────────────────────────────
-    for (const nav of NAV_ENTRIES) {
+    for (const to of NAV_ENTRIES) {
+      const label = navOf(to);
       list.push({
-        id: `nav-${nav.to}`,
-        label: nav.label,
-        hint: nav.hint,
-        section: "跳转",
-        search: nav.label + " " + (nav.hint ?? "") + " 页面 打开",
-        run: () => navigate(nav.to),
+        id: `nav-${to}`,
+        label,
+        hint: hintOf(to),
+        section: "jump",
+        search: `${label} ${hintOf(to)} ${m.cmd.searchWords.nav}`,
+        run: () => navigate(to),
       });
     }
 
@@ -171,12 +196,12 @@ export default function CommandPalette() {
     const recentList = [...recent]
       .sort((a, b) => b.at - a.at)
       .slice(0, 3)
-      .map<Command>((r) => ({
+      .map<Command>((r: DoneRecord) => ({
         id: `recent-${r.unitId}`,
-        label: `${REVIEW_LABEL[r.mode]} · ${unitTitle(r.unitId)}`,
-        hint: ago(r.at),
-        section: "最近",
-        search: unitTitle(r.unitId) + " 最近 继续",
+        label: `${m.units.action[r.mode]} · ${unitTitle(r.unitId)}`,
+        hint: agoText(m, r.at),
+        section: "recent",
+        search: `${unitTitle(r.unitId)} ${m.cmd.searchWords.recent}`,
         run: () =>
           navigate(
             r.mode === "assessment"
@@ -187,7 +212,7 @@ export default function CommandPalette() {
     list.push(...recentList);
 
     return list;
-  }, [chapterPlan, chapterIndex, recent, refresh, navigate]);
+  }, [chapterPlan, chapterIndex, recent, refresh, navigate, m]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -196,11 +221,12 @@ export default function CommandPalette() {
   }, [commands, query]);
 
   const sections = useMemo(() => {
-    const order: Command["section"][] = ["行动", "跳转", "最近"];
-    return order
-      .map((title) => ({ title, items: visible.filter((c) => c.section === title) }))
-      .filter((s) => s.items.length > 0);
-  }, [visible]);
+    return SECTION_ORDER.map((key) => ({
+      key,
+      title: m.cmd.section[key],
+      items: visible.filter((c) => c.section === key),
+    })).filter((s) => s.items.length > 0);
+  }, [visible, m]);
 
   if (!open) return null;
 
@@ -252,9 +278,9 @@ export default function CommandPalette() {
               setActive(0);
             }}
             onKeyDown={onKeyDown}
-            placeholder="跳转或执行…"
+            placeholder={m.cmd.placeholder}
             className="flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
-            aria-label="命令面板搜索"
+            aria-label={m.cmd.searchAria}
             autoFocus
             spellCheck={false}
           />
@@ -266,11 +292,11 @@ export default function CommandPalette() {
         <div className="max-h-[46vh] overflow-y-auto py-2">
           {sections.length === 0 ? (
             <p className="px-4 py-6 text-center text-sm text-slate-400">
-              没有匹配「{query}」的命令
+              {m.cmd.emptyNoMatch(query)}
             </p>
           ) : (
             sections.map((section) => (
-              <div key={section.title}>
+              <div key={section.key}>
                 <p className="px-4 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                   {section.title}
                 </p>
@@ -293,7 +319,7 @@ export default function CommandPalette() {
                       }`}
                     >
                       <span className="min-w-0 truncate">
-                        {cmd.section === "行动" ? "▶ " : ""}
+                        {cmd.section === "action" ? "▶ " : ""}
                         {cmd.label}
                       </span>
                       {cmd.hint ? (
@@ -313,12 +339,12 @@ export default function CommandPalette() {
   );
 }
 
-/** 「2 分钟前」样式的相对时间。 */
-function ago(at: number): string {
+/** 相对时间（「2 分钟前」样式），文案走字典（zh/en 各自函数叶子）。 */
+function agoText(m: Messages, at: number): string {
   const diff = Math.max(0, Date.now() - at);
   const min = Math.floor(diff / 60_000);
-  if (min < 1) return "刚刚";
-  if (min < 60) return `${min} 分钟前`;
+  if (min < 1) return m.cmd.time.now;
+  if (min < 60) return m.cmd.time.minAgo(min);
   const hour = Math.floor(min / 60);
-  return `${hour} 小时前`;
+  return m.cmd.time.hourAgo(hour);
 }

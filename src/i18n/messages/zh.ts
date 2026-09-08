@@ -47,6 +47,73 @@ export const zh = {
     footerBadge: "Pre-MVP",
     readyTooltip: "AI Provider 已就绪",
   },
+
+  units: {
+    kind: {
+      concept: "概念",
+      skill: "技能",
+      fact: "事实",
+      procedure: "流程",
+      principle: "原理",
+    },
+    action: {
+      learn: "学习",
+      review: "复习",
+      practice: "练习",
+      remediation: "补救",
+      assessment: "测评",
+      explore: "探索",
+      "learn-chapter": "学本章",
+      "chapter-quiz": "测本章",
+      "retake-quiz": "补考",
+      "review-points": "复习要点",
+    },
+    goalType: {
+      career: "职业",
+      study: "学习",
+      exam: "考试",
+      personal: "个人",
+      research: "研究",
+      project: "项目",
+    },
+    importance: { high: "高", medium: "中", low: "低" },
+  },
+
+  cmd: {
+    placeholder: "跳转或执行…",
+    searchAria: "命令面板搜索",
+    section: { action: "行动", jump: "跳转", recent: "最近" },
+    startNext: "开始今天的下一步",
+    startNextHint: "启动今日闭环",
+    quizAll: "出综合测 · 全部章节已达标",
+    quizAllHint: "巩固章就绪度",
+    import: "导入资料",
+    importHint: "粘贴 → 切分章节 → 逐章学习",
+    emptyNoMatch: (q: string) => `没有匹配「${q}」的命令`,
+    searchWords: {
+      start: "开始 下一步 学习 复习 测评 今天 启动",
+      quiz: "测评 综合 试卷 达标 巩固",
+      import: "导入 资料 粘贴 章节 学习",
+      nav: "页面 打开",
+      recent: "最近 继续",
+    },
+    time: {
+      now: "刚刚",
+      minAgo: (n: number) => `${n} 分钟前`,
+      hourAgo: (n: number) => `${n} 小时前`,
+    },
+  },
+
+  settings: {
+    lang: {
+      title: "界面语言",
+      auto: "跟随系统",
+      zh: "中文",
+      en: "English",
+      autoHint: "自动按系统语言选择；手动选择后始终使用该语言。",
+      current: (lang: "zh" | "en") => `当前生效：${lang === "zh" ? "中文" : "English"}`,
+    },
+  },
 };
 
 /** 文案结构类型 = typeof zh（en.ts 以它同构约束）。 */
