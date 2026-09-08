@@ -254,5 +254,108 @@ export const en: Messages = {
       splitting: "Splitting…",
       splitNow: "Split now",
     },
+    import: {
+      title: "Import document",
+      subtitle:
+        "Paste Markdown / notes — it will be split into chapters by heading, then learn chapter by chapter.",
+      formatNote: "Notes",
+      formatWeb: "Web",
+      formatTxt: "Plain text",
+      stepSource: (n: number) => `${n} · Source`,
+      stepPreview: (n: number) => `${n} · Split preview`,
+      titlePlaceholder: "Name this document, e.g. “RAG System Design”",
+      bodyPlaceholder:
+        "Paste your notes / Markdown here…\nUse # / ## for chapters (e.g. “# Chapter 1: Embedding”); plain text is auto-clustered by blank lines.",
+      format: "Format",
+      saveOnly: "Save document only",
+      unnamedDoc: "Untitled document",
+      previewHead: (title: string, n: number) =>
+        `“${title}” split into ${n} chapter(s)`,
+      refinedBadge: "AI refined",
+      noSplitWarn:
+        "No chapters detected — content may lack headings or paragraphs. Add some and retry.",
+      tooShort:
+        "Too short or no headings/paragraphs, so no chapters were split. The document is saved — paste fuller content and retry.",
+      splitFail: (msg: string) => `Split failed: ${msg}`,
+      savedDoc: (title: string) => `Document “${title}” saved to local library.`,
+      startLearning: (n: number) => `Start learning → (${n} chapters)`,
+      doneSaved: "Done (document saved)",
+      busy: "Splitting chapters…",
+      saveSplit: "Save & split chapters",
+    },
+    reader: {
+      missingTitle: "Chapter not found",
+      missingDesc: "It may have been removed, or belongs to another document.",
+      backToCatalog: "← Back to catalog",
+      backCatalogShort: "← Catalog",
+      opening: "Opening chapter…",
+      masteryEyebrow: "Chapter mastery",
+      masteryFormula:
+        "Updated by quizzes as 0.65 × paper score + 0.35 × history; self-rating only reschedules review, it never moves mastery.",
+      pointsEyebrow: "Key points",
+      noPoints: "No key points yet.",
+      graphEyebrow: "Concept graph",
+      graphDesc:
+        "AI splits this chapter into concepts you can memorize and review individually — mastery at a glance.",
+      openGraph: "Open chapter concept graph →",
+      dueHint:
+        "Review is due — re-read the key points, tap “Reviewed” and the next review is rescheduled automatically.",
+      readyHint: "Marked as learned — next step is “Quiz chapter” to check mastery.",
+      readingHint: "Mark the chapter as learned after reading to unlock its quiz.",
+      directQuiz: (p: number) => `✓ At ${p}%, take a comprehensive quiz`,
+      markReviewed: "✓ Reviewed · reschedule",
+      goQuiz: "Quiz chapter →",
+      markDone: "Mark learned ✓",
+      doneLabel: "Marked learned",
+      noSnapshot:
+        "This document has no saved body snapshot (empty textPreview), so the original text can't be shown.",
+    },
+  },
+
+  knowledge: {
+    rel: {
+      prerequisite: "Prerequisite",
+      related: "Related",
+      parent: "Parent",
+      child: "Child",
+      example: "Example",
+      contrast: "Contrast",
+      application: "Application",
+      source: "Source",
+    },
+    hintPill: "Drag to pan · scroll to zoom · click to focus · double-click for source",
+    masteryOf: (p: number, degree: number) =>
+      `Mastery ${p}% · ${degree} relation(s)`,
+    review: "Review ▶",
+    viewSource: "View source",
+    noSummary: "No summary for this unit yet.",
+    gapNote: "This unit is a gap of the current goal.",
+    relationsTitle: "Relations",
+    noRelations: "No modeled relations for this unit yet.",
+    focusEyebrow: "Focus",
+    focusPlaceholder:
+      "Click a node to inspect its detail and relations; double-click a sourced unit to view the original text.",
+    chapterGraph: {
+      missingTitle: "Chapter not found",
+      missingDesc: "It may have been removed, or belongs to another document.",
+      backToCatalog: "← Back to catalog",
+      opening: "Opening concept graph…",
+      backToReader: "← Back to chapter",
+      crumbSuffix: "Concept graph",
+      extractBusy: "Extracting…",
+      reExtract: "Re-extract concepts",
+      extract: "Extract chapter concepts",
+      notReady:
+        "AI not ready — configure a model in Settings → AI Model Center before extracting concepts.",
+      noBody:
+        "This document has no saved body snapshot, so chapter concepts can't be extracted.",
+      doneMsg: (units: number, rels: number) =>
+        `Extracted ${units} concept(s) · ${rels} relation(s)`,
+      hint: "Concepts are extracted by AI from the chapter body; self-rated reviews are the mastery evidence (no papers at concept level). Click a node to focus · double-click for the chapter source · gap concepts (<80%) pulse indigo.",
+      emptyTitle: "No concept graph for this chapter yet",
+      emptyDesc:
+        "Once AI is ready, tap “Extract chapter concepts” in the top-right to split this chapter into individually memorable and reviewable concepts (with prerequisite/related links). Without AI configured the concept layer stays empty — nothing is fabricated.",
+      goConfigure: "Configure AI →",
+    },
   },
 };

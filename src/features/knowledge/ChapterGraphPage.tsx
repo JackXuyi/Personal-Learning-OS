@@ -25,9 +25,12 @@ import { extractChapterConceptsWithAi } from "../../ai";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { replaceChapterConcepts, subgraphOf } from "../../engine/graph-engine";
 import { storage } from "../../stores/useLoopStore";
+import { useI18n } from "../../i18n";
 import GraphView from "./GraphView";
 
 export default function ChapterGraphPage() {
+  const { m } = useI18n();
+  const t = m.knowledge.chapterGraph;
   const { chapterId = "" } = useParams();
   const navigate = useNavigate();
 
@@ -64,8 +67,8 @@ export default function ChapterGraphPage() {
 
   const masteryByUnit = useMemo(() => {
     const out: Record<string, number> = {};
-    for (const [id, m] of Object.entries(learner?.byUnit ?? {})) {
-      out[id] = m.mastery;
+    for (const [id, mm] of Object.entries(learner?.byUnit ?? {})) {
+      out[id] = mm.mastery;
     }
     return out;
   }, [learner]);
@@ -82,18 +85,18 @@ export default function ChapterGraphPage() {
     setError(undefined);
     const provider = buildActiveProvider();
     if (!provider.isConfigured()) {
-      setError("AI 未就绪——请先到「设置 → AI 模型中心」配置模型后再提炼概念。");
+      setError(t.notReady);
       return;
     }
     const body = doc.textPreview?.slice(chapter.contentRef.start, chapter.contentRef.end) ?? "";
     if (body.trim().length === 0) {
-      setError("这份资料没有保存正文快照，无法提炼本章概念。");
+      setError(t.noBody);
       return;
     }
     setExtracting(true);
     try {
       const next = await extractChapterConceptsWithAi(provider, {
-        chapterTitle: chapter.title || `第 ${chapter.order} 章`,
+        chapterTitle: chapter.title || m.chapter.ordinal(chapter.order),
         text: body,
       });
       // 落库：以最新 storage 为准做 replace（图）→ 更新章 unitIds。
@@ -109,7 +112,7 @@ export default function ChapterGraphPage() {
       await storage.saveChapters(doc.id, updated);
       setGraph(ng);
       setChapter(updated.find((c) => c.id === chapter.id));
-      setMessage(`本章提炼出 ${next.units.length} 个概念 · ${next.relations.length} 条关系`);
+      setMessage(t.doneMsg(next.units.length, next.relations.length));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -120,10 +123,10 @@ export default function ChapterGraphPage() {
   if (missing) {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-base font-semibold text-slate-900">章节不存在</p>
-        <p className="mt-1 text-sm text-slate-500">它可能已被移除，或来自另一份资料。</p>
+        <p className="text-base font-semibold text-slate-900">{t.missingTitle}</p>
+        <p className="mt-1 text-sm text-slate-500">{t.missingDesc}</p>
         <Link to="/learn" className="mt-4 inline-block text-sm text-indigo-600 hover:underline">
-          ← 返回章节目录
+          {t.backToCatalog}
         </Link>
       </div>
     );
@@ -132,7 +135,7 @@ export default function ChapterGraphPage() {
   if (!chapter || !graph || !doc) {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-sm text-slate-500">正在打开概念图谱…</p>
+        <p className="text-sm text-slate-500">{t.opening}</p>
       </div>
     );
   }
@@ -145,10 +148,10 @@ export default function ChapterGraphPage() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <Link to={`/learn/${chapter.id}`} className="text-xs text-slate-400 hover:text-indigo-600">
-            ← 返回本章阅读
+            {t.backToReader}
           </Link>
           <p className="mt-0.5 truncate text-xs text-slate-400">
-            {doc.title} · 第 {chapter.order} 章 · 概念图谱
+            {doc.title} · {m.chapter.ordinal(chapter.order)} · {t.crumbSuffix}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -167,21 +170,14 @@ export default function ChapterGraphPage() {
             disabled={extracting}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
           >
-            {extracting
-              ? "提炼中…"
-              : hasConcepts
-                ? "重新提炼概念"
-                : "提炼本章概念"}
+            {extracting ? t.extractBusy : hasConcepts ? t.reExtract : t.extract}
           </button>
         </div>
       </div>
 
       {hasConcepts ? (
         <>
-          <p className="mb-3 text-xs text-slate-400">
-            概念由 AI 从本章正文提炼，自评复习即掌握度证据（概念层无卷面）。
-            单击节点聚焦 · 双击看本章原文 · 缺口概念（&lt;80%）带 indigo 脉冲。
-          </p>
+          <p className="mb-3 text-xs text-slate-400">{t.hint}</p>
           <GraphView
             graph={chapterUnits}
             masteryByUnit={masteryByUnit}
@@ -194,19 +190,16 @@ export default function ChapterGraphPage() {
         </>
       ) : (
         <Card className="p-10 text-center">
-          <p className="text-base font-semibold text-slate-800">
-            本章还没有概念图谱
-          </p>
+          <p className="text-base font-semibold text-slate-800">{t.emptyTitle}</p>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-            AI 就绪后点击右上角「提炼本章概念」，把这一章拆成可单独记忆与复习的
-            知识概念（含前置/相关关系）。未配置 AI 时概念层保持空白，不凭空生成。
+            {t.emptyDesc}
           </p>
           {buildActiveProvider().isConfigured() ? null : (
             <Link
               to="/settings"
               className="mt-4 inline-block rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
             >
-              去配置 AI →
+              {t.goConfigure}
             </Link>
           )}
         </Card>

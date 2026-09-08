@@ -17,9 +17,12 @@ import { MASTERY_THRESHOLD, isDueReview } from "../../domain";
 import type { Chapter, LearnerState, SourceDocument } from "../../domain";
 import { applyKeyPointRating } from "../../engine";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
+import { useI18n } from "../../i18n";
 import { chapterBadge } from "./chapter-badge";
 
 export default function ChapterReaderPage() {
+  const { m } = useI18n();
+  const t = m.learn.reader;
   const { chapterId = "" } = useParams();
   const navigate = useNavigate();
   const [chapter, setChapter] = useState<Chapter | undefined>();
@@ -57,7 +60,7 @@ export default function ChapterReaderPage() {
   }, [chapterId]);
 
   const mastery = chapter ? (learner?.byUnit[chapter.id]?.mastery ?? 0) : 0;
-  const badge = chapter ? chapterBadge(chapter.status, mastery) : undefined;
+  const badge = chapter ? chapterBadge(chapter.status, mastery, m) : undefined;
   /** 到期复习（T9）：已达标且 nextReviewAt 已过 → 引导「复习完成」顺延。 */
   const dueReview = !!chapter && !!learner && isDueReview(learner.byUnit[chapter.id], Date.now());
 
@@ -85,10 +88,10 @@ export default function ChapterReaderPage() {
   if (missing) {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-base font-semibold text-slate-900">章节不存在</p>
-        <p className="mt-1 text-sm text-slate-500">它可能已被移除，或来自另一份资料。</p>
+        <p className="text-base font-semibold text-slate-900">{t.missingTitle}</p>
+        <p className="mt-1 text-sm text-slate-500">{t.missingDesc}</p>
         <Link to="/learn" className="mt-4 inline-block text-sm text-indigo-600 hover:underline">
-          ← 返回章节目录
+          {t.backToCatalog}
         </Link>
       </div>
     );
@@ -97,7 +100,7 @@ export default function ChapterReaderPage() {
   if (!chapter || !doc) {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-sm text-slate-500">正在打开章节…</p>
+        <p className="text-sm text-slate-500">{t.opening}</p>
       </div>
     );
   }
@@ -110,10 +113,10 @@ export default function ChapterReaderPage() {
       <div className="mb-4 flex items-center justify-between gap-4">
         <div className="min-w-0">
           <Link to="/learn" className="text-xs text-slate-400 hover:text-indigo-600">
-            ← 章节目录
+            {t.backCatalogShort}
           </Link>
           <p className="mt-0.5 truncate text-xs text-slate-400">
-            {doc.title} · 第 {chapter.order} 章
+            {doc.title} · {m.chapter.ordinal(chapter.order)}
           </p>
         </div>
         {badge ? (
@@ -127,15 +130,13 @@ export default function ChapterReaderPage() {
         {/* 左：章正文 */}
         <Card className="px-8 py-7">
           <h1 className="text-xl font-semibold tracking-tight text-slate-900">
-            {chapter.title || `第 ${chapter.order} 章`}
+            {chapter.title || m.chapter.ordinal(chapter.order)}
           </h1>
           <div className="mt-4 border-t border-slate-100 pt-5">
             {body.length > 0 ? (
               <ArticleBody text={body} />
             ) : (
-              <p className="text-sm text-slate-400">
-                这份资料没有保存正文快照（textPreview 为空），无法展示原文。
-              </p>
+              <p className="text-sm text-slate-400">{t.noSnapshot}</p>
             )}
           </div>
         </Card>
@@ -145,23 +146,21 @@ export default function ChapterReaderPage() {
           <Card className="p-4">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                本章掌握度
+                {t.masteryEyebrow}
               </p>
               <span className="text-sm font-semibold tabular-nums text-slate-800">
                 {Math.round(mastery * 100)}%
               </span>
             </div>
             <div className="mt-2">
-              <Bar value={mastery} target={MASTERY_THRESHOLD} targetLabel={`达标 ${Math.round(MASTERY_THRESHOLD * 100)}%`} />
+              <Bar value={mastery} target={MASTERY_THRESHOLD} />
             </div>
-            <p className="mt-2 text-xs leading-5 text-slate-400">
-              卷面测验后按「0.65×卷面分 + 0.35×历史」更新；自评只影响复习调度，不移动掌握度。
-            </p>
+            <p className="mt-2 text-xs leading-5 text-slate-400">{t.masteryFormula}</p>
           </Card>
 
           <Card className="p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-              本章要点
+              {t.pointsEyebrow}
             </p>
             {chapter.keyPoints.length > 0 ? (
               <ul className="mt-2 space-y-2">
@@ -173,23 +172,21 @@ export default function ChapterReaderPage() {
                 ))}
               </ul>
             ) : (
-              <p className="mt-2 text-sm text-slate-400">暂无要点摘要。</p>
+              <p className="mt-2 text-sm text-slate-400">{t.noPoints}</p>
             )}
           </Card>
 
           {/* N5 概念层回归：章概念图谱入口（AI 提炼 + 可视化 + 概念复习） */}
           <Card className="p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-              概念图谱
+              {t.graphEyebrow}
             </p>
-            <p className="mt-2 text-xs leading-5 text-slate-400">
-              AI 把本章拆成可单独记忆与复习的知识概念，掌握度一目了然。
-            </p>
+            <p className="mt-2 text-xs leading-5 text-slate-400">{t.graphDesc}</p>
             <Link
               to={`/learn/${chapter.id}/graph`}
               className="mt-3 inline-block text-sm font-medium text-indigo-600 hover:underline"
             >
-              打开本章概念图谱 →
+              {t.openGraph}
             </Link>
           </Card>
         </div>
@@ -199,15 +196,15 @@ export default function ChapterReaderPage() {
       <div className="sticky bottom-4 z-10 mt-6 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white/90 px-5 py-3.5 shadow-lg backdrop-blur">
         <p className="hidden text-xs text-slate-400 sm:block">
           {dueReview
-            ? "已到复习日——重读要点后点「复习完成」，下次复习自动顺延。"
+            ? t.dueHint
             : chapter.status === "ready"
-              ? "已标记学完——下一步是「测本章」，检验掌握程度。"
-              : "读完正文后标记学完，即可进入本章测验。"}
+              ? t.readyHint
+              : t.readingHint}
         </p>
         <div className="flex items-center gap-2">
           {mastery >= MASTERY_THRESHOLD && !dueReview ? (
             <span className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
-              ✓ 已达 {Math.round(MASTERY_THRESHOLD * 100)}%，可直接综合测
+              {t.directQuiz(Math.round(MASTERY_THRESHOLD * 100))}
             </span>
           ) : null}
           {dueReview ? (
@@ -215,7 +212,7 @@ export default function ChapterReaderPage() {
               onClick={markReviewed}
               className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
             >
-              ✓ 复习完成 · 顺延复习
+              {t.markReviewed}
             </button>
           ) : chapter.status === "ready" ? (
             <button
@@ -226,7 +223,7 @@ export default function ChapterReaderPage() {
               }
               className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
             >
-              去测本章 →
+              {t.goQuiz}
             </button>
           ) : (
             <button
@@ -234,7 +231,7 @@ export default function ChapterReaderPage() {
               disabled={chapter.status === "mastered" || chapter.status === "retake"}
               className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
             >
-              {chapter.status === "not-started" || chapter.status === "learning" ? "标记学完 ✓" : "已标记学完"}
+              {chapter.status === "not-started" || chapter.status === "learning" ? t.markDone : t.doneLabel}
             </button>
           )}
         </div>

@@ -18,6 +18,7 @@ import type {
 } from "../../domain";
 import { MASTERY_THRESHOLD, relationsOf } from "../../domain";
 import { BandBadge } from "../../components/primitives";
+import { useI18n } from "../../i18n";
 import { bandOf } from "../../engine";
 import { unitTitle } from "../units";
 import {
@@ -35,17 +36,6 @@ const VISIBLE_LINK: ReadonlySet<RelationType> = new Set([
   "parent",
   "child",
 ]);
-
-const REL_LABELS: Record<RelationType, string> = {
-  prerequisite: "前置",
-  related: "相关",
-  parent: "父级",
-  child: "子级",
-  example: "示例",
-  contrast: "对比",
-  application: "应用",
-  source: "来源",
-};
 
 /** 掌握度四色（与 BandBadge 语义一致，供 SVG 节点使用）。 */
 const BAND_SVG: Record<string, { fill: string; stroke: string }> = {
@@ -96,6 +86,8 @@ export default function GraphView({
   onReviewUnit,
 }: GraphViewProps) {
   const navigate = useNavigate();
+  const { m } = useI18n();
+  const k = m.knowledge;
   const [focusId, setFocusId] = useState<string | undefined>();
   const [view, setView] = useState({ k: 1, tx: 0, ty: 0 });
 
@@ -304,7 +296,7 @@ export default function GraphView({
 
         {/* 操作提示（顶部角标） */}
         <div className="pointer-events-none absolute right-3 top-3 rounded-full bg-white/90 px-3 py-1 text-[11px] text-slate-400 ring-1 ring-slate-200">
-          拖动平移 · 滚轮缩放 · 单击聚焦 · 双击看原文
+          {k.hintPill}
         </div>
       </div>
 
@@ -318,13 +310,12 @@ export default function GraphView({
                 <BandBadge band={bandOf(masteryByUnit[focusUnit.id] ?? 0)} />
               </div>
               <p className="mt-1 text-xs text-slate-400">
-                {unitTitle(focusUnit.id)} · 掌握度 {Math.round((masteryByUnit[focusUnit.id] ?? 0) * 100)}% ·{" "}
-                关联 {degreeOf(graph.relations, focusUnit.id)} 条
+                {unitTitle(focusUnit.id)} · {k.masteryOf(Math.round((masteryByUnit[focusUnit.id] ?? 0) * 100), degreeOf(graph.relations, focusUnit.id))}
               </p>
               {focusUnit.summary ? (
                 <p className="mt-2 text-sm text-slate-600">{focusUnit.summary}</p>
               ) : (
-                <p className="mt-2 text-xs text-slate-400">该单元暂无摘要。</p>
+                <p className="mt-2 text-xs text-slate-400">{k.noSummary}</p>
               )}
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
@@ -335,21 +326,21 @@ export default function GraphView({
                   }
                   className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
                 >
-                  去复习 ▶
+                  {k.review}
                 </button>
                 {focusUnit.sourceDocumentId ? (
                   <button
                     onClick={() => onOpenDocument?.(focusUnit.sourceDocumentId!)}
                     className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
                   >
-                    查看原文
+                    {k.viewSource}
                   </button>
                 ) : null}
               </div>
               {requiredUnitIds.includes(focusUnit.id) &&
               (masteryByUnit[focusUnit.id] ?? 0) < GAP_THRESHOLD ? (
                 <p className="mt-2 rounded-md bg-indigo-50 px-2 py-1 text-[11px] text-indigo-600">
-                  这是当前目标的缺口单元。
+                  {k.gapNote}
                 </p>
               ) : null}
             </div>
@@ -358,12 +349,12 @@ export default function GraphView({
             {focusRelations.length > 0 ? (
               <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-                  关系
+                  {k.relationsTitle}
                 </p>
                 <ul className="space-y-1.5">
                   {focusRelations.map((r) => {
                     const other = relationUnit(r);
-                    const label = REL_LABELS[r.type] ?? r.type;
+                    const label = k.rel[r.type] ?? r.type;
                     return (
                       <li key={r.id} className="flex items-center justify-between gap-2 text-sm">
                         <button
@@ -382,14 +373,14 @@ export default function GraphView({
               </div>
             ) : (
               <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-xs text-slate-400">该单元暂无已建模的关系。</p>
+                <p className="text-xs text-slate-400">{k.noRelations}</p>
               </div>
             )}
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-slate-200 bg-white/60 p-4 text-sm text-slate-400">
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">聚焦</p>
-            单击节点查看单元详情与关系；双击带来源的单元可回看原文。
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">{k.focusEyebrow}</p>
+            {k.focusPlaceholder}
           </div>
         )}
       </aside>
