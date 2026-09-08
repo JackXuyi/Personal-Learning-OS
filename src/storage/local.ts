@@ -10,6 +10,9 @@ import type {
   KnowledgeGraph,
   LearnerState,
   LearningGoal,
+  Paper,
+  PaperAnswers,
+  PaperResult,
   SourceDocument,
 } from "../domain";
 import { InMemoryStorage } from "./memory";
@@ -17,6 +20,9 @@ import type { StorageAdapter } from "./types";
 
 const KEY_DOCUMENTS = "plos.documents";
 const KEY_CHAPTERS = "plos.chapters";
+const KEY_PAPERS = "plos.papers";
+const KEY_PAPER_DRAFTS = "plos.paper-drafts";
+const KEY_PAPER_RESULTS = "plos.paper-results";
 const KEY_GRAPH = "plos.graph";
 const KEY_LEARNER = "plos.learner";
 const KEY_GOALS = "plos.goals";
@@ -41,6 +47,13 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     this.chaptersByDocument = new Map(
       Object.entries(load<Record<string, Chapter[]>>(KEY_CHAPTERS, {})),
     );
+    this.papers = new Map(load<Paper[]>(KEY_PAPERS, []).map((p) => [p.id, p]));
+    this.paperDrafts = new Map(
+      Object.entries(load<Record<string, PaperAnswers>>(KEY_PAPER_DRAFTS, {})),
+    );
+    this.paperResults = new Map(
+      load<PaperResult[]>(KEY_PAPER_RESULTS, []).map((r) => [r.paperId, r]),
+    );
     this.graph = load<KnowledgeGraph>(KEY_GRAPH, { units: [], relations: [] });
     this.learnerState = load<LearnerState>(KEY_LEARNER, { byUnit: {} });
     this.goals = new Map(load<LearningGoal[]>(KEY_GOALS, []).map((g) => [g.id, g]));
@@ -51,6 +64,15 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     localStorage.setItem(
       KEY_CHAPTERS,
       JSON.stringify(Object.fromEntries(this.chaptersByDocument)),
+    );
+    localStorage.setItem(KEY_PAPERS, JSON.stringify([...this.papers.values()]));
+    localStorage.setItem(
+      KEY_PAPER_DRAFTS,
+      JSON.stringify(Object.fromEntries(this.paperDrafts)),
+    );
+    localStorage.setItem(
+      KEY_PAPER_RESULTS,
+      JSON.stringify([...this.paperResults.values()]),
     );
     localStorage.setItem(KEY_GRAPH, JSON.stringify(this.graph));
     localStorage.setItem(KEY_LEARNER, JSON.stringify(this.learnerState));
@@ -67,6 +89,18 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
   }
   override async saveChapters(documentId: string, chapters: Chapter[]): Promise<void> {
     await super.saveChapters(documentId, chapters);
+    this.persist();
+  }
+  override async savePaper(paper: Paper): Promise<void> {
+    await super.savePaper(paper);
+    this.persist();
+  }
+  override async savePaperDraft(paperId: string, answers: PaperAnswers): Promise<void> {
+    await super.savePaperDraft(paperId, answers);
+    this.persist();
+  }
+  override async savePaperResult(result: PaperResult): Promise<void> {
+    await super.savePaperResult(result);
     this.persist();
   }
   override async saveGraph(graph: KnowledgeGraph): Promise<void> {

@@ -23,9 +23,8 @@ interface Command {
 /** 跳转项与侧边栏一一对应（不改路由）。 */
 const NAV_ENTRIES: { to: string; label: string; hint?: string }[] = [
   { to: "/", label: "首页", hint: "今天做哪件事" },
-  { to: "/study", label: "学习", hint: "今日队列与复习" },
-  { to: "/assessment", label: "测评", hint: "自适应作答" },
-  { to: "/learn", label: "知识", hint: "章节目录与阅读" },
+  { to: "/learn", label: "学习", hint: "章节目录与阅读" },
+  { to: "/quiz", label: "测评", hint: "试卷 · 出卷 · 答题" },
   { to: "/spaces", label: "学习空间", hint: "资料与空间" },
   { to: "/career", label: "职业", hint: "目标就绪度" },
   { to: "/settings", label: "设置", hint: "AI 服务" },

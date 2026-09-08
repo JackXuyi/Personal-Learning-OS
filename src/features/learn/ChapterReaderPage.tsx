@@ -11,7 +11,7 @@
  */
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Bar, Card } from "../../components/primitives";
 import { MASTERY_THRESHOLD } from "../../domain";
 import type { Chapter, LearnerState, SourceDocument } from "../../domain";
@@ -20,6 +20,7 @@ import { chapterBadge } from "./chapter-badge";
 
 export default function ChapterReaderPage() {
   const { chapterId = "" } = useParams();
+  const navigate = useNavigate();
   const [chapter, setChapter] = useState<Chapter | undefined>();
   const [doc, setDoc] = useState<SourceDocument | undefined>();
   const [learner, setLearner] = useState<LearnerState | undefined>();
@@ -178,9 +179,12 @@ export default function ChapterReaderPage() {
           ) : null}
           {chapter.status === "ready" ? (
             <button
-              disabled
-              title="出卷答题页将在下一步（试卷中心）接入"
-              className="cursor-not-allowed rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white opacity-60"
+              onClick={() =>
+                navigate(
+                  `/quiz/new?doc=${doc.id}&chapters=${chapter.id}&mode=unit-test`,
+                )
+              }
+              className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
             >
               去测本章 →
             </button>

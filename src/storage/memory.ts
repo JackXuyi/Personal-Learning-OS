@@ -9,6 +9,9 @@ import type {
   KnowledgeGraph,
   LearnerState,
   LearningGoal,
+  Paper,
+  PaperAnswers,
+  PaperResult,
   SourceDocument,
 } from "../domain";
 import { sortChaptersByOrder } from "../domain";
@@ -18,6 +21,9 @@ export class InMemoryStorage implements StorageAdapter {
   readonly name: string = "memory";
   protected documents = new Map<string, SourceDocument>();
   protected chaptersByDocument = new Map<string, Chapter[]>();
+  protected papers = new Map<string, Paper>();
+  protected paperDrafts = new Map<string, PaperAnswers>();
+  protected paperResults = new Map<string, PaperResult>();
   protected graph: KnowledgeGraph = { units: [], relations: [] };
   protected learnerState: LearnerState = { byUnit: {} };
   protected goals = new Map<string, LearningGoal>();
@@ -39,6 +45,25 @@ export class InMemoryStorage implements StorageAdapter {
   }
   async saveChapters(documentId: string, chapters: Chapter[]): Promise<void> {
     this.chaptersByDocument.set(documentId, sortChaptersByOrder(chapters));
+  }
+
+  async listPapers(): Promise<Paper[]> {
+    return [...this.papers.values()].sort((a, b) => b.createdAt - a.createdAt);
+  }
+  async savePaper(paper: Paper): Promise<void> {
+    this.papers.set(paper.id, paper);
+  }
+  async getPaperDraft(paperId: string): Promise<PaperAnswers | undefined> {
+    return this.paperDrafts.get(paperId);
+  }
+  async savePaperDraft(paperId: string, answers: PaperAnswers): Promise<void> {
+    this.paperDrafts.set(paperId, answers);
+  }
+  async listPaperResults(): Promise<PaperResult[]> {
+    return [...this.paperResults.values()].sort((a, b) => b.createdAt - a.createdAt);
+  }
+  async savePaperResult(result: PaperResult): Promise<void> {
+    this.paperResults.set(result.paperId, result);
   }
 
   async getGraph(): Promise<KnowledgeGraph> {

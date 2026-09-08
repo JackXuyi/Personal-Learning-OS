@@ -10,6 +10,9 @@ import type {
   KnowledgeGraph,
   LearnerState,
   LearningGoal,
+  Paper,
+  PaperAnswers,
+  PaperResult,
   SourceDocument,
 } from "../domain";
 
@@ -24,6 +27,18 @@ export interface StorageAdapter {
   // 章节（V2 章节化学习主对象；切分/微调后整批写回）
   listChapters(documentId: string): Promise<Chapter[]>;
   saveChapters(documentId: string, chapters: Chapter[]): Promise<void>;
+
+  // 试卷（V2 章节化测评；/quiz 历史列表按 createdAt 倒序）
+  listPapers(): Promise<Paper[]>;
+  savePaper(paper: Paper): Promise<void>;
+
+  // 答题草稿：paperId → 未交卷的作答快照（P4 答题页草稿暂存）
+  getPaperDraft(paperId: string): Promise<PaperAnswers | undefined>;
+  savePaperDraft(paperId: string, answers: PaperAnswers): Promise<void>;
+
+  // 判卷结果（T6 交卷即落库；T7 报告页消费）
+  listPaperResults(): Promise<PaperResult[]>;
+  savePaperResult(result: PaperResult): Promise<void>;
 
   // 知识图谱
   getGraph(): Promise<KnowledgeGraph>;
