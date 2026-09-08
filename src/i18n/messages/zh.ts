@@ -26,6 +26,12 @@ export const zh = {
     done: "已完成",
     loading: "加载中…",
     all: "全部",
+    import: "导入资料",
+    targetLine: (p: number) => `达标 ${p}%`,
+    delta: {
+      nextReview: (d: number) => `下次复习：约 ${d} 天后`,
+      heuristic: "启发式估计",
+    },
   },
 
   nav: {
@@ -56,6 +62,12 @@ export const zh = {
       procedure: "流程",
       principle: "原理",
     },
+    band: {
+      "not-started": "未开始",
+      learning: "学习中",
+      proficient: "较熟练",
+      mastered: "已掌握",
+    },
     action: {
       learn: "学习",
       review: "复习",
@@ -67,6 +79,32 @@ export const zh = {
       "chapter-quiz": "测本章",
       "retake-quiz": "补考",
       "review-points": "复习要点",
+    },
+    /** 计划项按钮动词（去学习 / 去测验 / 生成补考卷 / 去复习）。 */
+    actionVerb: {
+      learn: "去学习",
+      review: "去复习",
+      practice: "去练习",
+      remediation: "去补救",
+      assessment: "去测评",
+      explore: "去探索",
+      "learn-chapter": "去学习",
+      "chapter-quiz": "去测验",
+      "retake-quiz": "生成补考卷",
+      "review-points": "去复习",
+    },
+    /** 首页主 CTA 大按钮动词（去学本章 / 去测本章 / 补考本章 / 去复习要点）。 */
+    actionCta: {
+      learn: "去学习",
+      review: "去复习",
+      practice: "去练习",
+      remediation: "去补救",
+      assessment: "去测评",
+      explore: "去探索",
+      "learn-chapter": "去学本章",
+      "chapter-quiz": "去测本章",
+      "retake-quiz": "补考本章",
+      "review-points": "去复习要点",
     },
     goalType: {
       career: "职业",
@@ -113,6 +151,77 @@ export const zh = {
       autoHint: "自动按系统语言选择；手动选择后始终使用该语言。",
       current: (lang: "zh" | "en") => `当前生效：${lang === "zh" ? "中文" : "English"}`,
     },
+  },
+  chapter: {
+    ordinal: (n: number) => `第 ${n} 章`,
+  },
+
+  home: {
+    title: "学习闭环",
+    subtitle: "今天只做一件事——系统已经替你算好。",
+    running: "正在运行学习闭环…",
+    todayActionEyebrow: "今日主行动",
+    masteryAt: (p: number) => `当前掌握度 ${p}%`,
+    generating: "生成中…",
+    why: "为什么是它？（可解释）",
+    goalOf: (title: string) => `当前目标 · ${title}`,
+    goalFallback: "章就绪度",
+    chaptersMastered: (m: number, t: number) => `${m} / ${t} 章达标`,
+    readyLine: (thresholdPct: number, gap: number) =>
+      `达标线 ${thresholdPct}% · 待补缺口 ${gap} 项`,
+    statReady: "章就绪",
+    statPending: "待补",
+    statPendingHint: "按推荐序",
+    priorityFill: "优先补",
+    planTitle: "学习计划",
+    planSubtitle: "规划器按优先级排序，先补弱章。",
+    viewAll: "查看全部",
+    allDoneTitle: "🎉 所有章节已达标",
+    allDoneDesc: "章就绪度到顶——可出综合测巩固，或继续导入新资料。",
+    goQuizReinforce: "去测评巩固",
+    viewCatalog: "查看章节目录",
+    emptyTitle: "📥 还没有学习资料",
+    emptyDesc: "导入第一份资料（Markdown / 笔记），系统会自动切分章节，排出「学 → 测 → 补」计划。",
+    viewPlan: "查看计划",
+    noChapterTitle: "资料还没有章节",
+    noChapterDesc: "已保存正文的资料还未切分——去章节目录补切分，或重新导入。",
+    goCatalog: "去章节目录",
+  },
+
+  career: {
+    title: "职业 · 目标就绪度",
+    subtitle: "把岗位拆成可练习的单元，达标一个少一个缺口。",
+    loading: "正在计算目标就绪度…",
+    currentGoal: "当前目标",
+    importanceLine: (importance: string, count: number) =>
+      `重要性 ${importance} · 共 ${count} 个单元`,
+    readyOf: (done: number, total: number) => `已达标 ${done}/${total} 个单元`,
+    masteryAt: (p: number) => `掌握度 ${p}%`,
+    remainingGap: (g: number) => `还差 ${g}%`,
+    allDoneTitle: "🎉 当前目标所有单元已达标",
+    allDoneDesc: (p: number) => `就绪度 ${p}% · 没有待补缺口。`,
+    gapList: (n: number) => `待补缺口（${n} · 依赖序）`,
+  },
+
+  scaffold: {
+    scopeTitle: "范围",
+    nextTitle: "下一步（MVP 里程碑）",
+  },
+
+  spaces: {
+    title: "学习空间",
+    subtitle: "为生活不同领域分别建立独立的知识库。",
+    scope: [
+      "存储层就绪：内存 + localStorage 适配器统一在单一接口之后",
+      "领域模型支持跨职业 / 学习 / 个人的多个目标",
+      "SQLite / 文件系统后端接口已在 src/storage 预留",
+    ],
+    nextSteps: [
+      "创建一个 Learning Space（名称、描述、图标）",
+      "将 PDF / Markdown / TXT / EPUB 导入到空间",
+      "文档解析 + 分块（chunking）流水线",
+      "列出文档并附带来源引用",
+    ],
   },
 };
 

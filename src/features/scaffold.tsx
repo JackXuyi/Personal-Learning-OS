@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Card, SectionTitle } from "../components/primitives";
 import { PageContainer } from "../components/layout/AppShell";
+import { useI18n } from "../i18n";
 
 export function ScaffoldPage({
   title,
@@ -13,16 +14,17 @@ export function ScaffoldPage({
   scope: string[];
   nextSteps: string[];
 }) {
+  const { m } = useI18n();
   return (
     <PageContainer>
       <SectionTitle title={title} subtitle={subtitle} />
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">范围</h3>
+          <h3 className="mb-3 text-sm font-semibold text-slate-700">{m.scaffold.scopeTitle}</h3>
           <CheckList items={scope} />
         </Card>
         <Card>
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">下一步（MVP 里程碑）</h3>
+          <h3 className="mb-3 text-sm font-semibold text-slate-700">{m.scaffold.nextTitle}</h3>
           <CheckList items={nextSteps} ghost />
         </Card>
       </div>

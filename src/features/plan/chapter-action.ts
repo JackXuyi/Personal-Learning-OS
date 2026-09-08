@@ -4,6 +4,7 @@
  */
 import type { Chapter, LearnerState, NextAction, Paper } from "../../domain";
 import { createRetakePaper } from "../../engine";
+import { zh, type Messages } from "../../i18n";
 
 export interface ChapterActionMeta {
   /** kind 徽标（tailwind 浅底深字圆角，与报告页 KIND_CHIP 同一套配色）。 */
@@ -14,37 +15,24 @@ export interface ChapterActionMeta {
   cta: string;
 }
 
-const META: Record<string, ChapterActionMeta> = {
-  "learn-chapter": {
-    chip: "border-red-200 bg-red-50 text-red-600",
-    verb: "去学习",
-    cta: "去学本章",
-  },
-  "retake-quiz": {
-    chip: "border-amber-200 bg-amber-50 text-amber-700",
-    verb: "生成补考卷",
-    cta: "补考本章",
-  },
-  "review-points": {
-    chip: "border-sky-200 bg-sky-50 text-sky-700",
-    verb: "去复习",
-    cta: "去复习要点",
-  },
-  "chapter-quiz": {
-    chip: "border-indigo-200 bg-indigo-50 text-indigo-700",
-    verb: "去测验",
-    cta: "去测本章",
-  },
+const CHIP: Record<string, string> = {
+  "learn-chapter": "border-red-200 bg-red-50 text-red-600",
+  "retake-quiz": "border-amber-200 bg-amber-50 text-amber-700",
+  "review-points": "border-sky-200 bg-sky-50 text-sky-700",
+  "chapter-quiz": "border-indigo-200 bg-indigo-50 text-indigo-700",
 };
 
-export function chapterActionMeta(kind: NextAction["kind"]): ChapterActionMeta {
-  return (
-    META[kind] ?? {
-      chip: "border-slate-200 bg-slate-100 text-slate-600",
-      verb: "去执行",
-      cta: "去执行",
-    }
-  );
+const FALLBACK_CHIP = "border-slate-200 bg-slate-100 text-slate-600";
+
+export function chapterActionMeta(
+  kind: NextAction["kind"],
+  m: Messages = zh,
+): ChapterActionMeta {
+  return {
+    chip: CHIP[kind] ?? FALLBACK_CHIP,
+    verb: m.units.actionVerb[kind],
+    cta: m.units.actionCta[kind],
+  };
 }
 
 /**
@@ -87,7 +75,8 @@ export function makeRetakePaper(
 export function chapterDisplayTitle(
   chapter: Chapter,
   docTitle?: string,
+  m: Messages = zh,
 ): string {
-  const head = chapter.title?.trim() ? chapter.title : `第 ${chapter.order} 章`;
+  const head = chapter.title?.trim() ? chapter.title : m.chapter.ordinal(chapter.order);
   return docTitle ? `${docTitle} · ${head}` : head;
 }

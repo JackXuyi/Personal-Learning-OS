@@ -4,6 +4,8 @@
  * 上升显示 emerald（积极），下降显示 red（警示）；数值保留一位小数的百分比
  * 步进，并诚实标注「启发式估计」。可选附「下次复习：约 N 天后」。
  */
+import { useI18n } from "../i18n";
+
 export function DeltaBadge({
   delta,
   nextReviewInDays,
@@ -11,6 +13,7 @@ export function DeltaBadge({
   delta: number;
   nextReviewInDays?: number;
 }) {
+  const { m } = useI18n();
   const up = delta >= 0;
   const sign = up ? "+" : "−";
   const pct = Math.round(Math.abs(delta) * 100);
@@ -28,11 +31,11 @@ export function DeltaBadge({
       </span>
       {nextReviewInDays !== undefined ? (
         <span className="text-xs text-slate-500">
-          下次复习：约 {nextReviewInDays} 天后
-          <span className="ml-1 text-slate-400">（启发式估计）</span>
+          {m.common.delta.nextReview(nextReviewInDays)}
+          <span className="ml-1 text-slate-400">（{m.common.delta.heuristic}）</span>
         </span>
       ) : (
-        <span className="text-[10px] text-slate-400">启发式估计</span>
+        <span className="text-[10px] text-slate-400">{m.common.delta.heuristic}</span>
       )}
     </span>
   );

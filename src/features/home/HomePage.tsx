@@ -6,7 +6,7 @@ import { MASTERY_THRESHOLD } from "../../domain";
 import type { Chapter, NextAction } from "../../domain";
 import { bandOf } from "../../engine";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
-import { actionKindLabel } from "../units";
+import { useI18n } from "../../i18n";
 import {
   actionPath,
   chapterActionMeta,
@@ -26,6 +26,7 @@ export default function HomePage() {
   const loading = useLoopStore((s) => s.loading);
   const error = useLoopStore((s) => s.error);
   const refresh = useLoopStore((s) => s.refresh);
+  const { m } = useI18n();
   /** 首帧前不闪空态。 */
   const [checked, setChecked] = useState(false);
 
@@ -38,10 +39,7 @@ export default function HomePage() {
 
   return (
     <PageContainer>
-      <SectionTitle
-        title="学习闭环"
-        subtitle="今天只做一件事——系统已经替你算好。"
-      />
+      <SectionTitle title={m.home.title} subtitle={m.home.subtitle} />
 
       {error ? (
         <Card>
@@ -51,7 +49,7 @@ export default function HomePage() {
 
       {!checked || (loading && !plan) ? (
         <Card>
-          <p className="text-sm text-slate-500">正在运行学习闭环…</p>
+          <p className="text-sm text-slate-500">{m.home.running}</p>
         </Card>
       ) : null}
 
@@ -130,11 +128,12 @@ function MainCtaCard() {
   const plan = useLoopStore((s) => s.chapterPlan);
   const index = useChapterIndex();
   const { run, busyId } = useRunAction();
+  const { m } = useI18n();
   const next = plan?.next;
   if (!next || !plan) return null;
   const chapter = index.get(next.unitId);
   const mastery = chapter ? (plan.learner.byUnit[chapter.id]?.mastery ?? 0) : 0;
-  const meta = chapterActionMeta(next.kind);
+  const meta = chapterActionMeta(next.kind, m);
   const busy = busyId === chapter?.id;
 
   return (
@@ -142,14 +141,14 @@ function MainCtaCard() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-indigo-400">
-            今日主行动 · {actionKindLabel(next.kind)}
+            {m.home.todayActionEyebrow} · {m.units.action[next.kind]}
           </p>
           <p className="mt-1 text-lg font-semibold text-slate-900">
             {chapter
-              ? chapterDisplayTitle(chapter, plan.docTitleOf[chapter.id])
+              ? chapterDisplayTitle(chapter, plan.docTitleOf[chapter.id], m)
               : next.unitId}
             <span className="ml-2 text-sm font-normal text-slate-500">
-              当前掌握度 {Math.round(mastery * 100)}%
+              {m.home.masteryAt(Math.round(mastery * 100))}
             </span>
           </p>
         </div>
@@ -158,12 +157,12 @@ function MainCtaCard() {
           disabled={busy}
           className="rounded-xl bg-indigo-600 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-indigo-700 active:scale-[0.99] disabled:opacity-50"
         >
-          {busy ? "生成中…" : `${meta.cta} →`}
+          {busy ? m.home.generating : `${meta.cta} →`}
         </button>
       </div>
       <details className="mt-3">
         <summary className="cursor-pointer text-xs font-medium text-indigo-500 hover:text-indigo-700">
-          为什么是它？（可解释）
+          {m.home.why}
         </summary>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">
           {next.reasons.map((reason) => (
@@ -179,6 +178,7 @@ function MainCtaCard() {
 function ReadinessCard() {
   const plan = useLoopStore((s) => s.chapterPlan);
   const index = useChapterIndex();
+  const { m } = useI18n();
   if (!plan || plan.total === 0) return null;
   const ratio = plan.mastered / plan.total;
   const lead = plan.actions.slice(0, 2);
@@ -187,35 +187,51 @@ function ReadinessCard() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-            {plan.goal ? `当前目标 · ${plan.goal.title}` : "章就绪度"}
+            {plan.goal ? m.home.goalOf(plan.goal.title) : m.home.goalFallback}
           </p>
           <p className="mt-1 text-lg font-semibold text-slate-900">
-            {plan.mastered} / {plan.total} 章达标
+            {m.home.chaptersMastered(plan.mastered, plan.total)}
           </p>
           <p className="text-sm text-slate-500">
-            达标线 {Math.round(MASTERY_THRESHOLD * 100)}% · 待补缺口{" "}
-            {plan.actions.length} 项
+            {m.home.readyLine(
+              Math.round(MASTERY_THRESHOLD * 100),
+              plan.actions.length,
+            )}
           </p>
         </div>
         <div className="grid grid-cols-2 gap-8">
-          <Stat label="章就绪" value={`${Math.round(ratio * 100)}%`} hint={`达标 ${Math.round(MASTERY_THRESHOLD * 100)}%`} />
-          <Stat label="待补" value={`${plan.actions.length}`} hint="按推荐序" />
+          <Stat
+            label={m.home.statReady}
+            value={`${Math.round(ratio * 100)}%`}
+            hint={m.common.targetLine(Math.round(MASTERY_THRESHOLD * 100))}
+          />
+          <Stat
+            label={m.home.statPending}
+            value={`${plan.actions.length}`}
+            hint={m.home.statPendingHint}
+          />
         </div>
       </div>
       <div className="mt-5">
-        <Bar value={ratio} target={MASTERY_THRESHOLD} targetLabel={`达标 ${Math.round(MASTERY_THRESHOLD * 100)}%`} />
+        <Bar
+          value={ratio}
+          target={MASTERY_THRESHOLD}
+          targetLabel={m.common.targetLine(Math.round(MASTERY_THRESHOLD * 100))}
+        />
         {lead.length > 0 ? (
           <ul className="mt-2 space-y-0.5">
             {lead.map((a) => {
               const ch = index.get(a.unitId);
               return (
                 <li key={a.id} className="text-xs text-slate-500">
-                  优先补{" "}
+                  {m.home.priorityFill}{" "}
                   <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">
-                    {actionKindLabel(a.kind)}
+                    {m.units.action[a.kind]}
                   </span>{" "}
                   <span className="font-medium text-slate-700">
-                    {ch ? chapterDisplayTitle(ch, plan.docTitleOf[ch.id]) : a.unitId}
+                    {ch
+                      ? chapterDisplayTitle(ch, plan.docTitleOf[ch.id], m)
+                      : a.unitId}
                   </span>
                 </li>
               );
@@ -232,16 +248,17 @@ function PlanPreview() {
   const plan = useLoopStore((s) => s.chapterPlan);
   const index = useChapterIndex();
   const { run, busyId } = useRunAction();
+  const { m } = useI18n();
   if (!plan || plan.actions.length === 0) return null;
   const items = plan.actions.slice(0, 3);
   return (
     <Card>
       <SectionTitle
-        title="学习计划"
-        subtitle="规划器按优先级排序，先补弱章。"
+        title={m.home.planTitle}
+        subtitle={m.home.planSubtitle}
         action={
           <Link to="/plan" className="text-sm font-medium text-indigo-600 hover:underline">
-            查看全部
+            {m.home.viewAll}
           </Link>
         }
       />
@@ -249,7 +266,7 @@ function PlanPreview() {
         {items.map((action, i) => {
           const chapter = index.get(action.unitId);
           const mastery = chapter ? (plan.learner.byUnit[chapter.id]?.mastery ?? 0) : 0;
-          const meta = chapterActionMeta(action.kind);
+          const meta = chapterActionMeta(action.kind, m);
           const busy = busyId === chapter?.id;
           return (
             <li
@@ -263,23 +280,25 @@ function PlanPreview() {
                 <span
                   className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.chip}`}
                 >
-                  {actionKindLabel(action.kind)}
+                  {m.units.action[action.kind]}
                 </span>
                 <span className="truncate text-sm font-medium text-slate-800">
                   {chapter
-                    ? chapterDisplayTitle(chapter, plan.docTitleOf[chapter.id])
+                    ? chapterDisplayTitle(chapter, plan.docTitleOf[chapter.id], m)
                     : action.unitId}
                 </span>
               </div>
               <div className="flex shrink-0 items-center gap-3">
-                <span className="text-xs text-slate-400">掌握度 {Math.round(mastery * 100)}%</span>
+                <span className="text-xs text-slate-400">
+                  {m.home.masteryAt(Math.round(mastery * 100))}
+                </span>
                 <BandBadge band={bandOf(mastery)} />
                 <button
                   onClick={() => void run(action)}
                   disabled={busy}
                   className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
                 >
-                  {busy ? "…" : "去执行"}
+                  {busy ? "…" : meta.verb}
                 </button>
               </div>
             </li>
@@ -292,24 +311,23 @@ function PlanPreview() {
 
 /** 全部达标态。 */
 function AllDoneCard() {
+  const { m } = useI18n();
   return (
     <Card className="border-emerald-200 bg-emerald-50/40">
-      <p className="text-lg font-semibold text-slate-900">🎉 所有章节已达标</p>
-      <p className="mt-1 text-sm text-slate-500">
-        章就绪度到顶——可出综合测巩固，或继续导入新资料。
-      </p>
+      <p className="text-lg font-semibold text-slate-900">{m.home.allDoneTitle}</p>
+      <p className="mt-1 text-sm text-slate-500">{m.home.allDoneDesc}</p>
       <div className="mt-4 flex gap-3">
         <Link
           to="/quiz"
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
         >
-          去测评巩固
+          {m.home.goQuizReinforce}
         </Link>
         <Link
           to="/learn"
           className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
-          查看章节目录
+          {m.home.viewCatalog}
         </Link>
       </div>
     </Card>
@@ -318,24 +336,23 @@ function AllDoneCard() {
 
 /** 空库引导（导入第一份资料）。 */
 function EmptyState() {
+  const { m } = useI18n();
   return (
     <Card>
-      <p className="text-lg font-semibold text-slate-900">📥 还没有学习资料</p>
-      <p className="mt-1 text-sm text-slate-500">
-        导入第一份资料（Markdown / 笔记），系统会自动切分章节，排出「学 → 测 → 补」计划。
-      </p>
+      <p className="text-lg font-semibold text-slate-900">{m.home.emptyTitle}</p>
+      <p className="mt-1 text-sm text-slate-500">{m.home.emptyDesc}</p>
       <div className="mt-4 flex flex-wrap gap-3">
         <Link
           to="/learn?import=1"
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
         >
-          导入资料
+          {m.common.import}
         </Link>
         <Link
           to="/plan"
           className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
-          查看计划
+          {m.home.viewPlan}
         </Link>
       </div>
     </Card>
@@ -344,24 +361,23 @@ function EmptyState() {
 
 /** 有资料但未切分章节（旧数据兜底，引导去 /learn 处理）。 */
 function NoChapterCard() {
+  const { m } = useI18n();
   return (
     <Card className="border-dashed">
-      <p className="text-lg font-semibold text-slate-900">资料还没有章节</p>
-      <p className="mt-1 text-sm text-slate-500">
-        已保存正文的资料还未切分——去章节目录补切分，或重新导入。
-      </p>
+      <p className="text-lg font-semibold text-slate-900">{m.home.noChapterTitle}</p>
+      <p className="mt-1 text-sm text-slate-500">{m.home.noChapterDesc}</p>
       <div className="mt-4 flex gap-3">
         <Link
           to="/learn"
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
         >
-          去章节目录
+          {m.home.goCatalog}
         </Link>
         <Link
           to="/learn?import=1"
           className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
-          导入资料
+          {m.common.import}
         </Link>
       </div>
     </Card>

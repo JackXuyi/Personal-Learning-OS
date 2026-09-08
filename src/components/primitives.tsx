@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { MasteryBand } from "../engine";
+import { useI18n } from "../i18n";
 
 const bandStyles: Record<MasteryBand, string> = {
   "not-started": "bg-slate-100 text-slate-500 border-slate-200",
@@ -9,17 +10,13 @@ const bandStyles: Record<MasteryBand, string> = {
 };
 
 export function BandBadge({ band }: { band: MasteryBand }) {
-  const label: Record<MasteryBand, string> = {
-    "not-started": "未开始",
-    learning: "学习中",
-    proficient: "较熟练",
-    mastered: "已掌握",
-  };
+  const { m } = useI18n();
+  const label = m.units.band[band];
   return (
     <span
       className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${bandStyles[band]}`}
     >
-      {label[band]}
+      {label}
     </span>
   );
 }
@@ -66,6 +63,7 @@ export function Bar({
 }) {
   const pct = Math.round(value * 100);
   const targetPct = target !== undefined ? Math.round(target * 100) : undefined;
+  const { m } = useI18n();
   return (
     <div className="relative">
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
@@ -78,7 +76,7 @@ export function Bar({
         <div
           className="absolute top-1/2 z-10 h-3.5 w-0.5 -translate-y-1/2 rounded-full bg-slate-400"
           style={{ left: `${Math.min(100, Math.max(0, targetPct))}%` }}
-          title={targetLabel ?? `目标 ${targetPct}%`}
+          title={targetLabel ?? m.common.targetLine(targetPct)}
         />
       ) : null}
     </div>

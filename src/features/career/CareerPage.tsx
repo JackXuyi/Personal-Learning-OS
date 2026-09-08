@@ -4,13 +4,8 @@ import { BandBadge, Bar, Card, SectionTitle } from "../../components/primitives"
 import { PageContainer } from "../../components/layout/AppShell";
 import { bandOf } from "../../engine";
 import { useLoopStore } from "../../stores/useLoopStore";
-import {
-  actionKindLabel,
-  GOAL_TARGET,
-  goalTypeLabel,
-  importanceLabel,
-  unitTitle,
-} from "../units";
+import { GOAL_TARGET, unitTitle } from "../units";
+import { useI18n } from "../../i18n";
 
 /**
  * 职业页 —— 目标就绪度视图（S6：信息与首页重叠，收敛为快照的另一种读法，
@@ -22,6 +17,7 @@ export default function CareerPage() {
   const error = useLoopStore((s) => s.error);
   const refresh = useLoopStore((s) => s.refresh);
   const navigate = useNavigate();
+  const { m } = useI18n();
 
   useEffect(() => {
     void refresh();
@@ -41,7 +37,7 @@ export default function CareerPage() {
     return (
       <PageContainer>
         <Card>
-          <p className="text-sm text-slate-500">正在计算目标就绪度…</p>
+          <p className="text-sm text-slate-500">{m.career.loading}</p>
         </Card>
       </PageContainer>
     );
@@ -56,23 +52,23 @@ export default function CareerPage() {
 
   return (
     <PageContainer>
-      <SectionTitle
-        title="职业 · 目标就绪度"
-        subtitle="把岗位拆成可练习的单元，达标一个少一个缺口。"
-      />
+      <SectionTitle title={m.career.title} subtitle={m.career.subtitle} />
 
       <Card className="border-indigo-200 bg-gradient-to-br from-indigo-50/60 to-white">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-              当前目标 · {goalTypeLabel(goal.type)}
+              {m.career.currentGoal} · {m.units.goalType[goal.type]}
             </p>
             <h3 className="mt-1 text-lg font-semibold text-slate-900">{goal.title}</h3>
             {goal.description ? (
               <p className="mt-1 text-sm text-slate-500">{goal.description}</p>
             ) : null}
             <p className="mt-1 text-xs text-slate-400">
-              重要性 {importanceLabel(goal.importance)} · 共 {goal.requiredUnitIds.length} 个单元
+              {m.career.importanceLine(
+                m.units.importance[goal.importance],
+                goal.requiredUnitIds.length,
+              )}
             </p>
           </div>
           <div className="text-right">
@@ -80,26 +76,30 @@ export default function CareerPage() {
               {Math.round(readiness * 100)}%
             </p>
             <p className="text-xs text-slate-500">
-              已达标 {masteredCount}/{goal.requiredUnitIds.length} 个单元
+              {m.career.readyOf(masteredCount, goal.requiredUnitIds.length)}
             </p>
           </div>
         </div>
         <div className="mt-5">
-          <Bar value={readiness} target={GOAL_TARGET} targetLabel={`目标 ${Math.round(GOAL_TARGET * 100)}%`} />
+          <Bar
+            value={readiness}
+            target={GOAL_TARGET}
+            targetLabel={m.common.targetLine(Math.round(GOAL_TARGET * 100))}
+          />
         </div>
       </Card>
 
       {actions.length === 0 ? (
         <Card className="mt-6 border-emerald-200 bg-emerald-50/40">
-          <p className="text-lg font-semibold text-slate-900">🎉 当前目标所有单元已达标</p>
+          <p className="text-lg font-semibold text-slate-900">{m.career.allDoneTitle}</p>
           <p className="mt-1 text-sm text-slate-500">
-            就绪度 {Math.round(readiness * 100)}% · 没有待补缺口。
+            {m.career.allDoneDesc(Math.round(readiness * 100))}
           </p>
         </Card>
       ) : (
         <Card className="mt-6">
           <h3 className="mb-3 text-sm font-semibold text-slate-700">
-            待补缺口（{actions.length} · 依赖序）
+            {m.career.gapList(actions.length)}
           </h3>
           <ul className="divide-y divide-slate-100">
             {actions.map((action) => {
@@ -116,22 +116,24 @@ export default function CareerPage() {
                 >
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                      {actionKindLabel(action.kind)}
+                      {m.units.action[action.kind]}
                     </span>
                     <span className="truncate text-sm font-medium text-slate-800">
                       {unitTitle(action.unitId)}
                     </span>
                     <span className="text-xs text-slate-400">
-                      掌握度 {Math.round(mastery * 100)}%
+                      {m.career.masteryAt(Math.round(mastery * 100))}
                     </span>
-                    <span className="text-xs text-indigo-600">还差 {gap}%</span>
+                    <span className="text-xs text-indigo-600">
+                      {m.career.remainingGap(gap)}
+                    </span>
                     <BandBadge band={bandOf(mastery)} />
                   </div>
                   <button
                     onClick={() => navigate(to)}
                     className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-700"
                   >
-                    {action.kind === "assessment" ? "去测评" : "去学习"} →
+                    {m.units.actionVerb[action.kind]} →
                   </button>
                 </li>
               );
