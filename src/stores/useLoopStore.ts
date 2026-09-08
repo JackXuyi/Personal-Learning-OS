@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import { createStorage, type StorageAdapter } from "../storage";
-import { runLearningLoop, type LoopSnapshot } from "../engine";
+import {
+  runChapterLoop,
+  runLearningLoop,
+  type ChapterLoopSnapshot,
+  type LoopSnapshot,
+} from "../engine";
 import { applyEvaluation, applyForgetting, applyRating, nextReviewInDays } from "../engine";
 import { newId } from "../domain";
 import type { Evaluation, LearnerState, SelfRating } from "../domain";
@@ -24,7 +29,10 @@ export interface SubmitResult {
 }
 
 interface LoopStoreState {
+  /** 概念层闭环快照（Phase 0 基座；ReviewSession / career 等沿用）。 */
   snapshot: LoopSnapshot | undefined;
+  /** V2 章级闭环快照（/ 首页主 CTA 与 /plan 计划页，T8）。 */
+  chapterPlan: ChapterLoopSnapshot | undefined;
   loading: boolean;
   error: string | undefined;
   refresh: () => Promise<void>;
@@ -42,14 +50,19 @@ const undoStack = new Map<string, { prevState: LearnerState; at: number }>();
 
 export const useLoopStore = create<LoopStoreState>((set, get) => ({
   snapshot: undefined,
+  chapterPlan: undefined,
   loading: false,
   error: undefined,
 
   refresh: async () => {
     set({ loading: true, error: undefined });
     try {
-      const snapshot = await runLearningLoop(storage);
-      set({ snapshot, loading: false });
+      // 概念层（runLearningLoop 含空库播种）与章级快照并行刷新。
+      const [snapshot, chapterPlan] = await Promise.all([
+        runLearningLoop(storage),
+        runChapterLoop(storage),
+      ]);
+      set({ snapshot, chapterPlan, loading: false });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err), loading: false });
     }

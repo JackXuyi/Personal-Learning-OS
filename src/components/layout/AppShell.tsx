@@ -23,6 +23,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "开始学习",
     items: [
       { to: "/learn", label: "学习", hint: "章节目录与阅读" },
+      { to: "/plan", label: "计划", hint: "章级学习队列" },
       { to: "/quiz", label: "测评", hint: "试卷 · 出卷 · 答题" },
     ],
   },

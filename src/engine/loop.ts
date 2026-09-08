@@ -8,6 +8,7 @@
  */
 import type {
   CognitiveLevel,
+  Chapter,
   KnowledgeGraph,
   LearnerState,
   LearningGoal,
@@ -15,9 +16,9 @@ import type {
   SourceDocument,
   UnitMastery,
 } from "../domain";
-import { MASTERY_THRESHOLD, RAG_UNIT_IDS } from "../domain";
+import { MASTERY_THRESHOLD, RAG_UNIT_IDS, sortChaptersByOrder } from "../domain";
 import type { StorageAdapter } from "../storage";
-import { createLearningPlanner } from "./learning-planner";
+import { buildChapterPlan, createLearningPlanner } from "./learning-planner";
 import { createRecommendationEngine } from "./recommendation-engine";
 
 const MS_PER_DAY = 86_400_000;
@@ -180,4 +181,83 @@ export async function seedDemoIfEmpty(storage: StorageAdapter): Promise<void> {
   await storage.saveGraph(dataset.graph);
   await storage.saveLearnerState(dataset.learnerState);
   for (const doc of dataset.documents) await storage.saveDocument(doc);
+}
+
+/* ------------------------------------------------------------------ */
+/* V2 章级快照（T8）—— 首页主 CTA 与 /plan 计划页的数据源              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 章级闭环快照。语义（docs §2 融合矩阵 #5/#7）：
+ * - 章就绪度 = 达标章数（卷面掌握度 ≥ 0.8） / 章总数（与 /learn 目录同源）；
+ * - 今日主行动 = 计划头项（去学 / 去测 / 去补考 / 复习要点）；
+ * - 计划队列由 buildChapterPlan 决策（重学弱章 > 补考 > 复习要点 >
+ *   测已学章 > 推进未学章），每项带可解释 reasons。
+ */
+export interface ChapterLoopSnapshot {
+  /** 当前目标（无目标——纯资料导入场景时为 undefined）。 */
+  goal: LearningGoal | undefined;
+  /** 全部文档（importedAt 升序）。 */
+  docs: SourceDocument[];
+  /** 文档 id → 章列表（order 升序；仅含已切分文档）。 */
+  chaptersByDoc: Record<string, Chapter[]>;
+  /** 章 id → 所属文档标题（跨文档展示 docTitle · 第 x 章）。 */
+  docTitleOf: Record<string, string>;
+  learner: LearnerState;
+  /** 章总数（跨文档）。 */
+  total: number;
+  /** 达标章数（掌握度 ≥ MASTERY_THRESHOLD）。 */
+  mastered: number;
+  /** 章级计划动作（按优先级排序；已达标章不产生动作）。 */
+  actions: NextAction[];
+  /** 计划头项 = 首页「今日主行动」。 */
+  next: NextAction | undefined;
+}
+
+/** 章级快照聚合（编排层，读 storage；范围 = 全部已切分文档的章）。 */
+export async function runChapterLoop(
+  storage: StorageAdapter,
+): Promise<ChapterLoopSnapshot> {
+  const [goals, docs, learner] = await Promise.all([
+    storage.listGoals(),
+    storage.listDocuments(),
+    storage.getLearnerState(),
+  ]);
+  const docList = [...docs].sort((a, b) => a.importedAt - b.importedAt);
+
+  const entries = await Promise.all(
+    docList.map(
+      async (d) => [d.id, sortChaptersByOrder(await storage.listChapters(d.id))] as const,
+    ),
+  );
+  const chaptersByDoc: Record<string, Chapter[]> = Object.fromEntries(
+    entries.filter(([, chapters]) => chapters.length > 0),
+  );
+
+  const docTitleOf: Record<string, string> = {};
+  const allChapters: Chapter[] = [];
+  for (const d of docList) {
+    for (const c of chaptersByDoc[d.id] ?? []) {
+      allChapters.push(c);
+      docTitleOf[c.id] = d.title;
+    }
+  }
+
+  const total = allChapters.length;
+  const mastered = allChapters.filter(
+    (c) => (learner.byUnit[c.id]?.mastery ?? 0) >= MASTERY_THRESHOLD,
+  ).length;
+  const actions = buildChapterPlan({ chapters: allChapters, learnerState: learner });
+
+  return {
+    goal: goals[0],
+    docs: docList,
+    chaptersByDoc,
+    docTitleOf,
+    learner,
+    total,
+    mastered,
+    actions,
+    next: actions[0],
+  };
 }

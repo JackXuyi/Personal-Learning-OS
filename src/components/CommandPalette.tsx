@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useLoopStore } from "../stores/useLoopStore";
+import { useLoopStore, storage } from "../stores/useLoopStore";
 import { useSessionStore, type DoneRecord } from "../stores/useSessionStore";
 import { actionKindLabel, unitTitle } from "../features/units";
+import type { Chapter } from "../domain";
+import {
+  actionPath,
+  chapterDisplayTitle,
+  makeRetakePaper,
+} from "../features/plan/chapter-action";
 
 /**
  * ⌘K 命令面板（S5 / P2-2）。
@@ -24,6 +30,7 @@ interface Command {
 const NAV_ENTRIES: { to: string; label: string; hint?: string }[] = [
   { to: "/", label: "首页", hint: "今天做哪件事" },
   { to: "/learn", label: "学习", hint: "章节目录与阅读" },
+  { to: "/plan", label: "计划", hint: "章级学习队列" },
   { to: "/quiz", label: "测评", hint: "试卷 · 出卷 · 答题" },
   { to: "/spaces", label: "学习空间", hint: "资料与空间" },
   { to: "/career", label: "职业", hint: "目标就绪度" },
@@ -43,8 +50,18 @@ export default function CommandPalette() {
   const navigate = useNavigate();
 
   const snapshot = useLoopStore((s) => s.snapshot);
+  const chapterPlan = useLoopStore((s) => s.chapterPlan);
   const refresh = useLoopStore((s) => s.refresh);
   const recent = useSessionStore((s) => s.records);
+
+  /** 章 id → Chapter（章级行动跳转用）。 */
+  const chapterIndex = useMemo(() => {
+    const index = new Map<string, Chapter>();
+    for (const list of Object.values(chapterPlan?.chaptersByDoc ?? {})) {
+      for (const c of list) index.set(c.id, c);
+    }
+    return index;
+  }, [chapterPlan]);
 
   // 全局快捷键：⌘K / Ctrl+K 开合。
   useEffect(() => {
@@ -69,8 +86,8 @@ export default function CommandPalette() {
 
   // 闭环快照缺失就先刷一次（保证「下一步」数据可用）；快照就绪后不打断输入。
   useEffect(() => {
-    if (open && !snapshot) void refresh();
-  }, [open, snapshot, refresh]);
+    if (open && !snapshot && !chapterPlan) void refresh();
+  }, [open, snapshot, chapterPlan, refresh]);
 
   // 列表长度变化时钳制高亮下标。
   useEffect(() => {
@@ -81,22 +98,52 @@ export default function CommandPalette() {
     const list: Command[] = [];
 
     // ── 行动 ──────────────────────────────────────────────
-    const next = snapshot?.next;
+    // 今日主行动 = 章级计划头项（V2，T8）；补考需先就地生成补考卷。
+    const next = chapterPlan?.next;
     if (next) {
+      const chapter = chapterIndex.get(next.unitId);
+      const title = chapter
+        ? chapterDisplayTitle(chapter, chapterPlan?.docTitleOf[chapter.id])
+        : next.unitId;
       list.push({
         id: "act-next",
-        label: `开始今天的下一步 · ${actionKindLabel(next.kind)} ${unitTitle(next.unitId)}`,
+        label: `开始今天的下一步 · ${actionKindLabel(next.kind)} ${title}`,
         hint: "启动今日闭环",
         section: "行动",
-        search: "开始 下一步 学习 复习 测评 今天 " + unitTitle(next.unitId),
+        search: "开始 下一步 学习 复习 测评 今天 " + title,
         run: () => {
-          const to =
-            next.kind === "assessment"
-              ? `/assessment?unit=${next.unitId}`
-              : `/study/session?unit=${next.unitId}`;
+          void (async () => {
+            if (!chapterPlan) return;
+            const ch = chapterIndex.get(next.unitId);
+            const path = actionPath(next, ch);
+            if (path) {
+              navigate(path);
+              return;
+            }
+            if (ch) {
+              // retake-quiz：生成补考卷后进答题。
+              const paper = makeRetakePaper(
+                ch,
+                chapterPlan.chaptersByDoc[ch.documentId] ?? [ch],
+                chapterPlan.learner,
+              );
+              await storage.savePaper(paper);
+              navigate(`/quiz/${paper.id}`);
+            }
+          })();
           void refresh();
-          navigate(to);
         },
+      });
+    }
+    // 有章但无待办时提供「出综合测」行动。
+    if (chapterPlan && chapterPlan.total > 0 && !next) {
+      list.push({
+        id: "act-quiz",
+        label: "出综合测 · 全部章节已达标",
+        hint: "巩固章就绪度",
+        section: "行动",
+        search: "测评 测验 试卷 综合 达标 巩固",
+        run: () => navigate("/quiz/new"),
       });
     }
     list.push({
@@ -140,7 +187,7 @@ export default function CommandPalette() {
     list.push(...recentList);
 
     return list;
-  }, [snapshot, recent, refresh, navigate]);
+  }, [chapterPlan, chapterIndex, recent, refresh, navigate]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
