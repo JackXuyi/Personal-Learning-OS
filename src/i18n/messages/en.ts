@@ -22,6 +22,7 @@ export const en: Messages = {
     done: "Done",
     loading: "Loading…",
     all: "All",
+    exit: "Exit",
     import: "Import material",
     targetLine: (p: number) => `Target ${p}%`,
     delta: {
@@ -357,5 +358,125 @@ export const en: Messages = {
         "Once AI is ready, tap “Extract chapter concepts” in the top-right to split this chapter into individually memorable and reviewable concepts (with prerequisite/related links). Without AI configured the concept layer stays empty — nothing is fabricated.",
       goConfigure: "Configure AI →",
     },
+  },
+
+  plan: {
+    title: "Learning plan",
+    loadingSubtitle: "Computing learning plan…",
+    running: "Running the learning planner…",
+    subtitle: (goal: string, mastered: number, total: number, todo: number) =>
+      `${goal} · ${mastered}/${total} chapters ready · ${todo} to-do(s)`,
+    newPaper: "＋ New paper",
+    emptyTitle: "No chapters to plan yet",
+    emptyDesc:
+      "Import a document and finish splitting first — the planner will schedule “learn → quiz → fix” for every chapter.",
+    goCatalog: "Go to catalog",
+    readinessEyebrow: "Chapter readiness",
+    masteredOf: (m: number, t: number) => `${m} / ${t} chapters ready`,
+    remaining: (n: number) => `${n} to-do(s) left (already in recommended order)`,
+    allReadyDesc: "Every chapter is ready — take a comprehensive quiz or import new material.",
+    allDoneTitle: "🎉 All chapters ready",
+    allDoneDesc:
+      "Chapter readiness is maxed out. Take a comprehensive quiz to consolidate, or keep importing new material.",
+    quizAll: "Comprehensive quiz",
+    importMore: "Import new material",
+    masteryAt: (p: number) => `Mastery ${p}%`,
+    generating: "Generating…",
+  },
+
+  review: {
+    rating: { forget: "Forgot", hard: "Hard", good: "Knew it", easy: "Easy" },
+    goBackGraph: "Back to concept graph",
+    goBackStudy: "Back to study",
+    singleReason: "Review this chapter concept — self-rate to reschedule the next review.",
+    missingChapter: "Chapter not found or has been removed.",
+    opening: "Entering review session…",
+    noConceptGaps:
+      "No gap concepts to review in this chapter — all are ready, or concepts haven't been extracted yet.",
+    noGaps: "No gap units to review right now.",
+    confirmExit: "Answers aren't submitted yet or can be undone — leave anyway?",
+    titleOf: (i: number, total: number) => `Review · ${i}/${total}`,
+    goalOf: (title: string) => `Goal: ${title}`,
+    exit: "Exit",
+    masteryAt: (p: number) => `Mastery ${p}%`,
+    explainPrompt: "Explain this concept in your own words",
+    explainPlaceholder:
+      "Write your understanding (optional) — it doesn't affect the self-rating.",
+    hideRef: "Hide reference points",
+    showRef: "Show reference points",
+    askSelf: "How did that step feel? (self-rating)",
+    meetAgain: (d: number) => `See you in ${d} day(s)`,
+    intervalPreview:
+      "Interval preview: forgot → 1d · hard → 2d · knew it → 4d · easy → 7d (heuristic)",
+    recorded: (label: string) => `Recorded: ${label}`,
+    undo: (s: number) => `Undo (${s}s)`,
+    nextItem: "Next item ▶",
+    finishReview: "Finish review ✅",
+    conceptDoneTitle: "Chapter concept review complete 🎉",
+    doneTitle: "Review complete 🎉",
+    conceptDoneSubtitle:
+      "No papers at concept level — self-rating is the mastery evidence; review scheduling follows the rating.",
+    doneSubtitle: "Mastery changes are heuristic estimates.",
+    noneDone: "No units were completed this session.",
+    readinessHead: "Readiness",
+    readinessTail: (target: number) => ` · target ${target}%`,
+    gapsLeft: (n: number) => `${n} gap(s) left — keep assessing to consolidate.`,
+    allReadyShort: "All gaps ready 🎉",
+    goHome: "Back to home",
+    keepAssess: "Keep assessing →",
+    backCatalog: "Back to catalog",
+  },
+
+  assessment: {
+    title: "Assess",
+    subtitle:
+      "Questions drawn from your gap units, difficulty adapts — local mode is honest self-grading.",
+    levelLabel: { remember: "Recall", understand: "Understand", apply: "Apply" },
+    levelHint: {
+      remember: "Recall the basic definition",
+      understand: "Explain in your own words",
+      apply: "Give a real example",
+    },
+    prompt: {
+      remember: (title: string) =>
+        `What is “${title}”? Define it in one or two sentences.`,
+      understand: (title: string) =>
+        `Explain “${title}” in your own words and what problem it solves.`,
+      apply: (title: string) =>
+        `Give a real scenario: when would you use “${title}”? How exactly?`,
+      fallback: (title: string) => `Share your understanding of “${title}”.`,
+    },
+    cognitiveOf: (label: string) => `Cognitive level: ${label}`,
+    masteryAt: (p: number) => `Mastery ${p}%`,
+    answerPlaceholder:
+      "Write your answer… (local mode: compare with the reference, then self-grade)",
+    compareRef: "Compare with reference",
+    refLead: "Reference points: ",
+    gotIt: "I got it right",
+    missedIt: "I missed it",
+    honestNote:
+      "No AI grading locally — honest self-grading is used; auto-grading arrives once a Provider is connected.",
+    verdictRight: "✅ Verdict: correct",
+    verdictWrong: "❌ Verdict: not correct",
+    streakUp: "Correct streak — difficulty raised.",
+    upNext: "Correct — next question is harder.",
+    queued: "No worries — this unit entered your review queue.",
+    nextQuestion: "Next question ▶",
+    finishUnit: "Finish this unit ✅",
+    progress: (from: number, now: number) =>
+      `Mastery was ${from}% → now ${now}%.`,
+    climbRule:
+      "Correct answers climb cognitive levels (Recall → Understand → Apply); a miss sends it back to the review queue.",
+    viewQueue: "View review queue →",
+    recommendEyebrow: "Recommended first",
+    start: "Start assessment →",
+    pickAny: "or pick any unit",
+    emptyLead: "No units to assess yet. ",
+    goStudy: "Go to study",
+    emptyTail: "Learn a bit first, then assess.",
+    todayTitle: "Assessed today",
+    todayCount: (n: number) => `${n} answer(s)`,
+    correct: "Correct",
+    wrong: "Wrong",
   },
 };

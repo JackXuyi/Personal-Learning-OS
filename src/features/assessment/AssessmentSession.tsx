@@ -7,48 +7,19 @@ import { bandOf } from "../../engine";
 import type { CognitiveLevel, KnowledgeUnit } from "../../domain";
 import { useLoopStore } from "../../stores/useLoopStore";
 import { useSessionStore } from "../../stores/useSessionStore";
+import { useI18n } from "../../i18n";
 import { unitTitle } from "../units";
-
-/** Bloom 认知层级的中文标签与题目模板。 */
-const LEVELS: { level: CognitiveLevel; label: string; hint: string }[] = [
-  {
-    level: "remember",
-    label: "记忆",
-    hint: "回忆基本定义",
-  },
-  {
-    level: "understand",
-    label: "理解",
-    hint: "用自己的话解释",
-  },
-  {
-    level: "apply",
-    label: "应用",
-    hint: "给一个实际例子",
-  },
-];
 
 type Stage = "answer" | "grade" | "feedback";
 
-const LEVEL_ORDER: CognitiveLevel[] = ["remember", "understand", "apply"];
+/** 测评实际使用的三档（analyze+ 为将来扩展，不在自适应循环内）。 */
+type QuizLevel = "remember" | "understand" | "apply";
+
+const LEVEL_ORDER: QuizLevel[] = ["remember", "understand", "apply"];
 
 function levelIndexOf(l: CognitiveLevel): number {
-  const i = LEVEL_ORDER.indexOf(l);
+  const i = LEVEL_ORDER.indexOf(l as QuizLevel);
   return i === -1 ? 0 : i;
-}
-
-function promptFor(unit: KnowledgeUnit, level: CognitiveLevel): string {
-  const title = unit.title;
-  switch (level) {
-    case "remember":
-      return `「${title}」是什么？用一两句话给出定义。`;
-    case "understand":
-      return `用自己的话解释「${title}」，并说明它解决什么问题。`;
-    case "apply":
-      return `举一个实际场景：在什么情况下会用上「${title}」？具体怎么做？`;
-    default:
-      return `关于「${title}」，请给出你的理解。`;
-  }
 }
 
 /**
@@ -67,6 +38,8 @@ export default function AssessmentSession({
   unit: KnowledgeUnit;
   onExit: () => void;
 }) {
+  const { m } = useI18n();
+  const a = m.assessment;
   const navigate = useNavigate();
   const snapshot = useLoopStore((s) => s.snapshot);
   const submitAnswer = useLoopStore((s) => s.submitAnswer);
@@ -96,8 +69,22 @@ export default function AssessmentSession({
   }, []);
 
   const currentLevel = LEVEL_ORDER[Math.min(levelIdx, LEVEL_ORDER.length - 1)];
-  const question = promptFor(unit, currentLevel);
+  const question = promptText(unit.title, currentLevel);
   const masteryNow = snapshot?.masteryByUnit[unit.id] ?? 0;
+
+  function promptText(title: string, level: CognitiveLevel): string {
+    const p = a.prompt;
+    switch (level) {
+      case "remember":
+        return p.remember(title);
+      case "understand":
+        return p.understand(title);
+      case "apply":
+        return p.apply(title);
+      default:
+        return p.fallback(title);
+    }
+  }
 
   const submitGrade = useCallback(
     async (correct: boolean) => {
@@ -159,19 +146,19 @@ export default function AssessmentSession({
     }
   };
 
-  const levelLabel = (i: number) => LEVELS[Math.min(i, LEVELS.length - 1)].label;
+  const level = (i: number): QuizLevel => LEVEL_ORDER[Math.min(i, LEVEL_ORDER.length - 1)];
 
   return (
     <PageContainer>
       <SectionTitle
-        title="测评"
-        subtitle="从缺口单元出题，难度随作答调整——本地模式为自评对错。"
+        title={a.title}
+        subtitle={a.subtitle}
         action={
           <button
             onClick={onExit}
             className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50"
           >
-            退出
+            {m.common.exit}
           </button>
         }
       />
@@ -182,14 +169,14 @@ export default function AssessmentSession({
           <div className="flex items-center gap-2">
             <span className="text-base font-semibold text-slate-900">{unitTitle(unit.id)}</span>
             <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-600">
-              认知层级：{levelLabel(levelIdx)}
+              {a.cognitiveOf(a.levelLabel[level(levelIdx)])}
               <span className="ml-1 text-[10px] text-indigo-400">
-                {LEVELS[Math.min(levelIdx, LEVELS.length - 1)].hint}
+                {a.levelHint[level(levelIdx)]}
               </span>
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-400">掌握度 {Math.round(masteryNow * 100)}%</span>
+            <span className="text-xs text-slate-400">{a.masteryAt(Math.round(masteryNow * 100))}</span>
             <BandBadge band={bandOf(masteryNow)} />
           </div>
         </div>
@@ -204,7 +191,7 @@ export default function AssessmentSession({
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
                 onFocus={() => setStage((s) => (s === "grade" ? "grade" : s))}
-                placeholder="写下你的回答…（本地模式：写完后对照参考答案自评）"
+                placeholder={a.answerPlaceholder}
                 rows={3}
                 className="mt-3 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-indigo-300 focus:bg-white"
               />
@@ -216,13 +203,13 @@ export default function AssessmentSession({
                   }}
                   className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
                 >
-                  对照参考答案
+                  {a.compareRef}
                 </button>
               ) : null}
               {revealed ? (
                 <div className="mt-3">
                   <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                    <span className="font-medium text-slate-700">参考答案要点：</span>
+                    <span className="font-medium text-slate-700">{a.refLead}</span>
                     {unit.summary ?? unit.title}
                   </div>
                   <div className="mt-3 flex gap-3">
@@ -230,25 +217,23 @@ export default function AssessmentSession({
                       onClick={() => void submitGrade(true)}
                       className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
                     >
-                      我答对了 <kbd className="ml-1 rounded bg-emerald-500/40 px-1 text-[10px]">1</kbd>
+                      {a.gotIt} <kbd className="ml-1 rounded bg-emerald-500/40 px-1 text-[10px]">1</kbd>
                     </button>
                     <button
                       onClick={() => void submitGrade(false)}
                       className="rounded-lg bg-red-50 px-4 py-2 text-sm font-medium text-red-600 ring-1 ring-red-200 hover:bg-red-100"
                     >
-                      我没答对 <kbd className="ml-1 rounded bg-red-100 px-1 text-[10px]">2</kbd>
+                      {a.missedIt} <kbd className="ml-1 rounded bg-red-100 px-1 text-[10px]">2</kbd>
                     </button>
                   </div>
-                  <p className="mt-2 text-[11px] text-slate-400">
-                    本地无 AI 判分，采用诚实自评；接入 Provider 后自动判分。
-                  </p>
+                  <p className="mt-2 text-[11px] text-slate-400">{a.honestNote}</p>
                 </div>
               ) : null}
             </>
           ) : (
             <div className="mt-3 space-y-4">
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                {delta !== undefined && delta >= 0 ? "✅ 判定：答对" : "❌ 判定：没答对"}
+                {delta !== undefined && delta >= 0 ? a.verdictRight : a.verdictWrong}
                 {delta !== undefined ? (
                   <span className="mt-1 block">
                     <DeltaBadge delta={delta} nextReviewInDays={intervalDays} />
@@ -259,9 +244,9 @@ export default function AssessmentSession({
                     ? wrongAtLevel
                       ? ""
                       : correctStreak >= 2
-                        ? "连续答对，难度已上调。"
-                        : "答对了，下一题难度上调。"
-                    : "没关系，这道题已进入你的复习队列。"}
+                        ? a.streakUp
+                        : a.upNext
+                    : a.queued}
                 </span>
               </div>
               {submitError ? <p className="text-sm text-red-600">{submitError}</p> : null}
@@ -269,7 +254,7 @@ export default function AssessmentSession({
                 onClick={nextRound}
                 className="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
               >
-                {!wrongAtLevel && levelIdx < LEVEL_ORDER.length - 1 ? "下一题 ▶" : "完成本单元测评 ✅"}
+                {!wrongAtLevel && levelIdx < LEVEL_ORDER.length - 1 ? a.nextQuestion : a.finishUnit}
               </button>
             </div>
           )}
@@ -277,15 +262,15 @@ export default function AssessmentSession({
       </Card>
 
       <p className="mt-4 text-xs text-slate-400">
-        已掌握度 {Math.round(startMastery * 100)}% → 现在 {Math.round(masteryNow * 100)}%。
-        连续答对升认知层级（记忆→理解→应用），答错则回到复习队列。
+        {a.progress(Math.round(startMastery * 100), Math.round(masteryNow * 100))}{" "}
+        {a.climbRule}
       </p>
       <div className="mt-2">
         <button
           onClick={() => navigate("/study")}
           className="text-sm text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline"
         >
-          查看复习队列 →
+          {a.viewQueue}
         </button>
       </div>
     </PageContainer>

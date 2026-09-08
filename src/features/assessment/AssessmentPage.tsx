@@ -6,6 +6,7 @@ import { bandOf } from "../../engine";
 import type { KnowledgeGraph, KnowledgeUnit } from "../../domain";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { useSessionStore } from "../../stores/useSessionStore";
+import { useI18n } from "../../i18n";
 import AssessmentSession from "./AssessmentSession";
 import { unitTitle } from "../units";
 
@@ -15,6 +16,8 @@ import { unitTitle } from "../units";
  * 首页：选单元 → 会话作答（AssessmentSession）。支持 ?unit= 直达会话。
  */
 export default function AssessmentPage() {
+  const { m } = useI18n();
+  const a = m.assessment;
   const snapshot = useLoopStore((s) => s.snapshot);
   const refresh = useLoopStore((s) => s.refresh);
   const records = useSessionStore((s) => s.records);
@@ -58,8 +61,8 @@ export default function AssessmentPage() {
   return (
     <PageContainer>
       <SectionTitle
-        title="测评"
-        subtitle="从你的缺口单元出题，难度随作答调整。"
+        title={a.title}
+        subtitle={a.subtitle}
       />
 
       {/* 建议先测 */}
@@ -68,7 +71,7 @@ export default function AssessmentPage() {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-indigo-400">
-                建议先测
+                {a.recommendEyebrow}
               </p>
               <p className="mt-1 text-lg font-semibold text-slate-900">
                 {unitTitle(recommended.id)}
@@ -78,7 +81,7 @@ export default function AssessmentPage() {
               onClick={() => setActive(recommended)}
               className="rounded-xl bg-indigo-600 px-6 py-3 text-base font-semibold text-white shadow-sm hover:bg-indigo-700"
             >
-              开始测评 →
+              {a.start}
             </button>
           </div>
         </Card>
@@ -86,14 +89,14 @@ export default function AssessmentPage() {
 
       {/* 选单元 */}
       <Card className="mt-6">
-        <p className="mb-3 text-sm font-semibold text-slate-700">或选择任意单元</p>
+        <p className="mb-3 text-sm font-semibold text-slate-700">{a.pickAny}</p>
         {units.length === 0 ? (
           <p className="text-sm text-slate-500">
-            还没有可测评的单元。{" "}
+            {a.emptyLead}{" "}
             <Link to="/study" className="text-indigo-600 hover:underline">
-              去学习页
+              {a.goStudy}
             </Link>{" "}
-            先学一点再测。
+            {a.emptyTail}
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">
@@ -117,11 +120,11 @@ export default function AssessmentPage() {
       {/* 今日已测 */}
       {todayAssessments.length > 0 ? (
         <Card className="mt-6">
-          <SectionTitle title="今日已测" subtitle={`${todayAssessments.length} 次作答`} />
+          <SectionTitle title={a.todayTitle} subtitle={a.todayCount(todayAssessments.length)} />
           <ul className="space-y-1 text-sm text-slate-600">
             {todayAssessments.map((r) => (
               <li key={`${r.unitId}-${r.at}`}>
-                {unitTitle(r.unitId)} · {r.correct ? "答对" : "答错"} ·{" "}
+                {unitTitle(r.unitId)} · {r.correct ? a.correct : a.wrong} ·{" "}
                 {r.correct ? "+" : ""}
                 {Math.round((r.masteryDelta ?? 0) * 100)}%
               </li>

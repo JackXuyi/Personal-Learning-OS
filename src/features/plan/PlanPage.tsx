@@ -17,7 +17,7 @@ import { MASTERY_THRESHOLD } from "../../domain";
 import type { Chapter, NextAction } from "../../domain";
 import { bandOf } from "../../engine";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
-import { actionKindLabel } from "../units";
+import { useI18n } from "../../i18n";
 import {
   actionPath,
   chapterActionMeta,
@@ -26,6 +26,7 @@ import {
 } from "./chapter-action";
 
 export default function PlanPage() {
+  const { m } = useI18n();
   const navigate = useNavigate();
   const plan = useLoopStore((s) => s.chapterPlan);
   const loading = useLoopStore((s) => s.loading);
@@ -75,46 +76,49 @@ export default function PlanPage() {
   return (
     <PageContainer>
       <SectionTitle
-        title="学习计划"
+        title={m.plan.title}
         subtitle={
           plan
-            ? `${plan.goal?.title ?? "学习空间"} · 章就绪 ${plan.mastered}/${plan.total} · 待办 ${plan.actions.length} 项`
-            : "正在计算学习计划…"
+            ? m.plan.subtitle(
+                plan.goal?.title ?? m.spaces.title,
+                plan.mastered,
+                plan.total,
+                plan.actions.length,
+              )
+            : m.plan.loadingSubtitle
         }
         action={
           <Link
             to="/quiz/new"
             className="rounded-lg bg-indigo-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
           >
-            ＋ 新建试卷
+            {m.plan.newPaper}
           </Link>
         }
       />
 
       {loading && !plan ? (
         <Card>
-          <p className="text-sm text-slate-500">正在运行学习规划器…</p>
+          <p className="text-sm text-slate-500">{m.plan.running}</p>
         </Card>
       ) : null}
 
       {plan && plan.total === 0 ? (
         <Card className="border-dashed">
-          <p className="text-base font-semibold text-slate-900">还没有可计划的章节</p>
-          <p className="mt-1 text-sm text-slate-500">
-            先导入一份资料并完成章节切分，规划器会为每一章排出「学 → 测 → 补」计划。
-          </p>
+          <p className="text-base font-semibold text-slate-900">{m.plan.emptyTitle}</p>
+          <p className="mt-1 text-sm text-slate-500">{m.plan.emptyDesc}</p>
           <div className="mt-4 flex gap-3">
             <Link
               to="/learn?import=1"
               className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
             >
-              导入资料
+              {m.common.import}
             </Link>
             <Link
               to="/learn"
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              去章节目录
+              {m.plan.goCatalog}
             </Link>
           </div>
         </Card>
@@ -127,19 +131,19 @@ export default function PlanPage() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  章就绪度
+                  {m.plan.readinessEyebrow}
                 </p>
                 <p className="mt-1 text-lg font-semibold text-slate-900">
-                  {plan.mastered} / {plan.total} 章达标
+                  {m.plan.masteredOf(plan.mastered, plan.total)}
                 </p>
                 <p className="text-sm text-slate-500">
                   {plan.actions.length > 0
-                    ? `还有 ${plan.actions.length} 项待办（已按推荐序排好）`
-                    : "所有章节都已达标——可直接综合测或推进新资料。"}
+                    ? m.plan.remaining(plan.actions.length)
+                    : m.plan.allReadyDesc}
                 </p>
               </div>
               <div className="w-44 shrink-0">
-                <Bar value={readyRatio} target={MASTERY_THRESHOLD} targetLabel={`达标 ${Math.round(MASTERY_THRESHOLD * 100)}%`} />
+                <Bar value={readyRatio} target={MASTERY_THRESHOLD} />
               </div>
             </div>
           </Card>
@@ -147,22 +151,20 @@ export default function PlanPage() {
           {/* 计划队列 */}
           {plan.actions.length === 0 ? (
             <Card className="border-emerald-200 bg-emerald-50/40">
-              <p className="text-lg font-semibold text-slate-900">🎉 全部章节已达标</p>
-              <p className="mt-1 text-sm text-slate-500">
-                章就绪度已到顶。可出综合测巩固，或继续导入新资料。
-              </p>
+              <p className="text-lg font-semibold text-slate-900">{m.plan.allDoneTitle}</p>
+              <p className="mt-1 text-sm text-slate-500">{m.plan.allDoneDesc}</p>
               <div className="mt-4 flex gap-3">
                 <Link
                   to="/quiz/new"
                   className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
                 >
-                  出综合测
+                  {m.plan.quizAll}
                 </Link>
                 <Link
                   to="/learn?import=1"
                   className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 >
-                  导入新资料
+                  {m.plan.importMore}
                 </Link>
               </div>
             </Card>
@@ -173,7 +175,7 @@ export default function PlanPage() {
                 const mastery = chapter
                   ? (plan.learner.byUnit[chapter.id]?.mastery ?? 0)
                   : 0;
-                const meta = chapterActionMeta(action.kind);
+                const meta = chapterActionMeta(action.kind, m);
                 const busy = busyId === chapter?.id;
                 return (
                   <div
@@ -188,16 +190,16 @@ export default function PlanPage() {
                         <span
                           className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${meta.chip}`}
                         >
-                          {actionKindLabel(action.kind)}
+                          {m.units.action[action.kind]}
                         </span>
                         <span className="text-sm font-medium text-slate-800">
                           {chapter
-                            ? chapterDisplayTitle(chapter, plan.docTitleOf[chapter.id])
+                            ? chapterDisplayTitle(chapter, plan.docTitleOf[chapter.id], m)
                             : action.unitId}
                         </span>
                         {chapter ? (
                           <span className="text-xs tabular-nums text-slate-400">
-                            掌握度 {Math.round(mastery * 100)}%
+                            {m.plan.masteryAt(Math.round(mastery * 100))}
                           </span>
                         ) : null}
                       </div>
@@ -216,7 +218,7 @@ export default function PlanPage() {
                         disabled={Boolean(busy)}
                         className="shrink-0 rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
                       >
-                        {busy ? "生成中…" : `${meta.verb} →`}
+                        {busy ? m.plan.generating : `${meta.verb} →`}
                       </button>
                     </div>
                   </div>

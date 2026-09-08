@@ -6,18 +6,19 @@ import { DeltaBadge } from "../../components/DeltaBadge";
 import { bandOf, createLearningPlanner } from "../../engine";
 import { subgraphOf } from "../../engine/graph-engine";
 import type { SelfRating, NextAction, Chapter } from "../../domain";
-import { newId } from "../../domain";
+import { MASTERY_THRESHOLD, newId } from "../../domain";
 import { storage, useLoopStore, type SubmitResult } from "../../stores/useLoopStore";
 import { useSessionStore } from "../../stores/useSessionStore";
-import { actionKindLabel, unitTitle } from "../units";
+import { useI18n } from "../../i18n";
+import { unitTitle } from "../units";
 
 type Stage = "show" | "rated";
 
-const RATINGS: { value: SelfRating; label: string; days: number }[] = [
-  { value: "forget", label: "忘记", days: 1 },
-  { value: "hard", label: "困难", days: 2 },
-  { value: "good", label: "记得", days: 4 },
-  { value: "easy", label: "轻松", days: 7 },
+const RATINGS: { value: SelfRating; days: number }[] = [
+  { value: "forget", days: 1 },
+  { value: "hard", days: 2 },
+  { value: "good", days: 4 },
+  { value: "easy", days: 7 },
 ];
 
 /** 本次会话的完成条目（用于完成汇总）。 */
@@ -29,6 +30,8 @@ interface SessionItem {
 }
 
 export default function ReviewSession() {
+  const { m } = useI18n();
+  const r = m.review;
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const unitParam = params.get("unit");
@@ -65,7 +68,7 @@ export default function ReviewSession() {
 
   /** 退出目标：概念模式回章图谱，否则 /study（重定向 /plan）。 */
   const goBack = conceptMode && chapterParam ? `/learn/${chapterParam}/graph` : "/study";
-  const goBackLabel = conceptMode ? "返回章图谱" : "返回学习页";
+  const goBackLabel = conceptMode ? r.goBackGraph : r.goBackStudy;
   const titleOf = (unitId: string): string => titles[unitId] ?? unitTitle(unitId);
 
   // 1) 数据就绪：概念模式 = 章概念缺口队列（先决 DFS 优先，复用概念 buildPlan）；
@@ -98,13 +101,13 @@ export default function ReviewSession() {
         for (const u of sub.units) titleMap[u.id] = u.title;
         setTitles(titleMap);
         const masteryMap: Record<string, number> = {};
-        for (const [id, m] of Object.entries(ls.byUnit)) masteryMap[id] = m.mastery;
+        for (const [id, mm] of Object.entries(ls.byUnit)) masteryMap[id] = mm.mastery;
         setConceptMastery(masteryMap);
         const planActions = createLearningPlanner().buildPlan({
           goal: {
             id: `goal-ch-${found.id}`,
             type: "study",
-            title: found.title || `第 ${found.order} 章`,
+            title: found.title || m.chapter.ordinal(found.order),
             importance: "high",
             requiredUnitIds: found.unitIds,
             createdAt: 0,
@@ -125,7 +128,7 @@ export default function ReviewSession() {
                 kind: "review",
                 unitId: unitParam,
                 priority: 0,
-                reasons: ["复习本章概念，自评刷新下次复习安排。"],
+                reasons: [r.singleReason],
                 createdAt: Date.now(),
               },
             ];
@@ -142,7 +145,7 @@ export default function ReviewSession() {
     return () => {
       activeRef.current = false;
     };
-  }, [conceptMode, chapterParam, unitParam, refresh]);
+  }, [conceptMode, chapterParam, unitParam, refresh, m, r]);
 
   // 2) 快照就绪后固定会话队列（非概念模式；从指定单元起，或整个队列），记录起始就绪度。
   useEffect(() => {
@@ -231,7 +234,7 @@ export default function ReviewSession() {
       if (finished) return;
       if (e.key === "Escape") {
         const changed = sessionItems.length > 0 && undoLeft > 0;
-        if (!changed || window.confirm("本次作答尚未提交或可撤销，确定退出？")) {
+        if (!changed || window.confirm(r.confirmExit)) {
           navigate(goBack);
         }
         return;
@@ -250,7 +253,7 @@ export default function ReviewSession() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [stage, onRate, next, finished, navigate, sessionItems, undoLeft, goBack]);
+  }, [stage, onRate, next, finished, navigate, sessionItems, undoLeft, goBack, r]);
 
   // 6) 撤销：回滚状态并移除本次会话记录。
   const undo = useCallback(async () => {
@@ -289,9 +292,9 @@ export default function ReviewSession() {
     return (
       <PageContainer>
         <Card>
-          <p className="text-sm text-slate-500">章节不存在或已被移除。</p>
+          <p className="text-sm text-slate-500">{r.missingChapter}</p>
           <Link to="/learn" className="mt-2 inline-block text-sm text-indigo-600 hover:underline">
-            ← 返回章节目录
+            ← {m.learn.reader.backToCatalog}
           </Link>
         </Card>
       </PageContainer>
@@ -302,7 +305,7 @@ export default function ReviewSession() {
     return (
       <PageContainer>
         <Card>
-          <p className="text-sm text-slate-500">正在进入复习会话…</p>
+          <p className="text-sm text-slate-500">{r.opening}</p>
         </Card>
       </PageContainer>
     );
@@ -313,9 +316,7 @@ export default function ReviewSession() {
       <PageContainer>
         <Card>
           <p className="text-sm text-slate-500">
-            {conceptMode
-              ? "本章概念没有待复习的缺口——都已达标，或本章尚未提炼概念。"
-              : "当前没有待复习的缺口单元。"}
+            {conceptMode ? r.noConceptGaps : r.noGaps}
           </p>
           <Link to={goBack} className="mt-2 inline-block text-sm text-indigo-600 hover:underline">
             ← {goBackLabel}
@@ -330,7 +331,7 @@ export default function ReviewSession() {
   const exit = () => {
     const changed = sessionItems.length > 0 && undoLeft > 0;
     if (changed) {
-      const ok = window.confirm("本次作答尚未提交或可撤销，确定退出？");
+      const ok = window.confirm(r.confirmExit);
       if (!ok) return;
     }
     navigate(goBack);
@@ -339,16 +340,16 @@ export default function ReviewSession() {
   return (
     <PageContainer>
       <SectionTitle
-        title={`复习 · ${index + 1}/${queue.length}`}
+        title={r.titleOf(index + 1, queue.length)}
         subtitle={
-          snapshot ? `目标：${snapshot.goal.title}` : undefined
+          snapshot ? r.goalOf(snapshot.goal.title) : undefined
         }
         action={
           <button
             onClick={exit}
             className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50"
           >
-            退出
+            {r.exit}
           </button>
         }
       />
@@ -358,25 +359,25 @@ export default function ReviewSession() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-              {actionKindLabel(current.kind)}
+              {m.units.action[current.kind]}
             </span>
             <span className="text-base font-semibold text-slate-900">
               {titleOf(current.unitId)}
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-400">掌握度 {Math.round(masteryNow * 100)}%</span>
+            <span className="text-xs text-slate-400">{r.masteryAt(Math.round(masteryNow * 100))}</span>
             <BandBadge band={bandOf(masteryNow)} />
           </div>
         </div>
 
         {/* 思考作答区（可选，默认自评模式） */}
         <div className="mt-5">
-          <p className="text-sm font-medium text-slate-700">用自己的话解释一下这个概念</p>
+          <p className="text-sm font-medium text-slate-700">{r.explainPrompt}</p>
           <textarea
             value={thinking}
             onChange={(e) => setThinking(e.target.value)}
-            placeholder="写下你的理解（可选）——写不写都不影响自评。"
+            placeholder={r.explainPlaceholder}
             rows={2}
             className="mt-2 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-indigo-300 focus:bg-white"
           />
@@ -384,7 +385,7 @@ export default function ReviewSession() {
             onClick={() => setRevealed((v) => !v)}
             className="mt-2 text-sm font-medium text-indigo-600 hover:underline"
           >
-            {revealed ? "收起参考要点" : "显示参考要点"} <kbd className="ml-1 rounded border border-slate-200 px-1 text-[10px] text-slate-400">Space</kbd>
+            {revealed ? r.hideRef : r.showRef} <kbd className="ml-1 rounded border border-slate-200 px-1 text-[10px] text-slate-400">Space</kbd>
           </button>
           {revealed && summaries[current.unitId] ? (
             <p className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-sm text-slate-600">
@@ -398,32 +399,30 @@ export default function ReviewSession() {
       <Card className="mt-4 border-t-0">
         {stage === "show" ? (
           <>
-            <p className="mb-3 text-sm font-semibold text-slate-700">这一步你感觉如何？（自评）</p>
+            <p className="mb-3 text-sm font-semibold text-slate-700">{r.askSelf}</p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {RATINGS.map((r, i) => (
+              {RATINGS.map((rate, i) => (
                 <button
-                  key={r.value}
-                  onClick={() => void onRate(r.value)}
+                  key={rate.value}
+                  onClick={() => void onRate(rate.value)}
                   className="group rounded-xl border border-slate-200 px-3 py-3 text-center transition hover:border-indigo-300 hover:bg-indigo-50/50 active:scale-[0.98]"
                 >
-                  <span className="block text-sm font-semibold text-slate-800">{r.label}</span>
+                  <span className="block text-sm font-semibold text-slate-800">{r.rating[rate.value]}</span>
                   <span className="mt-1 block text-[11px] text-slate-400 group-hover:text-indigo-500">
-                    {r.days} 天后再见
+                    {r.meetAgain(rate.days)}
                     <kbd className="ml-1 rounded border border-slate-200 px-1 text-[10px]">{i + 1}</kbd>
                   </span>
                 </button>
               ))}
             </div>
-            <p className="mt-3 text-[11px] text-slate-400">
-              间隔预览：忘记→1 天 · 困难→2 天 · 记得→4 天 · 轻松→7 天（启发式估计）
-            </p>
+            <p className="mt-3 text-[11px] text-slate-400">{r.intervalPreview}</p>
           </>
         ) : (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-slate-600">
-                  已记录：{ratingLabel(lastResultRating())}
+                  {r.recorded(lastResultRating() ? r.rating[lastResultRating()!] : "")}
                 </p>
                 {lastResult ? (
                   <div className="mt-1">
@@ -436,7 +435,7 @@ export default function ReviewSession() {
                   onClick={() => void undo()}
                   className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50"
                 >
-                  撤销（{undoLeft}s）
+                  {r.undo(undoLeft)}
                 </button>
               ) : null}
             </div>
@@ -445,7 +444,7 @@ export default function ReviewSession() {
               onClick={next}
               className="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
             >
-              {isLast ? "完成本次复习 ✅" : "下一项 ▶"}{" "}
+              {isLast ? r.finishReview : r.nextItem}{" "}
               <kbd className="ml-1 rounded bg-indigo-400/30 px-1 text-[10px] text-white">Enter</kbd>
             </button>
           </div>
@@ -454,9 +453,9 @@ export default function ReviewSession() {
     </PageContainer>
   );
 
-  function lastResultRating(): string {
+  function lastResultRating(): SelfRating | undefined {
     const item = sessionItems[sessionItems.length - 1];
-    return item ? item.rating : "";
+    return item ? item.rating : undefined;
   }
 }
 
@@ -476,6 +475,8 @@ function SummaryView({
   goBack: string;
   goBackLabel: string;
 }) {
+  const { m } = useI18n();
+  const r = m.review;
   const navigate = useNavigate();
   const snapshot = useLoopStore((s) => s.snapshot);
   const nowReadiness = snapshot?.readiness ?? startReadiness;
@@ -484,16 +485,14 @@ function SummaryView({
   return (
     <PageContainer>
       <SectionTitle
-        title={conceptMode ? "本章概念复习完成 🎉" : "本次复习完成 🎉"}
+        title={conceptMode ? r.conceptDoneTitle : r.doneTitle}
         subtitle={
-          conceptMode
-            ? "概念层无卷面——自评即该概念的掌握度证据，复习调度随评分顺延。"
-            : "掌握度变化为启发式估计。"
+          conceptMode ? r.conceptDoneSubtitle : r.doneSubtitle
         }
       />
       <Card>
         {items.length === 0 ? (
-          <p className="text-sm text-slate-500">本次没有完成任何单元。</p>
+          <p className="text-sm text-slate-500">{r.noneDone}</p>
         ) : (
           <ul className="space-y-2">
             {items.map((it) => (
@@ -504,7 +503,7 @@ function SummaryView({
                 <span className="text-sm font-medium text-slate-700">
                   {titleOf(it.action.unitId)}
                   <span className="ml-2 text-xs font-normal text-slate-400">
-                    {ratingLabel(it.rating)}
+                    {r.rating[it.rating]}
                   </span>
                 </span>
                 <DeltaBadge delta={it.delta} nextReviewInDays={it.intervalDays} />
@@ -515,7 +514,7 @@ function SummaryView({
         {!conceptMode && snapshot ? (
           <div className="mt-6 rounded-lg border border-indigo-100 bg-indigo-50/50 px-4 py-3">
             <p className="text-sm font-medium text-slate-800">
-              就绪度{" "}
+              {r.readinessHead}{" "}
               <span className="tabular-nums text-slate-900">
                 {Math.round(startReadiness * 100)}%
               </span>
@@ -527,12 +526,12 @@ function SummaryView({
               ) : (
                 <span className="tabular-nums text-slate-900"> → {Math.round(nowReadiness * 100)}%</span>
               )}
-              <span className="text-slate-500"> · 目标 80%</span>
+              <span className="text-slate-500">{r.readinessTail(Math.round(MASTERY_THRESHOLD * 100))}</span>
             </p>
             <p className="mt-1 text-xs text-slate-500">
               {snapshot.next
-                ? `还有 ${snapshot.actions.length} 个缺口待补，可继续测评巩固。`
-                : "所有缺口已达标 🎉"}
+                ? r.gapsLeft(snapshot.actions.length)
+                : r.allReadyShort}
             </p>
           </div>
         ) : null}
@@ -541,7 +540,7 @@ function SummaryView({
             onClick={() => navigate("/")}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
           >
-            回到首页
+            {r.goHome}
           </button>
           {conceptMode ? (
             <button
@@ -555,21 +554,17 @@ function SummaryView({
               onClick={() => navigate("/assessment")}
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              继续测评巩固 →
+              {r.keepAssess}
             </button>
           )}
           <button
             onClick={() => navigate(conceptMode ? "/learn" : "/study")}
             className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
-            {conceptMode ? "返回章节目录" : "返回学习页"}
+            {conceptMode ? r.backCatalog : r.goBackStudy}
           </button>
         </div>
       </Card>
     </PageContainer>
   );
-}
-
-function ratingLabel(rating: string): string {
-  return { forget: "忘记", hard: "困难", good: "记得", easy: "轻松" }[rating] ?? rating;
 }
