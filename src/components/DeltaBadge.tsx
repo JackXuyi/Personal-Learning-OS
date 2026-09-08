@@ -30,12 +30,12 @@ export function DeltaBadge({
         {pct}%
       </span>
       {nextReviewInDays !== undefined ? (
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-ink-2">
           {m.common.delta.nextReview(nextReviewInDays)}
-          <span className="ml-1 text-slate-400">（{m.common.delta.heuristic}）</span>
+          <span className="ml-1 text-ink-3">（{m.common.delta.heuristic}）</span>
         </span>
       ) : (
-        <span className="text-[10px] text-slate-400">{m.common.delta.heuristic}</span>
+        <span className="text-[10px] text-ink-3">{m.common.delta.heuristic}</span>
       )}
     </span>
   );

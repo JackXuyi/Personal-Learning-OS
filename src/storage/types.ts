@@ -49,8 +49,15 @@ export interface StorageAdapter {
   getLearnerState(): Promise<LearnerState>;
   saveLearnerState(state: LearnerState): Promise<void>;
 
-  // 目标
+  // 目标（多目标，U0 数据准备；docs/ui-workbench-plan-2026-09.md §7.2）
   listGoals(): Promise<LearningGoal[]>;
   saveGoal(goal: LearningGoal): Promise<void>;
   deleteGoal(id: string): Promise<void>;
+
+  // 目标 · 当前上下文（activeGoal）
+  // 语义：返回 activeGoalId 指向的目标；id 失效/未设置时回退列表首个目标；
+  //       列表为空返回 undefined（seed 由学习闭环 seedDemoIfEmpty 负责）。
+  getActiveGoal(): Promise<LearningGoal | undefined>;
+  /** id 传 undefined = 清除偏好（读取时回退首个目标）。 */
+  setActiveGoal(id: string | undefined): Promise<void>;
 }

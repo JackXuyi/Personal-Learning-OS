@@ -3,6 +3,25 @@
 @theme {
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
     "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+
+  /* ── UI Workbench 语义 token（docs/ui-workbench-plan-2026-09.md §5.2）── */
+  /* 背景层级 */
+  --color-app-bg: #f7f8fa; /* 应用底色（窗外留白） */
+  --color-surface: #ffffff; /* 主内容面 */
+  --color-subtle: #f1f3f5; /* hover / 次级块 */
+  --color-line: #e4e4e7; /* divider / 细分隔线 */
+  /* 文字层级 */
+  --color-ink-1: #18181b; /* 主文字 */
+  --color-ink-2: #71717a; /* 次文字 */
+  --color-ink-3: #a1a1aa; /* 弱化 / 占位 */
+  /* 强调（唯一强调色，收敛使用） */
+  --color-accent: #6366f1;
+  /* 状态（mastered/learning/weak/idle/failed） */
+  --color-state-mastered: #059669;
+  --color-state-learning: #6366f1;
+  --color-state-weak: #d97706;
+  --color-state-idle: #71717a;
+  --color-state-failed: #dc2626;
 }
 
 /* 全局基础样式，避免应用出现未加载样式的背景闪烁 */

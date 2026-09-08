@@ -3,22 +3,24 @@ import { useNavigate } from "react-router-dom";
 import { useLoopStore, storage } from "../stores/useLoopStore";
 import { useSessionStore, type DoneRecord } from "../stores/useSessionStore";
 import { unitTitle } from "../features/units";
-import type { Chapter } from "../domain";
+import type { Chapter, LearningGoal } from "../domain";
 import { useI18n, type Messages } from "../i18n";
 import {
   actionPath,
   chapterDisplayTitle,
   makeRetakePaper,
 } from "../features/plan/chapter-action";
+import { CMD_OPEN_EVENT } from "./layout/AppShell";
 
 /**
- * ⌘K 命令面板（S5 / P2-2）。
+ * ⌘K 命令面板（UI Workbench U0；docs/ui-workbench-plan-2026-09.md §4.2/§6-U0）。
  *
- * 任意页面 ⌘K / Ctrl+K 唤起：输入过滤 · ↑↓ 选择 · Enter 执行 · Esc 关闭。
- * 首条「行动」恒在顶部——不知道做什么时，⌘K 后直接回车即可启动今日闭环。
+ * 任意页面 ⌘K / Ctrl+K 或点击 Header 搜索框唤起：输入过滤 · ↑↓ 选择 ·
+ * Enter 执行 · Esc 关闭。分区：行动（今日下一步）/ 搜索（文档·章节·目标内容
+ * 索引）/ 命令（导入·出卷·页面跳转）/ 最近。
  */
 
-type SectionKey = "action" | "jump" | "recent";
+type SectionKey = "action" | "search" | "commands" | "recent";
 
 interface Command {
   id: string;
@@ -29,18 +31,16 @@ interface Command {
   search: string;
 }
 
-const SECTION_ORDER: SectionKey[] = ["action", "jump", "recent"];
+const SECTION_ORDER: SectionKey[] = ["action", "search", "commands", "recent"];
 
-/** 跳转项与侧边栏一一对应（不改路由；label/hint 取自当前语言字典）。 */
-const NAV_ENTRIES = [
-  "/",
-  "/learn",
-  "/plan",
-  "/quiz",
-  "/spaces",
-  "/career",
-  "/settings",
-] as const;
+/** 跳转项与侧边栏可达项一一对应（不改路由；label/hint 取自当前语言字典）。 */
+const NAV_ENTRIES = ["/", "/learn", "/plan", "/quiz", "/career", "/settings"] as const;
+
+/** 内容搜索索引（每次打开 ⌘K 时刷新一次目标列表；文档/章取自章级快照）。 */
+interface SearchIndex {
+  goals: LearningGoal[];
+  ready: boolean;
+}
 
 export default function CommandPalette() {
   const [open, setOpen] = useState(false);
@@ -54,6 +54,7 @@ export default function CommandPalette() {
   const chapterPlan = useLoopStore((s) => s.chapterPlan);
   const refresh = useLoopStore((s) => s.refresh);
   const recent = useSessionStore((s) => s.records);
+  const [index, setIndex] = useState<SearchIndex>({ goals: [], ready: false });
 
   /** 章 id → Chapter（章级行动跳转用）。 */
   const chapterIndex = useMemo(() => {
@@ -64,7 +65,7 @@ export default function CommandPalette() {
     return index;
   }, [chapterPlan]);
 
-  // 全局快捷键：⌘K / Ctrl+K 开合。
+  // 全局快捷键：⌘K / Ctrl+K 开合；Header 搜索框经 CustomEvent 同开。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -72,22 +73,25 @@ export default function CommandPalette() {
         setOpen((v) => !v);
       }
     };
+    const onOpen = () => setOpen(true);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener(CMD_OPEN_EVENT, onOpen);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(CMD_OPEN_EVENT, onOpen);
+    };
   }, []);
 
-  // 打开时：聚焦输入框并清空上次关键词。
+  // 打开时：聚焦输入框、清空关键词、刷新搜索索引与闭环快照。
   useEffect(() => {
-    if (open) {
-      setQuery("");
-      setActive(0);
-      requestAnimationFrame(() => inputRef.current?.select());
-    }
-  }, [open]);
-
-  // 闭环快照缺失就先刷一次（保证「下一步」数据可用）；快照就绪后不打断输入。
-  useEffect(() => {
-    if (open && !snapshot && !chapterPlan) void refresh();
+    if (!open) return;
+    setQuery("");
+    setActive(0);
+    requestAnimationFrame(() => inputRef.current?.select());
+    if (!snapshot && !chapterPlan) void refresh();
+    void (async () => {
+      setIndex({ goals: await storage.listGoals(), ready: true });
+    })();
   }, [open, snapshot, chapterPlan, refresh]);
 
   // 列表长度变化时钳制高亮下标。
@@ -103,7 +107,6 @@ export default function CommandPalette() {
         case "/learn": return m.nav.learn.label;
         case "/plan": return m.nav.plan.label;
         case "/quiz": return m.nav.quiz.label;
-        case "/spaces": return m.nav.spaces.label;
         case "/career": return m.nav.career.label;
         case "/settings": return m.nav.settings.label;
       }
@@ -114,14 +117,12 @@ export default function CommandPalette() {
         case "/learn": return m.nav.learn.hint;
         case "/plan": return m.nav.plan.hint;
         case "/quiz": return m.nav.quiz.hint;
-        case "/spaces": return m.nav.spaces.hint;
         case "/career": return m.nav.career.hint;
         case "/settings": return m.nav.settings.hint;
       }
     };
 
-    // ── 行动 ──────────────────────────────────────────────
-    // 今日主行动 = 章级计划头项（V2，T8）；补考需先就地生成补考卷。
+    // ── 行动：今日主行动 = 章级计划头项（补考需先就地生成补考卷）────────
     const next = chapterPlan?.next;
     if (next) {
       const chapter = chapterIndex.get(next.unitId);
@@ -159,40 +160,89 @@ export default function CommandPalette() {
         },
       });
     }
-    // 有章但无待办时提供「出综合测」行动。
+
+    // ── 搜索：文档 / 章节 / 目标 内容索引 ─────────────────────────────
+    const q = query.trim().toLowerCase();
+    if (q) {
+      const docs = chapterPlan?.docs ?? [];
+      const pushDoc = (docTitle: string, run: () => void) => {
+        list.push({
+          id: `s-doc-${docTitle}`,
+          label: `${m.cmd.typeDoc} · ${docTitle}`,
+          section: "search",
+          search: `${m.cmd.typeDoc} ${docTitle}`,
+          run,
+        });
+      };
+      for (const d of docs) {
+        const title = d.title.toLowerCase();
+        if (title.includes(q)) pushDoc(d.title, () => navigate("/learn"));
+      }
+      for (const list2 of Object.values(chapterPlan?.chaptersByDoc ?? {})) {
+        for (const c of list2) {
+          const docTitle = chapterPlan?.docTitleOf[c.id] ?? "";
+          if (
+            c.title.toLowerCase().includes(q) ||
+            docTitle.toLowerCase().includes(q)
+          ) {
+            list.push({
+              id: `s-ch-${c.id}`,
+              label: `${m.cmd.typeChapter} · ${chapterDisplayTitle(c, docTitle)}`,
+              hint: docTitle,
+              section: "search",
+              search: `${m.cmd.typeChapter} ${c.title} ${docTitle}`,
+              run: () => navigate(`/learn/${c.id}`),
+            });
+          }
+        }
+      }
+      for (const g of index.goals) {
+        if (g.title.toLowerCase().includes(q) || g.type.toLowerCase().includes(q)) {
+          list.push({
+            id: `s-goal-${g.id}`,
+            label: `${m.cmd.typeGoal} · ${g.title}`,
+            hint: m.nav.career.label,
+            section: "search",
+            search: `${m.cmd.typeGoal} ${g.title}`,
+            // U6 Goals 详情页上线后改为 /goals/:goalId。
+            run: () => navigate("/career"),
+          });
+        }
+      }
+    }
+
+    // ── 命令：导入 / 综合测（条件）/ 页面跳转 ─────────────────────────
     if (chapterPlan && chapterPlan.total > 0 && !next) {
       list.push({
-        id: "act-quiz",
+        id: "cmd-quiz",
         label: m.cmd.quizAll,
         hint: m.cmd.quizAllHint,
-        section: "action",
+        section: "commands",
         search: m.cmd.searchWords.quiz,
         run: () => navigate("/quiz/new"),
       });
     }
     list.push({
-      id: "act-import",
+      id: "cmd-import",
       label: m.cmd.import,
       hint: m.cmd.importHint,
-      section: "action",
+      section: "commands",
       search: m.cmd.searchWords.import,
       run: () => navigate("/learn?import=1"),
     });
-
-    // ── 跳转 ──────────────────────────────────────────────
     for (const to of NAV_ENTRIES) {
       const label = navOf(to);
       list.push({
-        id: `nav-${to}`,
+        id: `cmd-nav-${to}`,
         label,
         hint: hintOf(to),
-        section: "jump",
+        section: "commands",
         search: `${label} ${hintOf(to)} ${m.cmd.searchWords.nav}`,
         run: () => navigate(to),
       });
     }
 
-    // ── 最近（今日已完成，会话内存态）──────────────────────
+    // ── 最近（今日已完成，会话内存态）────────────────────────────────
     const recentList = [...recent]
       .sort((a, b) => b.at - a.at)
       .slice(0, 3)
@@ -212,7 +262,7 @@ export default function CommandPalette() {
     list.push(...recentList);
 
     return list;
-  }, [chapterPlan, chapterIndex, recent, refresh, navigate, m]);
+  }, [chapterPlan, chapterIndex, recent, refresh, navigate, m, query, index.goals]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -260,16 +310,16 @@ export default function CommandPalette() {
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-slate-900/30 backdrop-blur-sm"
+      className="fixed inset-0 z-50 bg-ink-1/25 backdrop-blur-sm"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) close();
       }}
     >
-      <div className="mx-auto mt-[10vh] w-full max-w-xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
-          <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-xs text-slate-500">
+      <div className="mx-auto mt-[10vh] w-full max-w-xl overflow-hidden rounded-xl border border-line bg-surface shadow-2xl">
+        <div className="flex items-center gap-3 border-b border-line px-4 py-3">
+          <kbd className="rounded border border-line bg-subtle px-1.5 py-0.5 font-mono text-xs text-ink-2">
             ⌘K
-          </span>
+          </kbd>
           <input
             ref={inputRef}
             value={query}
@@ -279,25 +329,25 @@ export default function CommandPalette() {
             }}
             onKeyDown={onKeyDown}
             placeholder={m.cmd.placeholder}
-            className="flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
+            className="flex-1 bg-transparent text-sm text-ink-1 outline-none placeholder:text-ink-3"
             aria-label={m.cmd.searchAria}
             autoFocus
             spellCheck={false}
           />
-          <kbd className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-400">
+          <kbd className="rounded border border-line px-1.5 py-0.5 text-[10px] text-ink-3">
             Esc
           </kbd>
         </div>
 
         <div className="max-h-[46vh] overflow-y-auto py-2">
           {sections.length === 0 ? (
-            <p className="px-4 py-6 text-center text-sm text-slate-400">
+            <p className="px-4 py-6 text-center text-sm text-ink-3">
               {m.cmd.emptyNoMatch(query)}
             </p>
           ) : (
             sections.map((section) => (
               <div key={section.key}>
-                <p className="px-4 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                <p className="px-4 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-ink-3">
                   {section.title}
                 </p>
                 {section.items.map((cmd) => {
@@ -313,9 +363,7 @@ export default function CommandPalette() {
                         cmd.run();
                       }}
                       className={`flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm transition-colors ${
-                        isActive
-                          ? "bg-indigo-50 text-indigo-700"
-                          : "text-slate-700"
+                        isActive ? "bg-accent/10 text-accent" : "text-ink-1"
                       }`}
                     >
                       <span className="min-w-0 truncate">
@@ -323,9 +371,7 @@ export default function CommandPalette() {
                         {cmd.label}
                       </span>
                       {cmd.hint ? (
-                        <span className="shrink-0 text-xs text-slate-400">
-                          {cmd.hint}
-                        </span>
+                        <span className="shrink-0 text-xs text-ink-3">{cmd.hint}</span>
                       ) : null}
                     </button>
                   );

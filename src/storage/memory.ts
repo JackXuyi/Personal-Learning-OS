@@ -27,6 +27,7 @@ export class InMemoryStorage implements StorageAdapter {
   protected graph: KnowledgeGraph = { units: [], relations: [] };
   protected learnerState: LearnerState = { byUnit: {} };
   protected goals = new Map<string, LearningGoal>();
+  protected activeGoalId: string | undefined;
 
   async listDocuments(): Promise<SourceDocument[]> {
     return [...this.documents.values()];
@@ -91,5 +92,17 @@ export class InMemoryStorage implements StorageAdapter {
   }
   async deleteGoal(id: string): Promise<void> {
     this.goals.delete(id);
+  }
+
+  async getActiveGoal(): Promise<LearningGoal | undefined> {
+    const all = [...this.goals.values()];
+    if (this.activeGoalId) {
+      const preferred = all.find((g) => g.id === this.activeGoalId);
+      if (preferred) return preferred;
+    }
+    return all[0]; // id 失效 / 未设置 → 回退首个目标
+  }
+  async setActiveGoal(id: string | undefined): Promise<void> {
+    this.activeGoalId = id;
   }
 }

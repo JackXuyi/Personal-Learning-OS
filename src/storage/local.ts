@@ -26,6 +26,7 @@ const KEY_PAPER_RESULTS = "plos.paper-results";
 const KEY_GRAPH = "plos.graph";
 const KEY_LEARNER = "plos.learner";
 const KEY_GOALS = "plos.goals";
+const KEY_ACTIVE_GOAL = "plos.active-goal";
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -57,6 +58,7 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     this.graph = load<KnowledgeGraph>(KEY_GRAPH, { units: [], relations: [] });
     this.learnerState = load<LearnerState>(KEY_LEARNER, { byUnit: {} });
     this.goals = new Map(load<LearningGoal[]>(KEY_GOALS, []).map((g) => [g.id, g]));
+    this.activeGoalId = load<string | undefined>(KEY_ACTIVE_GOAL, undefined);
   }
 
   private persist() {
@@ -122,5 +124,15 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
   override async deleteGoal(id: string): Promise<void> {
     await super.deleteGoal(id);
     this.persist();
+  }
+  /** activeGoalId 单独落 localStorage（独立 key，不随全量 persist）。 */
+  override async setActiveGoal(id: string | undefined): Promise<void> {
+    this.activeGoalId = id;
+    try {
+      if (id === undefined) localStorage.removeItem(KEY_ACTIVE_GOAL);
+      else localStorage.setItem(KEY_ACTIVE_GOAL, id);
+    } catch {
+      /* 写失败不阻塞主流程（回退首个目标语义由 getActiveGoal 兜底） */
+    }
   }
 }
