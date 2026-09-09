@@ -614,9 +614,13 @@ Long-term: become an **open-source Personal Learning OS** where a Personal Knowl
 ### Prerequisites
 
 - **Node.js ≥ 22** (npm 10+)
-- Rust toolchain — `cargo` ≥ 1.77 — only when running the Tauri desktop shell
+- Rust toolchain — `cargo` ≥ 1.77 — only when running / bundling the Tauri desktop shell
 
-### Run the web app
+> If Rust was installed via rustup, new shells load `~/.cargo/env` automatically; if
+> you hit `cargo: command not found`, run `. "$HOME/.cargo/env"` first (or add
+> `$HOME/.cargo/bin` to your PATH).
+
+### Run the web app (browser mode)
 
 ```bash
 npm install     # install dependencies
@@ -625,13 +629,50 @@ npm run dev     # start the Vite dev server → http://localhost:1420
 
 Open the printed URL. The **Home** page runs the learning-loop demo against a
 sample career goal and shows the recommended next action computed by the
-engine layer.
+engine layer. This mode does not require the Rust toolchain and hot-reloads on
+every change — great for frontend-only work.
 
-### Run the desktop shell (Tauri)
+### Frontend + desktop shell local dev
 
 ```bash
-npm run tauri dev   # launch the native window (requires the Rust toolchain)
+. "$HOME/.cargo/env"   # make sure cargo is on PATH (rustup users)
+npm run tauri dev      # one command: starts Vite → compiles Rust → opens the native window
 ```
+
+How it works: `src-tauri/tauri.conf.json` sets `beforeDevCommand: "npm run dev"`
+and `devUrl: "http://localhost:1420"`, so `tauri dev` **starts the Vite dev server
+(fixed port 1420) first, then the native window loads that URL** — frontend and
+desktop shell are wired up for local dev by default, no need for two terminals:
+
+| What you change | Effect during dev |
+| --- | --- |
+| `src/` (React / TS / Tailwind) | Page hot-reloads via HMR |
+| `src-tauri/` (Rust: IPC commands / sidecar, etc.) | Recompiles and restarts the window automatically |
+
+Running `npm run dev` manually and then `tauri dev` fails on a `strictPort`
+conflict for port 1420. A local-inference sidecar `llama-helper` (Rust workspace
+member) is compiled together with `tauri dev`; the first compile takes a while —
+that is expected.
+
+### Build a production desktop app
+
+```bash
+. "$HOME/.cargo/env"   # make sure cargo is on PATH (rustup users)
+npm run tauri build    # typecheck + vite build → dist/, then cargo build --release
+```
+
+Artifacts land in `src-tauri/target/release/`:
+
+| Artifact | Path |
+| --- | --- |
+| Executable | `target/release/personal-learning-os` |
+| Local inference sidecar | `target/release/llama-helper` |
+| Installers (once enabled) | `target/release/bundle/` (macOS `.app`/`.dmg` · Windows `.msi` · Linux `.deb`/`.AppImage`) |
+
+> The project is pre-MVP: `tauri.conf.json` has `bundle.active = false` and no app
+> icon configured, so `tauri build` currently emits the release binaries only and
+> skips installer generation. Before distributing, configure `bundle.icon` and
+> enable bundling (set `active` to `true`).
 
 ### Quality gates
 
@@ -651,7 +692,8 @@ src/
   stores/      zustand state — loop snapshot, provider settings
   components/  AppShell layout + shared UI primitives
   features/    page skeletons — home · spaces · knowledge · assessment · career · study · settings
-src-tauri/     Tauri v2 shell — Cargo.toml · tauri.conf.json · capabilities
+src-tauri/     Tauri v2 shell — Cargo.toml · tauri.conf.json · capabilities · icons
+  llama-helper/  local-inference sidecar (Rust workspace member, llama.cpp)
 ```
 
 ### MVP acceptance target

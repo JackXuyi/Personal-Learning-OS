@@ -623,9 +623,13 @@ Import → Knowledge → Graph → Assess → Mastery → Learn → Re-assess �
 ### 环境要求
 
 - **Node.js ≥ 22**（npm 10+）
-- Rust 工具链 —— `cargo` ≥ 1.77 —— 仅在运行 Tauri 桌面壳时需要
+- Rust 工具链 —— `cargo` ≥ 1.77 —— 仅在运行 / 打包 Tauri 桌面壳时需要
 
-### 运行 Web 应用
+> Rust 通过 rustup 安装后，新终端默认已加载 `~/.cargo/env`；若出现
+> `cargo: command not found`，先执行 `. "$HOME/.cargo/env"`（或把 `$HOME/.cargo/bin`
+> 加入 PATH）。
+
+### 运行 Web 应用（浏览器形态）
 
 ```bash
 npm install     # 安装依赖
@@ -633,13 +637,48 @@ npm run dev     # 启动 Vite 开发服务器 → http://localhost:1420
 ```
 
 打开输出的地址。**首页**会基于示例职业目标运行学习闭环 demo，展示引擎层
-计算出的下一步推荐动作。
+计算出的下一步推荐动作。此形态不依赖 Rust 工具链，改动 HMR 实时生效，
+适合纯前端调试。
 
-### 运行桌面壳（Tauri）
+### 前端 + 桌面客户端本地联调
 
 ```bash
-npm run tauri dev   # 启动原生窗口（需 Rust 工具链）
+. "$HOME/.cargo/env"   # 确保 cargo 在 PATH（rustup 用户）
+npm run tauri dev      # 一条命令：自动拉起 Vite → 编译 Rust → 打开原生窗口
 ```
+
+机制：`src-tauri/tauri.conf.json` 中 `beforeDevCommand: "npm run dev"`、
+`devUrl: "http://localhost:1420"`，因此 `tauri dev` 会**先自动启动 Vite dev
+server（固定端口 1420），原生窗口再加载该地址** —— 前端与桌面端天然一起联调，
+无需手动开两个终端：
+
+| 改动位置 | 联调效果 |
+| --- | --- |
+| `src/`（React / TS / Tailwind） | 页面 HMR 实时刷新 |
+| `src-tauri/`（Rust：IPC command / sidecar 等） | 自动重新编译并重启窗口 |
+
+若先手动 `npm run dev` 再跑 `tauri dev`，会因 1420 端口 `strictPort` 冲突而失败。
+仓库内置本地推理 sidecar `llama-helper`（Rust workspace 成员，`tauri dev` 时会一并
+编译），首次编译耗时较长属正常现象。
+
+### 打包构建（生产版桌面应用）
+
+```bash
+. "$HOME/.cargo/env"   # 确保 cargo 在 PATH（rustup 用户）
+npm run tauri build    # 先 typecheck + vite build → dist/，再 cargo build --release
+```
+
+产物位置（均在 `src-tauri/target/release/`）：
+
+| 产物 | 路径 |
+| --- | --- |
+| 可执行文件 | `target/release/personal-learning-os` |
+| 本地推理 sidecar | `target/release/llama-helper` |
+| 安装包（启用后） | `target/release/bundle/`（macOS `.app`/`.dmg` · Windows `.msi` · Linux `.deb`/`.AppImage`） |
+
+> 当前为 Pre-MVP 阶段，`tauri.conf.json` 中 `bundle.active = false` 且未配置应用
+> 图标，`tauri build` 只产出 release 二进制、跳过安装包生成。准备对外分发时，
+> 需先配置 `bundle.icon` 并启用 bundle（将 `active` 置为 `true`）。
 
 ### 质量门禁
 
@@ -659,7 +698,8 @@ src/
   stores/      zustand 状态 —— 闭环快照、Provider 配置
   components/  AppShell 布局 + 通用 UI 原语
   features/    页面骨架 —— home · spaces · knowledge · assessment · career · study · settings
-src-tauri/     Tauri v2 壳 —— Cargo.toml · tauri.conf.json · capabilities
+src-tauri/     Tauri v2 壳 —— Cargo.toml · tauri.conf.json · capabilities · icons
+  llama-helper/  本地推理 sidecar（Rust workspace 成员，llama.cpp 推理进程）
 ```
 
 ### MVP 验收目标
