@@ -1,374 +1,344 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { Card, SectionTitle } from "../../components/primitives";
 import { PageContainer } from "../../components/layout/AppShell";
-import {
-  buildActiveProvider,
-  useSettingsStore,
-} from "../../stores/useSettingsStore";
+import { buildActiveProvider, useSettingsStore } from "../../stores/useSettingsStore";
 import { useLangStore } from "../../stores/useLangStore";
-import { useI18n } from "../../i18n";
-import type { ActiveSource } from "../../ai/active";
+import { useI18n, type Messages } from "../../i18n";
+import { storage } from "../../stores/useLoopStore";
 import { labelOfLocalModel, labelOfProvider } from "../../ai/presets";
-import { testConnection } from "../../ai/connection";
-import { hasKeyring } from "../../ai/vault";
-import BuiltinModelsPanel from "./BuiltinModelsPanel";
-import ApiModelsTab from "./ApiModelsTab";
+import AIModelsSection from "./AIModelsSection";
 
 /**
- * 设置 · AI 模型中心(Q1/Q2/Q3,见 docs/ai-model-center-plan-2026-09.md)。
+ * 设置（U6b 分区化，docs/ui-workbench-plan-2026-09.md §24-26）。
  *
- * 双 Tab:「本地模型」= 应用自己下载运行的 GGUF(按设备匹配,禁用不支持档);
- * 「API 模型」= 预置(千问等开源模型)+ 配置 baseUrl/model/apiKey。
- * 任意一侧选中即成为全局「当前使用模型」并立即写库;引擎经
- * `buildActiveProvider()` 读取,下次进入功能即生效。
+ * 左分区导航：AI 模型 / 本地存储 / 学习行为 / 外观与语言 / 快捷键 / 关于；
+ * 顶部 Local-first 摘要卡（数据留本机 · AI 可选本地或云端）。
+ * AI 分区内容 = 原「AI 模型中心」（抽至 AIModelsSection，零功能回退）；
+ * Storage 分区展示真实计数（读 storage）；其余分区为说明卡。
  */
 
-type Tab = "local" | "api";
+type SectionKey = "ai" | "storage" | "learning" | "appearance" | "shortcuts" | "about";
 
-type Retest =
-  | { state: "idle" }
-  | { state: "testing" }
-  | { state: "ok"; latencyMs: number }
-  | { state: "fail"; reason: string; hint: string };
+const SECTION_ORDER: SectionKey[] = [
+  "ai",
+  "storage",
+  "learning",
+  "appearance",
+  "shortcuts",
+  "about",
+];
 
-const apiActiveOf = (a: ActiveSource | null) =>
-  a && a.source === "api" ? a : null;
+/** Storage 分区数据规模快照。 */
+interface StorageCounts {
+  docs: number;
+  chapters: number;
+  papers: number;
+  goals: number;
+  evidence: number;
+}
 
-function formatTime(ts: number, today: string): string {
-  const d = new Date(ts);
-  const now = new Date();
-  const sameDay = d.toDateString() === now.toDateString();
-  const hm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  return sameDay ? `${today} ${hm}` : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
+/** 后端徽标文案：适配器 name（local=本机 localStorage；memory=内存预览）。 */
+function backendNoteOf(name: string, lf: { storageLocal: string; storageMemory: string }): string {
+  return name.includes("local") ? lf.storageLocal : lf.storageMemory;
+}
+
+/** 当前 AI 徽标文案（与模型中心同源：active → provider/label）。 */
+function modelNoteOf(
+  active: ReturnType<typeof useSettingsStore.getState>["active"],
+  providerReady: boolean,
+  lf: { builtinQwen: string; noModel: string },
+): string {
+  if (!active) return lf.noModel;
+  if (active.source === "local") return `${lf.builtinQwen} · ${labelOfLocalModel(active.model)}`;
+  return `${labelOfProvider(active.provider)} · ${active.model || "(未填模型)"}${providerReady ? "" : "（未测试）"}`;
 }
 
 export default function SettingsPage() {
-  const saved = useSettingsStore();
-  const saveActive = useSettingsStore((s) => s.saveActive);
-  const clearActive = useSettingsStore((s) => s.clearActive);
+  const { m, lang } = useI18n();
+  const st = m.settings;
   const langMode = useLangStore((s) => s.mode);
   const setLangMode = useLangStore((s) => s.setMode);
-  const { lang, m } = useI18n();
-  const s = m.settings.models;
-
-  const [tab, setTab] = useState<Tab>(
-    saved.active?.source === "api" ? "api" : "local",
-  );
-  const [savedFlash, setSavedFlash] = useState(false);
-  const [retest, setRetest] = useState<Retest>({ state: "idle" });
-
-  const { active, providerReady } = saved;
-  const apiSaved = apiActiveOf(active);
-
-  /** 实时就绪判定:直接问「当前 provider 能否调用」(非缓存 providerReady)。
-   *  模型文件被删 / Key 被清 → 这里立即反映为不可用。 */
+  const active = useSettingsStore((s) => s.active);
+  const providerReady = useSettingsStore((s) => s.providerReady);
   const liveReady = active !== null && buildActiveProvider().isConfigured();
 
-  const flash = () => {
-    setSavedFlash(true);
-    window.setTimeout(() => setSavedFlash(false), 2500);
-  };
+  const [section, setSection] = useState<SectionKey>("ai");
+  const [counts, setCounts] = useState<StorageCounts | undefined>();
 
-  const onLocalActivate = (model: string) => {
-    saveActive({ source: "local", model }, { testedOk: true });
-    flash();
-  };
+  // Storage 分区计数：一次读取（docs/chapters 需逐文档；本地规模小）。
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [docs, papers, goals, evidence] = await Promise.all([
+          storage.listDocuments(),
+          storage.listPapers(),
+          storage.listGoals(),
+          storage.listEvidence(),
+        ]);
+        let chapters = 0;
+        for (const d of docs) chapters += (await storage.listChapters(d.id)).length;
+        setCounts({ docs: docs.length, chapters, papers: papers.length, goals: goals.length, evidence: evidence.length });
+      } catch {
+        /* 计数失败保持 undefined（Storage 分区显示占位）。 */
+      }
+    })();
+  }, []);
 
-  const onUseApi = (
-    api: Extract<ActiveSource, { source: "api" }>,
-    testedOk: boolean,
-    latencyMs?: number,
-  ) => {
-    saveActive(api, { testedOk, latencyMs });
-  };
-
-  /** 对「已保存的当前 API 模型」再做一次真实连接测试(不经表单草稿)。 */
-  const retestActive = async () => {
-    if (active?.source !== "api") return;
-    setRetest({ state: "testing" });
-    const cfg = {
-      kind: active.provider,
-      baseUrl: active.baseUrl.trim() || undefined,
-      model: active.model.trim() || undefined,
-      apiKey: active.apiKey.trim() || undefined,
-    };
-    const result = await testConnection(cfg);
-    if (result.ok) {
-      saveActive(active, { testedOk: true, latencyMs: result.latencyMs });
-      setRetest({ state: "ok", latencyMs: result.latencyMs });
-    } else {
-      setRetest({ state: "fail", reason: result.reason, hint: result.hint });
-    }
-  };
-
-  // ---- Active Banner 文案 ----
-  let bannerTitle: string;
-  let bannerDesc: string;
-  let bannerTone: "ok" | "warn" | "empty" = "warn";
-  if (active?.source === "local") {
-    bannerTitle = labelOfLocalModel(active.model);
-    bannerDesc = providerReady ? s.banner.localReady : s.banner.localNotReady;
-    bannerTone = providerReady ? "ok" : "warn";
-  } else if (active?.source === "api") {
-    bannerTitle = `${labelOfProvider(active.provider)} · ${active.model || s.banner.untitledModel}`;
-    bannerDesc = providerReady ? s.banner.apiReady : s.banner.apiNotReady;
-    bannerTone = providerReady ? "ok" : "warn";
-  } else {
-    bannerTitle = s.banner.noneTitle;
-    bannerDesc = s.banner.noneDesc;
-    bannerTone = "empty";
-  }
-
-  const bannerStyle =
-    bannerTone === "ok"
-      ? "border-emerald-200 bg-emerald-50/50"
-      : bannerTone === "empty"
-        ? "border-slate-200 bg-slate-50"
-        : "border-amber-200 bg-amber-50/50";
+  const lf = st.localFirst;
+  const activeModelNote = modelNoteOf(active, providerReady, lf);
 
   return (
     <PageContainer>
-      <SectionTitle
-        title={s.pageTitle}
-        subtitle={s.pageSubtitle}
-      />
+      <SectionTitle title={m.nav.settings.label} subtitle={m.nav.settings.hint} />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          {/* Active Banner */}
-          <div className={`mb-4 rounded-xl border px-4 py-3 ${bannerStyle}`}>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-800">
-                  {active ? s.banner.activePrefix : ""}
-                  <span
-                    className={
-                      bannerTone === "ok"
-                        ? "text-emerald-700"
-                        : bannerTone === "empty"
-                          ? "text-slate-500"
-                          : "text-amber-700"
-                    }
-                  >
-                    {" "}
-                    {bannerTitle}
-                  </span>
-                </p>
-                <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{bannerDesc}</p>
-              </div>
-              {savedFlash ? <span className="shrink-0 text-sm text-emerald-600">{s.savedOk}</span> : null}
-            </div>
+      {/* ── Local-first 摘要卡 ─────────────────────────────────────── */}
+      <Card className="mt-4">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-accent">
+          {lf.eyebrow}
+        </p>
+        <h2 className="mt-0.5 text-lg font-semibold text-ink-1">{lf.title}</h2>
+        <p className="mt-1 max-w-3xl text-sm leading-relaxed text-ink-2">{lf.desc}</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border border-line bg-subtle/60 px-3 py-2">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">
+              {lf.storageNote}
+            </p>
+            <p className="mt-0.5 flex items-center gap-1.5 text-sm font-medium text-ink-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-state-mastered" />
+              {backendNoteOf(storage.name, lf)}
+            </p>
           </div>
-
-          {/* Tabs */}
-          <div className="mb-4 flex gap-1 rounded-lg border border-slate-200 bg-slate-100/60 p-1">
-            {(
-              [
-                ["local", s.tabLocal],
-                ["api", s.tabApi],
-              ] as [Tab, string][]
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                onClick={() => setTab(value)}
-                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  tab === value
-                    ? "bg-white text-indigo-700 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
+          <div className="rounded-lg border border-line bg-subtle/60 px-3 py-2">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">
+              {lf.modelNote}
+            </p>
+            <p className="mt-0.5 flex items-center gap-1.5 text-sm font-medium text-ink-1">
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  active && (providerReady || liveReady) ? "bg-state-mastered" : "bg-state-idle"
                 }`}
-              >
-                {label}
-              </button>
-            ))}
+              />
+              <span className="truncate">{activeModelNote}</span>
+            </p>
           </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setSection("ai")}
+          className="mt-3 text-xs font-medium text-accent transition-colors hover:text-accent/70"
+        >
+          {lf.learnMore} →
+        </button>
+      </Card>
 
-          {tab === "local" ? (
-            <div>
-              <p className="mb-3 text-xs font-medium text-indigo-700">
-                {s.localHint}
-              </p>
-              <BuiltinModelsPanel
-                activeModel={active?.source === "local" ? active.model : null}
-                onActivate={onLocalActivate}
-                onClearActive={() => {
-                  clearActive();
-                  flash();
-                }}
-              />
-            </div>
+      {/* ── 分区骨架：左导航 + 右内容 ──────────────────────────────── */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-[220px_1fr]">
+        <aside className="flex flex-col gap-0.5 self-start lg:sticky lg:top-6">
+          {SECTION_ORDER.map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setSection(key)}
+              className={`rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
+                section === key
+                  ? "bg-subtle font-medium text-ink-1"
+                  : "text-ink-2 hover:bg-subtle hover:text-ink-1"
+              }`}
+            >
+              {st.sections[key]}
+            </button>
+          ))}
+        </aside>
+
+        <div className="min-w-0">
+          {section === "ai" ? (
+            <AIModelsSection />
+          ) : section === "storage" ? (
+            <StorageSection counts={counts} st={st} loading={m.common.loading} />
+          ) : section === "learning" ? (
+            <LearningSection st={st} />
+          ) : section === "appearance" ? (
+            <AppearanceSection
+              langMode={langMode}
+              setLangMode={setLangMode}
+              lang={lang}
+              m={m}
+            />
+          ) : section === "shortcuts" ? (
+            <ShortcutsSection st={st} />
           ) : (
-            <ApiModelsTab saved={apiSaved} onUse={onUseApi} />
+            <AboutSection st={st} />
           )}
-        </Card>
-
-        <div className="space-y-4">
-          <Card>
-            <h3 className="mb-3 text-sm font-semibold text-slate-700">
-              {m.settings.lang.title}
-            </h3>
-            <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-100/60 p-1">
-              {(
-                [
-                  ["auto", m.settings.lang.auto],
-                  ["zh", m.settings.lang.zh],
-                  ["en", m.settings.lang.en],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  onClick={() => setLangMode(value)}
-                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                    langMode === value
-                      ? "bg-white text-indigo-700 shadow-sm"
-                      : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
-              {langMode === "auto"
-                ? `${m.settings.lang.autoHint} ${m.settings.lang.current(lang)}`
-                : m.settings.lang.current(lang)}
-            </p>
-          </Card>
-
-          <Card>
-            <h3 className="mb-3 text-sm font-semibold text-slate-700">{s.aiStatus}</h3>
-            <div className="flex flex-wrap items-center gap-2">
-              {active ? (
-                providerReady ? (
-                  <ReadyPill label={s.savedPassed} ok />
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                    {s.savedFailed}
-                  </span>
-                )
-              ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
-                  <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                  {s.noModel}
-                </span>
-              )}
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                {s.heuristicAlways}
-              </span>
-            </div>
-
-            {/* 运行时实时探活 —— buildActiveProvider 接线:isConfigured 判定当前
-                能否真实调用(而非盲信缓存 providerReady),模型文件被删 / Key 被
-                清等场景立即反映为不可用。 */}
-            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
-              <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                {s.runtime}
-              </span>
-              {active === null ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
-                  <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                  {s.runtimeHeuristic}
-                </span>
-              ) : liveReady ? (
-                <ReadyPill label={s.runtimeCallable} ok />
-              ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                  {s.runtimeMissingCfg}
-                </span>
-              )}
-              {active?.source === "api" ? (
-                <button
-                  onClick={() => void retestActive()}
-                  disabled={retest.state === "testing"}
-                  className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {retest.state === "testing" ? s.retesting : s.retestConnection}
-                </button>
-              ) : null}
-            </div>
-            {retest.state === "ok" ? (
-              <p className="mt-2 text-xs text-emerald-600">
-                {s.retestOk(retest.latencyMs)}
-              </p>
-            ) : retest.state === "fail" ? (
-              <div className="mt-2 rounded-lg border border-red-200 bg-red-50/60 px-3 py-2">
-                <p className="text-xs font-medium text-red-700">{retest.reason}</p>
-                <p className="mt-0.5 text-[11px] text-red-600/90">→ {retest.hint}</p>
-              </div>
-            ) : null}
-            {active?.source === "api" && hasKeyring() ? (
-              <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] leading-relaxed text-slate-500">
-                {s.keychainNote}
-              </p>
-            ) : null}
-            <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
-              {s.statusLegend}
-            </p>
-          </Card>
-
-          <Card>
-            <h3 className="mb-3 text-sm font-semibold text-slate-700">{s.currentConfig}</h3>
-            <dl className="space-y-1 text-sm">
-              <KV
-                k={s.kv.source}
-                v={
-                  active?.source === "local"
-                    ? s.kv.sourceLocal
-                    : active?.source === "api"
-                      ? s.kv.sourceApi
-                      : s.kv.none
-                }
-              />
-              {active?.source === "local" ? <KV k={s.kv.model} v={labelOfLocalModel(active.model)} /> : null}
-              {active?.source === "api" ? (
-                <>
-                  <KV k={s.kv.provider} v={labelOfProvider(active.provider)} />
-                  <KV k={s.kv.model} v={active.model || s.kv.empty} />
-                  <KV k="Base URL" v={active.baseUrl || s.kv.empty} />
-                  <KV k="API Key" v={active.apiKey ? "••••••••" : s.kv.empty} />
-                </>
-              ) : null}
-              <KV
-                k={s.kv.status}
-                v={
-                  providerReady && saved.testedAt
-                    ? s.kv.testedPass(
-                        formatTime(saved.testedAt, s.timeToday),
-                        saved.lastLatencyMs ?? null,
-                      )
-                    : s.kv.notTested
-                }
-              />
-            </dl>
-          </Card>
         </div>
       </div>
     </PageContainer>
   );
 }
 
-function ReadyPill({ label, ok }: { label: string; ok: boolean }) {
+/* ------------------------------------------------------------------ */
+/* 分区内容                                                            */
+/* ------------------------------------------------------------------ */
+
+function SectionShell({ title, desc, children }: { title: string; desc?: string; children: ReactNode }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${
-        ok
-          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-          : "border-slate-200 bg-slate-50 text-slate-600"
-      }`}
-    >
-      <span className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-500" : "bg-slate-400"}`} />
-      {label}
-    </span>
+    <div>
+      <h3 className="text-base font-semibold text-ink-1">{title}</h3>
+      {desc ? <p className="mt-0.5 text-sm text-ink-2">{desc}</p> : null}
+      <div className="mt-3">{children}</div>
+    </div>
+  );
+}
+
+function StorageSection({ counts, st, loading }: { counts: StorageCounts | undefined; st: Messages["settings"]; loading: string }) {
+  const sg = st.storage;
+  return (
+    <SectionShell title={sg.title} desc={sg.desc}>
+      <Card className="space-y-3">
+        <dl className="space-y-1.5 text-sm">
+          <KV k={sg.backend} v={backendNoteOf(storage.name, st.localFirst)} />
+        </dl>
+        <div className="border-t border-line pt-3">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">{sg.counts}</p>
+          {counts ? (
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+              <StatCell label={sg.docCount(counts.docs)} />
+              <StatCell label={sg.chapterCount(counts.chapters)} />
+              <StatCell label={sg.paperCount(counts.papers)} />
+              <StatCell label={sg.goalCount(counts.goals)} />
+              <StatCell label={sg.evidenceCount(counts.evidence)} />
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-ink-3">{loading}</p>
+          )}
+        </div>
+        <p className="border-t border-line pt-3 text-[11px] leading-relaxed text-ink-3">{sg.note}</p>
+      </Card>
+    </SectionShell>
+  );
+}
+
+function StatCell({ label }: { label: string }) {
+  return (
+    <div className="rounded-lg border border-line bg-subtle/60 px-2.5 py-2 text-center">
+      <p className="truncate text-xs text-ink-2">{label}</p>
+    </div>
+  );
+}
+
+function LearningSection({ st }: { st: Messages["settings"] }) {
+  const sg = st.learning;
+  return (
+    <SectionShell title={sg.title} desc={sg.desc}>
+      <Card>
+        <ul className="space-y-2 text-sm text-ink-2">
+          {sg.items.map((item, i) => (
+            <li key={i} className="flex items-baseline gap-2">
+              <span className="h-1 w-1 shrink-0 translate-y-[-2px] rounded-full bg-ink-3" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </SectionShell>
+  );
+}
+
+function AppearanceSection({
+  langMode,
+  setLangMode,
+  lang,
+  m,
+}: {
+  langMode: "auto" | "zh" | "en";
+  setLangMode: (v: "auto" | "zh" | "en") => void;
+  lang: "zh" | "en";
+  m: Messages;
+}) {
+  const gl = m.settings.lang;
+  return (
+    <SectionShell title={m.settings.sections.appearance}>
+      <Card>
+        <h3 className="text-sm font-semibold text-ink-1">{gl.title}</h3>
+        <div className="mt-2 flex gap-1 rounded-lg border border-line bg-subtle p-1">
+          {(
+            [
+              ["auto", gl.auto],
+              ["zh", gl.zh],
+              ["en", gl.en],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setLangMode(value)}
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                langMode === value
+                  ? "bg-surface text-accent shadow-sm"
+                  : "text-ink-2 hover:text-ink-1"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-3">
+          {langMode === "auto" ? `${gl.autoHint} ${gl.current(lang)}` : gl.current(lang)}
+        </p>
+      </Card>
+    </SectionShell>
+  );
+}
+
+function ShortcutsSection({ st }: { st: Messages["settings"] }) {
+  const sg = st.shortcuts;
+  return (
+    <SectionShell title={sg.title} desc={sg.desc}>
+      <Card>
+        <div className="divide-y divide-line">
+          {sg.items.map((item, i) => (
+            <div key={i} className="flex items-center justify-between gap-4 py-2 first:pt-0 last:pb-0">
+              <kbd className="rounded border border-line bg-subtle px-2 py-0.5 font-mono text-xs text-ink-2">
+                {item.keys}
+              </kbd>
+              <span className="text-sm text-ink-2">{item.action}</span>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 border-t border-line pt-2 text-[11px] leading-relaxed text-ink-3">{sg.more}</p>
+      </Card>
+    </SectionShell>
+  );
+}
+
+function AboutSection({ st }: { st: Messages["settings"] }) {
+  const ag = st.about;
+  return (
+    <SectionShell title={ag.title}>
+      <Card>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-base font-semibold text-ink-1">{ag.name}</p>
+            <p className="text-sm text-ink-2">{ag.tagline}</p>
+          </div>
+          <span className="rounded border border-line bg-subtle px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-3">
+            {ag.badge}
+          </span>
+        </div>
+        <p className="mt-3 text-sm leading-relaxed text-ink-2">{ag.desc}</p>
+        <p className="mt-3 border-t border-line pt-3 text-[11px] leading-relaxed text-ink-3">
+          {ag.repoNote}
+        </p>
+      </Card>
+    </SectionShell>
   );
 }
 
 function KV({ k, v }: { k: string; v: string }) {
   return (
     <div className="flex justify-between gap-4">
-      <dt className="text-slate-400">{k}</dt>
-      <dd className="truncate text-slate-700">{v}</dd>
+      <dt className="text-ink-3">{k}</dt>
+      <dd className="truncate text-ink-1">{v}</dd>
     </div>
   );
 }
