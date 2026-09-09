@@ -368,6 +368,8 @@ export const zh = {
         `已有 ${n} 份资料未切分（旧数据或仅保存）。可对已有正文补切分，或重新导入。`,
       chapterRange: (done: number, total: number) =>
         `第 1–${total} 章 · 就绪 ${done}/${total}`,
+      /** U3 文档块头整体探索度（已涉猎章占比，非达标口径）。 */
+      exploredOf: (pct: number) => `已探索 ${pct}%`,
       targetLine: "达标线",
       unmetEmpty: "没有未达标章节 🎉",
       unsplitCount: (n: number) => `${n} 份资料尚未切分`,
@@ -423,6 +425,14 @@ export const zh = {
       goQuiz: "去测本章 →",
       markDone: "标记学完 ✓",
       doneLabel: "已标记学完",
+      /** U3 右栏四区：章状态 / Why it matters / Knowledge / Evidence。 */
+      whyEyebrow: "为什么重要",
+      knowledgeEyebrow: "本章知识",
+      knowledgeSelect: "选中知识块",
+      evidenceEyebrow: "证据",
+      evidenceSource: (doc: string, ord: string) => `来自《${doc}》· ${ord}`,
+      evidenceNone: "暂无本章测评——测一次后，这里会显示掌握度变化。",
+      toPlan: "回计划页看完整下一步",
       noSnapshot: "这份资料没有保存正文快照（textPreview 为空），无法展示原文。",
     },
   },

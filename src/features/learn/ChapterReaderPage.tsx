@@ -1,18 +1,21 @@
 /**
- * P2 章节阅读（/learn/:chapterId）—— 三步闭环「步骤 1」的逐章学习页（T5）。
+ * P2 章节阅读（/learn/:chapterId）—— 三步闭环「步骤 1」的逐章学习页（T5，UI Workbench U3）。
  *
- * 布局：左 = 章正文（doc.textPreview 的 contentRef 切片）；右 = 章状态卡 +
- * 要点卡（keyPoints，AI 提炼 / 本地首句摘要兜底）。
+ * 布局：左 = 章正文（doc.textPreview 的 contentRef 切片）；右 = 四区（与 Learner Model 相连，
+ * docs/ui-workbench-plan-2026-09.md §6-U3）：
+ *   1) 章状态 —— 状态徽标 + 掌握度 Bar + 口径说明（我学到哪）；
+ *   2) Why it matters —— 要点首条 / 正文首句兜底（它讲什么 / 为什么值得学）；
+ *   3) Knowledge —— 要点生成可点选知识 chips（N5 unitIds 就绪后以概念为准）；
+ *      底部保留「打开本章概念图谱」N5 入口；
+ *   4) Evidence —— 溯源（《doc》第 x 章）+ 最近一次含本章的测评 Δ 掌握度（证据从哪来）。
  * 状态机写回：打开阅读（not-started → learning）与「标记学完」（→ ready）
  * 直接整批写 storage（listChapters/saveChapters 契约，docs §5.1）。
- *
- * 「去测本章」CTA：出卷答题（/quiz/new，T6）接入前显示为下一步占位——
- * ready 章不会出现死链，T6 打开同一位置即可。
+ * 底部主行动保留；「标记学完」后提示下一步并刷新章级计划（plan 头项联动）。
  */
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Bar, Card } from "../../components/primitives";
+import { Bar, Card, EvidenceRow, Section } from "../../components/primitives";
 import { MASTERY_THRESHOLD, isDueReview } from "../../domain";
 import type { Chapter, LearnerState, SourceDocument } from "../../domain";
 import { applyKeyPointRating } from "../../engine";
@@ -20,8 +23,14 @@ import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { useI18n } from "../../i18n";
 import { chapterBadge } from "./chapter-badge";
 
+/** 本章证据：最近一次含本章的判卷结果（Δ 掌握度）。 */
+type ChapterEvidence =
+  | { state: "loading" }
+  | { state: "none" }
+  | { state: "ok"; at: number; prev: number; cur: number };
+
 export default function ChapterReaderPage() {
-  const { m } = useI18n();
+  const { m, lang } = useI18n();
   const t = m.learn.reader;
   const { chapterId = "" } = useParams();
   const navigate = useNavigate();
@@ -29,6 +38,9 @@ export default function ChapterReaderPage() {
   const [doc, setDoc] = useState<SourceDocument | undefined>();
   const [learner, setLearner] = useState<LearnerState | undefined>();
   const [missing, setMissing] = useState(false);
+  const [evidence, setEvidence] = useState<ChapterEvidence>({ state: "loading" });
+  /** Knowledge 区点选高亮的知识块（-1 = 无）。 */
+  const [activeChip, setActiveChip] = useState(-1);
 
   useEffect(() => {
     void (async () => {
@@ -59,12 +71,33 @@ export default function ChapterReaderPage() {
     })();
   }, [chapterId]);
 
+  /** Evidence 区：取最近一次含本章的判卷结果。 */
+  useEffect(() => {
+    if (!chapter) return;
+    let alive = true;
+    setEvidence({ state: "loading" });
+    void (async () => {
+      const results = await storage.listPaperResults();
+      const hit = results.find((r) => r.perChapter[chapter.id]);
+      if (!alive) return;
+      if (!hit) {
+        setEvidence({ state: "none" });
+        return;
+      }
+      const info = hit.perChapter[chapter.id];
+      setEvidence({ state: "ok", at: hit.createdAt, prev: info.previousMastery, cur: info.mastery });
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [chapter?.id]);
+
   const mastery = chapter ? (learner?.byUnit[chapter.id]?.mastery ?? 0) : 0;
   const badge = chapter ? chapterBadge(chapter.status, mastery, m) : undefined;
   /** 到期复习（T9）：已达标且 nextReviewAt 已过 → 引导「复习完成」顺延。 */
   const dueReview = !!chapter && !!learner && isDueReview(learner.byUnit[chapter.id], Date.now());
 
-  /** 标记学完：learning / not-started → ready。 */
+  /** 标记学完：learning / not-started → ready，随后刷新章级计划（U3 下一步联动）。 */
   const markReady = async () => {
     if (!chapter || !doc) return;
     const chapters = await storage.listChapters(doc.id);
@@ -73,6 +106,7 @@ export default function ChapterReaderPage() {
     );
     await storage.saveChapters(doc.id, updated);
     setChapter(updated.find((c) => c.id === chapter.id));
+    await useLoopStore.getState().refresh(m);
   };
 
   /** 复习完成：按「good」自评顺延下次复习（T9 到期动作闭环；只做调度不改掌握度）。 */
@@ -88,9 +122,9 @@ export default function ChapterReaderPage() {
   if (missing) {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-base font-semibold text-slate-900">{t.missingTitle}</p>
-        <p className="mt-1 text-sm text-slate-500">{t.missingDesc}</p>
-        <Link to="/learn" className="mt-4 inline-block text-sm text-indigo-600 hover:underline">
+        <p className="text-base font-semibold text-ink-1">{t.missingTitle}</p>
+        <p className="mt-1 text-sm text-ink-2">{t.missingDesc}</p>
+        <Link to="/learn" className="mt-4 inline-block text-sm font-medium text-accent hover:underline">
           {t.backToCatalog}
         </Link>
       </div>
@@ -100,22 +134,23 @@ export default function ChapterReaderPage() {
   if (!chapter || !doc) {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-sm text-slate-500">{t.opening}</p>
+        <p className="text-sm text-ink-3">{t.opening}</p>
       </div>
     );
   }
 
   const body = doc.textPreview?.slice(chapter.contentRef.start, chapter.contentRef.end) ?? "";
+  const whyLead = leadOf(chapter, body);
 
   return (
     <div className="mx-auto max-w-6xl px-8 py-6">
       {/* 面包屑 */}
       <div className="mb-4 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <Link to="/learn" className="text-xs text-slate-400 hover:text-indigo-600">
+          <Link to="/learn" className="text-xs text-ink-3 transition-colors hover:text-accent">
             {t.backCatalogShort}
           </Link>
-          <p className="mt-0.5 truncate text-xs text-slate-400">
+          <p className="mt-0.5 truncate text-xs text-ink-3">
             {doc.title} · {m.chapter.ordinal(chapter.order)}
           </p>
         </div>
@@ -129,99 +164,149 @@ export default function ChapterReaderPage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         {/* 左：章正文 */}
         <Card className="px-8 py-7">
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+          <h1 className="text-xl font-semibold tracking-tight text-ink-1">
             {chapter.title || m.chapter.ordinal(chapter.order)}
           </h1>
-          <div className="mt-4 border-t border-slate-100 pt-5">
+          <div className="mt-4 border-t border-line pt-5">
             {body.length > 0 ? (
               <ArticleBody text={body} />
             ) : (
-              <p className="text-sm text-slate-400">{t.noSnapshot}</p>
+              <p className="text-sm text-ink-3">{t.noSnapshot}</p>
             )}
           </div>
         </Card>
 
-        {/* 右：状态卡 + 要点卡 */}
-        <div className="space-y-4">
-          <Card className="p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                {t.masteryEyebrow}
-              </p>
-              <span className="text-sm font-semibold tabular-nums text-slate-800">
+        {/* 右：章状态 / Why it matters / Knowledge / Evidence 四区 */}
+        <div className="min-w-0 space-y-6">
+          {/* 1 · 章状态（我学到哪） */}
+          <section className="space-y-2">
+            <Section title={t.masteryEyebrow} />
+            <div className="flex items-center justify-between gap-2">
+              {badge ? (
+                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${badge.cls}`}>
+                  {badge.label}
+                </span>
+              ) : null}
+              <span className="text-sm font-semibold tabular-nums text-ink-1">
                 {Math.round(mastery * 100)}%
               </span>
             </div>
-            <div className="mt-2">
-              <Bar value={mastery} target={MASTERY_THRESHOLD} />
-            </div>
-            <p className="mt-2 text-xs leading-5 text-slate-400">{t.masteryFormula}</p>
-          </Card>
+            <Bar value={mastery} target={MASTERY_THRESHOLD} />
+            <p className="text-xs leading-5 text-ink-3">{t.masteryFormula}</p>
+          </section>
 
-          <Card className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-              {t.pointsEyebrow}
-            </p>
-            {chapter.keyPoints.length > 0 ? (
-              <ul className="mt-2 space-y-2">
-                {chapter.keyPoints.map((kp, i) => (
-                  <li key={i} className="flex gap-2 text-sm leading-6 text-slate-700">
-                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400" />
-                    <span>{kp}</span>
-                  </li>
-                ))}
-              </ul>
+          {/* 2 · Why it matters（它讲什么 / 为什么值得学） */}
+          <section className="space-y-2">
+            <Section title={t.whyEyebrow} />
+            {whyLead ? (
+              <p className="text-sm leading-6 text-ink-1">{whyLead}</p>
             ) : (
-              <p className="mt-2 text-sm text-slate-400">{t.noPoints}</p>
+              <p className="text-sm text-ink-3">{t.noPoints}</p>
             )}
-          </Card>
+          </section>
 
-          {/* N5 概念层回归：章概念图谱入口（AI 提炼 + 可视化 + 概念复习） */}
-          <Card className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-              {t.graphEyebrow}
-            </p>
-            <p className="mt-2 text-xs leading-5 text-slate-400">{t.graphDesc}</p>
-            <Link
-              to={`/learn/${chapter.id}/graph`}
-              className="mt-3 inline-block text-sm font-medium text-indigo-600 hover:underline"
-            >
-              {t.openGraph}
-            </Link>
-          </Card>
+          {/* 3 · Knowledge（本章知识块，点选高亮） */}
+          <section className="space-y-2">
+            <Section
+              title={t.knowledgeEyebrow}
+              action={
+                <Link
+                  to={`/learn/${chapter.id}/graph`}
+                  className="text-xs font-medium text-ink-3 transition-colors hover:text-accent"
+                >
+                  {t.openGraph}
+                </Link>
+              }
+            />
+            {chapter.keyPoints.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {chapter.keyPoints.map((kp, i) => {
+                  const active = activeChip === i;
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      aria-label={t.knowledgeSelect}
+                      aria-pressed={active}
+                      onClick={() => setActiveChip(active ? -1 : i)}
+                      className={`rounded-lg border px-2.5 py-1 text-left text-xs leading-5 transition-colors ${
+                        active
+                          ? "border-accent bg-accent/5 text-ink-1"
+                          : "border-line bg-surface text-ink-2 hover:border-ink-3/40"
+                      }`}
+                    >
+                      {kp}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-ink-3">{t.noPoints}</p>
+            )}
+          </section>
+
+          {/* 4 · Evidence（证据从哪来：溯源 + 最近测评 Δ） */}
+          <section className="space-y-2">
+            <Section title={t.evidenceEyebrow} />
+            {evidence.state === "ok" ? (
+              <EvidenceRow
+                time={shortDate(evidence.at, lang)}
+                title={`${m.units.action.assessment} · ${doc.title}`}
+                delta={`${Math.round(evidence.prev * 100)}% → ${Math.round(evidence.cur * 100)}%`}
+                deltaTone={
+                  evidence.cur > evidence.prev
+                    ? "up"
+                    : evidence.cur < evidence.prev
+                      ? "down"
+                      : "neutral"
+                }
+                source={t.evidenceSource(doc.title, m.chapter.ordinal(chapter.order))}
+              />
+            ) : evidence.state === "none" ? (
+              <p className="text-sm text-ink-3">{t.evidenceNone}</p>
+            ) : null}
+          </section>
         </div>
       </div>
 
       {/* 底部主行动 */}
-      <div className="sticky bottom-4 z-10 mt-6 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white/90 px-5 py-3.5 shadow-lg backdrop-blur">
-        <p className="hidden text-xs text-slate-400 sm:block">
-          {dueReview
-            ? t.dueHint
-            : chapter.status === "ready"
-              ? t.readyHint
-              : t.readingHint}
-        </p>
-        <div className="flex items-center gap-2">
+      <div className="sticky bottom-4 z-10 mt-6 flex items-center justify-between gap-4 rounded-2xl border border-line bg-surface/90 px-5 py-3.5 shadow-lg backdrop-blur">
+        <div className="min-w-0">
+          <p className="hidden text-xs text-ink-3 sm:block">
+            {dueReview
+              ? t.dueHint
+              : chapter.status === "ready"
+                ? t.readyHint
+                : t.readingHint}
+          </p>
+          {chapter.status === "ready" && !dueReview ? (
+            <Link
+              to="/plan"
+              className="hidden text-xs font-medium text-ink-3 transition-colors hover:text-accent sm:inline-block"
+            >
+              {t.toPlan} →
+            </Link>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           {mastery >= MASTERY_THRESHOLD && !dueReview ? (
-            <span className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+            <span className="rounded-lg border border-line bg-subtle px-3 py-2 text-sm font-medium text-state-mastered">
               {t.directQuiz(Math.round(MASTERY_THRESHOLD * 100))}
             </span>
           ) : null}
           {dueReview ? (
             <button
               onClick={markReviewed}
-              className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+              className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent/90"
             >
               {t.markReviewed}
             </button>
           ) : chapter.status === "ready" ? (
             <button
               onClick={() =>
-                navigate(
-                  `/quiz/new?doc=${doc.id}&chapters=${chapter.id}&mode=unit-test`,
-                )
+                navigate(`/quiz/new?doc=${doc.id}&chapters=${chapter.id}&mode=unit-test`)
               }
-              className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+              className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent/90"
             >
               {t.goQuiz}
             </button>
@@ -229,7 +314,7 @@ export default function ChapterReaderPage() {
             <button
               onClick={markReady}
               disabled={chapter.status === "mastered" || chapter.status === "retake"}
-              className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+              className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent/90 disabled:opacity-50"
             >
               {chapter.status === "not-started" || chapter.status === "learning" ? t.markDone : t.doneLabel}
             </button>
@@ -238,6 +323,29 @@ export default function ChapterReaderPage() {
       </div>
     </div>
   );
+}
+
+/**
+ * Why it matters 导语：要点首条优先；无要点时回退正文首句（去标题行）截断，
+ * 保持右栏始终能回答「这章讲什么」。
+ */
+function leadOf(chapter: Chapter, body: string): string | undefined {
+  if (chapter.keyPoints.length > 0) return chapter.keyPoints[0];
+  const first = body
+    .split("\n")
+    .map((s) => s.trim())
+    .find((s) => s && !/^#{1,6}\s/.test(s));
+  if (!first) return undefined;
+  return first.length > 96 ? `${first.slice(0, 96)}…` : first;
+}
+
+/** 短日期（随界面语言）：9/8 或 Sep 8。 */
+function shortDate(at: number, lang: "zh" | "en"): string {
+  const locale = lang === "zh" ? "zh-CN" : "en-US";
+  return new Intl.DateTimeFormat(locale, {
+    month: lang === "zh" ? "numeric" : "short",
+    day: "numeric",
+  }).format(new Date(at));
 }
 
 /** 极简 Markdown 行渲染：标题加粗放大、空行留白、其余原文 pre-wrap（不做转义/代码高亮）。 */
@@ -254,8 +362,8 @@ function ArticleBody({ text }: { text: string }) {
           key={i}
           className={
             level <= 2
-              ? "mt-5 mb-2 text-lg font-semibold text-slate-900"
-              : "mt-4 mb-1.5 text-base font-semibold text-slate-800"
+              ? "mt-5 mb-2 text-lg font-semibold text-ink-1"
+              : "mt-4 mb-1.5 text-base font-semibold text-ink-1"
           }
         >
           {heading[2].replace(/\s+#+\s*$/, "")}
@@ -265,7 +373,7 @@ function ArticleBody({ text }: { text: string }) {
       out.push(<div key={i} className="h-3" />);
     } else {
       out.push(
-        <p key={i} className="text-[15px] leading-7 text-slate-700">
+        <p key={i} className="text-[15px] leading-7 text-ink-2">
           <span className="whitespace-pre-wrap">{line}</span>
         </p>,
       );

@@ -22,7 +22,7 @@ export interface ChapterBadge {
 }
 
 const BADGE_CLS: Record<ChapterStatus, string> = {
-  "not-started": "border-slate-200 bg-slate-100 text-slate-500",
+  "not-started": "border-line bg-subtle text-ink-3",
   learning: "border-sky-200 bg-sky-50 text-sky-700",
   ready: "border-indigo-200 bg-indigo-50 text-indigo-700",
   mastered: "border-emerald-200 bg-emerald-50 text-emerald-700",

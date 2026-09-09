@@ -1,17 +1,18 @@
 /**
- * P1 章节目录（/learn）—— V2 三步闭环的「学一章」总入口（T5）。
+ * P1 章节目录（/learn）—— V2 三步闭环的「学一章」总入口（T5，UI Workbench U3）。
  *
- * 数据：按文档聚合的 Chapter 列表（listChapters），掌握度取自 Learner State。
- * 交互：
- * - 每份文档一块：文档标题 + 就绪进度（已掌握章 / 总章）；
- * - 章卡片：序 + 标题、状态徽标、掌握度进度条；点击进入 /learn/:chapterId 阅读；
+ * 数据：按文档聚合的 Chapter 列表（listChapters），掌握度取自 Learner State（读时衰减视图）。
+ * 交互（U3 起）：
+ * - 每份文档一块：文档标题 + 探索度（已涉猎章占比）+ 就绪 Bar（达标章 / 总章）；
+ * - 章行（divider 分隔，KnowledgeRow 同形态）：序 + 状态语义点 + 标题 + 状态弱标签 + 掌握度，
+ *   整行点击进入 /learn/:chapterId 阅读；
  * - 过滤：全部 / 仅未达标；空态引导导入（ImportModal，支持 ?import=1 直达）。
  *
  * 取代原 Knowledge 列表页（docs §2 融合矩阵 #8 / §4 页面 P1）：
  * 图谱可视化延后 N5（GraphView 组件保留在 features/knowledge/ 待复用）。
  */
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Bar, Card, SectionTitle } from "../../components/primitives";
 import { PageContainer } from "../../components/layout/AppShell";
 import { MASTERY_THRESHOLD } from "../../domain";
@@ -29,6 +30,8 @@ type Filter = "all" | "unmet";
 
 export default function ChapterCatalogPage() {
   const navigate = useNavigate();
+  const { m } = useI18n();
+  const cat = m.learn.catalog;
   const [searchParams] = useSearchParams();
   const [docs, setDocs] = useState<SourceDocument[]>([]);
   const [chaptersByDoc, setChaptersByDoc] = useState<Record<string, Chapter[]>>({});
@@ -38,8 +41,6 @@ export default function ChapterCatalogPage() {
     () => searchParams.get("import") === "1",
   );
   const [busyDocId, setBusyDocId] = useState<string | undefined>();
-  const { m } = useI18n();
-  const cat = m.learn.catalog;
 
   const load = async () => {
     const [ds, ls] = await Promise.all([
@@ -123,7 +124,7 @@ export default function ChapterCatalogPage() {
         action={
           <button
             onClick={() => setImportOpen(true)}
-            className="rounded-lg bg-indigo-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+            className="rounded-md bg-accent px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent/90"
           >
             ＋ {m.common.import}
           </button>
@@ -132,7 +133,7 @@ export default function ChapterCatalogPage() {
 
       {visibleDocs.length > 0 ? (
         <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="flex rounded-lg border border-slate-200 bg-white p-0.5">
+          <div className="flex rounded-lg border border-line bg-surface p-0.5">
             {(
               [
                 ["all", cat.filterAll],
@@ -144,34 +145,34 @@ export default function ChapterCatalogPage() {
                 onClick={() => setFilter(v)}
                 className={`rounded-md px-3 py-1 text-sm font-medium transition ${
                   filter === v
-                    ? "bg-indigo-600 text-white"
-                    : "text-slate-500 hover:text-slate-700"
+                    ? "bg-accent text-white"
+                    : "text-ink-2 hover:text-ink-1"
                 }`}
               >
                 {label}
               </button>
             ))}
           </div>
-          <p className="text-xs text-slate-400">{cat.hint}</p>
+          <p className="hidden text-xs text-ink-3 sm:block">{cat.hint}</p>
         </div>
       ) : null}
 
       {/* 空态：无任何资料 */}
       {docs.length === 0 ? (
         <Card className="border-dashed">
-          <p className="text-base font-semibold text-slate-900">{cat.emptyTitle}</p>
-          <p className="mt-1 text-sm text-slate-500">{cat.emptyDesc}</p>
+          <p className="text-base font-semibold text-ink-1">{cat.emptyTitle}</p>
+          <p className="mt-1 text-sm text-ink-2">{cat.emptyDesc}</p>
           <button
             onClick={() => setImportOpen(true)}
-            className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            className="mt-4 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
           >
             {cat.emptyImport}
           </button>
         </Card>
       ) : visibleDocs.length === 0 ? (
         <Card className="border-dashed">
-          <p className="text-base font-semibold text-slate-900">{cat.doclessTitle}</p>
-          <p className="mt-1 text-sm text-slate-500">{cat.doclessDesc(docs.length)}</p>
+          <p className="text-base font-semibold text-ink-1">{cat.doclessTitle}</p>
+          <p className="mt-1 text-sm text-ink-2">{cat.doclessDesc(docs.length)}</p>
         </Card>
       ) : (
         <div className="space-y-6">
@@ -180,15 +181,23 @@ export default function ChapterCatalogPage() {
             const docMastered = chapters.filter(
               (c) => (masteryOf(c.id) ?? 0) >= MASTERY_THRESHOLD,
             ).length;
+            // 探索度 = 已涉猎（曾打开 / 有卷面掌握）章占比，非达标口径。
+            const explored = chapters.filter(
+              (c) => c.status !== "not-started" || (masteryOf(c.id) ?? 0) > 0,
+            ).length;
             const shown = filter === "all" ? chapters : chapters.filter((c) => isChapterUnmet(masteryOf(c.id)));
             return (
               <div key={doc.id}>
-                {/* 文档头 + 就绪进度 */}
-                <div className="mb-2 flex items-center justify-between gap-4">
+                {/* 文档头 + 探索度 + 就绪 Bar */}
+                <div className="mb-1 flex items-center justify-between gap-4">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-800">{doc.title}</p>
-                    <p className="text-xs text-slate-400">
+                    <p className="truncate text-sm font-semibold text-ink-1">{doc.title}</p>
+                    <p className="text-xs text-ink-3">
                       {cat.chapterRange(docMastered, chapters.length)}
+                      <span className="mx-1.5">·</span>
+                      {cat.exploredOf(
+                        Math.round((explored / chapters.length) * 100),
+                      )}
                     </p>
                   </div>
                   <div className="w-40 shrink-0">
@@ -200,44 +209,45 @@ export default function ChapterCatalogPage() {
                   </div>
                 </div>
 
-                {/* 章卡片 */}
+                {/* 章行（KnowledgeRow 同形态：状态点 + 序 + 标题 + 弱标签 + 掌握度） */}
                 {shown.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-400">
+                  <p className="rounded-lg border border-dashed border-line px-4 py-3 text-sm text-ink-3">
                     {cat.unmetEmpty}
                   </p>
                 ) : (
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div>
                     {shown.map((chapter) => {
                       const mastery = masteryOf(chapter.id) ?? 0;
                       const badge = chapterBadge(chapter.status, masteryOf(chapter.id), m);
                       return (
-                        <button
+                        <Link
                           key={chapter.id}
-                          onClick={() => navigate(`/learn/${chapter.id}`)}
-                          className="group rounded-xl border border-slate-200 bg-white p-3.5 text-left shadow-sm transition hover:border-indigo-200 hover:shadow"
+                          to={`/learn/${chapter.id}`}
+                          className="group flex items-center justify-between gap-3 border-b border-line py-2 transition-colors last:border-b-0 hover:bg-subtle"
                         >
-                          <div className="flex items-center gap-2.5">
-                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-500 group-hover:bg-indigo-100 group-hover:text-indigo-700">
+                          <span className="flex min-w-0 items-center gap-2.5">
+                            <span
+                              className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotOf(chapter, mastery)}`}
+                            />
+                            <span className="w-6 shrink-0 text-right text-xs tabular-nums text-ink-3">
                               {chapter.order}
                             </span>
-                            <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">
+                            <span className="truncate text-sm text-ink-1">
                               {chapter.title || m.chapter.ordinal(chapter.order)}
                             </span>
-                            <span
-                              className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${badge.cls}`}
-                            >
+                            <span className="hidden shrink-0 text-xs text-ink-3 sm:inline">
                               {badge.label}
                             </span>
-                          </div>
-                          <div className="mt-2.5 flex items-center gap-2 pl-8">
-                            <div className="flex-1">
-                              <Bar value={mastery} target={MASTERY_THRESHOLD} targetLabel={cat.targetLine} />
-                            </div>
-                            <span className="w-9 shrink-0 text-right text-xs tabular-nums text-slate-400">
+                          </span>
+                          <span className="flex shrink-0 items-center gap-3">
+                            <span className="w-10 text-right text-xs tabular-nums text-ink-2">
                               {Math.round(mastery * 100)}%
                             </span>
-                          </div>
-                        </button>
+                            <span className="text-xs text-ink-3 transition-transform group-hover:translate-x-0.5">
+                              ›
+                            </span>
+                          </span>
+                        </Link>
                       );
                     })}
                   </div>
@@ -259,13 +269,13 @@ export default function ChapterCatalogPage() {
             {doclessDocs.map((d) => (
               <div
                 key={d.id}
-                className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm"
+                className="flex items-center gap-2 rounded-lg border border-line bg-subtle px-3 py-1.5 text-sm"
               >
-                <span className="max-w-40 truncate text-slate-600">{d.title}</span>
+                <span className="max-w-40 truncate text-ink-2">{d.title}</span>
                 <button
                   onClick={() => splitNow(d.id)}
                   disabled={busyDocId === d.id || !d.textPreview}
-                  className="rounded-md bg-white px-2 py-0.5 text-xs font-medium text-indigo-600 ring-1 ring-slate-200 hover:bg-indigo-50 disabled:opacity-40"
+                  className="rounded-md bg-surface px-2 py-0.5 text-xs font-medium text-accent ring-1 ring-line transition-colors hover:bg-subtle disabled:opacity-40"
                 >
                   {busyDocId === d.id ? cat.splitting : cat.splitNow}
                 </button>
@@ -278,4 +288,20 @@ export default function ChapterCatalogPage() {
       {importOpen ? <ImportModal onClose={() => setImportOpen(false)} onImported={onImported} /> : null}
     </PageContainer>
   );
+}
+
+/** 行首状态语义点颜色（派生与 chapterBadge 同源：高掌握优先，再看状态机）。 */
+function dotOf(chapter: Chapter, mastery: number): string {
+  if ((mastery >= MASTERY_THRESHOLD && chapter.status !== "retake") || chapter.status === "mastered") {
+    return "bg-state-mastered";
+  }
+  switch (chapter.status) {
+    case "retake":
+      return "bg-state-weak";
+    case "ready":
+    case "learning":
+      return "bg-state-learning";
+    default:
+      return "bg-state-idle";
+  }
 }

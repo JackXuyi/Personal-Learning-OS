@@ -375,6 +375,8 @@ export const en: Messages = {
         `${n} document(s) not split yet (legacy or saved only). Split their text now, or re-import.`,
       chapterRange: (done: number, total: number) =>
         `Chapters 1–${total} · ${done}/${total} ready`,
+      /** U3 doc header overall exploration (touched chapters ratio, not ready-line). */
+      exploredOf: (pct: number) => `Explored ${pct}%`,
       targetLine: "Target line",
       unmetEmpty: "No unmet chapters 🎉",
       unsplitCount: (n: number) => `${n} document(s) not split yet`,
@@ -435,6 +437,15 @@ export const en: Messages = {
       goQuiz: "Quiz chapter →",
       markDone: "Mark learned ✓",
       doneLabel: "Marked learned",
+      /** U3 right rail, four zones: status / why it matters / knowledge / evidence. */
+      whyEyebrow: "Why it matters",
+      knowledgeEyebrow: "Knowledge",
+      knowledgeSelect: "Select knowledge block",
+      evidenceEyebrow: "Evidence",
+      evidenceSource: (doc: string, ord: string) => `From “${doc}” · ${ord}`,
+      evidenceNone:
+        "No quiz recorded for this chapter yet — your mastery delta will appear here.",
+      toPlan: "Back to plan for the full next step",
       noSnapshot:
         "This document has no saved body snapshot (empty textPreview), so the original text can't be shown.",
     },
