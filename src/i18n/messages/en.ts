@@ -158,7 +158,7 @@ export const en: Messages = {
       current: (lang: "zh" | "en") =>
         `Currently active: ${lang === "zh" ? "中文" : "English"}`,
     },
-    /** U6b · Settings section skeleton (left rail navigation). */
+    /** Settings section tabs (top horizontal navigation). */
     sections: {
       ai: "AI models",
       storage: "Local storage",
@@ -167,24 +167,14 @@ export const en: Messages = {
       shortcuts: "Shortcuts",
       about: "About",
     },
-    /** U6b · Local-first summary card at the top. */
-    localFirst: {
-      eyebrow: "Local-first",
-      title: "Data stays on this device · AI local or cloud",
-      desc: "Learning records, material and evidence live only on your device by default (localStorage / desktop files). The built-in local model (Qwen) keeps extraction and grading usable offline; connecting an API model only sends what a task needs.",
-      storageNote: "Storage backend",
-      modelNote: "Current AI",
-      builtinQwen: "Built-in local Qwen (offline-ready)",
-      noModel: "Not configured (offline heuristic engine)",
-      storageMemory: "In-memory (preview)",
-      storageLocal: "This machine's localStorage",
-      learnMore: "See “AI models / Local storage” sections →",
-    },
-    /** U6b · Storage section. */
+    /** Storage section. */
     storage: {
       title: "Local storage",
       desc: "Everything is written on this device. Preview uses localStorage; the desktop build will switch to a SQLite / file-system backend with the same interface.",
       backend: "Current backend",
+      /** "Current backend" value label (adapter name → local / memory). */
+      storageMemory: "In-memory (preview)",
+      storageLocal: "This machine's localStorage",
       counts: "Data volume",
       docCount: (n: number) => `${n} document(s)`,
       chapterCount: (n: number) => `${n} chapter(s)`,

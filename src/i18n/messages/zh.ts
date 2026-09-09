@@ -164,7 +164,7 @@ export const zh = {
       autoHint: "自动按系统语言选择；手动选择后始终使用该语言。",
       current: (lang: "zh" | "en") => `当前生效：${lang === "zh" ? "中文" : "English"}`,
     },
-    /** U6b · Settings 分区骨架（左分区导航）。 */
+    /** Settings 分区 Tab（顶部横向导航）。 */
     sections: {
       ai: "AI 模型",
       storage: "本地存储",
@@ -173,24 +173,14 @@ export const zh = {
       shortcuts: "快捷键",
       about: "关于",
     },
-    /** U6b · 顶部 Local-first 摘要卡。 */
-    localFirst: {
-      eyebrow: "Local-first",
-      title: "数据留在本机 · AI 可选本地或云端",
-      desc: "学习记录、资料与证据默认只存在你的设备上（localStorage / 桌面端文件）。内置本地模型（Qwen）让抽取与判分离线可用；接入 API 模型时仅发送任务所需内容。",
-      storageNote: "存储后端",
-      modelNote: "当前 AI",
-      builtinQwen: "内置本地 Qwen（离线可用）",
-      noModel: "未配置（引擎走离线启发式）",
-      storageMemory: "内存（预览态）",
-      storageLocal: "本机 localStorage",
-      learnMore: "详见「AI 模型 / 本地存储」分区 →",
-    },
-    /** U6b · Storage 分区。 */
+    /** Storage 分区。 */
     storage: {
       title: "本地存储",
       desc: "一切数据都写在本机。预览态使用 localStorage；桌面端将切到 SQLite / 文件系统后端，接口不变。",
       backend: "当前后端",
+      /** 「当前后端」取值文案（适配器 name 映射：local / memory）。 */
+      storageMemory: "内存（预览态）",
+      storageLocal: "本机 localStorage",
       counts: "数据规模",
       docCount: (n: number) => `${n} 份资料`,
       chapterCount: (n: number) => `${n} 个章节`,

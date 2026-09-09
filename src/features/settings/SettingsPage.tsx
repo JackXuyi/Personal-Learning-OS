@@ -2,18 +2,16 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Card, SectionTitle } from "../../components/primitives";
 import { PageContainer } from "../../components/layout/AppShell";
-import { buildActiveProvider, useSettingsStore } from "../../stores/useSettingsStore";
 import { useLangStore } from "../../stores/useLangStore";
 import { useI18n, type Messages } from "../../i18n";
 import { storage } from "../../stores/useLoopStore";
-import { labelOfLocalModel, labelOfProvider } from "../../ai/presets";
 import AIModelsSection from "./AIModelsSection";
 
 /**
- * 设置（U6b 分区化，docs/ui-workbench-plan-2026-09.md §24-26）。
+ * 设置（docs/settings-top-tab-layout-design-2026-09.md：外层分区改顶部横向 Tab；
+ * 分区化源起 docs/ui-workbench-plan-2026-09.md §24-26）。
  *
- * 左分区导航：AI 模型 / 本地存储 / 学习行为 / 外观与语言 / 快捷键 / 关于；
- * 顶部 Local-first 摘要卡（数据留本机 · AI 可选本地或云端）。
+ * 顶部横向 Segment Tab：AI 模型 / 本地存储 / 学习行为 / 外观与语言 / 快捷键 / 关于；
  * AI 分区内容 = 原「AI 模型中心」（抽至 AIModelsSection，零功能回退）；
  * Storage 分区展示真实计数（读 storage）；其余分区为说明卡。
  */
@@ -39,19 +37,8 @@ interface StorageCounts {
 }
 
 /** 后端徽标文案：适配器 name（local=本机 localStorage；memory=内存预览）。 */
-function backendNoteOf(name: string, lf: { storageLocal: string; storageMemory: string }): string {
-  return name.includes("local") ? lf.storageLocal : lf.storageMemory;
-}
-
-/** 当前 AI 徽标文案（与模型中心同源：active → provider/label）。 */
-function modelNoteOf(
-  active: ReturnType<typeof useSettingsStore.getState>["active"],
-  providerReady: boolean,
-  lf: { builtinQwen: string; noModel: string },
-): string {
-  if (!active) return lf.noModel;
-  if (active.source === "local") return `${lf.builtinQwen} · ${labelOfLocalModel(active.model)}`;
-  return `${labelOfProvider(active.provider)} · ${active.model || "(未填模型)"}${providerReady ? "" : "（未测试）"}`;
+function backendLabelOf(name: string, sg: Messages["settings"]["storage"]): string {
+  return name.includes("local") ? sg.storageLocal : sg.storageMemory;
 }
 
 export default function SettingsPage() {
@@ -59,9 +46,6 @@ export default function SettingsPage() {
   const st = m.settings;
   const langMode = useLangStore((s) => s.mode);
   const setLangMode = useLangStore((s) => s.setMode);
-  const active = useSettingsStore((s) => s.active);
-  const providerReady = useSettingsStore((s) => s.providerReady);
-  const liveReady = active !== null && buildActiveProvider().isConfigured();
 
   const [section, setSection] = useState<SectionKey>("ai");
   const [counts, setCounts] = useState<StorageCounts | undefined>();
@@ -85,92 +69,54 @@ export default function SettingsPage() {
     })();
   }, []);
 
-  const lf = st.localFirst;
-  const activeModelNote = modelNoteOf(active, providerReady, lf);
-
   return (
     <PageContainer>
       <SectionTitle title={m.nav.settings.label} subtitle={m.nav.settings.hint} />
 
-      {/* ── Local-first 摘要卡 ─────────────────────────────────────── */}
-      <Card className="mt-4">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-accent">
-          {lf.eyebrow}
-        </p>
-        <h2 className="mt-0.5 text-lg font-semibold text-ink-1">{lf.title}</h2>
-        <p className="mt-1 max-w-3xl text-sm leading-relaxed text-ink-2">{lf.desc}</p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-lg border border-line bg-subtle/60 px-3 py-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">
-              {lf.storageNote}
-            </p>
-            <p className="mt-0.5 flex items-center gap-1.5 text-sm font-medium text-ink-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-state-mastered" />
-              {backendNoteOf(storage.name, lf)}
-            </p>
-          </div>
-          <div className="rounded-lg border border-line bg-subtle/60 px-3 py-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">
-              {lf.modelNote}
-            </p>
-            <p className="mt-0.5 flex items-center gap-1.5 text-sm font-medium text-ink-1">
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  active && (providerReady || liveReady) ? "bg-state-mastered" : "bg-state-idle"
-                }`}
-              />
-              <span className="truncate">{activeModelNote}</span>
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => setSection("ai")}
-          className="mt-3 text-xs font-medium text-accent transition-colors hover:text-accent/70"
-        >
-          {lf.learnMore} →
-        </button>
-      </Card>
+      {/* ── 分区导航：顶部横向 Segment Tab ─────────────────────────── */}
+      <div
+        role="tablist"
+        className="mt-4 flex gap-1 overflow-x-auto rounded-lg border border-line bg-subtle p-1"
+      >
+        {SECTION_ORDER.map((key) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={section === key}
+            data-testid={`settings-tab-${key}`}
+            onClick={() => setSection(key)}
+            className={`flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              section === key
+                ? "bg-surface text-accent shadow-sm"
+                : "text-ink-2 hover:bg-subtle hover:text-ink-1"
+            }`}
+          >
+            {st.sections[key]}
+          </button>
+        ))}
+      </div>
 
-      {/* ── 分区骨架：左导航 + 右内容 ──────────────────────────────── */}
-      <div className="mt-6 grid gap-6 lg:grid-cols-[220px_1fr]">
-        <aside className="flex flex-col gap-0.5 self-start lg:sticky lg:top-6">
-          {SECTION_ORDER.map((key) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setSection(key)}
-              className={`rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
-                section === key
-                  ? "bg-subtle font-medium text-ink-1"
-                  : "text-ink-2 hover:bg-subtle hover:text-ink-1"
-              }`}
-            >
-              {st.sections[key]}
-            </button>
-          ))}
-        </aside>
-
-        <div className="min-w-0">
-          {section === "ai" ? (
-            <AIModelsSection />
-          ) : section === "storage" ? (
-            <StorageSection counts={counts} st={st} loading={m.common.loading} />
-          ) : section === "learning" ? (
-            <LearningSection st={st} />
-          ) : section === "appearance" ? (
-            <AppearanceSection
-              langMode={langMode}
-              setLangMode={setLangMode}
-              lang={lang}
-              m={m}
-            />
-          ) : section === "shortcuts" ? (
-            <ShortcutsSection st={st} />
-          ) : (
-            <AboutSection st={st} />
-          )}
-        </div>
+      {/* ── 分区内容 ───────────────────────────────────────────────── */}
+      <div className="mt-6 min-w-0">
+        {section === "ai" ? (
+          <AIModelsSection />
+        ) : section === "storage" ? (
+          <StorageSection counts={counts} st={st} loading={m.common.loading} />
+        ) : section === "learning" ? (
+          <LearningSection st={st} />
+        ) : section === "appearance" ? (
+          <AppearanceSection
+            langMode={langMode}
+            setLangMode={setLangMode}
+            lang={lang}
+            m={m}
+          />
+        ) : section === "shortcuts" ? (
+          <ShortcutsSection st={st} />
+        ) : (
+          <AboutSection st={st} />
+        )}
       </div>
     </PageContainer>
   );
@@ -196,7 +142,7 @@ function StorageSection({ counts, st, loading }: { counts: StorageCounts | undef
     <SectionShell title={sg.title} desc={sg.desc}>
       <Card className="space-y-3">
         <dl className="space-y-1.5 text-sm">
-          <KV k={sg.backend} v={backendNoteOf(storage.name, st.localFirst)} />
+          <KV k={sg.backend} v={backendLabelOf(storage.name, sg)} />
         </dl>
         <div className="border-t border-line pt-3">
           <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">{sg.counts}</p>
