@@ -45,6 +45,8 @@ description: Runs a structured UI/style optimization workflow for the PLOS deskt
 
 ## 7. 对抗性自审
 
+> ⛔ **PLOS rule — [no-headless-browser-validation](../../rules/no-headless-browser-validation.mdc)**：不得启动浏览器（截图 / DOM / 视觉检查）来"验证"样式效果。样式正确性以代码审查判定；需肉眼确认时把 `npm run dev` 的 `http://localhost:1420` 交给用户查看。
+
 - [ ] 各窗口尺寸布局正常；无裁切 / 溢出
 - [ ] focus 可见、对比度达标
 - [ ] token 化，无一次性 hex

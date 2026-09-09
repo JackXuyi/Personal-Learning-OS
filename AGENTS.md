@@ -56,6 +56,7 @@ Cursor / Claude 系工具会按 frontmatter 自动注入：`alwaysApply: true` �
 | `pre-task-technical-design` | always | 实质任务先澄清 + 完整中文技术方案，用户确认后才写生产代码 |
 | `engineering-code-style` | always | 相对导入、中文注释、i18n 双语、Tailwind 4 token、`import type` |
 | `layer-import-boundaries` | always | src ↔ src-tauri 只走 IPC；UI → stores/storage；纯逻辑不依赖 React |
+| `no-headless-browser-validation` | always | 禁止主动启动无头/任何浏览器校验样式/布局/功能（截图、DOM、视觉检查）；校验走 typecheck + node 单测 + 代码自审；仅用户显式要求浏览器级/E2E 时放行 |
 | `react.mdc` | globs `src/**/*.tsx` | Tailwind 4 + 语义 token + primitives 原语；状态色仅 dot/徽标 |
 | `rust.mdc` | globs `src-tauri/**/*.rs` | 模块 vault/llm → lib.rs 注册；命令 `Result<T,String>`；macOS-only vault |
 
@@ -78,10 +79,10 @@ Cursor / Claude 系工具会按 frontmatter 自动注入：`alwaysApply: true` �
 | **桌面/Rust** | | |
 | tauri-ipc | 涉及 `invoke`/命令注册/事件 | vault/llm 命令契约、lib.rs 注册、serde 镜像、isTauri 守卫 |
 | **文档与变更配套** | | |
-| package-docs-driven-change | 功能/重构按文档驱动 | 按 area 读 docs → 对齐实现 → 产出测试（node tests/manual/Playwright） |
+| package-docs-driven-change | 功能/重构按文档驱动 | 按 area 读 docs → 对齐实现 → 产出测试（node tests/manual；浏览器级需用户显式要求） |
 | **测试** | | |
-| webapp-testing | 浏览器级校验/截图/调试 | 起 `npm run dev`(1420) + Python Playwright 脚本 |
-| playwright-test-ids | E2E 可测性 / data-testid | 交互元素加稳定 `data-testid`，重构成熟后保持稳定 |
+| webapp-testing | **仅用户显式要求**的浏览器级校验/截图/调试 | 起 `npm run dev`(1420) + Python Playwright 脚本（受 no-headless-browser-validation 约束，默认禁用） |
+| playwright-test-ids | E2E 可测性 / data-testid（写 testid 不启动浏览器） | 交互元素加稳定 `data-testid`，重构成熟后保持稳定 |
 | **通用工具（与 PLOS 主题无关，跨项目用）** | | |
 | skill-creator | 创建/维护 SKILL.md | 高质量 skill 编写指南 |
 | install-skills-from-url | 从 URL/GitHub 安装 skill | 装到仓库 `skills/<name>/` 或个人技能目录，装前安全审查 |

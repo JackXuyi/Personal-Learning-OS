@@ -6,7 +6,9 @@ license: Complete terms in LICENSE.txt
 
 # Web Application Testing
 
-**This repo (PLOS):** primary automated tests are node-run unit tests (`npm run test:*`, `tests/*.test.ts`). The dev UI runs via `npm run dev` → `http://localhost:1420`（Tauri 桌面壳与纯浏览器加载同一 Vite webview）。Use Playwright here when the user wants browser-level checks of the UI.
+**This repo (PLOS):** primary automated tests are node-run unit tests (`npm run test:*`, `tests/*.test.ts`). The dev UI runs via `npm run dev` → `http://localhost:1420`（Tauri 桌面壳与纯浏览器加载同一 Vite webview）。Use Playwright here **only when the user explicitly asks for browser-level checks** of the UI.
+
+> ⛔ **PLOS rule — [no-headless-browser-validation](../../rules/no-headless-browser-validation.mdc)**：禁止主动启动无头/任何浏览器来「校验」样式、布局或功能完成度（截图、DOM/视觉检查）。校验走 `npm run typecheck` + node 单测 + 代码级自审；需人眼确认时把 dev URL/HTML 交给用户。本 skill **仅在用户显式要求浏览器级校验 / E2E / 截图时启用**，headless 截图只作给用户的参考材料，不作自动验收。
 
 To test local web applications, write native Python Playwright scripts.
 

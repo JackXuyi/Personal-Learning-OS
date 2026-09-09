@@ -1,0 +1,30 @@
+---
+description: PLOS verification constraint — never auto-launch a headless browser (Playwright/Puppeteer screenshots, DOM/layout/visual checks) to "verify" styles or UI behavior as part of finishing a task. Validate via `npm run typecheck` + node-run unit tests + code self-review; browser-level checks only on explicit user request. 禁止无头浏览器校验样式/布局/功能。
+alwaysApply: true
+---
+
+# No headless-browser UI/function validation
+
+本仓库的 UI 校验**默认不通过浏览器进行**。AI 完成任务（尤其样式 / 布局 / 视觉 / UI 交互改动）后，不得为了「确认效果」主动启动浏览器——无论 headless 还是 headed，无论截图、DOM 检查、布局检查还是视觉回归快照。校验样式而启动浏览器截图不是本仓库的验收动作。
+
+## 适用范围
+
+- **覆盖**：样式（style）、布局（layout）、视觉（visual）、UI 功能行为的自动"校验"；「起 `npm run dev` 只为截图自检」同样禁止。
+- **不覆盖**：仅当**用户显式要求**浏览器级校验（E2E、Playwright 脚本、明确说「用浏览器测 / 截图看看 / 打开页面看看」）时，才允许执行浏览器级检查。触发来源只允许 [webapp-testing](../skills/webapp-testing/SKILL.md) / [playwright-test-ids](../skills/playwright-test-ids/SKILL.md)，且仅按用户要求的范围做。
+
+## 正确校验方式（替代浏览器）
+
+- **静态 / 类型**：`npm run typecheck`
+- **逻辑 / 功能行为**：node 直跑纯逻辑单测 `tests/*.test.ts`（`npm run test:*`），不依赖浏览器
+- **样式 / 布局正确性**：代码级对抗性自审——对照 `src/styles/main.css` 的 `@theme` token、`src/components/primitives.tsx` 原语、i18n 双语、兄弟页面模式与本次 diff 范围判定；不靠截图证明
+- **需要人眼确认时**：把 `npm run dev` 的 `http://localhost:1420` 或本地 HTML 交给用户自行查看，截图不是交付的替代品
+
+## 明确禁止
+
+- ❌ 样式 / UI 任务收尾时自动「起 dev server + Playwright/Puppeteer 无头截图」验证改动效果
+- ❌ 用 headless 截图 / DOM 检查 / 像素比对作为「样式已达标 / 功能已正常」的自动验收门槛
+- ❌ 以「截图给用户看」为由在未获要求时启动任何浏览器
+
+## 冲突仲裁
+
+本规则优先于任何 skill 中「启动浏览器验证 UI / 截图自检」的步骤（仓库冲突仲裁：**约束以 `rules/` 为准**）。相关 skill：[webapp-testing](../skills/webapp-testing/SKILL.md)、[playwright-test-ids](../skills/playwright-test-ids/SKILL.md)、[style-optimization-workflow](../skills/style-optimization-workflow/SKILL.md)、[package-docs-driven-change](../skills/package-docs-driven-change/SKILL.md)。
