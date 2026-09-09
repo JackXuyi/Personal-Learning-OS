@@ -598,7 +598,47 @@ export const zh = {
     },
     import: {
       title: "导入资料",
-      subtitle: "粘贴 Markdown / 笔记，系统会按标题切分成章节，逐章学习。",
+      subtitle: "粘贴 Markdown，或从本地文件 / GitHub 公开仓库导入资料，系统会切分成章节逐章学习。",
+      /** 三来源 Tab。 */
+      sourceTab: { paste: "粘贴", local: "本地文件", github: "GitHub" },
+      /** 本地文件面板。 */
+      local: {
+        dropTitle: "拖拽 .md / .pdf 到此处，或点击选择文件",
+        dropHint: "支持批量选择多个文件；扫描版 PDF 暂不支持（文本型 PDF 可导入）",
+        selected: (n: number) => `已选 ${n} 个文件`,
+        importable: (n: number) => `其中 ${n} 份可导入`,
+        removeAll: "全部移除",
+        remove: "移除",
+        kindMd: "Markdown",
+        kindPdf: "PDF",
+        unsupported: "不支持的类型（仅 .md / .pdf）",
+        tooLarge: "超出大小限制",
+        scanningNoText: "未抽取到文本（可能为扫描件）",
+        readFailed: "读取失败",
+        import: (n: number) => `保存并切分 ${n} 份资料`,
+      },
+      /** GitHub 面板。 */
+      github: {
+        label: "GitHub 链接（公开仓库）",
+        placeholder: "https://github.com/owner/repo 或 /tree/…、/blob/…",
+        resolve: "解析",
+        resolving: "正在解析仓库…",
+        hint: "支持仓库 / 子目录（tree）/ 单文件（blob）链接；仅公开仓库，导入为一次快照",
+        importN: (n: number) => `将导入 ${n} 个 Markdown · 合并为一份资料`,
+        skipped: (n: number) => `${n} 个超限跳过`,
+        filesHead: "Markdown 文件清单",
+        emptyPreview: "粘贴公开仓库链接后点「解析」，可预览将导入的文件",
+        fileTooMany: "Markdown 文件过多，请改用子目录或单文件链接",
+      },
+      /** 批量导入进度与汇总。 */
+      batch: {
+        importing: (i: number, n: number, title: string) => `正在导入 ${i}/${n} · ${title}`,
+        doneToLibrary: "完成，查看资料库 →",
+        failedN: (n: number) => `${n} 份导入失败`,
+        allFailed: "全部导入失败，请检查文件后重试",
+        summaryTitle: (ok: number, failed: number) =>
+          failed > 0 ? `导入完成：${ok} 份成功 · ${failed} 份失败` : `导入完成：${ok} 份成功`,
+      },
       formatNote: "笔记",
       formatWeb: "网页",
       formatTxt: "纯文本",

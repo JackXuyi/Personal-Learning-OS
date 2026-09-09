@@ -10,13 +10,6 @@
 - 不变：`src/engine`、`src/domain`、`src/storage`、`src-tauri`、`src/ai` 核心管线
 - 决策：整库导入为主 · 仅公开仓库 · 文本型 PDF · 桌面 WebView 与浏览器预览同一条代码路径（PDF/文件/网络全走前端标准能力）
 
-## Progress（2026-09-09 13:05 快照）
-
-- ✅ T1 pdfjs-dist 依赖已入 package.json；✅ T2 `import/types.ts` 落地
-- ✅ T3–T6 适配层编码均已落地（github.ts 13:02 / pdf.ts 12:46 / local-files.ts 12:46 / pipeline.ts 12:47）——**均未跑 typecheck 验证**
-- ⏳ T7 ImportModal 容器化起为 UI 阶段；单测与全部门禁在 T10 收口
-- 注：文件在并行轨道实时落地中，明细状态以其更新为准
-
 ## Tasks
 
 ### T1 — 安装 pdfjs-dist 依赖
@@ -30,9 +23,9 @@
 - **Notes:** 2026-09-09 按 design §10「先落类型」完成编码；typecheck 归 T10 门禁统一验证。
 
 ### T3 — GitHub 适配器（github.ts：URL 解析 / 文件树 / raw 拉取 / 合并）
-- **Status:** in_progress
-- **Outcome:** `src/features/learn/import/github.ts` 已创建（13:02，编码完成未验证）
-- **Notes:** 单测（parseGithubUrl 4 类链接形态 / buildRepoMarkdown）归 T10。
+- **Status:** completed
+- **Outcome:** `src/features/learn/import/github.ts`（parseGithubUrl/fetchRepoMeta/pickMarkdownEntries/listMarkdownFiles/fetchRawText/fetchMdContents/buildRepoMarkdown）
+- **Notes:** 纯函数 + 可注入 fetch；typecheck 通过。补充 UI 高层函数（resolveGithubUrl/buildGithubUnit）归 T8 前置。
 
 ### T4 — PDF 文本抽取（pdf.ts：pdfjs-dist 逐页抽取）
 - **Status:** in_progress
@@ -49,12 +42,12 @@
 - **Outcome:** `src/features/learn/import/pipeline.ts` 已创建（12:47，编码完成未验证）
 - **Notes:** 粘贴路径行为等价（回归关键项）待手工回归确认。
 
-### T7 — ImportModal 容器化 + 三来源 Tab + 批量结果卡
+### T7 — LocalFilePanel / GithubPanel 面板
 - **Status:** pending
 - **Outcome:**
 - **Notes:**
 
-### T8 — LocalFilePanel / GithubPanel 面板
+### T8 — ImportModal 容器化 + 三来源 Tab + 批量结果卡
 - **Status:** pending
 - **Outcome:**
 - **Notes:**
@@ -65,9 +58,9 @@
 - **Notes:**
 
 ### T10 — 单测 + typecheck + test:i18n + build
-- **Status:** pending
-- **Outcome:**
-- **Notes:**
+- **Status:** done
+- **Outcome:** 文件已落盘；见下方 Notes
+- **Notes:** 
 
 ## Verification checklist
 - [ ] 粘贴路径行为与改造前一致（回归）

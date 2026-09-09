@@ -13,6 +13,7 @@
     "test:goal": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/goal-repo.test.ts",
     "test:scope": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/chapter-scope.test.ts",
     "test:eta": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/plan-eta.test.ts",
+    "test:import": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/import-core.test.ts",
     "tauri": "tauri"
   },
   "engines": {
@@ -20,6 +21,7 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
+    "pdfjs-dist": "^4.10.38",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.3",
