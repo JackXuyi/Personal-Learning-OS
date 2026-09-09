@@ -490,6 +490,11 @@ export const zh = {
     importMore: "导入新资料",
     masteryAt: (p: number) => `掌握度 ${p}%`,
     generating: "生成中…",
+    /** U2 分段：高优（今天做）与排队（其余）。 */
+    next: "NEXT · 今天做",
+    upNext: "UP NEXT · 排队做",
+    /** 每项时间预估（启发式，标注估计）。 */
+    etaOf: (n: number) => `约 ${n} 分钟`,
   },
 
   review: {

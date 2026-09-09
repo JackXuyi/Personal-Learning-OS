@@ -3,8 +3,10 @@
  * 首页主 CTA / /plan 计划页 / 报告页共用，避免各页维护一份 kind → 徽标/动词/跳转映射。
  */
 import type { Chapter, LearnerState, NextAction, Paper } from "../../domain";
+import { PAPER_MODE_DURATION_MIN } from "../../domain";
 import { createRetakePaper } from "../../engine";
-import { zh, type Messages } from "../../i18n";
+// 子路径 import（不经 i18n barrel），避免 .tsx 参与单测直跑（与 engine/loop.ts 一致）。
+import { zh, type Messages } from "../../i18n/messages/zh";
 
 export interface ChapterActionMeta {
   /** kind 徽标（tailwind 浅底深字圆角，与报告页 KIND_CHIP 同一套配色）。 */
@@ -79,4 +81,40 @@ export function chapterDisplayTitle(
 ): string {
   const head = chapter.title?.trim() ? chapter.title : m.chapter.ordinal(chapter.order);
   return docTitle ? `${docTitle} · ${head}` : head;
+}
+
+/** 章正文长度（字符）—— contentRef 切片区间；无 chapter 时 0。 */
+export function chapterChars(chapter: Chapter | undefined): number {
+  if (!chapter) return 0;
+  return Math.max(0, chapter.contentRef.end - chapter.contentRef.start);
+}
+
+/**
+ * 动作耗时估计（分钟）—— Plan 每项 / Reader ETA 用（docs/ui-workbench-plan-2026-09.md
+ * §7.4：启发式即可，不进 domain/engine）。
+ *
+ * 策略（由动作模式决定，标注「估计」）：
+ * - chapter-quiz / retake-quiz：卷模式时长常量（domain.PAPER_MODE_DURATION_MIN）；
+ * - review-points：浏览要点为主，按章长 ~800 字/分，clamp [2, 12]；
+ * - learn-chapter：精读 + 勾要点，按章长 ~350 字/分，clamp [5, 40]；
+ * - 无章信息 / 其它 kind：走安全回退（quiz 8 / review 5 / learn 12 / 其它 8）。
+ */
+export function estimateEtaMin(
+  action: NextAction,
+  chapter: Chapter | undefined,
+): number {
+  if (action.kind === "chapter-quiz") return PAPER_MODE_DURATION_MIN["unit-test"];
+  if (action.kind === "retake-quiz") return PAPER_MODE_DURATION_MIN.retake;
+  const chars = chapterChars(chapter);
+  if (action.kind === "review-points") {
+    return chars === 0 ? 5 : clamp(Math.round(chars / 800), 2, 12);
+  }
+  if (action.kind === "learn-chapter") {
+    return chars === 0 ? 12 : clamp(Math.round(chars / 350), 5, 40);
+  }
+  return 8;
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, n));
 }

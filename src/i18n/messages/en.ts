@@ -509,6 +509,11 @@ export const en: Messages = {
     importMore: "Import new material",
     masteryAt: (p: number) => `Mastery ${p}%`,
     generating: "Generating…",
+    /** U2 sections: high priority (do today) vs the rest (queued). */
+    next: "NEXT · Do today",
+    upNext: "UP NEXT · In queue",
+    /** Per-item time estimate (heuristic, marked as estimate). */
+    etaOf: (n: number) => `about ${n} min`,
   },
 
   review: {

@@ -12,6 +12,7 @@
     "test:i18n": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/i18n-alignment.test.ts",
     "test:goal": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/goal-repo.test.ts",
     "test:scope": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/chapter-scope.test.ts",
+    "test:eta": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/plan-eta.test.ts",
     "tauri": "tauri"
   },
   "engines": {
