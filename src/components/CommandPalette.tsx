@@ -34,7 +34,7 @@ interface Command {
 const SECTION_ORDER: SectionKey[] = ["action", "search", "commands", "recent"];
 
 /** 跳转项与侧边栏可达项一一对应（不改路由；label/hint 取自当前语言字典）。 */
-const NAV_ENTRIES = ["/", "/learn", "/plan", "/quiz", "/career", "/settings"] as const;
+const NAV_ENTRIES = ["/", "/learn", "/plan", "/quiz", "/goals", "/learner", "/settings"] as const;
 
 /** 内容搜索索引（每次打开 ⌘K 时刷新一次目标列表；文档/章取自章级快照）。 */
 interface SearchIndex {
@@ -108,7 +108,8 @@ export default function CommandPalette() {
         case "/learn": return m.nav.library.label;
         case "/plan": return m.nav.plan.label;
         case "/quiz": return m.nav.quiz.label;
-        case "/career": return m.nav.career.label;
+        case "/goals": return m.nav.goals.label;
+        case "/learner": return m.nav.learner.label;
         case "/settings": return m.nav.settings.label;
       }
     };
@@ -118,7 +119,8 @@ export default function CommandPalette() {
         case "/learn": return m.nav.library.hint;
         case "/plan": return m.nav.plan.hint;
         case "/quiz": return m.nav.quiz.hint;
-        case "/career": return m.nav.career.hint;
+        case "/goals": return m.nav.goals.hint;
+        case "/learner": return m.nav.learner.hint;
         case "/settings": return m.nav.settings.hint;
       }
     };
@@ -202,11 +204,11 @@ export default function CommandPalette() {
           list.push({
             id: `s-goal-${g.id}`,
             label: `${m.cmd.typeGoal} · ${g.title}`,
-            hint: m.nav.career.label,
+            hint: m.nav.goals.label,
             section: "search",
             search: `${m.cmd.typeGoal} ${g.title}`,
-            // U6 Goals 详情页上线后改为 /goals/:goalId。
-            run: () => navigate("/career"),
+            // U6：目标搜索直达详情页。
+            run: () => navigate(`/goals/${g.id}`),
           });
         }
       }

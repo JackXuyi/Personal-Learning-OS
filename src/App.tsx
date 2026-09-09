@@ -11,7 +11,10 @@ import QuizAnswerPage from "./features/quiz/QuizAnswerPage";
 import QuizGradingPage from "./features/quiz/QuizGradingPage";
 import QuizReportPage from "./features/quiz/QuizReportPage";
 import AssessmentPage from "./features/assessment/AssessmentPage";
-import CareerPage from "./features/career/CareerPage";
+import GoalsPage from "./features/goals/GoalsPage";
+import GoalFormPage from "./features/goals/GoalFormPage";
+import GoalDetailPage from "./features/goals/GoalDetailPage";
+import LearnerPage from "./features/learner/LearnerPage";
 import PlanPage from "./features/plan/PlanPage";
 import ReviewSession from "./features/study/ReviewSession";
 import SettingsPage from "./features/settings/SettingsPage";
@@ -36,7 +39,15 @@ export default function App() {
           <Route path="quiz/:paperId" element={<QuizAnswerPage />} />
           <Route path="report/:paperId" element={<QuizReportPage />} />
           <Route path="assessment" element={<AssessmentPage />} />
-          <Route path="career" element={<CareerPage />} />
+          {/* U6：/career 语义并入 /goals（多目标 CRUD）；历史链接保留 → 重定向 */}
+          <Route path="career" element={<Navigate to="/goals" replace />} />
+          {/* U6 Goals：多目标 CRUD（列表 / 新建 / 编辑 / 详情） */}
+          <Route path="goals" element={<GoalsPage />} />
+          <Route path="goals/new" element={<GoalFormPage />} />
+          <Route path="goals/:goalId/edit" element={<GoalFormPage />} />
+          <Route path="goals/:goalId" element={<GoalDetailPage />} />
+          {/* U6 My Learner：纯视图画像 */}
+          <Route path="learner" element={<LearnerPage />} />
           {/* /study 概念层队列已迁移为 V2 章级 /plan（docs §2 融合矩阵 #5）；/study/session 保留概念复习会话 */}
           <Route path="study" element={<Navigate to="/plan" replace />} />
           <Route path="plan" element={<PlanPage />} />

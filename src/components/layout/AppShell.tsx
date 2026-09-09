@@ -46,7 +46,8 @@ interface NavGroup {
  * U5 调整（A 案升级 /learn 为资料库，导航唯一入口避免同路由双高亮）：
  * - LEARN 组收敛为 Plan / Assess（/quiz）；原 Learn 项语义并入资料库；
  * - KNOWLEDGE 组开放 Library（/learn 资料库观感）；Graph 灰显占位（N5 放开）；
- * - Learner 项：U6「我的画像」页上线后加入 SYSTEM 组。
+ * U6 调整：GOALS 组开放 Goals（/goals 多目标 CRUD，/career → /goals）；
+ * SYSTEM 组开放 Learner（/learner 我的画像）+ Settings。
  */
 function buildNavGroups(nav: Messages["nav"]): NavGroup[] {
   return [
@@ -63,8 +64,14 @@ function buildNavGroups(nav: Messages["nav"]): NavGroup[] {
       items: [{ to: "/learn", label: nav.library.label, hint: nav.library.hint }],
       coming: { label: nav.graph.label, hint: nav.graph.hint },
     },
-    { title: nav.groupGoals, items: [{ to: "/career", label: nav.career.label, hint: nav.career.hint }] },
-    { title: nav.groupSystem, items: [{ to: "/settings", label: nav.settings.label, hint: nav.settings.hint }] },
+    { title: nav.groupGoals, items: [{ to: "/goals", label: nav.goals.label, hint: nav.goals.hint }] },
+    {
+      title: nav.groupSystem,
+      items: [
+        { to: "/learner", label: nav.learner.label, hint: nav.learner.hint },
+        { to: "/settings", label: nav.settings.label, hint: nav.settings.hint },
+      ],
+    },
   ];
 }
 

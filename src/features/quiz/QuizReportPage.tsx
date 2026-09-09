@@ -17,6 +17,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Bar, Card } from "../../components/primitives";
 import { DeltaBadge } from "../../components/DeltaBadge";
 import {
+  EVIDENCE_VERDICT_FAIL,
+  EVIDENCE_VERDICT_PASS,
   isSubjectiveType,
   MASTERY_FLOOR,
   MASTERY_THRESHOLD,
@@ -68,6 +70,46 @@ const KIND_CHIP: Record<string, string> = {
 /** 引擎判卷产出的「未作答」作答占位（quiz-engine 写死的数据标记，不随界面语言走）。 */
 const UNANSWERED_MARKER = "（未作答）";
 
+/**
+ * §7.1 evidence log · assessment 写点：判卷结果首次展示时落「主章行」。
+ * - 主章 = 卷内掌握度净变化 |Δ| 最大的一章（与 U1 首页临时组装同口径）；
+ * - 幂等：sourceId = 试卷 id，重复打开报告页不重复落；
+ * - verdict = 该章是否达标（≥ MASTERY_THRESHOLD → pass）。
+ */
+async function logAssessmentEvidence(
+  result: PaperResult,
+  paperId: string,
+): Promise<void> {
+  try {
+    const existing = await storage.listEvidence();
+    if (existing.some((e) => e.kind === "assessment" && e.sourceId === paperId)) {
+      return;
+    }
+    let bestId: string | undefined;
+    let bestDelta = 0;
+    let bestMastery = 0;
+    for (const [cid, info] of Object.entries(result.perChapter)) {
+      const d = info.mastery - info.previousMastery;
+      if (bestId === undefined || Math.abs(d) > Math.abs(bestDelta)) {
+        bestId = cid;
+        bestDelta = d;
+        bestMastery = info.mastery;
+      }
+    }
+    if (!bestId) return;
+    await storage.appendEvidence({
+      at: Date.now(),
+      kind: "assessment",
+      subjectId: bestId,
+      verdict: bestMastery >= MASTERY_THRESHOLD ? EVIDENCE_VERDICT_PASS : EVIDENCE_VERDICT_FAIL,
+      delta: bestDelta,
+      sourceId: paperId,
+    });
+  } catch {
+    /* 证据落库失败不阻塞报告页主流程。 */
+  }
+}
+
 export default function QuizReportPage() {
   const { m } = useI18n();
   const r = m.quiz.report;
@@ -118,6 +160,8 @@ export default function QuizReportPage() {
           .filter((c): c is Chapter => Boolean(c)),
       );
       setData({ paper, result, index, docChapters, scopeChapters, learner });
+      // §7.1 evidence log：判卷结果首次展示时落主章行（幂等按 sourceId=paperId）。
+      await logAssessmentEvidence(result, paperId);
     })();
   }, [paperId]);
 

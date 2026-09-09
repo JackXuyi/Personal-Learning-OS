@@ -6,6 +6,7 @@
  */
 import type {
   Chapter,
+  EvidenceEntry,
   KnowledgeGraph,
   LearnerState,
   LearningGoal,
@@ -28,6 +29,7 @@ export class InMemoryStorage implements StorageAdapter {
   protected learnerState: LearnerState = { byUnit: {} };
   protected goals = new Map<string, LearningGoal>();
   protected activeGoalId: string | undefined;
+  protected evidenceLog: EvidenceEntry[] = [];
 
   async listDocuments(): Promise<SourceDocument[]> {
     return [...this.documents.values()];
@@ -104,5 +106,16 @@ export class InMemoryStorage implements StorageAdapter {
   }
   async setActiveGoal(id: string | undefined): Promise<void> {
     this.activeGoalId = id;
+  }
+
+  async listEvidence(): Promise<EvidenceEntry[]> {
+    return [...this.evidenceLog].sort((a, b) => b.at - a.at);
+  }
+  async appendEvidence(entry: EvidenceEntry): Promise<void> {
+    this.evidenceLog.push(entry);
+    // 简单上限防无限增长（本地应用规模足够）。
+    if (this.evidenceLog.length > 500) {
+      this.evidenceLog = this.evidenceLog.slice(-500);
+    }
   }
 }

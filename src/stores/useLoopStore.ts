@@ -45,6 +45,13 @@ interface LoopStoreState {
   refresh: (m?: Messages) => Promise<void>;
   /** 切换 activeGoal 上下文并重算（写入 storage，setActiveGoal + refresh）。 */
   switchGoal: (goalId: string, m?: Messages) => Promise<void>;
+  /** 新建 / 更新目标（goal repo，U6 Goals CRUD）；保存后重算快照。 */
+  saveGoal: (goal: LearningGoal, m?: Messages) => Promise<void>;
+  /**
+   * 删除目标（U6）。若删除的是当前 activeGoal，清掉 activeGoal 偏好 →
+   * 读取时回退首个剩余目标（无脏状态，§U6 验收）。删除后重算快照。
+   */
+  removeGoal: (goalId: string, m?: Messages) => Promise<void>;
   /** 提交一次自评/作答并回写 Learner State。幂等：5s 撤销窗口内同一单元拒绝重复提交。 */
   submitAnswer: (
     unitId: string,
@@ -97,6 +104,19 @@ export const useLoopStore = create<LoopStoreState>((set, get) => ({
 
   switchGoal: async (goalId, m?: Messages) => {
     await storage.setActiveGoal(goalId);
+    await get().refresh(m);
+  },
+
+  saveGoal: async (goal, m?: Messages) => {
+    await storage.saveGoal(goal);
+    await get().refresh(m);
+  },
+
+  removeGoal: async (goalId, m?: Messages) => {
+    const wasActive = get().activeGoal?.id === goalId;
+    await storage.deleteGoal(goalId);
+    // 删除的是当前上下文 → 清偏好；getActiveGoal 回退列表首个（首个没了 → 再下一个）。
+    if (wasActive) await storage.setActiveGoal(undefined);
     await get().refresh(m);
   },
 

@@ -7,6 +7,7 @@
  */
 import type {
   Chapter,
+  EvidenceEntry,
   KnowledgeGraph,
   LearnerState,
   LearningGoal,
@@ -48,6 +49,10 @@ export interface StorageAdapter {
   // 学习者状态
   getLearnerState(): Promise<LearnerState>;
   saveLearnerState(state: LearnerState): Promise<void>;
+
+  // 证据日志（U6 §7.1 薄层；按 at 倒序返回）
+  listEvidence(): Promise<EvidenceEntry[]>;
+  appendEvidence(entry: EvidenceEntry): Promise<void>;
 
   // 目标（多目标，U0 数据准备；docs/ui-workbench-plan-2026-09.md §7.2）
   listGoals(): Promise<LearningGoal[]>;

@@ -7,6 +7,7 @@
  */
 import type {
   Chapter,
+  EvidenceEntry,
   KnowledgeGraph,
   LearnerState,
   LearningGoal,
@@ -27,6 +28,7 @@ const KEY_GRAPH = "plos.graph";
 const KEY_LEARNER = "plos.learner";
 const KEY_GOALS = "plos.goals";
 const KEY_ACTIVE_GOAL = "plos.active-goal";
+const KEY_EVIDENCE = "plos.evidence";
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -59,6 +61,7 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     this.learnerState = load<LearnerState>(KEY_LEARNER, { byUnit: {} });
     this.goals = new Map(load<LearningGoal[]>(KEY_GOALS, []).map((g) => [g.id, g]));
     this.activeGoalId = load<string | undefined>(KEY_ACTIVE_GOAL, undefined);
+    this.evidenceLog = load<EvidenceEntry[]>(KEY_EVIDENCE, []);
   }
 
   private persist() {
@@ -79,6 +82,7 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     localStorage.setItem(KEY_GRAPH, JSON.stringify(this.graph));
     localStorage.setItem(KEY_LEARNER, JSON.stringify(this.learnerState));
     localStorage.setItem(KEY_GOALS, JSON.stringify([...this.goals.values()]));
+    localStorage.setItem(KEY_EVIDENCE, JSON.stringify(this.evidenceLog));
   }
 
   override async saveDocument(doc: SourceDocument): Promise<void> {
@@ -134,5 +138,10 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     } catch {
       /* 写失败不阻塞主流程（回退首个目标语义由 getActiveGoal 兜底） */
     }
+  }
+
+  override async appendEvidence(entry: EvidenceEntry): Promise<void> {
+    await super.appendEvidence(entry);
+    this.persist();
   }
 }

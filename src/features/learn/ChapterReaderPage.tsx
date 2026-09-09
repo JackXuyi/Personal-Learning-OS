@@ -116,6 +116,18 @@ export default function ChapterReaderPage() {
     const next = applyKeyPointRating(ls, chapter.id, "good", Date.now());
     await storage.saveLearnerState(next);
     setLearner(next);
+    // §7.1 evidence log · review 写点（delta=0；verdict=good 自评）。
+    try {
+      await storage.appendEvidence({
+        at: Date.now(),
+        kind: "review",
+        subjectId: chapter.id,
+        verdict: "good",
+        delta: 0,
+      });
+    } catch {
+      /* 证据落库失败不阻塞复习主流程。 */
+    }
     await useLoopStore.getState().refresh(m);
   };
 

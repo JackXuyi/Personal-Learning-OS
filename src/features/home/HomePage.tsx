@@ -11,7 +11,7 @@ import {
 } from "../../components/primitives";
 import { PageContainer, openImportModal } from "../../components/layout/AppShell";
 import { MASTERY_THRESHOLD } from "../../domain";
-import type { Chapter, NextAction } from "../../domain";
+import type { Chapter, EvidenceEntry, NextAction } from "../../domain";
 import { bandOf, type ChapterLoopSnapshot } from "../../engine";
 import { useI18n, type Messages } from "../../i18n";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
@@ -95,7 +95,7 @@ function TodayView() {
   const index = useChapterIndex();
   const { run, busyId } = useRunChapterAction();
   const { m } = useI18n();
-  const [evidence, setEvidence] = useState<EvidenceEntry[] | undefined>(undefined);
+  const [evidence, setEvidence] = useState<EvidenceView[] | undefined>(undefined);
 
   useEffect(() => {
     if (!plan || plan.total === 0) return;
@@ -289,7 +289,7 @@ function GoalContext() {
         ))}
       </select>
       <Link
-        to="/career"
+        to="/goals"
         className="text-xs font-medium text-ink-3 transition-colors hover:text-accent"
       >
         {m.home.manageGoals}
@@ -348,28 +348,67 @@ function chapterIndexOf(plan: ChapterLoopSnapshot, chapterId: string): Chapter |
 }
 
 /* ------------------------------------------------------------------ */
-/* Recent Evidence（U1 临时组装；§7.1 evidence log 落地后替换）        */
+/* Recent Evidence（§7.1 evidence log 优先；无记录回退旧组装）         */
 /* ------------------------------------------------------------------ */
 
-interface EvidenceEntry {
+/** 展示行（由 log / 旧组装映射而来）。 */
+interface EvidenceView {
   at: number;
   title: string;
   delta: string;
   tone: "up" | "down" | "neutral";
 }
 
-/** 从最近试卷结果组装证据行：测评 · 章标题 + 掌握度变化量。 */
+/** log kind → 行内动作前缀（不随存储，界面语言映射）。 */
+function evidenceActionLabel(kind: "assessment" | "review", m: Messages): string {
+  return kind === "assessment" ? m.units.action.assessment : m.units.action.review;
+}
+
+/** log 行 → 展示行（章标题经 plan 索引；找不到章回退 subjectId）。 */
+function logToView(
+  entry: EvidenceEntry,
+  plan: ChapterLoopSnapshot,
+  m: Messages,
+): EvidenceView {
+  const chapter = chapterIndexOf(plan, entry.subjectId);
+  const baseTitle = chapter
+    ? chapterDisplayTitle(chapter, plan.docTitleOf[chapter.id], m)
+    : entry.subjectId;
+  const { text, tone } = fmtDelta(entry.delta);
+  return {
+    at: entry.at,
+    title: `${evidenceActionLabel(entry.kind, m)} · ${baseTitle}`,
+    delta: text,
+    tone,
+  };
+}
+
+/** 最近证据：读 §7.1 evidence log（≤6 行）；log 为空（旧数据）→ 回退从试卷结果组装。 */
 async function loadRecentEvidence(
   plan: ChapterLoopSnapshot,
   m: Messages,
-): Promise<EvidenceEntry[]> {
+): Promise<EvidenceView[]> {
+  try {
+    const log = await storage.listEvidence();
+    if (log.length > 0) return log.slice(0, 6).map((e) => logToView(e, plan, m));
+  } catch {
+    /* log 读取失败 → 走旧组装兜底。 */
+  }
+  return assembleLegacyEvidence(plan, m);
+}
+
+/** 旧组装兜底：从最近试卷结果组装证据行（U1 期实现，兼容无 log 的旧数据）。 */
+async function assembleLegacyEvidence(
+  plan: ChapterLoopSnapshot,
+  m: Messages,
+): Promise<EvidenceView[]> {
   const [results, papers] = await Promise.all([
     storage.listPaperResults(),
     storage.listPapers(),
   ]);
   if (results.length === 0) return [];
   const paperById = new Map(papers.map((p) => [p.id, p]));
-  const out: EvidenceEntry[] = [];
+  const out: EvidenceView[] = [];
   for (const r of results.slice(0, 5)) {
     // 主章 = 卷内掌握度变化 |Δ| 最大的一章。
     let bestId: string | undefined;

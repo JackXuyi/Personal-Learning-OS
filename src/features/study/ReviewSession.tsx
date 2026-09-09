@@ -195,6 +195,18 @@ export default function ReviewSession() {
           nextReviewInDays: result.nextReviewInDays,
           at: Date.now(),
         });
+        // §7.1 evidence log · review 写点（每次评分提交一条）。
+        try {
+          await storage.appendEvidence({
+            at: Date.now(),
+            kind: "review",
+            subjectId: current.unitId,
+            verdict: rating,
+            delta: result.masteryDelta,
+          });
+        } catch {
+          /* 证据落库失败不阻塞复习主流程。 */
+        }
         setSessionItems((items) => [
           ...items.filter((it) => it.action.unitId !== current.unitId),
           {
