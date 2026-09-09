@@ -154,7 +154,7 @@ export default function AIModelsSection() {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-6 lg:grid-cols-3">
+      <div className="w-full">
         <Card className="lg:col-span-2">
           {/* Tabs */}
           <div className="mb-4 flex gap-1 rounded-lg border border-line bg-subtle p-1">
@@ -194,143 +194,8 @@ export default function AIModelsSection() {
             <ApiModelsTab saved={apiSaved} onUse={onUseApi} />
           )}
         </Card>
-
-        <div className="space-y-4">
-          <Card>
-            <h3 className="mb-3 text-sm font-semibold text-ink-1">{s.aiStatus}</h3>
-            <div className="flex flex-wrap items-center gap-2">
-              {active ? (
-                providerReady ? (
-                  <ReadyPill label={s.savedPassed} ok />
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-state-weak/30 bg-state-weak/10 px-2.5 py-1 text-xs font-medium text-state-weak">
-                    <span className="h-1.5 w-1.5 rounded-full bg-state-weak" />
-                    {s.savedFailed}
-                  </span>
-                )
-              ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-subtle px-2.5 py-1 text-xs font-medium text-ink-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-ink-3" />
-                  {s.noModel}
-                </span>
-              )}
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-state-mastered/25 bg-state-mastered/10 px-2.5 py-1 text-xs font-medium text-state-mastered">
-                <span className="h-1.5 w-1.5 rounded-full bg-state-mastered" />
-                {s.heuristicAlways}
-              </span>
-            </div>
-
-            {/* 运行时实时探活 —— buildActiveProvider 接线:isConfigured 判定当前
-                能否真实调用(而非盲信缓存 providerReady),模型文件被删 / Key 被
-                清等场景立即反映为不可用。 */}
-            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
-              <span className="text-[11px] font-medium uppercase tracking-wide text-ink-3">
-                {s.runtime}
-              </span>
-              {active === null ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-subtle px-2.5 py-1 text-xs font-medium text-ink-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-ink-3" />
-                  {s.runtimeHeuristic}
-                </span>
-              ) : liveReady ? (
-                <ReadyPill label={s.runtimeCallable} ok />
-              ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-state-weak/30 bg-state-weak/10 px-2.5 py-1 text-xs font-medium text-state-weak">
-                  <span className="h-1.5 w-1.5 rounded-full bg-state-weak" />
-                  {s.runtimeMissingCfg}
-                </span>
-              )}
-              {active?.source === "api" ? (
-                <button
-                  onClick={() => void retestActive()}
-                  disabled={retest.state === "testing"}
-                  className="rounded-md border border-line px-2.5 py-1 text-xs text-ink-2 transition hover:bg-subtle disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {retest.state === "testing" ? s.retesting : s.retestConnection}
-                </button>
-              ) : null}
-            </div>
-            {retest.state === "ok" ? (
-              <p className="mt-2 text-xs text-state-mastered">
-                {s.retestOk(retest.latencyMs)}
-              </p>
-            ) : retest.state === "fail" ? (
-              <div className="mt-2 rounded-lg border border-state-failed/25 bg-state-failed/10 px-3 py-2">
-                <p className="text-xs font-medium text-state-failed">{retest.reason}</p>
-                <p className="mt-0.5 text-[11px] text-state-failed/80">→ {retest.hint}</p>
-              </div>
-            ) : null}
-            {active?.source === "api" && hasKeyring() ? (
-              <p className="mt-3 border-t border-line pt-2 text-[11px] leading-relaxed text-ink-2">
-                {s.keychainNote}
-              </p>
-            ) : null}
-            <p className="mt-2 text-[11px] leading-relaxed text-ink-3">
-              {s.statusLegend}
-            </p>
-          </Card>
-
-          <Card>
-            <h3 className="mb-3 text-sm font-semibold text-ink-1">{s.currentConfig}</h3>
-            <dl className="space-y-1 text-sm">
-              <KV
-                k={s.kv.source}
-                v={
-                  active?.source === "local"
-                    ? s.kv.sourceLocal
-                    : active?.source === "api"
-                      ? s.kv.sourceApi
-                      : s.kv.none
-                }
-              />
-              {active?.source === "local" ? <KV k={s.kv.model} v={labelOfLocalModel(active.model)} /> : null}
-              {active?.source === "api" ? (
-                <>
-                  <KV k={s.kv.provider} v={labelOfProvider(active.provider)} />
-                  <KV k={s.kv.model} v={active.model || s.kv.empty} />
-                  <KV k="Base URL" v={active.baseUrl || s.kv.empty} />
-                  <KV k="API Key" v={active.apiKey ? "••••••••" : s.kv.empty} />
-                </>
-              ) : null}
-              <KV
-                k={s.kv.status}
-                v={
-                  providerReady && saved.testedAt
-                    ? s.kv.testedPass(
-                        formatTime(saved.testedAt, s.timeToday),
-                        saved.lastLatencyMs ?? null,
-                      )
-                    : s.kv.notTested
-                }
-              />
-            </dl>
-          </Card>
-        </div>
       </div>
     </div>
   );
 }
 
-function ReadyPill({ label, ok }: { label: string; ok: boolean }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${
-        ok
-          ? "border-state-mastered/25 bg-state-mastered/10 text-state-mastered"
-          : "border-line bg-subtle text-ink-2"
-      }`}
-    >
-      <span className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-state-mastered" : "bg-ink-3"}`} />
-      {label}
-    </span>
-  );
-}
-
-function KV({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="flex justify-between gap-4">
-      <dt className="text-ink-3">{k}</dt>
-      <dd className="truncate text-ink-1">{v}</dd>
-    </div>
-  );
-}
