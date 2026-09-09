@@ -1,6 +1,7 @@
 # Personal Learning OS · UI Workbench 优化方案（Today-first 工作台）
 
 > 版本：2026-09-08 · 方案稿 v1.1（**评审定稿版**，含 5 项决策落定，可直接转开发）
+> 实施状态：**U0–U6 已全部落地收官**（2026-09-08 17:49 `7c574ac` → 2026-09-09 12:32 `2f8b026`，UI Workbench 主线完成）；后续知识导入扩展见 `docs/knowledge-import-design-2026-09.md`
 > 上游输入：产品评审意见（38 节文字 UI Wireframe，下称「建议稿」）
 > 关联文档：`docs/learning-system-v2-design-2026-09.md`（V2 三步闭环，**架构主文档**）、`docs/interaction-design-spec-2026-09.md`（S0–S6 文字原型，**交互主文档**）、`docs/interaction-design-research-2026-09.md`（调研 P0/P1/P2）、`docs/ai-model-center-plan-2026-09.md`、`docs/i18n-design-2026-09.md`
 > 定位：在 **V2 领域/引擎不动** 的前提下，把 UI 从「功能页拼装 + 学习流程」重构为「**Personal Learning OS 工作台**」的信息架构与视觉层级方案。不推倒 Domain/Engine，只重构 AppShell + Navigation + 页面层级 + 视觉系统。
