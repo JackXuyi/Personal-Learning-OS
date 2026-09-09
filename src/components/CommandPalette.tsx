@@ -243,7 +243,10 @@ export default function CommandPalette() {
     }
 
     // ── 最近（今日已完成，会话内存态）────────────────────────────────
+    // U4（评审 D4）：概念级测评入口收敛——assessment 记录不再从 ⌘K 重开
+    // （路由保留；N5 概念层回归后以「章内自检」复用）。
     const recentList = [...recent]
+      .filter((r) => r.mode !== "assessment")
       .sort((a, b) => b.at - a.at)
       .slice(0, 3)
       .map<Command>((r: DoneRecord) => ({
@@ -252,12 +255,7 @@ export default function CommandPalette() {
         hint: agoText(m, r.at),
         section: "recent",
         search: `${unitTitle(r.unitId)} ${m.cmd.searchWords.recent}`,
-        run: () =>
-          navigate(
-            r.mode === "assessment"
-              ? `/assessment?unit=${r.unitId}`
-              : `/study/session?unit=${r.unitId}`,
-          ),
+        run: () => navigate(`/study/session?unit=${r.unitId}`),
       }));
     list.push(...recentList);
 

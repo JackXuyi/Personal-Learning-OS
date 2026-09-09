@@ -11,8 +11,8 @@
  * - UP NEXT（其余）：KnowledgeRow 压缩行 —— 一眼区分「今天做 vs 排队做」；
  * - 空态：无章节 → 引导导入；全部达标 → 庆祝 + 去巩固。
  */
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
   ActionCard,
   Bar,
@@ -24,66 +24,31 @@ import {
 } from "../../components/primitives";
 import { PageContainer } from "../../components/layout/AppShell";
 import { MASTERY_THRESHOLD } from "../../domain";
-import type { Chapter, NextAction } from "../../domain";
+import type { NextAction } from "../../domain";
 import { bandOf } from "../../engine";
-import { storage, useLoopStore } from "../../stores/useLoopStore";
+import { useLoopStore } from "../../stores/useLoopStore";
 import { useI18n } from "../../i18n";
 import {
-  actionPath,
   chapterActionMeta,
   chapterDisplayTitle,
   estimateEtaMin,
-  makeRetakePaper,
 } from "./chapter-action";
+import { useChapterIndex, useRunChapterAction } from "./run-action";
 
 /** NEXT 高优段条数（其余进 UP NEXT）。 */
 const NEXT_LIMIT = 3;
 
 export default function PlanPage() {
   const { m } = useI18n();
-  const navigate = useNavigate();
   const plan = useLoopStore((s) => s.chapterPlan);
   const loading = useLoopStore((s) => s.loading);
   const refresh = useLoopStore((s) => s.refresh);
-  const [busyId, setBusyId] = useState<string | undefined>();
+  const chapterById = useChapterIndex();
+  const { run: runAction, busyId } = useRunChapterAction();
 
   useEffect(() => {
     void refresh(m);
   }, [refresh]);
-
-  const chapterById = useMemo(() => {
-    const index = new Map<string, Chapter>();
-    for (const list of Object.values(plan?.chaptersByDoc ?? {})) {
-      for (const c of list) index.set(c.id, c);
-    }
-    return index;
-  }, [plan]);
-
-  /** 执行计划项：阅读/复习/测验 → 直达；补考 → 生成补考卷（降一档）后进入作答。 */
-  const runAction = async (action: NextAction) => {
-    if (busyId) return;
-    const chapter = chapterById.get(action.unitId);
-    const path = actionPath(action, chapter);
-    if (path) {
-      navigate(path);
-      return;
-    }
-    // retake-quiz：就地生成补考卷。
-    if (chapter && plan) {
-      setBusyId(chapter.id);
-      try {
-        const paper = makeRetakePaper(
-          chapter,
-          plan.chaptersByDoc[chapter.documentId] ?? [chapter],
-          plan.learner,
-        );
-        await storage.savePaper(paper);
-        navigate(`/quiz/${paper.id}`);
-      } finally {
-        setBusyId(undefined);
-      }
-    }
-  };
 
   const readyRatio = plan && plan.total > 0 ? plan.mastered / plan.total : 0;
 

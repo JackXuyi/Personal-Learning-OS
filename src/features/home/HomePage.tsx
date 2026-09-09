@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   ActionCard,
   Bar,
@@ -15,12 +15,8 @@ import type { Chapter, NextAction } from "../../domain";
 import { bandOf, type ChapterLoopSnapshot } from "../../engine";
 import { useI18n, type Messages } from "../../i18n";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
-import {
-  actionPath,
-  chapterActionMeta,
-  chapterDisplayTitle,
-  makeRetakePaper,
-} from "../plan/chapter-action";
+import { chapterActionMeta, chapterDisplayTitle } from "../plan/chapter-action";
+import { useChapterIndex, useRunChapterAction } from "../plan/run-action";
 
 /**
  * 首页 —— Today 启动器（UI Workbench U1，docs/ui-workbench-plan-2026-09.md §U1）。
@@ -90,54 +86,6 @@ export default function HomePage() {
 }
 
 /* ------------------------------------------------------------------ */
-/* 共享 hooks                                                          */
-/* ------------------------------------------------------------------ */
-
-/** 章索引（chapterId → Chapter；主 CTA 与计划预览共用）。 */
-function useChapterIndex(): Map<string, Chapter> {
-  const plan = useLoopStore((s) => s.chapterPlan);
-  return useMemo(() => {
-    const index = new Map<string, Chapter>();
-    for (const list of Object.values(plan?.chaptersByDoc ?? {})) {
-      for (const c of list) index.set(c.id, c);
-    }
-    return index;
-  }, [plan]);
-}
-
-/** 执行章级动作：阅读/复习/测验直达；补考就地生成补考卷。 */
-function useRunAction() {
-  const navigate = useNavigate();
-  const plan = useLoopStore((s) => s.chapterPlan);
-  const index = useChapterIndex();
-  const [busyId, setBusyId] = useState<string | undefined>();
-  const run = async (action: NextAction) => {
-    if (busyId) return;
-    const chapter = index.get(action.unitId);
-    const path = actionPath(action, chapter);
-    if (path) {
-      navigate(path);
-      return;
-    }
-    if (chapter && plan) {
-      setBusyId(chapter.id);
-      try {
-        const paper = makeRetakePaper(
-          chapter,
-          plan.chaptersByDoc[chapter.documentId] ?? [chapter],
-          plan.learner,
-        );
-        await storage.savePaper(paper);
-        navigate(`/quiz/${paper.id}`);
-      } finally {
-        setBusyId(undefined);
-      }
-    }
-  };
-  return { run, busyId };
-}
-
-/* ------------------------------------------------------------------ */
 /* Today 视图                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -145,7 +93,7 @@ function useRunAction() {
 function TodayView() {
   const plan = useLoopStore((s) => s.chapterPlan);
   const index = useChapterIndex();
-  const { run, busyId } = useRunAction();
+  const { run, busyId } = useRunChapterAction();
   const { m } = useI18n();
   const [evidence, setEvidence] = useState<EvidenceEntry[] | undefined>(undefined);
 

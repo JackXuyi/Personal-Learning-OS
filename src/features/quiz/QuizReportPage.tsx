@@ -261,8 +261,8 @@ export default function QuizReportPage() {
   if (missing) {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-base font-semibold text-slate-900">{r.missingTitle}</p>
-        <Link to="/quiz" className="mt-4 inline-block text-sm text-indigo-600 hover:underline">
+        <p className="text-base font-semibold text-ink-1">{r.missingTitle}</p>
+        <Link to="/quiz" className="mt-4 inline-block text-sm text-accent hover:underline">
           {r.backToCenter}
         </Link>
       </div>
@@ -272,9 +272,9 @@ export default function QuizReportPage() {
   if (noResult) {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-base font-semibold text-slate-900">{r.noResultTitle}</p>
-        <p className="mt-1 text-sm text-slate-500">{r.noResultDesc}</p>
-        <Link to="/quiz" className="mt-4 inline-block text-sm text-indigo-600 hover:underline">
+        <p className="text-base font-semibold text-ink-1">{r.noResultTitle}</p>
+        <p className="mt-1 text-sm text-ink-2">{r.noResultDesc}</p>
+        <Link to="/quiz" className="mt-4 inline-block text-sm text-accent hover:underline">
           {r.backToCenter}
         </Link>
       </div>
@@ -284,7 +284,7 @@ export default function QuizReportPage() {
   if (!data) {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-sm text-slate-500">{r.opening}</p>
+        <p className="text-sm text-ink-2">{r.opening}</p>
       </div>
     );
   }
@@ -313,32 +313,32 @@ export default function QuizReportPage() {
       {/* 顶栏 */}
       <div className="mb-5 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <Link to="/quiz" className="text-xs text-slate-400 hover:text-indigo-600">
+          <Link to="/quiz" className="text-xs text-ink-3 hover:text-accent">
             {r.backToCenter}
           </Link>
-          <p className="mt-0.5 truncate text-xs text-slate-500">
+          <p className="mt-0.5 truncate text-xs text-ink-2">
             {m.quiz.mode[paper.scope.mode]} · {contextTitle(scopeChapters, m)}
           </p>
         </div>
-        <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-500">
+        <span className="shrink-0 rounded-full bg-subtle px-3 py-1 text-xs text-ink-2">
           {r.submitted(ago(result.createdAt, m))}
         </span>
       </div>
 
       {/* 总分卡 */}
       <Card className="text-center">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{r.scoreEyebrow}</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-ink-3">{r.scoreEyebrow}</p>
         <p
           className={`mt-2 text-6xl font-bold tabular-nums ${
-            passed ? "text-emerald-600" : near ? "text-amber-600" : "text-red-500"
+            passed ? "text-state-mastered" : near ? "text-state-weak" : "text-state-failed"
           }`}
         >
           {score}
         </p>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-ink-2">
           {passed ? r.passedDesc : near ? r.nearDesc : r.failDesc}
         </p>
-        <p className="mt-3 text-xs text-slate-400">
+        <p className="mt-3 text-xs text-ink-3">
           {r.meta(
             paper.questions.length,
             wrongCount,
@@ -352,7 +352,7 @@ export default function QuizReportPage() {
           <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-xs">
             {pendingSubjective > 0 ? (
               <>
-                <span className="font-medium text-amber-600">
+                <span className="font-medium text-state-weak">
                   {r.pendingSubjective(pendingSubjective)}
                 </span>
                 {retryable ? (
@@ -360,32 +360,32 @@ export default function QuizReportPage() {
                     <button
                       onClick={() => void retrySubjectiveGrading()}
                       disabled={aiRetrying}
-                      className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                      className="rounded-full border border-accent/30 bg-accent/5 px-3 py-1 font-medium text-accent hover:bg-accent/10 disabled:opacity-50"
                     >
                       {aiRetrying ? r.aiRetrying : r.retryAI}
                     </button>
                   ) : (
-                    <Link to="/settings" className="text-indigo-600 hover:underline">
+                    <Link to="/settings" className="text-accent hover:underline">
                       {r.goConfigAI}
                     </Link>
                   )
                 ) : (
-                  <span className="text-slate-400">{r.noAnswerCopy}</span>
+                  <span className="text-ink-3">{r.noAnswerCopy}</span>
                 )}
               </>
             ) : scoredCount > 0 ? (
-              <span className="font-medium text-emerald-600">{r.mergedIn(scoredCount)}</span>
+              <span className="font-medium text-state-mastered">{r.mergedIn(scoredCount)}</span>
             ) : (
-              <span className="text-slate-400">{r.aiUnavailable}</span>
+              <span className="text-ink-3">{r.aiUnavailable}</span>
             )}
           </div>
         ) : null}
-        {aiMsg ? <p className="mt-2 text-xs text-slate-500">{aiMsg}</p> : null}
+        {aiMsg ? <p className="mt-2 text-xs text-ink-2">{aiMsg}</p> : null}
 
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
           <button
             onClick={togglePlan}
-            className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+            className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent/90"
           >
             {planOpen ? r.planClose : r.planGenerate}
           </button>
@@ -405,24 +405,24 @@ export default function QuizReportPage() {
       {planOpen ? (
         <Card className="mt-4">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-slate-800">{r.planHeader}</p>
-            <span className="text-xs text-slate-400">{r.planDrivenBy}</span>
+            <p className="text-sm font-semibold text-ink-1">{r.planHeader}</p>
+            <span className="text-xs text-ink-3">{r.planDrivenBy}</span>
           </div>
           {plan === undefined ? (
-            <p className="mt-3 text-sm text-slate-400">{m.plan.generating}</p>
+            <p className="mt-3 text-sm text-ink-3">{m.plan.generating}</p>
           ) : plan.length === 0 ? (
-            <p className="mt-3 text-sm text-emerald-700">{r.planEmpty}</p>
+            <p className="mt-3 text-sm text-state-mastered">{r.planEmpty}</p>
           ) : (
             <div className="mt-3 space-y-2">
               {plan.map((action, i) => {
                 const chapter = scopeChapters.find((c) => c.id === action.unitId);
-                const chip = KIND_CHIP[action.kind] ?? "border-slate-200 bg-slate-100 text-slate-600";
+                const chip = KIND_CHIP[action.kind] ?? "border-line bg-subtle text-ink-2";
                 return (
                   <div
                     key={action.id}
-                    className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3"
+                    className="flex items-start gap-3 rounded-xl border border-line bg-subtle p-3"
                   >
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-semibold text-slate-600">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-subtle text-[11px] font-semibold text-ink-2">
                       {i + 1}
                     </span>
                     <div className="min-w-0 flex-1">
@@ -432,13 +432,13 @@ export default function QuizReportPage() {
                         >
                           {m.units.action[action.kind]}
                         </span>
-                        <span className="text-sm font-medium text-slate-800">
+                        <span className="text-sm font-medium text-ink-1">
                           {chapter ? `${chapter.order}. ${chapter.title}` : action.unitId}
                         </span>
                       </div>
                       <ul className="mt-1 space-y-0.5">
                         {action.reasons.map((reason, ri) => (
-                          <li key={ri} className="text-xs leading-5 text-slate-500">
+                          <li key={ri} className="text-xs leading-5 text-ink-2">
                             · {reason}
                           </li>
                         ))}
@@ -446,7 +446,7 @@ export default function QuizReportPage() {
                     </div>
                     <button
                       onClick={() => goAction(action)}
-                      className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                      className="shrink-0 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-subtle"
                     >
                       {action.kind === "chapter-quiz"
                         ? r.goQuiz
@@ -461,15 +461,24 @@ export default function QuizReportPage() {
               })}
             </div>
           )}
+          {/* 报告回流（U4）：完整章队列在 /plan 持续更新——从报告直达计划页。 */}
+          <div className="mt-3 flex justify-end border-t border-line pt-2">
+            <Link
+              to="/plan"
+              className="text-xs font-medium text-accent transition-colors hover:text-accent/70"
+            >
+              {r.planViewAll}
+            </Link>
+          </div>
         </Card>
       ) : null}
 
       {/* 逐章掌握度 */}
       <Card className="mt-4">
-        <p className="text-sm font-semibold text-slate-800">{r.perChapterTitle}</p>
-        <p className="mt-0.5 text-xs text-slate-400">{r.perChapterSub}</p>
+        <p className="text-sm font-semibold text-ink-1">{r.perChapterTitle}</p>
+        <p className="mt-0.5 text-xs text-ink-3">{r.perChapterSub}</p>
         {perChapterRows.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-400">{r.noObjective}</p>
+          <p className="mt-3 text-sm text-ink-3">{r.noObjective}</p>
         ) : (
           <div className="mt-4 space-y-4">
             {perChapterRows.map(({ chapter, entry }) => {
@@ -479,7 +488,7 @@ export default function QuizReportPage() {
               return (
                 <div key={chapter.id}>
                   <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                    <span className="text-xs text-slate-500">
+                    <span className="text-xs text-ink-2">
                       {chRef ? `${chRef.docTitle} · ` : ""}
                       {chapter.order}. {chapter.title}
                     </span>
@@ -488,9 +497,9 @@ export default function QuizReportPage() {
                         delta={delta}
                         nextReviewInDays={reviewIntervalDaysForScore(entry.score)}
                       />
-                      <span className="text-xs tabular-nums text-slate-500">
+                      <span className="text-xs tabular-nums text-ink-2">
                         {Math.round(entry.previousMastery * 100)}% →{" "}
-                        <b className="text-slate-800">{Math.round(entry.mastery * 100)}%</b>
+                        <b className="text-ink-1">{Math.round(entry.mastery * 100)}%</b>
                       </span>
                       {weak ? (
                         <button
@@ -514,58 +523,58 @@ export default function QuizReportPage() {
       {/* 错题回顾 */}
       {wrongRows.length > 0 ? (
         <Card className="mt-4">
-          <p className="text-sm font-semibold text-slate-800">{r.wrongTitle}</p>
-          <p className="mt-0.5 text-xs text-slate-400">{r.wrongSub(wrongRows.length)}</p>
+          <p className="text-sm font-semibold text-ink-1">{r.wrongTitle}</p>
+          <p className="mt-0.5 text-xs text-ink-3">{r.wrongSub(wrongRows.length)}</p>
           <div className="mt-4 space-y-4">
             {wrongRows.map(({ w, q }, i) => {
               const chapter = q.chapterId ? index.get(q.chapterId)?.chapter : undefined;
               const correct = correctText(q, r);
               return (
-                <div key={q.id} className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+                <div key={q.id} className="rounded-xl border border-line bg-subtle p-4">
                   <div className="flex items-start gap-3">
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500 text-xs font-semibold text-white">
                       {i + 1}
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="mb-1 flex items-center gap-2 text-[11px]">
-                        <span className="rounded bg-slate-200/70 px-1.5 py-0.5 font-medium text-slate-500">
+                        <span className="rounded bg-subtle px-1.5 py-0.5 font-medium text-ink-2">
                           {typeBadgeText(q.type, m)}
                         </span>
                         {chapter ? (
-                          <span className="text-slate-400">{r.chapterOf(chapter.order)}</span>
+                          <span className="text-ink-3">{r.chapterOf(chapter.order)}</span>
                         ) : null}
-                        <span className="text-slate-300">{r.difficulty(q.difficulty)}</span>
+                        <span className="text-ink-3">{r.difficulty(q.difficulty)}</span>
                       </div>
-                      <p className="text-sm font-medium leading-6 text-slate-900">{q.prompt}</p>
+                      <p className="text-sm font-medium leading-6 text-ink-1">{q.prompt}</p>
 
                       <div className="mt-2 space-y-1.5 text-xs leading-5">
-                        <p className="text-slate-600">
-                          <span className="text-slate-400">{r.yourAnswerLead}</span>
+                        <p className="text-ink-2">
+                          <span className="text-ink-3">{r.yourAnswerLead}</span>
                           {answerText(q, w.yourAnswer, r)}
                         </p>
-                        <p className="text-emerald-700">
-                          <span className="text-slate-400">{r.refAnswerLead}</span>
+                        <p className="text-state-mastered">
+                          <span className="text-ink-3">{r.refAnswerLead}</span>
                           {correct}
                         </p>
                       </div>
 
                       {/* AI 批语槽（P0-3：未配置 AI 不伪造；T12 起回填批语与定位要点） */}
                       {w.aiFeedback ? (
-                        <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-xs leading-5 text-slate-700">
-                          <span className="font-medium text-indigo-700">{r.aiCommentLead}</span>
+                        <div className="mt-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-xs leading-5 text-ink-1">
+                          <span className="font-medium text-accent">{r.aiCommentLead}</span>
                           {w.aiFeedback}
                           {w.point ? (
-                            <span className="mt-1 block text-[11px] text-indigo-600/80">
+                            <span className="mt-1 block text-[11px] text-accent/80">
                               {r.aiPointLead(w.point)}
                             </span>
                           ) : null}
                         </div>
                       ) : isSubjectiveType(q.type) && w.yourAnswer === UNANSWERED_MARKER ? (
-                        <p className="mt-2 text-[11px] leading-4 text-amber-600/80">
+                        <p className="mt-2 text-[11px] leading-4 text-state-weak">
                           {r.unansweredHint}
                         </p>
                       ) : (
-                        <p className="mt-2 text-[11px] leading-4 text-slate-400">
+                        <p className="mt-2 text-[11px] leading-4 text-ink-3">
                           {r.aiPendingHint}
                         </p>
                       )}
@@ -581,13 +590,13 @@ export default function QuizReportPage() {
       <div className="mt-6 flex justify-center gap-2">
         <Link
           to="/learn"
-          className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+          className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-ink-2 hover:bg-subtle"
         >
           {r.goCatalog}
         </Link>
         <Link
           to="/quiz"
-          className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+          className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent/90"
         >
           {r.backCenter}
         </Link>

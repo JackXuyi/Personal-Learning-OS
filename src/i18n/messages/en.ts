@@ -680,6 +680,14 @@ export const en: Messages = {
       removedDoc: "Document removed",
       unknownDoc: "Unknown document",
       scoreOf: (n: number) => `${n} pts`,
+      // UI Workbench U4：Recommended 直推（activeGoal 范围 plan 的测评类高优动作）。
+      recommended: "Recommended",
+      recommendedSub:
+        "The weakest chapter worth quizzing now, based on your goal and recent reports.",
+      recommendedNone:
+        "No weak chapter is due for a quiz — one will appear here after you learn a new chapter or a review comes due.",
+      recommendedGoPlan: "View plan →",
+      recent: "Recent",
     },
     answer: {
       backToCenter: "← Quiz center",
@@ -801,6 +809,7 @@ export const en: Messages = {
       retakeWeak: (n: number) => `Retake ${n} weak chapter(s) →`,
       planHeader: "Learning plan · do these first",
       planDrivenBy: "Driven by this paper's report (only chapters in scope)",
+      planViewAll: "View full plan (incl. other chapters) →",
       planEmpty:
         "🎉 Every chapter in scope is ready — advance to new chapters or take a final test.",
       goQuiz: "Take quiz →",

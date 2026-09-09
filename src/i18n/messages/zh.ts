@@ -650,6 +650,12 @@ export const zh = {
       removedDoc: "资料已移除",
       unknownDoc: "未知资料",
       scoreOf: (n: number) => `${n} 分`,
+      // UI Workbench U4：Recommended 直推（activeGoal 范围 plan 的测评类高优动作）。
+      recommended: "推荐测评",
+      recommendedSub: "按你当前目标与最近报告，最该测的弱章——直接开始。",
+      recommendedNone: "暂无到期测评的弱章：学完新章或上次测验到期后，这里会自动排出。",
+      recommendedGoPlan: "查看计划 →",
+      recent: "近期试卷",
     },
     answer: {
       backToCenter: "← 试卷中心",
@@ -764,6 +770,7 @@ export const zh = {
       retakeWeak: (n: number) => `补考 ${n} 个弱章 →`,
       planHeader: "学习计划 · 优先做这些",
       planDrivenBy: "由本卷报告驱动（仅覆盖本卷范围章）",
+      planViewAll: "查看完整计划（含其它章）→",
       planEmpty: "🎉 本卷范围内所有章节均已达标——可推进新章节或直接综合测。",
       goQuiz: "去测验 →",
       goRetake: "生成补考卷 →",

@@ -1,24 +1,38 @@
 /**
- * P3a 试卷中心（/quiz）—— V2 三步闭环「考一卷」的总入口（T6）。
+ * 试卷中心（/quiz）—— Assessment Center 收口（UI Workbench U4，
+ * docs/ui-workbench-plan-2026-09.md §6-U4）。V2 三步闭环「考一卷」的总入口。
  *
- * 内容：
- * - 主行动「＋ 新建试卷」→ /quiz/new 三步向导（范围 → 模式 → 生成）；
- * - 历史试卷列表（storage.listPapers，createdAt 倒序）：模式徽标 + 范围/
- *   题量/时间；open（有草稿）→「继续作答」，grading →「完成判卷」，
- *   done →「查看报告」（/report/:paperId）；
- * - 空态：无章节时引导去 /learn 导入资料。
+ * 内容（U4 升级后）：
+ * - RECOMMENDED（顶部）：按 activeGoal 范围 plan 的测评类高优动作直推弱章
+ *   （retake-quiz 弱章补考 / chapter-quiz 本章测验）→ ActionCard 一键直出卷；
+ *   无到期测评弱章时显示空态 + 去计划。数据 = chapterPlan（零新引擎）。
+ * - RECENT（下方）：历史试卷 divider 行流（open → grading → done 三态），
+ *   行 = 语义点 + 模式徽标 + 得分 + 范围/题量/时间；open 高优置顶。
+ * - 空态：无章节引导导入；有章节无试卷引导出第一张。
  *
- * 判卷流与报告页见 QuizGradingPage（P5）/ QuizReportPage（P6，T7）。
+ * 判卷流与报告页见 QuizGradingPage / QuizReportPage（报告 → /plan 回流）。
  */
 import { useCallback, useEffect, useState } from "react";
-import type { ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
-import { Card, SectionTitle } from "../../components/primitives";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  ActionCard,
+  Card,
+  Section,
+  SectionTitle,
+  type StatusTone,
+} from "../../components/primitives";
 import { PageContainer } from "../../components/layout/AppShell";
+import { MASTERY_FLOOR, MASTERY_THRESHOLD } from "../../domain";
 import type { Chapter, Paper, PaperResult, SourceDocument } from "../../domain";
-import { storage } from "../../stores/useLoopStore";
+import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { useI18n, type Messages } from "../../i18n";
 import { ago, modeLabel, orderRange } from "./meta";
+import {
+  chapterActionMeta,
+  chapterDisplayTitle,
+  estimateEtaMin,
+} from "../plan/chapter-action";
+import { useChapterIndex, useRunChapterAction } from "../plan/run-action";
 
 interface PaperRow {
   paper: Paper;
@@ -62,6 +76,10 @@ export default function QuizCenterPage() {
   const { m } = useI18n();
   const navigate = useNavigate();
   const c = m.quiz.center;
+  const plan = useLoopStore((s) => s.chapterPlan);
+  const refresh = useLoopStore((s) => s.refresh);
+  const index = useChapterIndex();
+  const { run, busyId } = useRunChapterAction();
   const [rows, setRows] = useState<PaperRow[] | undefined>();
   const [hasAnyChapter, setHasAnyChapter] = useState(false);
 
@@ -92,8 +110,16 @@ export default function QuizCenterPage() {
   }, [m]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void (async () => {
+      await Promise.all([refresh(m), load()]);
+    })();
+  }, [refresh, load]);
+
+  // 推荐测评章：activeGoal 范围 plan 里第一个测评类高优动作（补考 > 单元测）。
+  const quizAction = plan?.actions.find(
+    (a) => a.kind === "retake-quiz" || a.kind === "chapter-quiz",
+  );
+  const recChapter = quizAction ? index.get(quizAction.unitId) : undefined;
 
   const openPaper = rows?.find((r) => r.paper.status === "open");
   const gradingPapers = rows?.filter((r) => r.paper.status === "grading") ?? [];
@@ -104,177 +130,248 @@ export default function QuizCenterPage() {
       <SectionTitle
         title={c.title}
         subtitle={
-          rows && rows.length > 0
-            ? c.subtitleCount(rows.length)
-            : c.subtitleEmpty
+          rows && rows.length > 0 ? c.subtitleCount(rows.length) : c.subtitleEmpty
         }
         action={
-          <button
-            onClick={() => navigate("/quiz/new")}
-            className="rounded-lg bg-indigo-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+          <Link
+            to="/quiz/new"
+            className="rounded-md bg-accent px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent/90"
           >
             {c.newPaper}
-          </button>
+          </Link>
         }
       />
 
       {rows === undefined ? (
-        <p className="text-sm text-slate-400">{c.loading}</p>
-      ) : rows.length === 0 ? (
-        hasAnyChapter ? (
-          <Card className="border-dashed">
-            <p className="text-base font-semibold text-slate-900">{c.noPaperTitle}</p>
-            <p className="mt-1 text-sm text-slate-500">{c.noPaperDesc}</p>
-            <button
-              onClick={() => navigate("/quiz/new")}
-              className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-            >
-              {c.firstPaper}
-            </button>
-          </Card>
-        ) : (
-          <Card className="border-dashed">
-            <p className="text-base font-semibold text-slate-900">{c.needImportTitle}</p>
-            <p className="mt-1 text-sm text-slate-500">{c.needImportDesc}</p>
-            <button
-              onClick={() => navigate("/learn?import=1")}
-              className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-            >
-              {c.goImport}
-            </button>
-          </Card>
-        )
+        <p className="text-sm text-ink-3">{c.loading}</p>
       ) : (
-        <div className="space-y-3">
-          {openPaper ? (
-            <PaperRowCard
-              row={openPaper}
-              highlight
-              m={m}
-              primaryAction={
+        <>
+          {/* RECOMMENDED —— 最该测的弱章直推 */}
+          {plan && plan.total > 0 ? (
+            <section className="mt-2">
+              <Section title={c.recommended} />
+              <p className="mt-1 text-xs text-ink-3">{c.recommendedSub}</p>
+              {quizAction && recChapter ? (
+                <div className="mt-2">
+                  <RecommendedCard
+                    busy={busyId === recChapter.id}
+                    onRun={() => void run(quizAction)}
+                  />
+                </div>
+              ) : (
+                <div className="mt-2 flex items-center justify-between gap-3 border-b border-line py-2">
+                  <p className="text-sm text-ink-2">{c.recommendedNone}</p>
+                  <Link
+                    to="/plan"
+                    className="shrink-0 text-xs font-medium text-accent hover:text-accent/70"
+                  >
+                    {c.recommendedGoPlan}
+                  </Link>
+                </div>
+              )}
+            </section>
+          ) : null}
+
+          {/* RECENT —— 历史试卷（open / grading / done 三态） */}
+          {rows.length === 0 ? (
+            hasAnyChapter ? (
+              <Card className="mt-6 border-dashed">
+                <p className="text-base font-semibold text-ink-1">{c.noPaperTitle}</p>
+                <p className="mt-1 text-sm text-ink-2">{c.noPaperDesc}</p>
                 <button
-                  onClick={() => navigate(`/quiz/${openPaper.paper.id}`)}
-                  className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                  onClick={() => navigate("/quiz/new")}
+                  className="mt-4 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
                 >
-                  {openPaper.hasDraft ? c.continueAnswer : c.startAnswer}
+                  {c.firstPaper}
                 </button>
-              }
-            />
-          ) : null}
+              </Card>
+            ) : (
+              <Card className="mt-6 border-dashed">
+                <p className="text-base font-semibold text-ink-1">
+                  {c.needImportTitle}
+                </p>
+                <p className="mt-1 text-sm text-ink-2">{c.needImportDesc}</p>
+                <button
+                  onClick={() => navigate("/learn?import=1")}
+                  className="mt-4 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+                >
+                  {c.goImport}
+                </button>
+              </Card>
+            )
+          ) : (
+            <section className="mt-6">
+              <Section title={c.recent} />
+              <div className="mt-1">
+                {openPaper ? (
+                  <PaperRowLine
+                    row={openPaper}
+                    m={m}
+                    actionLabel={openPaper.hasDraft ? c.continueAnswer : c.startAnswer}
+                    onAction={() => navigate(`/quiz/${openPaper.paper.id}`)}
+                  />
+                ) : null}
 
-          {gradingPapers.length > 0 ? (
-            <>
-              <p className="pt-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-                {c.sectionGrading}
-              </p>
-              {gradingPapers.map((row) => (
-                <PaperRowCard
-                  key={row.paper.id}
-                  row={row}
-                  m={m}
-                  primaryAction={
-                    <button
-                      onClick={() => navigate(`/quiz/${row.paper.id}/grading`)}
-                      className="rounded-lg border border-indigo-200 bg-indigo-50 px-3.5 py-1.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
-                    >
-                      {c.finishGrading}
-                    </button>
-                  }
-                />
-              ))}
-            </>
-          ) : null}
+                {gradingPapers.map((row) => (
+                  <PaperRowLine
+                    key={row.paper.id}
+                    row={row}
+                    m={m}
+                    actionLabel={c.finishGrading}
+                    onAction={() => navigate(`/quiz/${row.paper.id}/grading`)}
+                  />
+                ))}
 
-          {donePapers.length > 0 ? (
-            <>
-              <p className="pt-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-                {c.sectionHistory}
-              </p>
-              {donePapers.map((row) => (
-                <PaperRowCard
-                  key={row.paper.id}
-                  row={row}
-                  m={m}
-                  primaryAction={
-                    <button
-                      onClick={() =>
-                        navigate(row.result ? `/report/${row.paper.id}` : `/quiz/${row.paper.id}`)
-                      }
-                      className="rounded-lg border border-slate-200 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-                    >
-                      {row.result ? c.viewReport : c.viewPaper}
-                    </button>
-                  }
-                />
-              ))}
-            </>
-          ) : null}
+                {donePapers.map((row) => (
+                  <PaperRowLine
+                    key={row.paper.id}
+                    row={row}
+                    m={m}
+                    actionLabel={row.result ? c.viewReport : c.viewPaper}
+                    onAction={() =>
+                      navigate(
+                        row.result ? `/report/${row.paper.id}` : `/quiz/${row.paper.id}`,
+                      )
+                    }
+                  />
+                ))}
 
-          {openPaper === undefined && gradingPapers.length === 0 && donePapers.length === 0 ? (
-            <p className="py-2 text-center text-xs text-slate-400">{c.noHistory}</p>
-          ) : null}
-        </div>
+                {openPaper === undefined &&
+                gradingPapers.length === 0 &&
+                donePapers.length === 0 ? (
+                  <p className="py-2 text-center text-xs text-ink-3">{c.noHistory}</p>
+                ) : null}
+              </div>
+            </section>
+          )}
+        </>
       )}
     </PageContainer>
   );
 }
 
-function PaperRowCard({
+/* ------------------------------------------------------------------ */
+/* Recommended 直推卡                                                  */
+/* ------------------------------------------------------------------ */
+
+/** Recommended 主卡：复用 plan 高优动作（含 why-now reasons + 耗时预估）。 */
+function RecommendedCard({ busy, onRun }: { busy: boolean; onRun: () => void }) {
+  const plan = useLoopStore((s) => s.chapterPlan);
+  const index = useChapterIndex();
+  const { m } = useI18n();
+  const action = plan?.actions.find(
+    (a) => a.kind === "retake-quiz" || a.kind === "chapter-quiz",
+  );
+  if (!action || !plan) return null;
+  const chapter = index.get(action.unitId);
+  const mastery = chapter ? (plan.learner.byUnit[chapter.id]?.mastery ?? 0) : 0;
+  const meta = chapterActionMeta(action.kind, m);
+  const eta = chapter
+    ? m.plan.etaOf(estimateEtaMin(action, chapter))
+    : undefined;
+  return (
+    <ActionCard
+      eyebrow={m.units.action[action.kind]}
+      title={
+        chapter ? chapterDisplayTitle(chapter, plan.docTitleOf[chapter.id], m) : action.unitId
+      }
+      mastery={chapter ? mastery : undefined}
+      reasons={action.reasons.length > 0 ? action.reasons : undefined}
+      ctaLabel={busy ? m.quiz.center.loading : `${meta.cta} →`}
+      onCta={onRun}
+      eta={eta}
+    />
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Recent 试卷行                                                       */
+/* ------------------------------------------------------------------ */
+
+/** 试卷 divider 行：语义点 + 模式徽标 + 得分 + 语境/时间 + 主动作链接。 */
+function PaperRowLine({
   row,
-  primaryAction,
   m,
-  highlight = false,
+  actionLabel,
+  onAction,
 }: {
   row: PaperRow;
-  primaryAction: ReactNode;
   m: Messages;
-  highlight?: boolean;
+  actionLabel: string;
+  onAction: () => void;
 }) {
-  const { paper, context } = row;
   const q = m.quiz;
-  const mode = modeLabel(paper.scope.mode, m);
+  const { paper, context } = row;
   const score = row.result ? Math.round(row.result.totalScore * 100) : undefined;
+  const scoreTone = toneOfScore(score);
   const statusLabel = q.status[paper.status];
   return (
-    <Card
-      className={`flex items-center gap-4 p-4 ${highlight ? "border-indigo-200 ring-1 ring-indigo-100" : ""}`}
-    >
-      <div
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${
-          highlight ? "bg-indigo-600 text-white" : "bg-indigo-50 text-indigo-600"
-        }`}
-      >
-        {paper.questions.length}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-semibold text-slate-900">
-            {paper.title}
-          </span>
+    <div className="flex items-center justify-between gap-3 border-b border-line py-2 last:border-b-0">
+      <span className="flex min-w-0 items-center gap-2.5">
+        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotOfPaper(paper.status, score)}`} />
+        <span className="truncate text-sm text-ink-1">{paper.title}</span>
+        <span className="shrink-0 rounded border border-line bg-subtle px-1.5 py-0.5 text-[11px] text-ink-2">
+          {modeLabel(paper.scope.mode, m)}
+        </span>
+      </span>
+      <span className="flex shrink-0 items-center gap-3">
+        <span className="text-right text-xs leading-4 text-ink-3">
           {score !== undefined ? (
-            <span
-              className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-xs font-medium ${
-                score >= 80
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : score >= 60
-                    ? "border-amber-200 bg-amber-50 text-amber-700"
-                    : "border-red-200 bg-red-50 text-red-600"
-              }`}
-            >
+            <span className={`block text-sm font-semibold tabular-nums ${scoreTone}`}>
               {q.center.scoreOf(score)}
             </span>
-          ) : (
-            <span className="inline-flex shrink-0 items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-500">
-              {mode}
-            </span>
-          )}
-        </div>
-        <p className="mt-0.5 truncate text-xs text-slate-400">
-          {statusLabel} · {context} · {m.quiz.itemUnit(paper.questions.length)} ·{" "}
-          {ago(paper.createdAt, m)}
-        </p>
-      </div>
-      {primaryAction}
-    </Card>
+          ) : null}
+          <span className="block">
+            {statusLabel} · {context} · {q.itemUnit(paper.questions.length)} ·{" "}
+            {ago(paper.createdAt, m)}
+          </span>
+        </span>
+        <button
+          type="button"
+          onClick={onAction}
+          className="shrink-0 text-xs font-medium text-accent transition-colors hover:text-accent/70"
+        >
+          {actionLabel}
+        </button>
+      </span>
+    </div>
   );
+}
+
+/** 试卷得分 → 语义色文字（达标绿 / 及格前黄 / 未及格红 / 无分灰）。 */
+function toneOfScore(score: number | undefined): string {
+  if (score === undefined) return "text-ink-3";
+  if (score >= Math.round(MASTERY_THRESHOLD * 100)) return "text-state-mastered";
+  if (score >= Math.round(MASTERY_FLOOR * 100)) return "text-state-weak";
+  return "text-state-failed";
+}
+
+/** 行首语义点：open=进行中(learning)；grading=待处理(weak)；done 按得分。 */
+function dotOfPaper(
+  status: Paper["status"],
+  score: number | undefined,
+): string {
+  if (status === "open") return "bg-state-learning";
+  if (status === "grading") return "bg-state-weak";
+  const tone: StatusTone =
+    score === undefined
+      ? "idle"
+      : score >= Math.round(MASTERY_THRESHOLD * 100)
+        ? "mastered"
+        : score >= Math.round(MASTERY_FLOOR * 100)
+          ? "weak"
+          : "failed";
+  return toneDotClass(tone);
+}
+
+/** StatusTone → 圆点类（primitives 内部映射的轻量副本，避免引入私有依赖）。 */
+const DOT_CLS: Record<StatusTone, string> = {
+  mastered: "bg-state-mastered",
+  learning: "bg-state-learning",
+  weak: "bg-state-weak",
+  idle: "bg-state-idle",
+  failed: "bg-state-failed",
+};
+function toneDotClass(tone: StatusTone): string {
+  return DOT_CLS[tone];
 }
