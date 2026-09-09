@@ -359,13 +359,16 @@ export const en: Messages = {
       retake: "Retake needed",
     },
     catalog: {
-      title: "Chapter catalog",
+      /** U5: /learn upgraded to a "document library" feel (Option A, docs/ui-workbench-plan §11/U5). */
+      title: "Library",
       subtitleEmpty: "Import a document and the system will split it into chapters to learn one by one.",
-      subtitleStats: (total: number, mastered: number, p: number) =>
-        `${total} chapters · ${mastered} mastered (target ${p}%)`,
+      subtitleStats: (docs: number, chapters: number, mastered: number, p: number) =>
+        `${docs} document(s) · ${chapters} chapters · ${mastered} mastered (target ${p}%)`,
       filterAll: "All",
       filterUnmet: "Not ready",
-      hint: "Click a chapter to start reading · mark it learned when done",
+      hint: "Click a chapter row to read · collapse cards by header",
+      searchPlaceholder: "Search documents / chapters / points…",
+      searchEmpty: (q: string) => `No material matching “${q}”`,
       emptyTitle: "No material yet",
       emptyDesc:
         "Import your first document (Markdown / notes) and the system will split it into chapters by heading — then learn and quiz chapter by chapter.",
@@ -373,8 +376,16 @@ export const en: Messages = {
       doclessTitle: "Material has no chapters",
       doclessDesc: (n: number) =>
         `${n} document(s) not split yet (legacy or saved only). Split their text now, or re-import.`,
-      chapterRange: (done: number, total: number) =>
-        `Chapters 1–${total} · ${done}/${total} ready`,
+      /** Document-card meta line (when = "last learned" relative text; omitted if never studied). */
+      docMeta: (chapters: number, points: number, when?: string) =>
+        when
+          ? `${chapters} chapter(s) · ${points} point(s) · ${when}`
+          : `${chapters} chapter(s) · ${points} point(s)`,
+      docReady: (done: number, total: number) => `${done}/${total} ready`,
+      learnedToday: "studied today",
+      learnedYesterday: "studied yesterday",
+      learnedAgo: (n: number) => `studied ${n} day(s) ago`,
+      notLearned: "not studied yet",
       /** U3 doc header overall exploration (touched chapters ratio, not ready-line). */
       exploredOf: (pct: number) => `Explored ${pct}%`,
       targetLine: "Target line",
@@ -383,6 +394,20 @@ export const en: Messages = {
       unsplitHint: "These documents have saved text but no chapters — split by heading in one click.",
       splitting: "Splitting…",
       splitNow: "Split now",
+    },
+    /** Document-format labels (type badge on document cards; covers DocumentFormat). */
+    format: {
+      pdf: "PDF",
+      markdown: "Markdown",
+      txt: "Plain text",
+      docx: "Word",
+      epub: "EPUB",
+      web: "Web",
+      note: "Notes",
+      code: "Code",
+      image: "Image",
+      custom: "Other",
+      fallback: "Document",
     },
     import: {
       title: "Import document",
@@ -412,6 +437,30 @@ export const en: Messages = {
       doneSaved: "Done (document saved)",
       busy: "Splitting chapters…",
       saveSplit: "Save & split chapters",
+      /** U5: stage progress (read → detect → refine → create → link) and result card. */
+      progressTitle: "Importing…",
+      progressDone: "✓ Import complete",
+      phaseLabel: {
+        read: "Reading document",
+        detect: "Detecting structure",
+        refine: "Refining key points",
+        create: "Creating chapters",
+        link: "Linking to goals",
+      },
+      phaseHint: {
+        read: "Saving the source text to your local library",
+        detect: "Splitting chapters by headings / paragraphs",
+        refine: "AI refines titles & key points (first-sentence summary offline)",
+        create: "Writing chapters and key points",
+        link: "Material is in your library — scope it under Goals later",
+      },
+      statChapter: (n: number) => `${n} chapter(s)`,
+      statPoints: (n: number) => `${n} point(s)`,
+      mergedN: (n: number) => `${n} over-fragmented section(s) auto-merged`,
+      structureRefined: "AI refined titles & key points",
+      structureLocal: "Local heuristic split · no AI configured",
+      resultTitle: (title: string) => `“${title}” is ready to learn`,
+      inspect: "Inspect structure →",
     },
     reader: {
       missingTitle: "Chapter not found",

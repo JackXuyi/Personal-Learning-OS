@@ -9,7 +9,7 @@ import {
   Section,
   type StatusTone,
 } from "../../components/primitives";
-import { PageContainer } from "../../components/layout/AppShell";
+import { PageContainer, openImportModal } from "../../components/layout/AppShell";
 import { MASTERY_THRESHOLD } from "../../domain";
 import type { Chapter, NextAction } from "../../domain";
 import { bandOf, type ChapterLoopSnapshot } from "../../engine";
@@ -439,12 +439,13 @@ function EmptyState() {
       <p className="text-lg font-semibold text-ink-1">{m.home.emptyTitle}</p>
       <p className="mt-1 text-sm text-ink-2">{m.home.emptyDesc}</p>
       <div className="mt-4 flex flex-wrap gap-3">
-        <Link
-          to="/learn?import=1"
+        <button
+          type="button"
+          onClick={openImportModal}
           className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
         >
           {m.common.import}
-        </Link>
+        </button>
         <Link
           to="/plan"
           className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-ink-1 transition-colors hover:bg-subtle"
@@ -470,12 +471,13 @@ function NoChapterCard() {
         >
           {m.home.goCatalog}
         </Link>
-        <Link
-          to="/learn?import=1"
+        <button
+          type="button"
+          onClick={openImportModal}
           className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-ink-1 transition-colors hover:bg-subtle"
         >
           {m.common.import}
-        </Link>
+        </button>
       </div>
     </Card>
   );

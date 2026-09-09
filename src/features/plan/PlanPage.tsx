@@ -22,7 +22,7 @@ import {
   SectionTitle,
   type StatusTone,
 } from "../../components/primitives";
-import { PageContainer } from "../../components/layout/AppShell";
+import { PageContainer, openImportModal } from "../../components/layout/AppShell";
 import { MASTERY_THRESHOLD } from "../../domain";
 import type { NextAction } from "../../domain";
 import { bandOf } from "../../engine";
@@ -98,12 +98,13 @@ export default function PlanPage() {
           <p className="text-base font-semibold text-ink-1">{m.plan.emptyTitle}</p>
           <p className="mt-1 text-sm text-ink-2">{m.plan.emptyDesc}</p>
           <div className="mt-4 flex gap-3">
-            <Link
-              to="/learn?import=1"
+            <button
+              type="button"
+              onClick={openImportModal}
               className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
             >
               {m.common.import}
-            </Link>
+            </button>
             <Link
               to="/learn"
               className="rounded-md border border-line bg-surface px-4 py-2 text-sm font-medium text-ink-2 transition-colors hover:bg-subtle"
@@ -149,12 +150,13 @@ export default function PlanPage() {
                 >
                   {m.plan.quizAll}
                 </Link>
-                <Link
-                  to="/learn?import=1"
+                <button
+                  type="button"
+                  onClick={openImportModal}
                   className="rounded-md border border-line bg-surface px-4 py-2 text-sm font-medium text-ink-2 transition-colors hover:bg-subtle"
                 >
                   {m.plan.importMore}
-                </Link>
+                </button>
               </div>
             </Card>
           ) : (

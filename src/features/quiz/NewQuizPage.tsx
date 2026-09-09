@@ -18,7 +18,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, SectionTitle } from "../../components/primitives";
-import { PageContainer } from "../../components/layout/AppShell";
+import { PageContainer, openImportModal } from "../../components/layout/AppShell";
 import type { Chapter, LearnerState, PaperMode, PaperScope, SourceDocument } from "../../domain";
 import { PAPER_MODE_DURATION_MIN } from "../../domain";
 import { createPaper } from "../../engine";
@@ -192,7 +192,7 @@ export default function NewQuizPage() {
           <p className="text-base font-semibold text-slate-900">{np.noDocTitle}</p>
           <p className="mt-1 text-sm text-slate-500">{np.noDocDesc}</p>
           <button
-            onClick={() => navigate("/learn?import=1")}
+            onClick={openImportModal}
             className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
           >
             {m.quiz.center.goImport}

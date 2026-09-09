@@ -10,7 +10,7 @@ import {
   chapterDisplayTitle,
   makeRetakePaper,
 } from "../features/plan/chapter-action";
-import { CMD_OPEN_EVENT } from "./layout/AppShell";
+import { CMD_OPEN_EVENT, openImportModal } from "./layout/AppShell";
 
 /**
  * ⌘K 命令面板（UI Workbench U0；docs/ui-workbench-plan-2026-09.md §4.2/§6-U0）。
@@ -104,7 +104,8 @@ export default function CommandPalette() {
     const navOf = (to: (typeof NAV_ENTRIES)[number]): string => {
       switch (to) {
         case "/": return m.nav.home.label;
-        case "/learn": return m.nav.learn.label;
+        // U5：/learn 已升级为资料库观感，命令文案对齐 Library。
+        case "/learn": return m.nav.library.label;
         case "/plan": return m.nav.plan.label;
         case "/quiz": return m.nav.quiz.label;
         case "/career": return m.nav.career.label;
@@ -114,7 +115,7 @@ export default function CommandPalette() {
     const hintOf = (to: (typeof NAV_ENTRIES)[number]): string => {
       switch (to) {
         case "/": return m.nav.home.hint;
-        case "/learn": return m.nav.learn.hint;
+        case "/learn": return m.nav.library.hint;
         case "/plan": return m.nav.plan.hint;
         case "/quiz": return m.nav.quiz.hint;
         case "/career": return m.nav.career.hint;
@@ -222,13 +223,14 @@ export default function CommandPalette() {
         run: () => navigate("/quiz/new"),
       });
     }
+    // U5：⌘K 直接唤起全局导入 Modal（无需先跳 /learn?import=1）。
     list.push({
       id: "cmd-import",
       label: m.cmd.import,
       hint: m.cmd.importHint,
       section: "commands",
       search: m.cmd.searchWords.import,
-      run: () => navigate("/learn?import=1"),
+      run: () => openImportModal(),
     });
     for (const to of NAV_ENTRIES) {
       const label = navOf(to);

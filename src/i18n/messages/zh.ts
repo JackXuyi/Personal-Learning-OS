@@ -352,13 +352,16 @@ export const zh = {
       retake: "待补考",
     },
     catalog: {
-      title: "章节目录",
+      /** U5：/learn 升级为「文档资料库」观感（A 案，docs/ui-workbench-plan §11/U5）。 */
+      title: "资料库",
       subtitleEmpty: "导入一份资料，系统会把它切分成章节，逐章学习。",
-      subtitleStats: (total: number, mastered: number, p: number) =>
-        `共 ${total} 章 · 已掌握 ${mastered} 章（达标 ${p}%）`,
+      subtitleStats: (docs: number, chapters: number, mastered: number, p: number) =>
+        `${docs} 份资料 · ${chapters} 章 · 已掌握 ${mastered} 章（达标 ${p}%）`,
       filterAll: "全部",
       filterUnmet: "仅未达标",
-      hint: "点击章卡片开始阅读 · 阅读完可标记学完",
+      hint: "点章行开始阅读 · 卡头可折叠",
+      searchPlaceholder: "搜索文档 / 章节 / 要点…",
+      searchEmpty: (q: string) => `没有匹配「${q}」的资料`,
       emptyTitle: "还没有资料",
       emptyDesc:
         "导入第一份资料（Markdown / 笔记），系统会按标题自动切分成章节，之后就能逐章学习、逐章测验。",
@@ -366,8 +369,14 @@ export const zh = {
       doclessTitle: "资料还没有章节",
       doclessDesc: (n: number) =>
         `已有 ${n} 份资料未切分（旧数据或仅保存）。可对已有正文补切分，或重新导入。`,
-      chapterRange: (done: number, total: number) =>
-        `第 1–${total} 章 · 就绪 ${done}/${total}`,
+      /** 文档卡元信息行（when 为「最后学习」相对文案，无则省略）。 */
+      docMeta: (chapters: number, points: number, when?: string) =>
+        when ? `${chapters} 章 · ${points} 要点 · ${when}` : `${chapters} 章 · ${points} 要点`,
+      docReady: (done: number, total: number) => `就绪 ${done}/${total}`,
+      learnedToday: "今天学过",
+      learnedYesterday: "昨天学过",
+      learnedAgo: (n: number) => `${n} 天前学过`,
+      notLearned: "尚未学习",
       /** U3 文档块头整体探索度（已涉猎章占比，非达标口径）。 */
       exploredOf: (pct: number) => `已探索 ${pct}%`,
       targetLine: "达标线",
@@ -376,6 +385,20 @@ export const zh = {
       unsplitHint: "这些资料已保存正文但还没有章节，可一键按标题切分。",
       splitting: "切分中…",
       splitNow: "立即切分",
+    },
+    /** 资料格式标签（文档卡类型徽标；DocumentFormat 全覆盖）。 */
+    format: {
+      pdf: "PDF",
+      markdown: "Markdown",
+      txt: "纯文本",
+      docx: "Word",
+      epub: "EPUB",
+      web: "网页",
+      note: "笔记",
+      code: "代码",
+      image: "图片",
+      custom: "其他",
+      fallback: "资料",
     },
     import: {
       title: "导入资料",
@@ -402,6 +425,30 @@ export const zh = {
       doneSaved: "完成（资料已保存）",
       busy: "正在切分章节…",
       saveSplit: "保存并切分章节",
+      /** U5：阶段进度（读取→检测→提炼→创建→关联）与结果卡。 */
+      progressTitle: "正在导入…",
+      progressDone: "✓ 导入完成",
+      phaseLabel: {
+        read: "读取文档",
+        detect: "检测结构",
+        refine: "提炼要点",
+        create: "创建章节",
+        link: "关联目标",
+      },
+      phaseHint: {
+        read: "保存正文到本地资料库",
+        detect: "按标题 / 分段自动切分章节",
+        refine: "AI 精修章标题与要点（未配置 AI 时用本地首句摘要）",
+        create: "写入章节与要点",
+        link: "资料已入资料库——可在「目标」管理中纳入学习范围",
+      },
+      statChapter: (n: number) => `${n} 章`,
+      statPoints: (n: number) => `${n} 条要点`,
+      mergedN: (n: number) => `已自动合并 ${n} 个过碎小节`,
+      structureRefined: "AI 已精修标题与要点",
+      structureLocal: "本地启发式切分 · 未配置 AI",
+      resultTitle: (title: string) => `「${title}」已可学习`,
+      inspect: "检查结构 →",
     },
     reader: {
       missingTitle: "章节不存在",

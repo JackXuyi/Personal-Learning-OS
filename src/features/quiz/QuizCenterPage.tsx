@@ -21,7 +21,7 @@ import {
   SectionTitle,
   type StatusTone,
 } from "../../components/primitives";
-import { PageContainer } from "../../components/layout/AppShell";
+import { PageContainer, openImportModal } from "../../components/layout/AppShell";
 import { MASTERY_FLOOR, MASTERY_THRESHOLD } from "../../domain";
 import type { Chapter, Paper, PaperResult, SourceDocument } from "../../domain";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
@@ -192,7 +192,7 @@ export default function QuizCenterPage() {
                 </p>
                 <p className="mt-1 text-sm text-ink-2">{c.needImportDesc}</p>
                 <button
-                  onClick={() => navigate("/learn?import=1")}
+                  onClick={openImportModal}
                   className="mt-4 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
                 >
                   {c.goImport}

@@ -1,14 +1,19 @@
 /**
- * 导入资料 Modal（V2 章节式导入，T5）—— 三步闭环「步骤 1」的入口。
+ * 导入资料 Modal（V2 章节式导入，T5；UI Workbench U5 翻新）—— 全产品统一入库入口。
  *
- * 链路：输入标题与正文 → 保存为 SourceDocument（原始素材永远属于你，
- * 正文存 textPreview）→ 本地切分引擎 splitDocument() 产出有序 Chapter →
- * 展示切分预览（章标题列表，可人工微调 UI 在后续里程碑）→ 整批写入 storage。
+ * 链路：标题与正文 → 保存 SourceDocument（正文永远属于你，存 textPreview）→
+ * 本地切分 splitDocument() 产出有序 Chapter → AI 精修（refineSplitResult，
+ * 未配置 Provider 静默回退启发式）→ 整批写入 storage。
  *
- * 与旧版「概念抽取导入」的差异（docs §2 融合矩阵 #8）：
- * V2 首版导入直接以「章节」为产物；AI 概念抽取 / 图谱单元（原 ImportModal
- * 候选确认段）属 N5 概念层，届时随 knowledge-engine 提示词管线回归，
- * 不在此保留半成品 UI。
+ * U5 变更（docs/ui-workbench-plan-2026-09.md §27/U5）：
+ * - 视觉全面 token 化（B 案语义 token，替换旧 slate/indigo）；
+ * - 导入期间展示五阶段进度（读取文档 → 检测结构 → 提炼要点 → 创建章节 →
+ *   关联目标），每阶段最小可见时长（≈160ms）保证 ≤2s 一阶段全程有反馈；
+ * - 完成以「结果卡」呈现：n 章 / n 要点 / 结构修正（AI 合并过碎小节计数）→
+ *   [开始学习]（直达首章）/ [检查结构]（回资料库目录核对）。
+ *
+ * 说明：阶段标签为 UX 反馈文案，与实际流水线（save → split → refine →
+ * saveChapters）映射，不新造引擎能力（方案 U5 约束：不绑架 Domain）。
  */
 import { useState } from "react";
 import type { DocumentFormat, SourceDocument } from "../../domain";
@@ -19,16 +24,40 @@ import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { storage } from "../../stores/useLoopStore";
 import { useI18n } from "../../i18n";
 
+type PhaseKey = "read" | "detect" | "refine" | "create" | "link";
+type PhaseStatus = "pending" | "active" | "done";
+
+const PHASE_ORDER: PhaseKey[] = ["read", "detect", "refine", "create", "link"];
+
+/** 快阶段的最小可见时长：让每个进度状态至少出现一帧（本地切分是毫秒级）。 */
+const MIN_PHASE_MS = 160;
+
 interface ImportModalProps {
   /** 关闭（不写入）。 */
   onClose: () => void;
-  /** 写入完成（返回新文档 id 与切分出的章节 id，供目录页高亮 / 跳转）。 */
+  /** 写入完成（返回新文档 id 与章节 id，供 AppShell 跳转首章）。 */
   onImported: (docId: string, chapterIds: string[]) => void;
+  /** 结果卡「检查结构」：关闭并回到资料库目录核对。 */
+  onInspect?: () => void;
 }
 
-export default function ImportModal({ onClose, onImported }: ImportModalProps) {
+interface PreviewState {
+  docId: string;
+  docTitle: string;
+  chapterIds: string[];
+  chapterTitles: string[];
+  /** 是否经过了 AI 精修（标题/要点/过碎合并）。 */
+  refined?: boolean;
+  /** AI 自动合并的过碎小节数（结构修正；启发式 → 精修后减少的章数）。 */
+  merged: number;
+  /** 全资料要点总数（各章 keyPoints 之和）。 */
+  totalPoints: number;
+}
+
+export default function ImportModal({ onClose, onImported, onInspect }: ImportModalProps) {
   const { m } = useI18n();
   const fmt = m.learn.import;
+  const phasesI18n = fmt.phaseLabel;
 
   const FORMAT_OPTIONS: { value: DocumentFormat; label: string; split: "markdown" | "txt" | "auto" }[] = [
     { value: "markdown", label: "Markdown", split: "markdown" },
@@ -42,23 +71,34 @@ export default function ImportModal({ onClose, onImported }: ImportModalProps) {
   const [format, setFormat] = useState<DocumentFormat>("markdown");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | undefined>();
-  const [preview, setPreview] = useState<{
-    docId: string;
-    docTitle: string;
-    chapterIds: string[];
-    chapterTitles: string[];
-    /** 是否经过了 AI 精修（标题/要点/过碎合并）。 */
-    refined?: boolean;
-  }>();
+  const [phases, setPhases] = useState<PhaseStatus[]>(
+    () => PHASE_ORDER.map(() => "pending" as const),
+  );
+  const [preview, setPreview] = useState<PreviewState>();
 
   const splitFormat = FORMAT_OPTIONS.find((o) => o.value === format)?.split ?? "auto";
 
-  /** 保存资料 → 本地切分 → 写回章节 → 展示预览（不自动关闭，用户确认后进入）。 */
+  const setPhase = (key: PhaseKey, status: PhaseStatus) =>
+    setPhases((prev) => prev.map((s, i) => (PHASE_ORDER[i] === key ? status : s)));
+  const settle = (ms = MIN_PHASE_MS) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  /** 逐阶段跑流水线：先亮 active 状态一小段时间，完成即标记 done。 */
+  async function runPhase<T>(key: PhaseKey, fn: () => Promise<T>): Promise<T> {
+    setPhase(key, "active");
+    await settle();
+    const out = await fn();
+    setPhase(key, "done");
+    return out;
+  }
+
+  /** 保存资料 → 切分 → AI 精修 → 写入 → 结果卡（阶段进度全程可见）。 */
   const splitAndPreview = async () => {
     const body = content.trim();
     if (!body) return;
     setBusy(true);
     setNotice(undefined);
+    setPreview(undefined);
+    setPhases(PHASE_ORDER.map(() => "pending"));
     try {
       const doc: SourceDocument = {
         id: newId("doc"),
@@ -68,35 +108,54 @@ export default function ImportModal({ onClose, onImported }: ImportModalProps) {
         status: "ready",
         textPreview: body,
       };
-      await storage.saveDocument(doc);
+      await runPhase("read", () => storage.saveDocument(doc));
 
-      const { chapters: heuristic } = splitDocument(
-        { documentId: doc.id, text: body, format: splitFormat },
-        // TXT 段落聚类偏小章更利于逐章学完；Markdown 标题切分默认 #/##
-        { targetCharsPerChapter: 1_600, minParagraphsPerChapter: 3 },
-      );
+      const { chapters: heuristic } = await runPhase("detect", async () => {
+        const out = splitDocument(
+          { documentId: doc.id, text: body, format: splitFormat },
+          // TXT 段落聚类偏小章更利于逐章学完；Markdown 标题切分默认 #/##
+          { targetCharsPerChapter: 1_600, minParagraphsPerChapter: 3 },
+        );
+        return out;
+      });
+
+      if (heuristic.length === 0) {
+        // 内容过短/无结构：资料已保存，不演剩余阶段（避免「已创建 0 章」的误导）。
+        setPreview({
+          docId: doc.id,
+          docTitle: doc.title,
+          chapterIds: [],
+          chapterTitles: [],
+          refined: false,
+          merged: 0,
+          totalPoints: 0,
+        });
+        setNotice(fmt.tooShort);
+        return;
+      }
+
       // T12：Provider 就绪时对启发式结果做 AI 精修（标题/要点/过碎合并）；
       // 失败或未配置 → 静默回退启发式章节，不阻断导入。
-      let chapters = heuristic;
-      let refined = false;
-      if (heuristic.length > 0) {
-        const out = await refineSplitResult(buildActiveProvider(), heuristic, body);
-        chapters = out.chapters;
-        refined = out.refined;
-      }
-      if (chapters.length > 0) {
-        await storage.saveChapters(doc.id, chapters);
-      }
+      const out = await runPhase("refine", () =>
+        refineSplitResult(buildActiveProvider(), heuristic, body),
+      );
+      const chapters = out.chapters;
+      const merged = Math.max(0, heuristic.length - chapters.length);
+
+      await runPhase("create", () => storage.saveChapters(doc.id, chapters));
+
+      setPhase("link", "active");
+      await settle();
+      setPhase("link", "done");
       setPreview({
         docId: doc.id,
         docTitle: doc.title,
         chapterIds: chapters.map((c) => c.id),
         chapterTitles: chapters.map((c) => c.title),
-        refined,
+        refined: out.refined,
+        merged,
+        totalPoints: chapters.reduce((n, c) => n + c.keyPoints.length, 0),
       });
-      if (chapters.length === 0) {
-        setNotice(fmt.tooShort);
-      }
     } catch (err) {
       setNotice(fmt.splitFail(err instanceof Error ? err.message : String(err)));
     } finally {
@@ -126,18 +185,29 @@ export default function ImportModal({ onClose, onImported }: ImportModalProps) {
     }
   };
 
+  const structureNote =
+    preview && preview.chapterIds.length > 0
+      ? preview.merged > 0
+        ? fmt.mergedN(preview.merged)
+        : preview.refined
+          ? fmt.structureRefined
+          : fmt.structureLocal
+      : undefined;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-6 backdrop-blur-sm">
-      <div className="my-4 w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink-1/40 p-6 backdrop-blur-sm">
+      <div className="my-4 w-full max-w-2xl rounded-xl border border-line bg-surface shadow-2xl">
         {/* 头部 */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-line px-6 py-4">
           <div>
-            <h3 className="text-base font-semibold text-slate-900">{fmt.title}</h3>
-            <p className="text-xs text-slate-400">{fmt.subtitle}</p>
+            <h3 className="text-base font-semibold text-ink-1">{fmt.title}</h3>
+            <p className="mt-0.5 text-xs text-ink-3">{fmt.subtitle}</p>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg px-2 py-1 text-sm text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+            disabled={busy}
+            aria-label={m.common.close}
+            className="rounded-lg px-2 py-1 text-sm text-ink-3 transition-colors hover:bg-subtle hover:text-ink-1 disabled:opacity-40"
           >
             ✕
           </button>
@@ -146,26 +216,28 @@ export default function ImportModal({ onClose, onImported }: ImportModalProps) {
         <div className="space-y-5 px-6 py-5">
           {/* 1) 资料 */}
           <div className="space-y-3">
-            <p className="text-sm font-medium text-slate-700">{fmt.stepSource(1)}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-3">
+              {fmt.stepSource(1)}
+            </p>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder={fmt.titlePlaceholder}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+              className="w-full rounded-lg border border-line bg-app-bg px-3 py-2 text-sm text-ink-1 outline-none transition-colors placeholder:text-ink-3 focus:border-accent"
             />
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder={fmt.bodyPlaceholder}
               rows={8}
-              className="w-full resize-y rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs leading-relaxed outline-none focus:border-indigo-400"
+              className="w-full resize-y rounded-lg border border-line bg-app-bg px-3 py-2 font-mono text-xs leading-relaxed text-ink-1 outline-none transition-colors placeholder:text-ink-3 focus:border-accent"
             />
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">{fmt.format}</span>
+              <span className="text-xs text-ink-3">{fmt.format}</span>
               <select
                 value={format}
                 onChange={(e) => setFormat(e.target.value as DocumentFormat)}
-                className="rounded-lg border border-slate-200 px-2 py-1 text-sm outline-none"
+                className="rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink-1 outline-none transition-colors focus:border-accent"
               >
                 {FORMAT_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -173,11 +245,10 @@ export default function ImportModal({ onClose, onImported }: ImportModalProps) {
                   </option>
                 ))}
               </select>
-              {content.trim() ? (
+              {content.trim() && !busy && !preview ? (
                 <button
                   onClick={saveDocOnly}
-                  disabled={busy}
-                  className="ml-auto rounded-lg border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  className="ml-auto rounded-lg border border-line px-3 py-1 text-xs text-ink-2 transition-colors hover:bg-subtle hover:text-ink-1"
                 >
                   {fmt.saveOnly}
                 </button>
@@ -185,55 +256,105 @@ export default function ImportModal({ onClose, onImported }: ImportModalProps) {
             </div>
           </div>
 
-          {/* 2) 切分预览 */}
-          {preview ? (
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-700">{fmt.stepPreview(2)}</p>
-              <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 px-4 py-3">
-                <p className="text-sm font-medium text-slate-800">
-                  {fmt.previewHead(preview.docTitle, preview.chapterTitles.length)}
-                  {preview.refined ? (
-                    <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-600">
-                      {fmt.refinedBadge}
-                    </span>
-                  ) : null}
-                </p>
-                {preview.chapterTitles.length > 0 ? (
-                  <ol className="mt-2 max-h-40 list-decimal space-y-1 overflow-y-auto pl-5 text-xs text-slate-600">
+          {/* 2) 阶段进度（导入中，全程可见 ≤2s/阶段） */}
+          {busy ? (
+            <div className="rounded-xl border border-line bg-subtle/60 px-4 py-3">
+              <p className="text-sm font-semibold text-ink-1">{fmt.progressTitle}</p>
+              <ul className="mt-2 space-y-1.5">
+                {PHASE_ORDER.map((key, i) => {
+                  const status = phases[i];
+                  return (
+                    <li key={key} className="flex items-start gap-2.5">
+                      <PhaseIcon status={status} />
+                      <span className="min-w-0">
+                        <span
+                          className={`block text-sm ${
+                            status === "done"
+                              ? "text-ink-2"
+                              : status === "active"
+                                ? "font-medium text-ink-1"
+                                : "text-ink-3"
+                          }`}
+                        >
+                          {phasesI18n[key]}
+                        </span>
+                        <span className="block text-xs text-ink-3">
+                          {fmt.phaseHint[key]}
+                        </span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
+
+          {/* 3) 结果卡（导入完成：n 章 / n 要点 / 结构修正） */}
+          {!busy && preview ? (
+            <div className="rounded-xl border border-line bg-subtle/60 px-4 py-3">
+              <p className="flex items-center gap-2 text-sm font-semibold text-ink-1">
+                <span className="text-state-mastered">✓</span>
+                <span>
+                  {preview.chapterIds.length > 0
+                    ? fmt.resultTitle(preview.docTitle)
+                    : fmt.savedDoc(preview.docTitle)}
+                </span>
+              </p>
+              {preview.chapterIds.length > 0 ? (
+                <>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-2">
+                    <span className="tabular-nums">{fmt.statChapter(preview.chapterIds.length)}</span>
+                    <span className="tabular-nums">{fmt.statPoints(preview.totalPoints)}</span>
+                    {structureNote ? (
+                      <span className="text-ink-3">{structureNote}</span>
+                    ) : null}
+                  </div>
+                  <ol className="mt-2 max-h-40 list-decimal space-y-1 overflow-y-auto pl-5 text-xs text-ink-2">
                     {preview.chapterTitles.map((t, i) => (
                       <li key={`${t}-${i}`}>{t || m.chapter.ordinal(i + 1)}</li>
                     ))}
                   </ol>
-                ) : (
-                  <p className="mt-1 text-xs text-amber-600">{fmt.noSplitWarn}</p>
-                )}
-              </div>
+                </>
+              ) : (
+                <p className="mt-1 text-xs text-state-weak">{fmt.noSplitWarn}</p>
+              )}
             </div>
           ) : null}
 
-          {notice ? <p className="text-xs text-amber-600">{notice}</p> : null}
+          {notice ? <p className="text-xs text-state-weak">{notice}</p> : null}
         </div>
 
         {/* 底部 */}
-        <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4">
+        <div className="flex items-center justify-end gap-2 border-t border-line px-6 py-4">
           <button
             onClick={onClose}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+            disabled={busy}
+            className="rounded-lg border border-line px-4 py-2 text-sm text-ink-2 transition-colors hover:bg-subtle hover:text-ink-1 disabled:opacity-40"
           >
             {m.common.cancel}
           </button>
           {preview ? (
             preview.chapterIds.length > 0 ? (
-              <button
-                onClick={() => onImported(preview.docId, preview.chapterIds)}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-              >
-                {fmt.startLearning(preview.chapterIds.length)}
-              </button>
+              <>
+                {onInspect ? (
+                  <button
+                    onClick={onInspect}
+                    className="rounded-lg border border-line px-4 py-2 text-sm text-ink-1 transition-colors hover:bg-subtle"
+                  >
+                    {fmt.inspect}
+                  </button>
+                ) : null}
+                <button
+                  onClick={() => onImported(preview.docId, preview.chapterIds)}
+                  className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+                >
+                  {fmt.startLearning(preview.chapterIds.length)}
+                </button>
+              </>
             ) : (
               <button
                 onClick={() => onImported(preview.docId, [])}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
               >
                 {fmt.doneSaved}
               </button>
@@ -242,7 +363,7 @@ export default function ImportModal({ onClose, onImported }: ImportModalProps) {
             <button
               onClick={splitAndPreview}
               disabled={busy || !content.trim()}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-40"
             >
               {busy ? fmt.busy : fmt.saveSplit}
             </button>
@@ -251,4 +372,17 @@ export default function ImportModal({ onClose, onImported }: ImportModalProps) {
       </div>
     </div>
   );
+}
+
+/** 阶段状态图标：active 转圈 / done 对勾 / pending 空心圆。 */
+function PhaseIcon({ status }: { status: PhaseStatus }) {
+  if (status === "active") {
+    return (
+      <span className="mt-1 h-3 w-3 shrink-0 animate-spin rounded-full border border-accent/30 border-t-accent" />
+    );
+  }
+  if (status === "done") {
+    return <span className="mt-0.5 text-xs font-bold text-state-mastered">✓</span>;
+  }
+  return <span className="mt-1 h-3 w-3 shrink-0 rounded-full border border-line" />;
 }
