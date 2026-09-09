@@ -22,6 +22,7 @@ import LocalFilePanel from "./import/LocalFilePanel";
 import GithubPanel from "./import/GithubPanel";
 import type { ImportTab, ImportUnit, ImportSummary } from "./import/types";
 import { runUnitImport, runBatchImport } from "./import/pipeline";
+import { Select } from "../../components/ui/select";
 import { fileToUnit } from "./import/local-files";
 import { buildGithubUnit } from "./import/github";
 import type { GithubPreview } from "./import/github";
@@ -285,18 +286,17 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
         />
         <div className="flex items-center gap-2">
           <span className="text-xs text-ink-3">{fmt.format}</span>
-          <select
+          <Select
+            ariaLabel={fmt.format}
             value={format}
-            onChange={(e) => setFormat(e.target.value as DocumentFormat)}
+            onValueChange={(v) => setFormat(v as DocumentFormat)}
             disabled={busy}
-            className="rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink-1 outline-none transition-colors focus:border-primary disabled:opacity-50"
-          >
-            {FORMAT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+            options={FORMAT_OPTIONS.map((o) => ({
+              value: o.value,
+              label: o.label,
+            }))}
+            className="h-8 w-auto"
+          />
           {content.trim() && !busy && !done ? (
             <button
               onClick={saveDocOnly}

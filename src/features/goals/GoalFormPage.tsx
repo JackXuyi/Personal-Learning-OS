@@ -11,6 +11,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Card, SectionTitle } from "../../components/primitives";
+import { Checkbox } from "../../components/ui/checkbox";
+import { Select } from "../../components/ui/select";
 import { PageContainer, openImportModal } from "../../components/layout/AppShell";
 import { newId } from "../../domain";
 import type { GoalImportance, GoalType, LearningGoal } from "../../domain";
@@ -212,38 +214,36 @@ export default function GoalFormPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label htmlFor="goal-type" className="mb-1 block text-xs font-medium text-ink-2">
+                <label className="mb-1 block text-xs font-medium text-ink-2">
                   {f.typeLabel}
                 </label>
-                <select
+                <Select
                   id="goal-type"
+                  ariaLabel={f.typeLabel}
                   value={type}
-                  onChange={(e) => setType(e.target.value as GoalType)}
-                  className="w-full rounded-md border border-line bg-app-bg px-3 py-2 text-sm text-ink-1 outline-none focus:border-primary"
-                >
-                  {GOAL_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {m.units.goalType[t]}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={(v) => setType(v as GoalType)}
+                  options={GOAL_TYPES.map((t) => ({
+                    value: t,
+                    label: m.units.goalType[t],
+                  }))}
+                  className="bg-app-bg"
+                />
               </div>
               <div>
-                <label htmlFor="goal-importance" className="mb-1 block text-xs font-medium text-ink-2">
+                <label className="mb-1 block text-xs font-medium text-ink-2">
                   {f.importanceLabel}
                 </label>
-                <select
+                <Select
                   id="goal-importance"
+                  ariaLabel={f.importanceLabel}
                   value={importance}
-                  onChange={(e) => setImportance(e.target.value as GoalImportance)}
-                  className="w-full rounded-md border border-line bg-app-bg px-3 py-2 text-sm text-ink-1 outline-none focus:border-primary"
-                >
-                  {IMPORTANCE.map((im) => (
-                    <option key={im} value={im}>
-                      {m.units.importance[im]}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={(v) => setImportance(v as GoalImportance)}
+                  options={IMPORTANCE.map((im) => ({
+                    value: im,
+                    label: m.units.importance[im],
+                  }))}
+                  className="bg-app-bg"
+                />
               </div>
             </div>
 
@@ -326,20 +326,22 @@ export default function GoalFormPage() {
                         const c = r.chapter;
                         const checked = selected.has(c.id);
                         return (
-                          <label
+                          <div
                             key={c.id}
                             className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs text-ink-2 transition-colors hover:bg-surface"
+                            onClick={(e) => {
+                              if ((e.target as HTMLElement).closest("[data-slot=checkbox]")) return;
+                              toggleChapter(c.id);
+                            }}
                           >
-                            <input
-                              type="checkbox"
+                            <Checkbox
                               checked={checked}
-                              onChange={() => toggleChapter(c.id)}
-                              className="accent-[var(--color-primary)]"
+                              onCheckedChange={() => toggleChapter(c.id)}
                             />
                             <span className="truncate">
                               {c.title?.trim() || m.chapter.ordinal(c.order)}（第 {c.order} 章）
                             </span>
-                          </label>
+                          </div>
                         );
                       })}
                     </div>

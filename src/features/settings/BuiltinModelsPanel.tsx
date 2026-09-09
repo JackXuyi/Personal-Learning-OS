@@ -25,6 +25,7 @@ import {
   type LlmModelInfo,
 } from "../../ai/builtin";
 import { useI18n, type Messages } from "../../i18n";
+import { ConfirmDialog } from "../../components/ui/confirm-dialog";
 
 function formatSize(bytes: number, b: Messages["settings"]["models"]["builtin"]): string {
   const gb = bytes / 1_000_000_000;
@@ -80,6 +81,8 @@ export default function BuiltinModelsPanel({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<Record<string, number>>({});
+  /** 待删除模型（非空时弹确认框）。 */
+  const [deleteTarget, setDeleteTarget] = useState<LlmModelInfo | null>(null);
   const unlistenRef = useRef<UnlistenFn | null>(null);
 
   const { m: msg } = useI18n();
@@ -322,17 +325,7 @@ export default function BuiltinModelsPanel({
                   ) : null}
                   {hasFile ? (
                     <button
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            `${b.confirmDelete(m.display_name)}${
-                              activeModel === m.name ? b.deleteWarnActive : b.deleteWarnNormal
-                            }`,
-                          )
-                        ) {
-                          void runDelete(m);
-                        }
-                      }}
+                      onClick={() => setDeleteTarget(m)}
                       className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-500 transition hover:bg-red-50 hover:text-red-600"
                     >
                       {msg.common.delete}
@@ -347,6 +340,26 @@ export default function BuiltinModelsPanel({
       <p className="mt-2 text-[11px] text-slate-400">
         {b.downloadTip}
       </p>
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(o) => {
+          if (!o) setDeleteTarget(null);
+        }}
+        title={deleteTarget ? b.confirmDelete(deleteTarget.display_name) : ""}
+        description={
+          deleteTarget
+            ? activeModel === deleteTarget.name
+              ? b.deleteWarnActive
+              : b.deleteWarnNormal
+            : undefined
+        }
+        confirmLabel={msg.common.delete}
+        cancelLabel={msg.common.cancel}
+        destructive
+        onConfirm={() => {
+          if (deleteTarget) void runDelete(deleteTarget);
+        }}
+      />
     </div>
   );
 }

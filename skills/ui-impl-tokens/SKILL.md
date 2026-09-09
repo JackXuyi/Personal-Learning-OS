@@ -47,6 +47,13 @@ description: PLOS UI 实现规范——先读语义 token（src/styles/main.css 
    - 样式全走 PLOS/shadcn 角色 token，`add`/自建后按方案 §5.4 定制表复查一遍；
    - **不引入** antd、Radix UI、MUI、Emotion、styled-components、ahooks；Base UI 由 `ui/` 层封装，业务代码不直接 import。
 3. hooks：优先项目现有 hooks 与 `src/stores/*`（zustand）；不造通用 hook 库。
+4. **Base UI 交互件手写约定（M2 实测 `@base-ui/react` 1.8，禁 asChild/render 深水区避坑）**：
+   - import 命名空间：`import { Dialog } from "@base-ui/react/dialog"`（root/dialog、select、checkbox、alert-dialog 子路径均存在）；
+   - 浮层三件套样式基类（overlay `bg-ink-1/40` + Popup `data-starting-style`/`data-ending-style` 进出场动画）见 `ui/dialog.tsx` 导出的 `overlayBase`/`contentBase`，新增浮层直接复用，勿重写；
+   - 受控全部走 `open`/`onOpenChange`、`checked`/`onCheckedChange`、`value`/`onValueChange`（值改变回调第一个参数）；
+   - Select 显示 label：`Select.Value` 的 children 可传函数 `(value) => label`；弹层默认 `alignItemWithTrigger` 会覆盖触发区，需要下方弹出设 `alignItemWithTrigger={false}` + `side="bottom"`；
+   - 业务要「按钮外观的确认」→ 直接用 `ui/confirm-dialog.tsx`（受控 ConfirmDialog），不要自组 AlertDialog（文案必须调用方传 i18n 词，L1 无文案）。
+   - 禁 `asChild`/`@radix-ui/*`/`data-state`/`--radix-*`；hover 态用 `data-highlighted:`/`data-pressed:` 等 Base UI data 属性。
 
 ## `useCallback`
 

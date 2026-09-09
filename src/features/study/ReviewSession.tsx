@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { BandBadge, Card, SectionTitle } from "../../components/primitives";
+import { ConfirmDialog } from "../../components/ui/confirm-dialog";
 import { PageContainer } from "../../components/layout/AppShell";
 import { DeltaBadge } from "../../components/DeltaBadge";
 import { bandOf, createLearningPlanner } from "../../engine";
@@ -53,6 +54,8 @@ export default function ReviewSession() {
   const [titles, setTitles] = useState<Record<string, string>>({});
   /** 概念模式：unitId → 掌握度（无全局 snapshot，直接从 learnerState 派生）。 */
   const [conceptMastery, setConceptMastery] = useState<Record<string, number>>({});
+  /** 退出确认弹窗（有未提交/可撤销作答时拦截 Esc 与退出按钮）。 */
+  const [confirmExitOpen, setConfirmExitOpen] = useState(false);
   const [missingChapter, setMissingChapter] = useState(false);
   const [index, setIndex] = useState(0);
   const [stage, setStage] = useState<Stage>("show");
@@ -246,7 +249,9 @@ export default function ReviewSession() {
       if (finished) return;
       if (e.key === "Escape") {
         const changed = sessionItems.length > 0 && undoLeft > 0;
-        if (!changed || window.confirm(r.confirmExit)) {
+        if (changed) {
+          setConfirmExitOpen(true);
+        } else {
           navigate(goBack);
         }
         return;
@@ -343,16 +348,17 @@ export default function ReviewSession() {
   const exit = () => {
     const changed = sessionItems.length > 0 && undoLeft > 0;
     if (changed) {
-      const ok = window.confirm(r.confirmExit);
-      if (!ok) return;
+      setConfirmExitOpen(true);
+      return;
     }
     navigate(goBack);
   };
 
   return (
-    <PageContainer>
-      <SectionTitle
-        title={r.titleOf(index + 1, queue.length)}
+    <>
+      <PageContainer>
+        <SectionTitle
+          title={r.titleOf(index + 1, queue.length)}
         subtitle={
           snapshot ? r.goalOf(snapshot.goal.title) : undefined
         }
@@ -462,7 +468,16 @@ export default function ReviewSession() {
           </div>
         )}
       </Card>
-    </PageContainer>
+      </PageContainer>
+      <ConfirmDialog
+        open={confirmExitOpen}
+        onOpenChange={setConfirmExitOpen}
+        title={r.confirmExit}
+        confirmLabel={r.exit}
+        cancelLabel={m.common.cancel}
+        onConfirm={() => navigate(goBack)}
+      />
+    </>
   );
 
   function lastResultRating(): SelfRating | undefined {

@@ -10,6 +10,7 @@ import {
   type StatusTone,
 } from "../../components/primitives";
 import { PageContainer, openImportModal } from "../../components/layout/AppShell";
+import { Select } from "../../components/ui/select";
 import { MASTERY_THRESHOLD } from "../../domain";
 import type { Chapter, EvidenceEntry, NextAction } from "../../domain";
 import { bandOf, type ChapterLoopSnapshot } from "../../engine";
@@ -270,24 +271,18 @@ function GoalContext() {
 
   return (
     <div className="flex items-center gap-3">
-      <select
-        aria-label={m.home.goalSelectAria}
+      <Select
+        ariaLabel={m.home.goalSelectAria}
         value={value}
         disabled={loading}
-        onChange={(e) => {
-          const v = e.target.value;
+        onValueChange={(v) => {
           if (!v || v === activeGoal?.id) return;
           setPickId(v);
           void switchGoal(v, m);
         }}
-        className="max-w-64 rounded-md border border-line bg-surface px-2 py-1 text-sm font-medium text-ink-1 outline-none transition-colors focus:border-primary disabled:opacity-50"
-      >
-        {goals.map((g) => (
-          <option key={g.id} value={g.id}>
-            {g.title}
-          </option>
-        ))}
-      </select>
+        options={goals.map((g) => ({ value: g.id, label: g.title }))}
+        className="h-8 max-w-64"
+      />
       <Link
         to="/goals"
         className="text-xs font-medium text-ink-3 transition-colors hover:text-primary"

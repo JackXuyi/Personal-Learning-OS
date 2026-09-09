@@ -19,6 +19,7 @@ import {
 import { testConnection } from "../../ai/connection";
 import { hasKeyring } from "../../ai/vault";
 import { useI18n } from "../../i18n";
+import { Select } from "../../components/ui/select";
 
 /** API 侧草稿(provider 必选,其余为表单值)。 */
 export interface ApiDraft {
@@ -147,21 +148,19 @@ export default function ApiModelsTab({ saved, onUse }: Props) {
       {/* 预置供应商下拉:选中即带入默认端点与建议模型 */}
       <Field label={s.presetProvider}>
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          <Select
+            ariaLabel={s.presetProvider}
             value={draft.provider}
-            onChange={(e) => {
-              const p = AVAILABLE_PRESETS.find((x) => x.provider === e.target.value);
+            onValueChange={(v) => {
+              const p = AVAILABLE_PRESETS.find((x) => x.provider === v);
               if (p) pickPreset(p);
             }}
-            className="w-full max-w-sm rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-400"
-          >
-            {AVAILABLE_PRESETS.map((p) => (
-              <option key={p.provider} value={p.provider}>
-                {p.label}
-                {p.note ? ` — ${p.note}` : ""}
-              </option>
-            ))}
-          </select>
+            options={AVAILABLE_PRESETS.map((p) => ({
+              value: p.provider,
+              label: p.note ? `${p.label} — ${p.note}` : p.label,
+            }))}
+            className="w-full max-w-sm"
+          />
           {isSaved ? (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
               <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
