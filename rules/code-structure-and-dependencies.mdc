@@ -1,0 +1,44 @@
+---
+description: Global limits on file size, duplication, and module dependency structure.
+alwaysApply: true
+---
+
+# Code structure and dependencies
+
+These rules apply to **all** production code in this repository.
+
+## 1. File length limit
+
+- **Hard limit**: no source file may exceed **700 lines** (including blanks and comments).
+- Before adding code to a large file, **split first** by responsibility (types, engine logic, store, UI section).
+
+```text
+❌ BAD: a feature page.tsx at 900 lines mixing engine calls + storage + UI sections
+✅ GOOD: feature module split into domain.ts (types) + engine helpers + store + view components
+```
+
+When touching a file already over 700 lines, include a **small, focused split** if the task allows; do not grow it further.
+
+## 2. Duplication threshold
+
+When the **same or near-identical logic** appears **≥ 10 lines** and **≥ 3 times**, extract shared code first:
+
+- TS: `src/{domain,engine,ai,storage,stores,features,components}`
+- Rust: `src-tauri/src/<module>`
+
+```text
+❌ BAD: copy the same mastery-band mapping into 4 feature components
+✅ GOOD: keep the mapping in src/domain (or a shared hook) and import it
+```
+
+## 3. No circular dependencies
+
+- TS direction: **domain (types/constants) → engine / ai / storage → stores → features / components**.
+  UI (features/components) must not be imported by domain/engine/ai/storage.
+- Rust direction: **vault / llm modules → lib.rs**.
+- If `A` imports `B`, `B` must not import `A`. Break cycles with a leaf `types` module or callback injection.
+
+## Related
+
+- Cross-layer import rules: [layer-import-boundaries.mdc](layer-import-boundaries.mdc)
+- Frontend coding style: [engineering-code-style.mdc](engineering-code-style.mdc)

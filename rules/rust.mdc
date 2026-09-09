@@ -1,0 +1,21 @@
+---
+description: Tauri/Rust conventions for the desktop core — commands, modules (vault/llm), registration.
+globs: src-tauri/**/*.rs
+alwaysApply: false
+---
+
+# Rust / Tauri (`src-tauri`)
+
+- Match surrounding error style: `Result<T, String>` on `#[tauri::command]` fn; `anyhow::Result` / `Box<dyn Error>` inside internal helpers.
+- Module layout: `src-tauri/src/lib.rs`（shell + `generate_handler!`）、`vault.rs`（macOS Keychain secrets via `security` CLI, service `plos`）、`llm/`（`commands.rs` `manager.rs` `models.rs` `sidecar.rs`）。
+- New command: implement in the owning module → register in `lib.rs` `generate_handler!` → call with `invoke` from `src/`. Registered commands: `app_status`、`llm_*`（list/download/cancel/delete/generate/default/status）、`vault_*`（set/get/delete secret）。
+- Rust → UI: `app.emit("event-name", payload)` and `listen` in hooks/services; keep payloads `Serialize`/`Deserialize` and mirrored as TS types next to the invoke caller.
+- Sidecar: local-model helper binary lifecycle lives in `llm/sidecar.rs`; do not block the main thread on downloads (progress via `llm_download`/events).
+- vault is **macOS-only**（`security` CLI）；pure-browser preview (`isTauri` guard) must not touch these commands.
+- Do not grow a file already over 700 lines; split by responsibility first.
+- Comments in 中文/English — follow the module you edit (repo defaults to 中文).
+
+## Related
+
+- IPC mechanics: `skills/tauri-ipc/SKILL.md`
+- Import boundaries: [layer-import-boundaries.mdc](layer-import-boundaries.mdc)

@@ -1,0 +1,35 @@
+---
+description: Forbidden cross-layer imports between the React UI, Tauri Rust core, and shared logic.
+alwaysApply: true
+---
+
+# Layer import boundaries
+
+Talk across layers only through the documented IPC contracts or store/storage adapters.
+
+| Code in | Must not import from | How to talk instead |
+|---------|----------------------|---------------------|
+| `src/**` (React UI) | `src-tauri/**` | `invoke` / `listen` (`@tauri-apps/api`), wrapped in helpers/hooks |
+| `src-tauri/**` (Rust) | `src/**` | Tauri commands / events; shared shapes via serde + mirrored TS types |
+| `src/domain` `src/engine` `src/ai` | React (`react`, hooks, DOM), `src-tauri` | Keep pure TS; UI reads them via `src/stores` / hooks |
+
+```text
+❌ BAD: a feature component imports a Rust module or calls llm/vault logic inline
+✅ GOOD: src/stores or a hook wraps invoke("llm_generate") / invoke("vault_set_secret")
+❌ BAD: src/engine imports a component from src/features to compute a score
+✅ GOOD: engine stays pure; the feature maps domain fields to UI
+```
+
+**Data flow (local-first)**
+
+- UI → `src/stores/*`（zustand）→ 读 `src/domain` 类型 / `src/engine` 纯逻辑。
+- 持久化只经 `src/storage`（`local.ts` / `memory.ts` 适配层），组件不直接碰 localStorage。
+- 桌面能力（密钥、本地模型）→ 仅 `invoke`（`vault_*` / `llm_*`，命令在 `src-tauri/src/lib.rs` 注册）。
+
+Shared UI helpers live under `src/components/`; shared domain under `src/domain` / `src/engine` / `src/ai`.
+Rust helpers stay inside `src-tauri/src/<module>` (`vault.rs`, `llm/`).
+
+## Related
+
+- Dependency direction: [code-structure-and-dependencies.mdc](code-structure-and-dependencies.mdc)
+- Tauri IPC mechanics: `skills/tauri-ipc/SKILL.md`

@@ -1,0 +1,31 @@
+---
+description: Mandatory pre-task technical design workflow — clarify requirements, produce full Chinese technical plan, get user confirmation before coding.
+alwaysApply: true
+---
+
+# 任务前技术方案（始终适用）
+
+对**实质性工作**（新功能、重构、多文件改动、需改代码的 Bug 修复），在编写或修改生产代码之前，必须遵循 `skills/pre-task-technical-design/SKILL.md`。
+
+## 必须顺序
+
+1. **澄清** — 复述目标与完成标准；对模糊/冲突/未决项向用户确认（优先 `AskUserQuestion`），不得擅自假设产品或安全边界。
+2. **调研** — 阅读相关项目文档（`README.md`、`docs/*.md` 领域方案、`AGENTS.md`）与代码，掌握项目现状。
+3. **方案** — 按 `skills/pre-task-technical-design/TECHNICAL_PLAN_TEMPLATE.md` 输出完整中文技术方案，写入 `docs/` 或用户指定路径。
+4. **确认** — 用户明确同意方案前**不写生产代码**；修订方案后再次确认。
+5. **执行** — 确认后配合 [docs-task-runbook](docs-task-runbook.mdc) 按任务实施并验证。
+
+## 豁免
+
+- 纯问答、单行查阅、无后续实现：仅澄清意图，不写完整方案。
+- 用户明确说跳过方案或直接改：遵从用户范围，在回复中注明豁免。
+- 用户已提供并确认过的完整方案：补齐缺口后可直接进入 runbook。
+
+## 复杂度分流入口
+
+判断走「≤30 行直改 / 先澄清 / 完整方案」哪条路径，先看 `skills/tiered-change-workflow/SKILL.md`。
+
+## Related
+
+- Full workflow + templates: `skills/pre-task-technical-design/SKILL.md`
+- Execution tracking: [docs-task-runbook.mdc](docs-task-runbook.mdc)

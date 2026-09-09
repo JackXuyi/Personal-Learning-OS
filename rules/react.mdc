@@ -1,0 +1,32 @@
+---
+description: Tailwind 4 + semantic tokens + primitives conventions for PLOS React pages (relative imports, i18n copy).
+globs: src/**/*.tsx
+alwaysApply: false
+---
+
+# React / TSX (PLOS `src`)
+
+## Styling
+
+- Prefer **Tailwind CSS 4** utility classes over hand-written CSS.
+- Global tokens live in `src/styles/main.css` `@theme` (semantic: `app-bg` `surface` `subtle` `line` `ink-1..3` `accent` `state-*`). Reuse those tokens (`bg-surface`, `text-ink-2`, …); avoid scattering new hex values.
+- Reuse `src/components/primitives.tsx`（`Section`、`KnowledgeRow`、`EvidenceRow`、`ActionCard`、`Card`、`Stat`、`DeltaBadge`）and `src/components/layout/AppShell.tsx`（`PageContainer`）before inventing new atoms.
+- State semantic colors (mastered/learning/weak/idle/failed) apply to **dot/badges only**, not full backgrounds.
+- Do not add Ant Design, Radix/shadcn, Emotion/styled-components, or ahooks.
+
+## Language
+
+- **Talk to the user in 中文.**
+- **Comments:** follow the file (repo defaults to 中文注释).
+- **User-facing copy:** always via `src/i18n` (`useI18n`, `messages/zh.ts` + `messages/en.ts` pairs) — never hardcode.
+
+## Tooling
+
+- Do not add demo pages or extra README files unless the user asks.
+- Prefer existing stores/hooks (`src/stores/*`, feature hooks) over new global state.
+- Keep files ≤ 700 lines; split by responsibility.
+
+## Related
+
+- Full UI implementation spec: `skills/ui-impl-tokens/SKILL.md`
+- Global style rules: [engineering-code-style.mdc](engineering-code-style.mdc)

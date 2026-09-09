@@ -1,0 +1,26 @@
+---
+description: Mandatory doc-driven runbook workflow for every session (intent, docs, tasks in markdown, execution, doc sync).
+alwaysApply: true
+---
+
+# Documentation-driven task runbook (always)
+
+For **every** agent session in this repository, follow this workflow before and during substantive work (anything beyond a one-line answer or trivial lookup). Full detail, templates, and cross-links: `skills/docs-task-runbook/SKILL.md` — read that file when starting a multi-step task.
+
+## Required sequence
+
+1. **Intent** — Restate the goal and "done" criteria; ask once if critical facts are missing.
+2. **Docs** — Read relevant project docs (`README.md` / `README.zh-CN.md`, then domain docs in `docs/*.md`, then `AGENTS.md` and `rules/` that apply).
+3. **Runbook** — Write or update a markdown runbook (user path, existing `docs/*-plan-*.md` / `*TASKS*.md`, or `docs/<AREA>_TASK_RUNBOOK.md`) with ordered tasks; each task has **Status** and **Outcome**.
+4. **Execute** — One task at a time: set **in_progress** → work → verify → **done** + outcome in the same doc; append new tasks if scope grows.
+5. **Finish** — When all runbook tasks are complete, update affected **canonical** docs so they match the code (minimal edits, no unrelated rewrites).
+
+## Exceptions
+
+- Pure Q&A with no repo changes: still clarify intent; skip runbook only if no follow-up implementation is implied.
+- User explicitly says to skip doc updates or the runbook: follow their scope, note the waiver in the reply.
+
+## Related
+
+- Full workflow: [skills/docs-task-runbook/SKILL.md](../skills/docs-task-runbook/SKILL.md)
+- Tech plan gate (confirmation before coding): [pre-task-technical-design.mdc](pre-task-technical-design.mdc)

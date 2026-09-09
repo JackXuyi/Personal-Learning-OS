@@ -1,0 +1,29 @@
+---
+description: Conventional Commits for git messages in this repo (no commitlint/husky).
+alwaysApply: true
+---
+
+# Commit message conventions
+
+This repo does **not** ship commitlint or husky.
+Still use Conventional Commits when the user asks you to commit.
+
+```text
+<type>(<scope>): <subject>
+```
+
+- Header ≤ 100 characters; no trailing period
+- **type** lowercase: `feat` `fix` `perf` `refactor` `docs` `style` `test` `build` `ci` `chore` `revert`
+- **scope** optional, lowercase, prefer a PLOS area: `domain` `engine` `ai` `storage` `stores` `features` `components` `i18n` `ui` `test` `docs` `tauri` `rust` `build` `chore`
+- **subject** imperative or concise; the repo mixes English and 中文 subjects — match the surrounding history style
+- Body/footer: wrap ≤ 100 characters; blank line before body
+- Do not use `--no-verify` unless the user asks
+
+```text
+❌ BAD: Added assessment sync. | Feat: Fix UI
+✅ GOOD: feat(ui): HomePage 今日启动器接入 activeGoal 上下文
+✅ GOOD: fix(i18n): 对齐 zh/en 字典缺失键
+✅ GOOD: test(engine): plan ETA 预估边界用例
+```
+
+Pass the message via HEREDOC so wrapping is preserved.

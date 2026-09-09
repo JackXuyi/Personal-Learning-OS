@@ -1,0 +1,33 @@
+---
+description: TypeScript/React style for src — relative imports, Tailwind 4 tokens, comments, i18n.
+alwaysApply: true
+---
+
+# Engineering code style
+
+Match the file you are editing. This repo has no Prettier config and no
+`import/order` ESLint rule. Do not invent a second format.
+
+## TypeScript / React (`src`)
+
+- Prefer 2-space indent; keep the file's existing quote style
+- Comments: **中文注释为主**（仓库现状），跟随所在文件语言；与用户交流用**中文**
+- **Relative imports only** — no path alias (`@/`, `@repo/*`, …); no `tsconfig` paths
+- Keep `strict` + `verbatimModuleSyntax`; use `import type` for type-only imports
+- Do not add `eslint-disable` unless the user asks
+- Client env / native access: only through existing helpers (`src/storage`, `src/ai`, Tauri invoke guards). Do not invent `VITE_*` or `import.meta.env` usage
+- UI copy: must go through `src/i18n` (`messages/zh.ts` + `messages/en.ts` as a pair) via `useI18n`; never hardcode user-facing strings
+- UI styling: Tailwind 4 utilities against semantic tokens in `src/styles/main.css`; reuse `src/components/primitives.tsx` / `src/components/layout/AppShell.tsx`. Do not add antd, Radix/shadcn, ahooks, or styled-components
+
+## Import grouping (when adding new files)
+
+builtin → external (`react` first) → parent (`../../`) → sibling (`./`) → type imports
+
+## Tests
+
+Pure logic unit tests live in `tests/*.test.ts` and run with
+`node --experimental-strip-types` (`npm run test:*` scripts). No Vitest runner.
+
+## Commits
+
+Follow [commit-conventions.mdc](commit-conventions.mdc) when the user asks to commit.
