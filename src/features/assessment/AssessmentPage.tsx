@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { BandBadge, Card, SectionTitle } from "../../components/primitives";
+import { Button } from "../../components/ui/button";
 import { PageContainer } from "../../components/layout/AppShell";
 import { bandOf } from "../../engine";
 import type { KnowledgeGraph, KnowledgeUnit } from "../../domain";
@@ -67,33 +68,34 @@ export default function AssessmentPage() {
 
       {/* 建议先测 */}
       {recommended ? (
-        <Card className="border-indigo-200 bg-indigo-50/40">
+        <Card className="border-primary/20 bg-primary/5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-indigo-400">
+              <p className="text-xs font-medium uppercase tracking-wide text-primary">
                 {a.recommendEyebrow}
               </p>
-              <p className="mt-1 text-lg font-semibold text-slate-900">
+              <p className="mt-1 text-lg font-semibold text-ink-1">
                 {unitTitle(recommended.id)}
               </p>
             </div>
-            <button
+            <Button
               onClick={() => setActive(recommended)}
-              className="rounded-xl bg-indigo-600 px-6 py-3 text-base font-semibold text-white shadow-sm hover:bg-indigo-700"
+              size="lg"
+              className="rounded-xl text-base"
             >
               {a.start}
-            </button>
+            </Button>
           </div>
         </Card>
       ) : null}
 
       {/* 选单元 */}
       <Card className="mt-6">
-        <p className="mb-3 text-sm font-semibold text-slate-700">{a.pickAny}</p>
+        <p className="mb-3 text-sm font-semibold text-ink-2">{a.pickAny}</p>
         {units.length === 0 ? (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-ink-3">
             {a.emptyLead}{" "}
-            <Link to="/study" className="text-indigo-600 hover:underline">
+            <Link to="/study" className="text-primary hover:underline">
               {a.goStudy}
             </Link>{" "}
             {a.emptyTail}
@@ -106,7 +108,7 @@ export default function AssessmentPage() {
                 <button
                   key={u.id}
                   onClick={() => setActive(u)}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50/40"
+                  className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink-2 transition hover:border-primary/50 hover:bg-primary/5"
                 >
                   {unitTitle(u.id)}
                   <BandBadge band={bandOf(mastery)} />
@@ -121,7 +123,7 @@ export default function AssessmentPage() {
       {todayAssessments.length > 0 ? (
         <Card className="mt-6">
           <SectionTitle title={a.todayTitle} subtitle={a.todayCount(todayAssessments.length)} />
-          <ul className="space-y-1 text-sm text-slate-600">
+          <ul className="space-y-1 text-sm text-ink-2">
             {todayAssessments.map((r) => (
               <li key={`${r.unitId}-${r.at}`}>
                 {unitTitle(r.unitId)} · {r.correct ? a.correct : a.wrong} ·{" "}

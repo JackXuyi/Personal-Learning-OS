@@ -230,6 +230,9 @@ PLOS                                    ⌘K Search everything      ● Local Qw
   --color-ink-3: #a1a1aa;         /* 弱化/占位（zinc-400） */
   /* 强调（收敛使用，仅 CTA/激活/选中/goal/掌握度提升） */
   --color-accent: #6366f1;        /* 沿用 indigo-500，唯一强调色 */
+  /* ^ 注记（2026-09-09，M3 收尾）：品牌强调 token 已更名 primary（值不变 #6366f1，
+     定义上收 src/styles/main.css；原因与 shadcn 语义 accent 冲突，见
+     docs/ui-component-system-shadcn-design-2026-09.md §5.2）。此条目仅存档历史。 */
   /* 状态（四态 + 失败） */
   --color-state-mastered: #059669;  /* emerald-600 */
   --color-state-learning: #6366f1;  /* indigo-500 */

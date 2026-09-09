@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Bar, Card, EvidenceRow, Section } from "../../components/primitives";
+import { Button } from "../../components/ui/button";
 import { MASTERY_THRESHOLD, isDueReview } from "../../domain";
 import type { Chapter, LearnerState, SourceDocument } from "../../domain";
 import { applyKeyPointRating } from "../../engine";
@@ -307,29 +308,29 @@ export default function ChapterReaderPage() {
             </span>
           ) : null}
           {dueReview ? (
-            <button
+            <Button
               onClick={markReviewed}
-              className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90"
+              className="rounded-lg px-5 font-semibold"
             >
               {t.markReviewed}
-            </button>
+            </Button>
           ) : chapter.status === "ready" ? (
-            <button
+            <Button
               onClick={() =>
                 navigate(`/quiz/new?doc=${doc.id}&chapters=${chapter.id}&mode=unit-test`)
               }
-              className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90"
+              className="rounded-lg px-5 font-semibold"
             >
               {t.goQuiz}
-            </button>
+            </Button>
           ) : (
-            <button
+            <Button
               onClick={markReady}
               disabled={chapter.status === "mastered" || chapter.status === "retake"}
-              className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+              className="rounded-lg px-5 font-semibold"
             >
               {chapter.status === "not-started" || chapter.status === "learning" ? t.markDone : t.doneLabel}
-            </button>
+            </Button>
           )}
         </div>
       </div>

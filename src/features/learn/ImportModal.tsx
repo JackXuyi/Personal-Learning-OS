@@ -23,6 +23,7 @@ import GithubPanel from "./import/GithubPanel";
 import type { ImportTab, ImportUnit, ImportSummary } from "./import/types";
 import { runUnitImport, runBatchImport } from "./import/pipeline";
 import { Select } from "../../components/ui/select";
+import { Button } from "../../components/ui/button";
 import { fileToUnit } from "./import/local-files";
 import { buildGithubUnit } from "./import/github";
 import type { GithubPreview } from "./import/github";
@@ -541,23 +542,23 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
                 </button>
               ) : null}
               {finishedActionLabel ? (
-                <button
+                <Button
                   onClick={primaryAction}
-                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+                  className="rounded-lg"
                 >
                   {finishedActionLabel}
-                </button>
+                </Button>
               ) : null}
             </>
           ) : (
-            <button
+            <Button
               onClick={runTabAction}
               disabled={primaryDisabled}
               data-testid="import-primary-btn"
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-40"
+              className="rounded-lg disabled:opacity-40"
             >
               {primaryLabel}
-            </button>
+            </Button>
           )}
         </div>
       </div>

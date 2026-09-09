@@ -10,6 +10,8 @@ import {
   type StatusTone,
 } from "../../components/primitives";
 import { PageContainer, openImportModal } from "../../components/layout/AppShell";
+import { Button, buttonVariants } from "../../components/ui/button";
+import { cn } from "../../lib/utils";
 import { Select } from "../../components/ui/select";
 import { MASTERY_THRESHOLD } from "../../domain";
 import type { Chapter, EvidenceEntry, NextAction } from "../../domain";
@@ -450,7 +452,7 @@ function AllDoneCard() {
       <div className="mt-4 flex gap-3">
         <Link
           to="/quiz"
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+          className={cn(buttonVariants(), "rounded-lg")}
         >
           {m.home.goQuizReinforce}
         </Link>
@@ -473,13 +475,13 @@ function EmptyState() {
       <p className="text-lg font-semibold text-ink-1">{m.home.emptyTitle}</p>
       <p className="mt-1 text-sm text-ink-2">{m.home.emptyDesc}</p>
       <div className="mt-4 flex flex-wrap gap-3">
-        <button
+        <Button
           type="button"
           onClick={openImportModal}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+          className="rounded-lg"
         >
           {m.common.import}
-        </button>
+        </Button>
         <Link
           to="/plan"
           className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-ink-1 transition-colors hover:bg-subtle"
@@ -501,7 +503,7 @@ function NoChapterCard() {
       <div className="mt-4 flex gap-3">
         <Link
           to="/learn"
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+          className={cn(buttonVariants(), "rounded-lg")}
         >
           {m.home.goCatalog}
         </Link>

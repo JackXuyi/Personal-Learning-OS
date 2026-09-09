@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Bar, Card, SectionTitle } from "../../components/primitives";
+import { Button } from "../../components/ui/button";
 import {
   DOCS_CHANGED_EVENT,
   PageContainer,
@@ -179,12 +180,9 @@ export default function ChapterCatalogPage() {
             : cat.subtitleStats(docs.length, chapterCount, masteredCount, Math.round(MASTERY_THRESHOLD * 100))
         }
         action={
-          <button
-            onClick={openImportModal}
-            className="rounded-md bg-primary px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary/90"
-          >
+          <Button onClick={openImportModal} size="sm" className="px-3.5 text-sm">
             ＋ {m.common.import}
-          </button>
+          </Button>
         }
       />
 
@@ -230,12 +228,9 @@ export default function ChapterCatalogPage() {
         <Card className="mt-4 border-dashed">
           <p className="text-base font-semibold text-ink-1">{cat.emptyTitle}</p>
           <p className="mt-1 text-sm text-ink-2">{cat.emptyDesc}</p>
-          <button
-            onClick={openImportModal}
-            className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
-          >
+          <Button onClick={openImportModal} className="mt-4">
             {cat.emptyImport}
-          </button>
+          </Button>
         </Card>
       ) : visibleDocs.length === 0 && !searched ? (
         <Card className="mt-4 border-dashed">

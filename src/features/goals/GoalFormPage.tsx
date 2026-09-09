@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Card, SectionTitle } from "../../components/primitives";
+import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Select } from "../../components/ui/select";
 import { PageContainer, openImportModal } from "../../components/layout/AppShell";
@@ -294,13 +295,14 @@ export default function GoalFormPage() {
           {docList.length === 0 ? (
             <div className="mt-4 rounded-lg border border-dashed border-line p-4 text-center">
               <p className="text-sm text-ink-2">{f.scopeEmpty}</p>
-              <button
+              <Button
                 type="button"
                 onClick={openImportModal}
-                className="mt-3 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+                size="sm"
+                className="mt-3 text-sm"
               >
                 {f.goImport}
-              </button>
+              </Button>
             </div>
           ) : (
             <div className="mt-3 max-h-96 space-y-3 overflow-y-auto pr-1">
@@ -357,14 +359,14 @@ export default function GoalFormPage() {
       <div className="mt-6 flex items-center gap-3">
         {err ? <p className="text-sm text-state-failed">{err}</p> : null}
         {savedFlash ? <span className="text-sm text-state-mastered">{f.saved}</span> : null}
-        <button
+        <Button
           type="button"
           disabled={saving}
           onClick={() => void onSubmit()}
-          className="ml-auto rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+          className="ml-auto"
         >
           {saving ? f.saving : f.save}
-        </button>
+        </Button>
         <Link
           to={goalId ? `/goals/${goalId}` : "/goals"}
           className="rounded-md border border-line bg-surface px-4 py-2 text-sm font-medium text-ink-2 transition-colors hover:bg-subtle"

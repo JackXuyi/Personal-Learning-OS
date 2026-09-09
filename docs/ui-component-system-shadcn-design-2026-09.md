@@ -1,6 +1,6 @@
 # Personal Learning OS · UI 组件体系方案（shadcn/ui × Base UI × Lucide）
 
-> 版本：2026-09-09 · 方案稿 v0.9（评审稿，待决策确认后转开发）
+> 版本：2026-09-09 · 方案 v1.0（**已落地**：M0–M3 完成，状态同步至 §9 执行记录与 §12 偏差归档）
 > 上游输入：用户指定技术组合「Tailwind CSS 4 + shadcn/ui + Base UI + Lucide + PLOS Design System」，要求生成当前项目的组件方案
 > 关联文档：`docs/ui-workbench-plan-2026-09.md`（UI 语义 token 与三大核心组件来源，**本方案主题上游**）、`docs/learning-system-v2-design-2026-09.md`（V2 架构主文档）、`docs/interaction-design-spec-2026-09.md`、`docs/i18n-design-2026-09.md`、`docs/knowledge-import-design-2026-09.md`
 > 定位：**工程化组件体系方案**——不推倒 Domain/Engine，把「手写原子组件 + 裸语义 token」的现状，演进为「shadcn/ui（Base UI 原语，代码入库可控）为 UI 基础层 + Lucide 图标 + PLOS Design System token」的组件体系，渐进迁移，规则同步修订。
@@ -450,6 +450,20 @@ perl -pi -e 's/((?:bg|text|border|ring|fill|stroke|decoration|from|to|via)-)acce
 - R5 注记；本文件状态更新为「已落地」并归档决策偏差；
 - Done：typecheck + 全部单测；§7 映射表逐项 ✅。
 
+**M3 执行记录（2026-09-09）**：
+- **primitives 处置归档**：Card / ActionCard **保留**（ActionCard CTA 已 M1 换 Button；结构手写稳定、与 ui kit 无重叠痛，基于 L1 重写无净收益，避免 churn）。Bar / Section / Stat / KnowledgeRow / EvidenceRow 按 §7 保持不动。
+- **BandBadge 收敛 ✅**：重构为 `Badge variant="outline"` + 领域色表（`bandStyles` 保留原值，tailwind-merge 覆写 border/bg/text），4 调用点（AssessmentPage/AssessmentSession/GraphView/ReviewSession）API 零变更、视觉零回归。
+- **手写实心 primary CTA 清零 ✅**：10 个 feature 文件 20+ 处 → `Button` / `cn(buttonVariants(...))`（路由 Link 保持语义）。映射规则：紧凑 `px-3/3.5 py-1/1.5` → `size="sm"` + `text-sm` 覆写；`px-4` → `default`；大主钮 `px-5 rounded-lg font-semibold` → `default` + 覆写保留；布局类（mt-/ml-auto/shrink-0）原样保留。残留 `bg-primary` 均为非 CTA 语义（Bar 进度/dot/CommandPalette 激活/tab chip 选中态）。
+- **旧样式类清理**：AssessmentPage 全页 token 化（9 处 slate/indigo → 语义 token；`bg-indigo-600 px-6 py-3` 主按钮 → `Button size="lg"`，唯一旧色线中包藏的主 CTA 变体）。
+- **i18n 回归 ✅**：本里程碑 diff 新增行无裸中文（仅 1 条工程注释）；全部沿用字典引用。
+- **死代码**：无迁移引入死代码；`ui/dialog`/`alert-dialog` 作为 kit 储备保留（M2 记录在案，confirm-dialog 消费 dialog）。
+- 门禁：typecheck 0、单测全绿、vite build 通过；**目测项**：AssessmentPage 推荐卡 tint 与主按钮、全局 Button 高度/圆角归一。
+
+### M3 遗留与新发现 → §12 偏差归档
+
+- ImportModal 外壳（busy 状态机）与 CommandPalette（gate 未决）——按 M2 豁免结论**维持暂缓**，不入 M3；
+- **新发现：全站旧色线**——quiz/assessment/study/settings/knowledge 10+ 文件数百处 `slate-*`/`indigo-*`（token 化前的老页面），与 M3 无关的独立大迁移，建议独立里程碑（见 §12 D9）。
+
 ---
 
 ## 10. 风险矩阵
@@ -481,15 +495,40 @@ perl -pi -e 's/((?:bg|text|border|ring|fill|stroke|decoration|from|to|via)-)acce
 | D7 | 官方目录 components/ui + lib/utils | CLI 默认、升级友好 | ✅ 本稿定稿 |
 | D8 | 升级走 shadcn diff | copy-paste 模型的既有实践 | ✅ 本稿定稿 |
 
-### 11.2 待 M0 init 后确认（不阻塞本稿评审）
+### 11.2 待 M0 init 后确认（落地结论 2026-09-09）
 
-| # | 问题 | 结论路径 |
-|---|---|---|
-| Q1 | Base UI 版式下 `command` / `alert-dialog` / `tabs` 实际可用？ | M0.3 `shadcn list` gate |
-| Q2 | `base-vega` vs `base-maia`（圆润）哪个更贴近 PLOS？ | init 交互选择时目测；PLOS 现状偏圆润（rounded-xl）可试 base-maia |
-| Q3 | ImportModal 外壳是否换 Dialog？ | M2 评估；内容面板结构与文件对话框逻辑多，倾向「外壳延后」 |
-| Q4 | primitives.Card 是否被 ui/card 取代？ | 建议保留领域 Card（PLOS 语义收窄过），仅新增页面用 ui/card 时再评 |
+| # | 问题 | 结论路径 | 落地结论 |
+|---|---|---|---|
+| Q1 | Base UI 版式下 `command` / `alert-dialog` / `tabs` 实际可用？ | M0.3 `shadcn list` gate | CLI 本机沙箱不可用 → 改 node_modules 实测 `@base-ui/react@1.8.0`：`alert-dialog` ✅ 原生可用（M2 用上）；`command`/`tabs` ⚠️ 仍待用户侧 `npx shadcn@latest list` 补录 |
+| Q2 | `base-vega` vs `base-maia`（圆润）哪个更贴近 PLOS？ | init 交互选择时目测 | components.json 定 `base-vega`（rounded-md 系）；kit 实际为手写同构（M0.3 降级），圆润度差异在 M1 定制时以仓库基线为准 |
+| Q3 | ImportModal 外壳是否换 Dialog？ | M2 评估；倾向「外壳延后」 | **暂缓归档**（busy 状态机/阶段动画/结果卡导航，低收益高回归面）→ §12 A2 |
+| Q4 | primitives.Card 是否被 ui/card 取代？ | 建议保留领域 Card | **保留归档**（M3）：结构稳定、语义收窄过，L1 重写无净收益 → §12 A1 |
 
 ---
 
-*本文件为方案稿（评审稿）。确认 D1–D8 后按 §9 里程碑开工；M0 各任务可转 `docs/` runbook 逐条执行。*
+## 12. 落地偏差归档（M0–M3 完成后）
+
+### 12.1 处置决策归档
+
+| # | 决策 | 归档结论 |
+|---|---|---|
+| A1 | primitives.Card / ActionCard 处置 | **保留**（M3）：ActionCard CTA 已换 Button；手写结构稳定，基于 L1 重写无净收益 |
+| A2 | ImportModal 自写 modal 外壳 | **暂缓**：busy 状态机/阶段动画/结果卡 onInspect 导航复杂，低收益高回归面；其内部 format 下拉已 M2 换 Select |
+| A3 | CommandPalette（⌘K）自写层 | **暂缓**：`command` wrapper 的 Base UI 版可用性 gate 未决（Q1），fallback 矩阵（§6.4）生效 |
+| A4 | 次级手写控件 | 保留并记录余量：outline/文字型手写 `<button>`、分段控件选中态（ChapterCatalog filter chip）、单元选择 chip（AssessmentPage 已 token 化但保留手写形态）——均非主 CTA，M3 后按需随改随换 |
+
+### 12.2 新发现：全站旧色线（D9，建议独立里程碑）
+
+M3 盘点发现 token 化前的老页面仍大面积使用原始色（`slate-*`/`indigo-*`），与 M3 语义无关的独立迁移：
+
+| 面 | 规模 | 归属 |
+|---|---|---|
+| quiz（NewQuizPage/QuizAnswerPage/QuizGradingPage/QuizReport 残） | ~80 处 | 独立「token 全面落地」里程碑 |
+| assessment（AssessmentSession） | ~16 处 | 同上（AssessmentPage 已 M3 收） |
+| study（ReviewSession）/ knowledge（GraphView/ChapterGraphPage） | ~66 处 | 同上 |
+| settings（BuiltinModelsPanel/ApiModelsTab） | ~41 处 | 同上（select 周边 M2 已收敛，其余残留） |
+| scaffold.tsx | ~5 处 | 同上 |
+
+> 建议：作为独立小里程碑（M4-tokenize）按页逐文件迁移：`slate-900→ink-1`、`slate-700→ink-2`、`slate-600→ink-2`、`slate-500/400→ink-3`、`slate-200/border→line`、`slate-50/bg-white→surface/subtle`、`indigo-600 主行动→Button`、`indigo-50/200 强调 tint→primary/5+primary/20`、`text-indigo-600 链接→text-primary`。每页 typecheck + 目测。
+
+*本文件为**已落地**方案（v1.0）。M0–M3 执行记录见 §9；偏差与后续见 §12。*

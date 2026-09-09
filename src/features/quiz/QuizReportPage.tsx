@@ -15,6 +15,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Bar, Card } from "../../components/primitives";
+import { Button, buttonVariants } from "../../components/ui/button";
+import { cn } from "../../lib/utils";
 import { DeltaBadge } from "../../components/DeltaBadge";
 import {
   EVIDENCE_VERDICT_FAIL,
@@ -427,12 +429,12 @@ export default function QuizReportPage() {
         {aiMsg ? <p className="mt-2 text-xs text-ink-2">{aiMsg}</p> : null}
 
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-          <button
+          <Button
             onClick={togglePlan}
-            className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white hover:bg-primary/90"
+            className="rounded-lg px-5 font-semibold"
           >
             {planOpen ? r.planClose : r.planGenerate}
-          </button>
+          </Button>
           {weakChapters.length > 0 ? (
             <button
               onClick={() => void startRetakeAll()}
@@ -640,7 +642,7 @@ export default function QuizReportPage() {
         </Link>
         <Link
           to="/quiz"
-          className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white hover:bg-primary/90"
+          className={cn(buttonVariants(), "rounded-lg px-5 font-semibold")}
         >
           {r.backCenter}
         </Link>

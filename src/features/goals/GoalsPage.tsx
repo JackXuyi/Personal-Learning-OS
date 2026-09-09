@@ -11,6 +11,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Bar, Card, SectionTitle } from "../../components/primitives";
+import { buttonVariants } from "../../components/ui/button";
+import { cn } from "../../lib/utils";
 import { PageContainer } from "../../components/layout/AppShell";
 import { MASTERY_THRESHOLD } from "../../domain";
 import type { LearnerState, LearningGoal } from "../../domain";
@@ -102,7 +104,7 @@ export default function GoalsPage() {
         action={
           <Link
             to="/goals/new"
-            className="shrink-0 rounded-md bg-primary px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+            className={cn(buttonVariants({ size: "sm" }), "shrink-0 px-3.5 text-sm")}
           >
             {g.newGoal}
           </Link>
@@ -126,7 +128,7 @@ export default function GoalsPage() {
           <div className="mt-4">
             <Link
               to="/goals/new"
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+              className={cn(buttonVariants(), "rounded-lg")}
             >
               {g.newGoal}
             </Link>
@@ -263,7 +265,7 @@ function GoalGroup({
                 </div>
                 <Link
                   to={`/goals/${rd.goal.id}`}
-                  className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+                  className={cn(buttonVariants({ size: "sm" }), "text-sm")}
                 >
                   {g.open}
                 </Link>

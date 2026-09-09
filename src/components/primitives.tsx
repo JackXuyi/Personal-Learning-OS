@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { MasteryBand } from "../engine";
 import { useI18n } from "../i18n";
 import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
 
 /**
  * 公共 UI 原语（B 案语义 token，docs/ui-workbench-plan-2026-09.md §5）。
@@ -32,15 +33,14 @@ const bandStyles: Record<MasteryBand, string> = {
   mastered: "bg-emerald-50 text-emerald-600 border-emerald-200",
 };
 
+/** 掌握度徽标：基于 `Badge`（outline）+ 领域状态色表（方案 §7，M3 收敛）。 */
 export function BandBadge({ band }: { band: MasteryBand }) {
   const { m } = useI18n();
   const label = m.units.band[band];
   return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${bandStyles[band]}`}
-    >
+    <Badge variant="outline" className={bandStyles[band]}>
       {label}
-    </span>
+    </Badge>
   );
 }
 

@@ -22,6 +22,8 @@ import {
   type StatusTone,
 } from "../../components/primitives";
 import { PageContainer, openImportModal } from "../../components/layout/AppShell";
+import { Button, buttonVariants } from "../../components/ui/button";
+import { cn } from "../../lib/utils";
 import { MASTERY_FLOOR, MASTERY_THRESHOLD } from "../../domain";
 import type { Chapter, Paper, PaperResult, SourceDocument } from "../../domain";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
@@ -135,7 +137,7 @@ export default function QuizCenterPage() {
         action={
           <Link
             to="/quiz/new"
-            className="rounded-md bg-primary px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+            className={cn(buttonVariants({ size: "sm" }), "px-3.5 text-sm")}
           >
             {c.newPaper}
           </Link>
@@ -178,12 +180,12 @@ export default function QuizCenterPage() {
               <Card className="mt-6 border-dashed">
                 <p className="text-base font-semibold text-ink-1">{c.noPaperTitle}</p>
                 <p className="mt-1 text-sm text-ink-2">{c.noPaperDesc}</p>
-                <button
+                <Button
                   onClick={() => navigate("/quiz/new")}
-                  className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+                  className="mt-4"
                 >
                   {c.firstPaper}
-                </button>
+                </Button>
               </Card>
             ) : (
               <Card className="mt-6 border-dashed">
@@ -191,12 +193,12 @@ export default function QuizCenterPage() {
                   {c.needImportTitle}
                 </p>
                 <p className="mt-1 text-sm text-ink-2">{c.needImportDesc}</p>
-                <button
+                <Button
                   onClick={openImportModal}
-                  className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+                  className="mt-4"
                 >
                   {c.goImport}
-                </button>
+                </Button>
               </Card>
             )
           ) : (

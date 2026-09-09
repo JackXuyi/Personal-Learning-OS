@@ -23,6 +23,8 @@ import {
   type StatusTone,
 } from "../../components/primitives";
 import { PageContainer, openImportModal } from "../../components/layout/AppShell";
+import { Button, buttonVariants } from "../../components/ui/button";
+import { cn } from "../../lib/utils";
 import { MASTERY_THRESHOLD } from "../../domain";
 import type { NextAction } from "../../domain";
 import { bandOf } from "../../engine";
@@ -80,7 +82,7 @@ export default function PlanPage() {
         action={
           <Link
             to="/quiz/new"
-            className="rounded-md bg-primary px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+            className={cn(buttonVariants({ size: "sm" }), "px-3.5 text-sm")}
           >
             {m.plan.newPaper}
           </Link>
@@ -98,13 +100,12 @@ export default function PlanPage() {
           <p className="text-base font-semibold text-ink-1">{m.plan.emptyTitle}</p>
           <p className="mt-1 text-sm text-ink-2">{m.plan.emptyDesc}</p>
           <div className="mt-4 flex gap-3">
-            <button
+            <Button
               type="button"
               onClick={openImportModal}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
             >
               {m.common.import}
-            </button>
+            </Button>
             <Link
               to="/learn"
               className="rounded-md border border-line bg-surface px-4 py-2 text-sm font-medium text-ink-2 transition-colors hover:bg-subtle"
@@ -146,7 +147,7 @@ export default function PlanPage() {
               <div className="mt-4 flex gap-3">
                 <Link
                   to="/quiz/new"
-                  className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+                  className={cn(buttonVariants())}
                 >
                   {m.plan.quizAll}
                 </Link>
