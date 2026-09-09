@@ -157,7 +157,7 @@ export default function GoalFormPage() {
         <Card>
           <p className="text-lg font-semibold text-ink-1">{m.goals.notFound}</p>
           <p className="mt-1 text-sm text-ink-2">{m.goals.notFoundDesc}</p>
-          <Link to="/goals" className="mt-4 inline-block text-sm font-medium text-accent hover:underline">
+          <Link to="/goals" className="mt-4 inline-block text-sm font-medium text-primary hover:underline">
             {m.goals.backToList}
           </Link>
         </Card>
@@ -185,7 +185,7 @@ export default function GoalFormPage() {
         action={
           <Link
             to={goalId ? `/goals/${goalId}` : "/goals"}
-            className="text-xs font-medium text-ink-3 hover:text-accent"
+            className="text-xs font-medium text-ink-3 hover:text-primary"
           >
             {goalId ? f.back : m.goals.backToList}
           </Link>
@@ -206,7 +206,7 @@ export default function GoalFormPage() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder={f.titlePlaceholder}
-                className="w-full rounded-md border border-line bg-app-bg px-3 py-2 text-sm text-ink-1 outline-none transition-colors placeholder:text-ink-3 focus:border-accent"
+                className="w-full rounded-md border border-line bg-app-bg px-3 py-2 text-sm text-ink-1 outline-none transition-colors placeholder:text-ink-3 focus:border-primary"
               />
             </div>
 
@@ -219,7 +219,7 @@ export default function GoalFormPage() {
                   id="goal-type"
                   value={type}
                   onChange={(e) => setType(e.target.value as GoalType)}
-                  className="w-full rounded-md border border-line bg-app-bg px-3 py-2 text-sm text-ink-1 outline-none focus:border-accent"
+                  className="w-full rounded-md border border-line bg-app-bg px-3 py-2 text-sm text-ink-1 outline-none focus:border-primary"
                 >
                   {GOAL_TYPES.map((t) => (
                     <option key={t} value={t}>
@@ -236,7 +236,7 @@ export default function GoalFormPage() {
                   id="goal-importance"
                   value={importance}
                   onChange={(e) => setImportance(e.target.value as GoalImportance)}
-                  className="w-full rounded-md border border-line bg-app-bg px-3 py-2 text-sm text-ink-1 outline-none focus:border-accent"
+                  className="w-full rounded-md border border-line bg-app-bg px-3 py-2 text-sm text-ink-1 outline-none focus:border-primary"
                 >
                   {IMPORTANCE.map((im) => (
                     <option key={im} value={im}>
@@ -257,7 +257,7 @@ export default function GoalFormPage() {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder={f.descPlaceholder}
                 rows={3}
-                className="w-full resize-none rounded-md border border-line bg-app-bg px-3 py-2 text-sm text-ink-1 outline-none transition-colors placeholder:text-ink-3 focus:border-accent"
+                className="w-full resize-none rounded-md border border-line bg-app-bg px-3 py-2 text-sm text-ink-1 outline-none transition-colors placeholder:text-ink-3 focus:border-primary"
               />
             </div>
 
@@ -270,7 +270,7 @@ export default function GoalFormPage() {
                 type="date"
                 value={deadline}
                 onChange={(e) => setDeadline(e.target.value)}
-                className="w-full rounded-md border border-line bg-app-bg px-3 py-2 text-sm text-ink-1 outline-none focus:border-accent"
+                className="w-full rounded-md border border-line bg-app-bg px-3 py-2 text-sm text-ink-1 outline-none focus:border-primary"
               />
             </div>
           </div>
@@ -283,7 +283,7 @@ export default function GoalFormPage() {
             <div className="flex items-center gap-2 text-xs text-ink-3">
               <span>{f.selectedOf(selected.size)}</span>
               {selected.size > 0 ? (
-                <button type="button" onClick={clearScope} className="font-medium text-ink-2 hover:text-accent">
+                <button type="button" onClick={clearScope} className="font-medium text-ink-2 hover:text-primary">
                   {f.clearScope}
                 </button>
               ) : null}
@@ -297,7 +297,7 @@ export default function GoalFormPage() {
               <button
                 type="button"
                 onClick={openImportModal}
-                className="mt-3 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+                className="mt-3 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary/90"
               >
                 {f.goImport}
               </button>
@@ -316,7 +316,7 @@ export default function GoalFormPage() {
                       <button
                         type="button"
                         onClick={() => toggleDoc(docTitle, rows)}
-                        className="shrink-0 text-[11px] font-medium text-accent hover:text-accent/70"
+                        className="shrink-0 text-[11px] font-medium text-primary hover:text-primary/70"
                       >
                         {allIn ? "−" : f.selectAll}
                       </button>
@@ -334,7 +334,7 @@ export default function GoalFormPage() {
                               type="checkbox"
                               checked={checked}
                               onChange={() => toggleChapter(c.id)}
-                              className="accent-[var(--color-accent)]"
+                              className="accent-[var(--color-primary)]"
                             />
                             <span className="truncate">
                               {c.title?.trim() || m.chapter.ordinal(c.order)}（第 {c.order} 章）
@@ -359,7 +359,7 @@ export default function GoalFormPage() {
           type="button"
           disabled={saving}
           onClick={() => void onSubmit()}
-          className="ml-auto rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-50"
+          className="ml-auto rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
         >
           {saving ? f.saving : f.save}
         </button>

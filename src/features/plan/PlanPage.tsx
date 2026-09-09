@@ -80,7 +80,7 @@ export default function PlanPage() {
         action={
           <Link
             to="/quiz/new"
-            className="rounded-md bg-accent px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+            className="rounded-md bg-primary px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary/90"
           >
             {m.plan.newPaper}
           </Link>
@@ -101,7 +101,7 @@ export default function PlanPage() {
             <button
               type="button"
               onClick={openImportModal}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
             >
               {m.common.import}
             </button>
@@ -146,7 +146,7 @@ export default function PlanPage() {
               <div className="mt-4 flex gap-3">
                 <Link
                   to="/quiz/new"
-                  className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+                  className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
                 >
                   {m.plan.quizAll}
                 </Link>

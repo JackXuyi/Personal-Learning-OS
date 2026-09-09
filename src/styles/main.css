@@ -1,27 +1,67 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-@theme {
+/* ── PLOS 语义值 · 单一事实源 ────────────────────────────────
+ * 组件体系方案：docs/ui-component-system-shadcn-design-2026-09.md §5
+ * 颜色值只允许出现在此处；暗色预留（D4）：未来在 .dark 覆盖 --plos-* 即可，本轮不实现。 */
+:root {
+  /* 背景层级 */
+  --plos-app-bg: #f7f8fa; /* 应用底色（窗外留白） */
+  --plos-surface: #ffffff; /* 主内容面 */
+  --plos-subtle: #f1f3f5; /* hover / 次级块 */
+  --plos-line: #e4e4e7; /* divider / 细分隔线 */
+  /* 文字层级 */
+  --plos-ink-1: #18181b; /* 主文字 */
+  --plos-ink-2: #71717a; /* 次文字 */
+  --plos-ink-3: #a1a1aa; /* 弱化 / 占位 */
+  /* 品牌强调（唯一强调色；原 accent 更名 primary，值不变，见方案 D2） */
+  --plos-primary: #6366f1;
+  /* 状态（mastered/learning/weak/idle/failed；仅 dot/徽标用） */
+  --plos-state-mastered: #059669;
+  --plos-state-learning: #6366f1;
+  --plos-state-weak: #d97706;
+  --plos-state-idle: #71717a;
+  --plos-state-failed: #dc2626;
+}
+
+@theme inline {
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
     "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 
-  /* ── UI Workbench 语义 token（docs/ui-workbench-plan-2026-09.md §5.2）── */
-  /* 背景层级 */
-  --color-app-bg: #f7f8fa; /* 应用底色（窗外留白） */
-  --color-surface: #ffffff; /* 主内容面 */
-  --color-subtle: #f1f3f5; /* hover / 次级块 */
-  --color-line: #e4e4e7; /* divider / 细分隔线 */
-  /* 文字层级 */
-  --color-ink-1: #18181b; /* 主文字 */
-  --color-ink-2: #71717a; /* 次文字 */
-  --color-ink-3: #a1a1aa; /* 弱化 / 占位 */
-  /* 强调（唯一强调色，收敛使用） */
-  --color-accent: #6366f1;
-  /* 状态（mastered/learning/weak/idle/failed） */
-  --color-state-mastered: #059669;
-  --color-state-learning: #6366f1;
-  --color-state-weak: #d97706;
-  --color-state-idle: #71717a;
-  --color-state-failed: #dc2626;
+  /* ── PLOS 语义 token（原名保留，业务代码继续直接使用）── */
+  --color-app-bg: var(--plos-app-bg);
+  --color-surface: var(--plos-surface);
+  --color-subtle: var(--plos-subtle);
+  --color-line: var(--plos-line);
+  --color-ink-1: var(--plos-ink-1);
+  --color-ink-2: var(--plos-ink-2);
+  --color-ink-3: var(--plos-ink-3);
+  --color-primary: var(--plos-primary); /* 品牌强调（原 accent） */
+  --color-state-mastered: var(--plos-state-mastered);
+  --color-state-learning: var(--plos-state-learning);
+  --color-state-weak: var(--plos-state-weak);
+  --color-state-idle: var(--plos-state-idle);
+  --color-state-failed: var(--plos-state-failed);
+
+  /* ── shadcn/ui 角色桥接（ui 生成组件消费；映射见方案 §5.3）── */
+  --color-background: var(--plos-app-bg);
+  --color-foreground: var(--plos-ink-1);
+  --color-card: var(--plos-surface);
+  --color-card-foreground: var(--plos-ink-1);
+  --color-popover: var(--plos-surface);
+  --color-popover-foreground: var(--plos-ink-1);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--plos-subtle);
+  --color-secondary-foreground: var(--plos-ink-2);
+  --color-muted: var(--plos-subtle);
+  --color-muted-foreground: var(--plos-ink-2);
+  --color-accent: var(--plos-subtle); /* hover / 选中填充（shadcn 语义，非品牌色） */
+  --color-accent-foreground: var(--plos-ink-1);
+  --color-destructive: var(--plos-state-failed);
+  --color-destructive-foreground: #ffffff;
+  --color-border: var(--plos-line);
+  --color-input: var(--plos-line);
+  --color-ring: var(--plos-primary);
 }
 
 /* 全局基础样式，避免应用出现未加载样式的背景闪烁 */

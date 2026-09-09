@@ -135,7 +135,7 @@ export default function QuizCenterPage() {
         action={
           <Link
             to="/quiz/new"
-            className="rounded-md bg-accent px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+            className="rounded-md bg-primary px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary/90"
           >
             {c.newPaper}
           </Link>
@@ -163,7 +163,7 @@ export default function QuizCenterPage() {
                   <p className="text-sm text-ink-2">{c.recommendedNone}</p>
                   <Link
                     to="/plan"
-                    className="shrink-0 text-xs font-medium text-accent hover:text-accent/70"
+                    className="shrink-0 text-xs font-medium text-primary hover:text-primary/70"
                   >
                     {c.recommendedGoPlan}
                   </Link>
@@ -180,7 +180,7 @@ export default function QuizCenterPage() {
                 <p className="mt-1 text-sm text-ink-2">{c.noPaperDesc}</p>
                 <button
                   onClick={() => navigate("/quiz/new")}
-                  className="mt-4 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+                  className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
                 >
                   {c.firstPaper}
                 </button>
@@ -193,7 +193,7 @@ export default function QuizCenterPage() {
                 <p className="mt-1 text-sm text-ink-2">{c.needImportDesc}</p>
                 <button
                   onClick={openImportModal}
-                  className="mt-4 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+                  className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
                 >
                   {c.goImport}
                 </button>
@@ -329,7 +329,7 @@ function PaperRowLine({
         <button
           type="button"
           onClick={onAction}
-          className="shrink-0 text-xs font-medium text-accent transition-colors hover:text-accent/70"
+          className="shrink-0 text-xs font-medium text-primary transition-colors hover:text-primary/70"
         >
           {actionLabel}
         </button>

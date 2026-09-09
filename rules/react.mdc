@@ -1,5 +1,5 @@
 ---
-description: Tailwind 4 + semantic tokens + primitives conventions for PLOS React pages (relative imports, i18n copy).
+description: Tailwind 4 + semantic tokens + UI Kit/primitives conventions for PLOS React pages (component policy, i18n copy).
 globs: src/**/*.tsx
 alwaysApply: false
 ---
@@ -9,24 +9,32 @@ alwaysApply: false
 ## Styling
 
 - Prefer **Tailwind CSS 4** utility classes over hand-written CSS.
-- Global tokens live in `src/styles/main.css` `@theme` (semantic: `app-bg` `surface` `subtle` `line` `ink-1..3` `accent` `state-*`). Reuse those tokens (`bg-surface`, `text-ink-2`, …); avoid scattering new hex values.
-- Reuse `src/components/primitives.tsx`（`Section`、`KnowledgeRow`、`EvidenceRow`、`ActionCard`、`Card`、`Stat`、`DeltaBadge`）and `src/components/layout/AppShell.tsx`（`PageContainer`）before inventing new atoms.
+- Global tokens live in `src/styles/main.css`（`:root` 语义值 + `@theme inline`：PLOS 语义 `app-bg` `surface` `subtle` `line` `ink-1..3` `primary` `state-*`，以及 shadcn 角色桥接 `background/card/foreground/muted/accent/border/ring/…`）。Reuse those tokens（`bg-surface`, `text-ink-2`, `bg-primary`, …）; avoid scattering new hex values. 映射见 `docs/ui-component-system-shadcn-design-2026-09.md` §5.3。
+- Reuse `src/components/ui/*`（**UI Kit**，shadcn/ui 风格、Base UI 底层、代码入库自有）与 `src/components/primitives.tsx`（`Section`、`KnowledgeRow`、`EvidenceRow`、`ActionCard`、`Card`、`Stat`、`DeltaBadge`）以及 `src/components/layout/AppShell.tsx`（`PageContainer`）before inventing new atoms.
 - State semantic colors (mastered/learning/weak/idle/failed) apply to **dot/badges only**, not full backgrounds.
-- Do not add Ant Design, Radix/shadcn, Emotion/styled-components, or ahooks.
+
+## Component policy（组件来源优先级）
+
+1. 先查 `src/components/ui/*` 是否有现成控件（button/input/dialog/…）；有则直接 import `@/components/ui/xxx` 或用相对导入。
+2. 缺失的受控交互组件（浮层/菜单/弹窗/键盘导航类）：优先按 shadcn 惯例自建进 `ui/`（`cva` + 语义 token + `data-slot` + React 19 无 forwardRef），**不得**在业务代码里用原生 `<select>` / `window.confirm` 等绕过。
+3. **不引入** antd、Radix UI、MUI、Emotion、styled-components、ahooks。Base UI（`@base-ui/react`）由 `ui/` 层封装后供上层使用，业务代码不直接 import。
+4. 领域组合语义（卡、行、徽标）仍走 `primitives.tsx` / feature 组件。
 
 ## Language
 
 - **Talk to the user in 中文.**
 - **Comments:** follow the file (repo defaults to 中文注释).
-- **User-facing copy:** always via `src/i18n` (`useI18n`, `messages/zh.ts` + `messages/en.ts` pairs) — never hardcode.
+- **User-facing copy:** always via `src/i18n` (`useI18n`, `messages/zh.ts` + `messages/en.ts` pairs) — never hardcode. `components/ui/*` 是纯展示控件，不含文案；文案由调用方传入。
 
 ## Tooling
 
 - Do not add demo pages or extra README files unless the user asks.
 - Prefer existing stores/hooks (`src/stores/*`, feature hooks) over new global state.
 - Keep files ≤ 700 lines; split by responsibility.
+- 新增/改动 UI 前先过 `skills/ui-impl-tokens/SKILL.md`。
 
 ## Related
 
 - Full UI implementation spec: `skills/ui-impl-tokens/SKILL.md`
+- Component system design: `docs/ui-component-system-shadcn-design-2026-09.md`
 - Global style rules: [engineering-code-style.mdc](engineering-code-style.mdc)

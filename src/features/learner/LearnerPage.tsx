@@ -12,7 +12,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, Section, Stat } from "../../components/primitives";
+import { buttonVariants } from "../../components/ui/button";
 import { PageContainer } from "../../components/layout/AppShell";
+import { cn } from "../../lib/utils";
 import type { LearnerState } from "../../domain";
 import { applyForgetting } from "../../engine";
 import { storage } from "../../stores/useLoopStore";
@@ -88,7 +90,7 @@ export default function LearnerPage() {
           <p className="mt-1 text-sm text-ink-2">{lr.noRecordDesc}</p>
           <Link
             to="/plan"
-            className="mt-4 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+            className={cn(buttonVariants({ variant: "default" }), "mt-4 rounded-lg")}
           >
             {lr.goPlan}
           </Link>
@@ -231,7 +233,7 @@ function ChapterLine({
     <Link to={chapterPath(id)} className="group flex items-center justify-between gap-3 border-b border-line py-2 text-sm last:border-b-0">
       <span className="flex min-w-0 items-center gap-2">
         <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
-        <span className="truncate text-ink-1 group-hover:text-accent">{title}</span>
+        <span className="truncate text-ink-1 group-hover:text-primary">{title}</span>
       </span>
       <span className="shrink-0 text-xs tabular-nums text-ink-2">
         {Math.round(mastery * 100)}%

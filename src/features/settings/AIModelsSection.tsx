@@ -1,14 +1,9 @@
 import { useState } from "react";
 import { Card } from "../../components/primitives";
-import {
-  buildActiveProvider,
-  useSettingsStore,
-} from "../../stores/useSettingsStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useI18n } from "../../i18n";
 import type { ActiveSource } from "../../ai/active";
 import { labelOfLocalModel, labelOfProvider } from "../../ai/presets";
-import { testConnection } from "../../ai/connection";
-import { hasKeyring } from "../../ai/vault";
 import BuiltinModelsPanel from "./BuiltinModelsPanel";
 import ApiModelsTab from "./ApiModelsTab";
 
@@ -21,27 +16,13 @@ import ApiModelsTab from "./ApiModelsTab";
  * `buildActiveProvider()` 读取,下次进入功能即生效。
  *
  * B 案 token 化:成功 → state-mastered;警告 → state-weak;错误 → state-failed;
- * 强调操作 → accent。无功能回退。
+ * 强调操作 → primary。无功能回退。
  */
 
 type Tab = "local" | "api";
 
-type Retest =
-  | { state: "idle" }
-  | { state: "testing" }
-  | { state: "ok"; latencyMs: number }
-  | { state: "fail"; reason: string; hint: string };
-
 const apiActiveOf = (a: ActiveSource | null) =>
   a && a.source === "api" ? a : null;
-
-function formatTime(ts: number, today: string): string {
-  const d = new Date(ts);
-  const now = new Date();
-  const sameDay = d.toDateString() === now.toDateString();
-  const hm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  return sameDay ? `${today} ${hm}` : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
-}
 
 export default function AIModelsSection() {
   const saved = useSettingsStore();
@@ -54,14 +35,9 @@ export default function AIModelsSection() {
     saved.active?.source === "api" ? "api" : "local",
   );
   const [savedFlash, setSavedFlash] = useState(false);
-  const [retest, setRetest] = useState<Retest>({ state: "idle" });
 
   const { active, providerReady } = saved;
   const apiSaved = apiActiveOf(active);
-
-  /** 实时就绪判定:直接问「当前 provider 能否调用」(非缓存 providerReady)。
-   *  模型文件被删 / Key 被清 → 这里立即反映为不可用。 */
-  const liveReady = active !== null && buildActiveProvider().isConfigured();
 
   const flash = () => {
     setSavedFlash(true);
@@ -79,25 +55,6 @@ export default function AIModelsSection() {
     latencyMs?: number,
   ) => {
     saveActive(api, { testedOk, latencyMs });
-  };
-
-  /** 对「已保存的当前 API 模型」再做一次真实连接测试(不经表单草稿)。 */
-  const retestActive = async () => {
-    if (active?.source !== "api") return;
-    setRetest({ state: "testing" });
-    const cfg = {
-      kind: active.provider,
-      baseUrl: active.baseUrl.trim() || undefined,
-      model: active.model.trim() || undefined,
-      apiKey: active.apiKey.trim() || undefined,
-    };
-    const result = await testConnection(cfg);
-    if (result.ok) {
-      saveActive(active, { testedOk: true, latencyMs: result.latencyMs });
-      setRetest({ state: "ok", latencyMs: result.latencyMs });
-    } else {
-      setRetest({ state: "fail", reason: result.reason, hint: result.hint });
-    }
   };
 
   // ---- Active Banner 文案 ----
@@ -169,7 +126,7 @@ export default function AIModelsSection() {
                 onClick={() => setTab(value)}
                 className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   tab === value
-                    ? "bg-surface text-accent shadow-sm"
+                    ? "bg-surface text-primary shadow-sm"
                     : "text-ink-2 hover:text-ink-1"
                 }`}
               >
@@ -180,7 +137,7 @@ export default function AIModelsSection() {
 
           {tab === "local" ? (
             <div>
-              <p className="mb-3 text-xs font-medium text-accent">{s.localHint}</p>
+              <p className="mb-3 text-xs font-medium text-primary">{s.localHint}</p>
               <BuiltinModelsPanel
                 activeModel={active?.source === "local" ? active.model : null}
                 onActivate={onLocalActivate}

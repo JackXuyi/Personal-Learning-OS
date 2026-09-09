@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 import type { MasteryBand } from "../engine";
 import { useI18n } from "../i18n";
+import { Button } from "./ui/button";
 
 /**
  * 公共 UI 原语（B 案语义 token，docs/ui-workbench-plan-2026-09.md §5）。
  *
  * 约定：
- * - 中性色一律走语义 token（surface / line / subtle / ink-1..3 / accent）；
+ * - 中性色一律走语义 token（surface / line / subtle / ink-1..3 / primary）；
  * - `Card` 语义收窄：仅主行动卡 / 空态卡使用；普通内容块用 divider + 留白；
  * - U0 起新增 Workbench 三件套：`Section`（divider 标题）、`KnowledgeRow`（知识行）、
  *   `EvidenceRow`（证据行）、`ActionCard`（下一步动作卡，全站唯一允许「抬升」的主卡）。
@@ -93,7 +94,7 @@ export function Bar({
     <div className="relative">
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-subtle">
         <div
-          className={`h-full rounded-full transition-all ${className || "bg-accent"}`}
+          className={`h-full rounded-full transition-all ${className || "bg-primary"}`}
           style={{ width: `${Math.min(100, pct)}%` }}
         />
       </div>
@@ -192,7 +193,7 @@ export function KnowledgeRow({
           <button
             type="button"
             onClick={onAction}
-            className="text-xs font-medium text-accent transition-colors hover:text-accent/70"
+            className="text-xs font-medium text-primary transition-colors hover:text-primary/70"
           >
             {actionLabel}
           </button>
@@ -284,7 +285,7 @@ export function ActionCard({
             <p className="text-right text-xs font-medium tabular-nums text-ink-2">
               {Math.round(mastery * 100)}%
             </p>
-            <Bar value={mastery} className="mt-1 bg-accent" />
+            <Bar value={mastery} className="mt-1 bg-primary" />
           </div>
         ) : null}
       </div>
@@ -304,13 +305,9 @@ export function ActionCard({
 
       <div className="mt-4 flex items-center justify-end gap-3">
         {eta ? <span className="text-xs text-ink-3">{eta}</span> : null}
-        <button
-          type="button"
-          onClick={onCta}
-          className="rounded-md bg-accent px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent/90"
-        >
+        <Button type="button" onClick={onCta}>
           {ctaLabel}
-        </button>
+        </Button>
       </div>
     </div>
   );

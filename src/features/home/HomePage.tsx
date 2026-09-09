@@ -135,7 +135,7 @@ function TodayView() {
           value={readiness}
           target={MASTERY_THRESHOLD}
           targetLabel={m.home.targetOf(Math.round(MASTERY_THRESHOLD * 100))}
-          className="bg-accent"
+          className="bg-primary"
         />
       </div>
 
@@ -152,7 +152,7 @@ function TodayView() {
             title={m.home.todayTitle(items.length)}
             className="mt-6"
             action={
-              <Link to="/plan" className="text-xs font-medium text-accent hover:text-accent/70">
+              <Link to="/plan" className="text-xs font-medium text-primary hover:text-primary/70">
                 {m.home.viewPlan} →
               </Link>
             }
@@ -183,7 +183,7 @@ function TodayView() {
         </>
       ) : (
         <div className="mt-5 flex justify-end">
-          <Link to="/plan" className="text-xs font-medium text-accent hover:text-accent/70">
+          <Link to="/plan" className="text-xs font-medium text-primary hover:text-primary/70">
             {m.home.viewPlan} →
           </Link>
         </div>
@@ -280,7 +280,7 @@ function GoalContext() {
           setPickId(v);
           void switchGoal(v, m);
         }}
-        className="max-w-64 rounded-md border border-line bg-surface px-2 py-1 text-sm font-medium text-ink-1 outline-none transition-colors focus:border-accent disabled:opacity-50"
+        className="max-w-64 rounded-md border border-line bg-surface px-2 py-1 text-sm font-medium text-ink-1 outline-none transition-colors focus:border-primary disabled:opacity-50"
       >
         {goals.map((g) => (
           <option key={g.id} value={g.id}>
@@ -290,7 +290,7 @@ function GoalContext() {
       </select>
       <Link
         to="/goals"
-        className="text-xs font-medium text-ink-3 transition-colors hover:text-accent"
+        className="text-xs font-medium text-ink-3 transition-colors hover:text-primary"
       >
         {m.home.manageGoals}
       </Link>
@@ -455,7 +455,7 @@ function AllDoneCard() {
       <div className="mt-4 flex gap-3">
         <Link
           to="/quiz"
-          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
         >
           {m.home.goQuizReinforce}
         </Link>
@@ -481,7 +481,7 @@ function EmptyState() {
         <button
           type="button"
           onClick={openImportModal}
-          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
         >
           {m.common.import}
         </button>
@@ -506,7 +506,7 @@ function NoChapterCard() {
       <div className="mt-4 flex gap-3">
         <Link
           to="/learn"
-          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
         >
           {m.home.goCatalog}
         </Link>

@@ -136,7 +136,7 @@ export default function ChapterReaderPage() {
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
         <p className="text-base font-semibold text-ink-1">{t.missingTitle}</p>
         <p className="mt-1 text-sm text-ink-2">{t.missingDesc}</p>
-        <Link to="/learn" className="mt-4 inline-block text-sm font-medium text-accent hover:underline">
+        <Link to="/learn" className="mt-4 inline-block text-sm font-medium text-primary hover:underline">
           {t.backToCatalog}
         </Link>
       </div>
@@ -159,7 +159,7 @@ export default function ChapterReaderPage() {
       {/* 面包屑 */}
       <div className="mb-4 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <Link to="/learn" className="text-xs text-ink-3 transition-colors hover:text-accent">
+          <Link to="/learn" className="text-xs text-ink-3 transition-colors hover:text-primary">
             {t.backCatalogShort}
           </Link>
           <p className="mt-0.5 truncate text-xs text-ink-3">
@@ -224,7 +224,7 @@ export default function ChapterReaderPage() {
               action={
                 <Link
                   to={`/learn/${chapter.id}/graph`}
-                  className="text-xs font-medium text-ink-3 transition-colors hover:text-accent"
+                  className="text-xs font-medium text-ink-3 transition-colors hover:text-primary"
                 >
                   {t.openGraph}
                 </Link>
@@ -243,7 +243,7 @@ export default function ChapterReaderPage() {
                       onClick={() => setActiveChip(active ? -1 : i)}
                       className={`rounded-lg border px-2.5 py-1 text-left text-xs leading-5 transition-colors ${
                         active
-                          ? "border-accent bg-accent/5 text-ink-1"
+                          ? "border-primary bg-primary/5 text-ink-1"
                           : "border-line bg-surface text-ink-2 hover:border-ink-3/40"
                       }`}
                     >
@@ -294,7 +294,7 @@ export default function ChapterReaderPage() {
           {chapter.status === "ready" && !dueReview ? (
             <Link
               to="/plan"
-              className="hidden text-xs font-medium text-ink-3 transition-colors hover:text-accent sm:inline-block"
+              className="hidden text-xs font-medium text-ink-3 transition-colors hover:text-primary sm:inline-block"
             >
               {t.toPlan} →
             </Link>
@@ -309,7 +309,7 @@ export default function ChapterReaderPage() {
           {dueReview ? (
             <button
               onClick={markReviewed}
-              className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent/90"
+              className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90"
             >
               {t.markReviewed}
             </button>
@@ -318,7 +318,7 @@ export default function ChapterReaderPage() {
               onClick={() =>
                 navigate(`/quiz/new?doc=${doc.id}&chapters=${chapter.id}&mode=unit-test`)
               }
-              className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent/90"
+              className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90"
             >
               {t.goQuiz}
             </button>
@@ -326,7 +326,7 @@ export default function ChapterReaderPage() {
             <button
               onClick={markReady}
               disabled={chapter.status === "mastered" || chapter.status === "retake"}
-              className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent/90 disabled:opacity-50"
+              className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
             >
               {chapter.status === "not-started" || chapter.status === "learning" ? t.markDone : t.doneLabel}
             </button>

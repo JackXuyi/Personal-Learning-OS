@@ -86,7 +86,7 @@ export default function GithubPanel({ onPreview, disabled }: GithubPanelProps) {
             placeholder={fmt.placeholder}
             disabled={disabled}
             data-testid="github-url-input"
-            className="w-full rounded-lg border border-line bg-app-bg px-3 py-2 font-mono text-xs text-ink-1 outline-none transition-colors placeholder:text-ink-3 focus:border-accent disabled:opacity-50"
+            className="w-full rounded-lg border border-line bg-app-bg px-3 py-2 font-mono text-xs text-ink-1 outline-none transition-colors placeholder:text-ink-3 focus:border-primary disabled:opacity-50"
           />
           <button
             onClick={resolve}

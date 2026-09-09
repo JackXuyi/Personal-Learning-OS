@@ -273,7 +273,7 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
           onChange={(e) => setTitle(e.target.value)}
           placeholder={fmt.titlePlaceholder}
           disabled={busy}
-          className="w-full rounded-lg border border-line bg-app-bg px-3 py-2 text-sm text-ink-1 outline-none transition-colors placeholder:text-ink-3 focus:border-accent disabled:opacity-50"
+          className="w-full rounded-lg border border-line bg-app-bg px-3 py-2 text-sm text-ink-1 outline-none transition-colors placeholder:text-ink-3 focus:border-primary disabled:opacity-50"
         />
         <textarea
           value={content}
@@ -281,7 +281,7 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
           placeholder={fmt.bodyPlaceholder}
           rows={8}
           disabled={busy}
-          className="w-full resize-y rounded-lg border border-line bg-app-bg px-3 py-2 font-mono text-xs leading-relaxed text-ink-1 outline-none transition-colors placeholder:text-ink-3 focus:border-accent disabled:opacity-50"
+          className="w-full resize-y rounded-lg border border-line bg-app-bg px-3 py-2 font-mono text-xs leading-relaxed text-ink-1 outline-none transition-colors placeholder:text-ink-3 focus:border-primary disabled:opacity-50"
         />
         <div className="flex items-center gap-2">
           <span className="text-xs text-ink-3">{fmt.format}</span>
@@ -289,7 +289,7 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
             value={format}
             onChange={(e) => setFormat(e.target.value as DocumentFormat)}
             disabled={busy}
-            className="rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink-1 outline-none transition-colors focus:border-accent disabled:opacity-50"
+            className="rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink-1 outline-none transition-colors focus:border-primary disabled:opacity-50"
           >
             {FORMAT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -318,7 +318,7 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
         <div className="rounded-xl border border-line bg-subtle/60 px-4 py-3">
           <p className="text-sm font-semibold text-ink-1">{fmt.progressTitle}</p>
           <p className="mt-1 flex items-center gap-2 text-sm text-ink-2">
-            <span className="mt-1 h-3 w-3 shrink-0 animate-spin rounded-full border border-accent/30 border-t-accent" />
+            <span className="mt-1 h-3 w-3 shrink-0 animate-spin rounded-full border border-primary/30 border-t-primary" />
             <span className="min-w-0 truncate">
               {fmt.batch.importing(batchTick.i, batchTick.total, batchTick.title)}
             </span>
@@ -503,7 +503,7 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
               data-testid={`import-source-tab-${key}`}
               className={`rounded-t-lg border-b-2 px-3 py-1.5 text-sm transition-colors ${
                 tab === key
-                  ? "border-accent font-medium text-ink-1"
+                  ? "border-primary font-medium text-ink-1"
                   : "border-transparent text-ink-3 hover:text-ink-1"
               } disabled:opacity-40`}
             >
@@ -543,7 +543,7 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
               {finishedActionLabel ? (
                 <button
                   onClick={primaryAction}
-                  className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
                 >
                   {finishedActionLabel}
                 </button>
@@ -554,7 +554,7 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
               onClick={runTabAction}
               disabled={primaryDisabled}
               data-testid="import-primary-btn"
-              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-40"
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-40"
             >
               {primaryLabel}
             </button>
@@ -569,7 +569,7 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
 function PhaseIcon({ status }: { status: PhaseStatus }) {
   if (status === "active") {
     return (
-      <span className="mt-1 h-3 w-3 shrink-0 animate-spin rounded-full border border-accent/30 border-t-accent" />
+      <span className="mt-1 h-3 w-3 shrink-0 animate-spin rounded-full border border-primary/30 border-t-primary" />
     );
   }
   if (status === "done") {

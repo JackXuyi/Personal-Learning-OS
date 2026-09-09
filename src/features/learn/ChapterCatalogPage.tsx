@@ -181,7 +181,7 @@ export default function ChapterCatalogPage() {
         action={
           <button
             onClick={openImportModal}
-            className="rounded-md bg-accent px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+            className="rounded-md bg-primary px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary/90"
           >
             ＋ {m.common.import}
           </button>
@@ -204,7 +204,7 @@ export default function ChapterCatalogPage() {
                     key={v}
                     onClick={() => setFilter(v)}
                     className={`rounded-md px-3 py-1 text-sm font-medium transition ${
-                      filter === v ? "bg-accent text-white" : "text-ink-2 hover:text-ink-1"
+                      filter === v ? "bg-primary text-white" : "text-ink-2 hover:text-ink-1"
                     }`}
                   >
                     {label}
@@ -218,7 +218,7 @@ export default function ChapterCatalogPage() {
               placeholder={cat.searchPlaceholder}
               aria-label={cat.searchPlaceholder}
               spellCheck={false}
-              className="h-8 w-64 rounded-md border border-line bg-surface px-3 text-sm text-ink-1 outline-none transition-colors placeholder:text-ink-3 focus:border-accent"
+              className="h-8 w-64 rounded-md border border-line bg-surface px-3 text-sm text-ink-1 outline-none transition-colors placeholder:text-ink-3 focus:border-primary"
             />
           </div>
           <p className="mt-1.5 text-xs text-ink-3">{cat.hint}</p>
@@ -232,7 +232,7 @@ export default function ChapterCatalogPage() {
           <p className="mt-1 text-sm text-ink-2">{cat.emptyDesc}</p>
           <button
             onClick={openImportModal}
-            className="mt-4 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+            className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
           >
             {cat.emptyImport}
           </button>
@@ -381,7 +381,7 @@ export default function ChapterCatalogPage() {
                     <button
                       onClick={() => splitNow(d.id)}
                       disabled={busyDocId === d.id || !d.textPreview}
-                      className="rounded-md bg-surface px-2 py-0.5 text-xs font-medium text-accent ring-1 ring-line transition-colors hover:bg-subtle disabled:opacity-40"
+                      className="rounded-md bg-surface px-2 py-0.5 text-xs font-medium text-primary ring-1 ring-line transition-colors hover:bg-subtle disabled:opacity-40"
                     >
                       {busyDocId === d.id ? cat.splitting : cat.splitNow}
                     </button>

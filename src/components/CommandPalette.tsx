@@ -365,7 +365,7 @@ export default function CommandPalette() {
                         cmd.run();
                       }}
                       className={`flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm transition-colors ${
-                        isActive ? "bg-accent/10 text-accent" : "text-ink-1"
+                        isActive ? "bg-primary/10 text-primary" : "text-ink-1"
                       }`}
                     >
                       <span className="min-w-0 truncate">

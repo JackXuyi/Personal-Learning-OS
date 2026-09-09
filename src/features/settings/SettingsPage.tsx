@@ -88,7 +88,7 @@ export default function SettingsPage() {
             onClick={() => setSection(key)}
             className={`flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               section === key
-                ? "bg-surface text-accent shadow-sm"
+                ? "bg-surface text-primary shadow-sm"
                 : "text-ink-2 hover:bg-subtle hover:text-ink-1"
             }`}
           >
@@ -220,7 +220,7 @@ function AppearanceSection({
               onClick={() => setLangMode(value)}
               className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 langMode === value
-                  ? "bg-surface text-accent shadow-sm"
+                  ? "bg-surface text-primary shadow-sm"
                   : "text-ink-2 hover:text-ink-1"
               }`}
             >

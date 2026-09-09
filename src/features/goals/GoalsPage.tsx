@@ -102,7 +102,7 @@ export default function GoalsPage() {
         action={
           <Link
             to="/goals/new"
-            className="shrink-0 rounded-md bg-accent px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+            className="shrink-0 rounded-md bg-primary px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary/90"
           >
             {g.newGoal}
           </Link>
@@ -126,7 +126,7 @@ export default function GoalsPage() {
           <div className="mt-4">
             <Link
               to="/goals/new"
-              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
             >
               {g.newGoal}
             </Link>
@@ -198,7 +198,7 @@ function GoalGroup({
                     </span>
                     {rd.active ? (
                       <span className="flex items-center gap-1 rounded-full border border-line bg-subtle px-2 py-0.5 text-[10px] font-medium text-ink-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                         {g.activeTag}
                       </span>
                     ) : null}
@@ -247,7 +247,7 @@ function GoalGroup({
                       type="button"
                       disabled={busyId !== undefined}
                       onClick={() => void onSwitch(rd.goal.id)}
-                      className="text-xs font-medium text-ink-2 transition-colors hover:text-accent disabled:opacity-40"
+                      className="text-xs font-medium text-ink-2 transition-colors hover:text-primary disabled:opacity-40"
                     >
                       {busyId === rd.goal.id ? "…" : g.setActive}
                     </button>
@@ -256,14 +256,14 @@ function GoalGroup({
                   )}
                   <Link
                     to={`/goals/${rd.goal.id}`}
-                    className="text-xs font-medium text-ink-2 transition-colors hover:text-accent"
+                    className="text-xs font-medium text-ink-2 transition-colors hover:text-primary"
                   >
                     {g.edit}
                   </Link>
                 </div>
                 <Link
                   to={`/goals/${rd.goal.id}`}
-                  className="rounded-md bg-accent px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+                  className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-primary/90"
                 >
                   {g.open}
                 </Link>

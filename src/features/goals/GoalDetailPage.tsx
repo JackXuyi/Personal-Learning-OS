@@ -111,7 +111,7 @@ export default function GoalDetailPage() {
         <Card>
           <p className="text-lg font-semibold text-ink-1">{g.notFound}</p>
           <p className="mt-1 text-sm text-ink-2">{g.notFoundDesc}</p>
-          <Link to="/goals" className="mt-4 inline-block text-sm font-medium text-accent hover:underline">
+          <Link to="/goals" className="mt-4 inline-block text-sm font-medium text-primary hover:underline">
             {g.backToList}
           </Link>
         </Card>
@@ -155,7 +155,7 @@ export default function GoalDetailPage() {
       {/* READINESS 头 */}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <Link to="/goals" className="text-xs font-medium text-ink-3 hover:text-accent">
+          <Link to="/goals" className="text-xs font-medium text-ink-3 hover:text-primary">
             {g.backToList}
           </Link>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -268,7 +268,7 @@ export default function GoalDetailPage() {
           <p className="mt-2 text-sm text-ink-2">{g.detail.noScope}</p>
           <Link
             to={`/goals/${goal.id}/edit`}
-            className="mt-2 inline-block text-sm font-medium text-accent hover:text-accent/70"
+            className="mt-2 inline-block text-sm font-medium text-primary hover:text-primary/70"
           >
             {g.detail.editScope}
           </Link>
@@ -375,7 +375,7 @@ function PathCol({
             <button
               type="button"
               onClick={() => onClick(c.id)}
-              className="block w-full truncate text-left text-xs text-ink-2 transition-colors hover:text-accent"
+              className="block w-full truncate text-left text-xs text-ink-2 transition-colors hover:text-primary"
               title={chapterDisplayTitle(c, plan.docTitleOf[c.id], m)}
             >
               {chapterDisplayTitle(c, plan.docTitleOf[c.id], m)}

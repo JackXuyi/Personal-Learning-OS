@@ -8,9 +8,9 @@
 
 本地优先（local-first）、隐私优先的个人 AI 学习系统桌面应用：
 
-- 前端：React 19 + Vite 8 + TypeScript（`strict` + `verbatimModuleSyntax`）+ Tailwind CSS 4 + Zustand 5 + react-router-dom 7
+- 前端：React 19 + Vite 8 + TypeScript（`strict` + `verbatimModuleSyntax`）+ Tailwind CSS 4 + Zustand 5 + react-router-dom 7；UI Kit = shadcn/ui 风格（Base UI 底层，代码入库，见 `docs/ui-component-system-shadcn-design-2026-09.md`）
 - 桌面壳：Tauri 2（Rust），Rust 侧仅 `vault`（Keychain 密钥）与 `llm`（本地模型 sidecar / 下载 / 生成）
-- 环境：Node ≥ 22；**相对导入、无路径 alias**；无 ESLint/Prettier 配置（跟随文件风格）
+- 环境：Node ≥ 22；**相对导入为主**，`@/*` alias 仅豁免给 shadcn 生成层（`src/components/ui/*`、`src/lib/utils.ts`）；无 ESLint/Prettier 配置（跟随文件风格）
 - 领域：知识 → 章节 → 学习循环（掌握度 mastery band）→ 目标（goal）→ 计划；核心域逻辑全部纯 TS
 
 ## 目录地图
@@ -23,9 +23,11 @@
 | `src/storage` | 持久化适配层（`local.ts` / `memory.ts`）；组件不得直接碰 localStorage |
 | `src/stores` | Zustand store（`useLoopStore`、`useSessionStore`…） |
 | `src/features` | 业务页面/组件，按域分（home、plan、learn、assessment、quiz、goals、learner、knowledge、spaces、study、settings） |
-| `src/components` | 共享 UI：`primitives.tsx`（原语）、`layout/AppShell.tsx`（`PageContainer`） |
+| `src/components` | 共享 UI：`ui/`（UI Kit 生成层：button/dialog…，可改自有）、`primitives.tsx`（PLOS 领域原语）、`layout/AppShell.tsx`（`PageContainer`） |
+| `src/lib` | `utils.ts`（`cn` = clsx + tailwind-merge），供 ui 层使用 |
 | `src/i18n` | 双语字典 `messages/zh.ts` + `messages/en.ts`（**UI 文案必须成对新增**） |
-| `src/styles/main.css` | Tailwind 4 `@theme` 语义 token **唯一出处** |
+| `src/styles/main.css` | `:root` PLOS 语义值 + `@theme inline`（PLOS token 原名 + shadcn 角色桥接）**唯一出处** |
+| `components.json` | shadcn CLI 配置（根；`style: base-*` Base UI 版式） |
 | `src-tauri/src` | `lib.rs`（`generate_handler!`）、`vault.rs`、`llm/` |
 | `docs/` | 方案/计划/设计文档，命名如 `docs/ui-workbench-plan-2026-09.md` |
 | `tests/` | node 直跑纯逻辑单测（`npm run test:*`） |
@@ -54,10 +56,10 @@ Cursor / Claude 系工具会按 frontmatter 自动注入：`alwaysApply: true` �
 | `commit-conventions` | always | Conventional Commits，scope 取 PLOS 域（`ui` `i18n` `engine` `docs` `tauri` …） |
 | `docs-task-runbook` | always | 实质任务：意图 → 读 docs → 写 runbook → 逐任务执行 → 收尾同步文档 |
 | `pre-task-technical-design` | always | 实质任务先澄清 + 完整中文技术方案，用户确认后才写生产代码 |
-| `engineering-code-style` | always | 相对导入、中文注释、i18n 双语、Tailwind 4 token、`import type` |
+| `engineering-code-style` | always | 相对导入（`@/*` 仅豁免 ui/lib 层）、中文注释、i18n 双语、Tailwind 4 token、`import type` |
 | `layer-import-boundaries` | always | src ↔ src-tauri 只走 IPC；UI → stores/storage；纯逻辑不依赖 React |
 | `no-headless-browser-validation` | always | 禁止主动启动无头/任何浏览器校验样式/布局/功能（截图、DOM、视觉检查）；校验走 typecheck + node 单测 + 代码自审；仅用户显式要求浏览器级/E2E 时放行 |
-| `react.mdc` | globs `src/**/*.tsx` | Tailwind 4 + 语义 token + primitives 原语；状态色仅 dot/徽标 |
+| `react.mdc` | globs `src/**/*.tsx` | Tailwind 4 + 语义 token + UI Kit（`components/ui`）优先 + primitives 原语；状态色仅 dot/徽标 |
 | `rust.mdc` | globs `src-tauri/**/*.rs` | 模块 vault/llm → lib.rs 注册；命令 `Result<T,String>`；macOS-only vault |
 
 ## Skills：按任务类型按需加载
@@ -74,7 +76,7 @@ Cursor / Claude 系工具会按 frontmatter 自动注入：`alwaysApply: true` �
 | **诊断** | | |
 | root-cause-fix-workflow | Bug/回归/异常调查 | 先证根因（具体代码证据）再改；给最小正确修复与备选 |
 | **UI** | | |
-| ui-impl-tokens | 在 `src/` 新增/改动 React UI | token-first + Tailwind 4 + primitives 复用；默认不加 useCallback/组件库 |
+| ui-impl-tokens | 在 `src/` 新增/改动 React UI | token-first + Tailwind 4 + UI Kit/primitives 复用（含 ui/ 新建规范）；默认不加 useCallback |
 | style-optimization-workflow | 样式优化/一致性审计/设计语言提炼 | 读 token 与 UI 方案 → 短方案 → 实现 → 对抗性自审 → 按需持久化审计 |
 | **桌面/Rust** | | |
 | tauri-ipc | 涉及 `invoke`/命令注册/事件 | vault/llm 命令契约、lib.rs 注册、serde 镜像、isTauri 守卫 |
@@ -91,10 +93,10 @@ Cursor / Claude 系工具会按 frontmatter 自动注入：`alwaysApply: true` �
 
 ## 编码速记（改代码前过一遍）
 
-- **导入**：相对导入；external（`react` 在前）→ parent → sibling → `import type`
+- **导入**：相对导入为主；仅 `components/ui` 与 `lib/utils` 允许 `@/*`；external（`react` 在前）→ parent → sibling → `import type`
 - **文案**：一律 `useI18n` + `messages/zh.ts`/`en.ts` 成对；不硬编码
-- **样式**：Tailwind 4 utility + token（`--color-surface` `ink-1..3` `line` `accent` `state-*`）；新 hex 只允许进 `main.css`
-- **UI 原语**：优先 `primitives.tsx`（Section/KnowledgeRow/EvidenceRow/ActionCard/Card/Stat/DeltaBadge）与 `AppShell.PageContainer`
+- **样式**：Tailwind 4 utility + token（`--color-surface` `ink-1..3` `line` `primary` `state-*`，加 shadcn 角色 `background/card/muted/accent/border/ring`）；新 hex 只允许进 `main.css`
+- **UI 原语**：优先 `components/ui`（Button/Dialog…）与 `primitives.tsx`（Section/KnowledgeRow/EvidenceRow/ActionCard/Card/Stat/DeltaBadge）及 `AppShell.PageContainer`
 - **数据流**：组件 → `src/stores` → `src/storage`；桌面能力（Keychain/本地模型）→ `invoke("vault_*"|"llm_*")`，纯浏览器预览用 `isTauri()` 守卫
 - **Rust**：新命令在属主模块实现 → `lib.rs` `generate_handler!` 注册 → 前端封装进 `src/ai/*`
 - **测试**：`npm run typecheck`；纯逻辑单测写 `tests/*.test.ts`（`npm run test:i18n|goal|scope|eta`）；dev 端口 1420

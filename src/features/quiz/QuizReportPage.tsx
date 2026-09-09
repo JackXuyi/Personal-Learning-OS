@@ -306,7 +306,7 @@ export default function QuizReportPage() {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
         <p className="text-base font-semibold text-ink-1">{r.missingTitle}</p>
-        <Link to="/quiz" className="mt-4 inline-block text-sm text-accent hover:underline">
+        <Link to="/quiz" className="mt-4 inline-block text-sm text-primary hover:underline">
           {r.backToCenter}
         </Link>
       </div>
@@ -318,7 +318,7 @@ export default function QuizReportPage() {
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
         <p className="text-base font-semibold text-ink-1">{r.noResultTitle}</p>
         <p className="mt-1 text-sm text-ink-2">{r.noResultDesc}</p>
-        <Link to="/quiz" className="mt-4 inline-block text-sm text-accent hover:underline">
+        <Link to="/quiz" className="mt-4 inline-block text-sm text-primary hover:underline">
           {r.backToCenter}
         </Link>
       </div>
@@ -357,7 +357,7 @@ export default function QuizReportPage() {
       {/* 顶栏 */}
       <div className="mb-5 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <Link to="/quiz" className="text-xs text-ink-3 hover:text-accent">
+          <Link to="/quiz" className="text-xs text-ink-3 hover:text-primary">
             {r.backToCenter}
           </Link>
           <p className="mt-0.5 truncate text-xs text-ink-2">
@@ -404,12 +404,12 @@ export default function QuizReportPage() {
                     <button
                       onClick={() => void retrySubjectiveGrading()}
                       disabled={aiRetrying}
-                      className="rounded-full border border-accent/30 bg-accent/5 px-3 py-1 font-medium text-accent hover:bg-accent/10 disabled:opacity-50"
+                      className="rounded-full border border-primary/30 bg-primary/5 px-3 py-1 font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
                     >
                       {aiRetrying ? r.aiRetrying : r.retryAI}
                     </button>
                   ) : (
-                    <Link to="/settings" className="text-accent hover:underline">
+                    <Link to="/settings" className="text-primary hover:underline">
                       {r.goConfigAI}
                     </Link>
                   )
@@ -429,7 +429,7 @@ export default function QuizReportPage() {
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
           <button
             onClick={togglePlan}
-            className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent/90"
+            className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white hover:bg-primary/90"
           >
             {planOpen ? r.planClose : r.planGenerate}
           </button>
@@ -509,7 +509,7 @@ export default function QuizReportPage() {
           <div className="mt-3 flex justify-end border-t border-line pt-2">
             <Link
               to="/plan"
-              className="text-xs font-medium text-accent transition-colors hover:text-accent/70"
+              className="text-xs font-medium text-primary transition-colors hover:text-primary/70"
             >
               {r.planViewAll}
             </Link>
@@ -604,11 +604,11 @@ export default function QuizReportPage() {
 
                       {/* AI 批语槽（P0-3：未配置 AI 不伪造；T12 起回填批语与定位要点） */}
                       {w.aiFeedback ? (
-                        <div className="mt-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-xs leading-5 text-ink-1">
-                          <span className="font-medium text-accent">{r.aiCommentLead}</span>
+                        <div className="mt-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs leading-5 text-ink-1">
+                          <span className="font-medium text-primary">{r.aiCommentLead}</span>
                           {w.aiFeedback}
                           {w.point ? (
-                            <span className="mt-1 block text-[11px] text-accent/80">
+                            <span className="mt-1 block text-[11px] text-primary/80">
                               {r.aiPointLead(w.point)}
                             </span>
                           ) : null}
@@ -640,7 +640,7 @@ export default function QuizReportPage() {
         </Link>
         <Link
           to="/quiz"
-          className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent/90"
+          className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white hover:bg-primary/90"
         >
           {r.backCenter}
         </Link>

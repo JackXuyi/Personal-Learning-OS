@@ -92,7 +92,7 @@ export default function LocalFilePanel({ files, onFilesChange, disabled }: Local
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
         className={`block cursor-pointer rounded-xl border border-dashed border-line bg-subtle/40 px-4 py-6 text-center transition-colors ${
-          disabled ? "opacity-50" : "hover:border-accent/60 hover:bg-subtle/70"
+          disabled ? "opacity-50" : "hover:border-primary/60 hover:bg-subtle/70"
         }`}
       >
         <input
