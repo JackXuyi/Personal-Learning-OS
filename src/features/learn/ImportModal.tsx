@@ -22,6 +22,7 @@ import LocalFilePanel from "./import/LocalFilePanel";
 import GithubPanel from "./import/GithubPanel";
 import type { ImportTab, ImportUnit, ImportSummary } from "./import/types";
 import { runUnitImport, runBatchImport } from "./import/pipeline";
+import { autoIndexAfterImport } from "./index-service";
 import { Select } from "../../components/ui/select";
 import { Button } from "../../components/ui/button";
 import { fileToUnit } from "./import/local-files";
@@ -126,6 +127,8 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
         totalPoints: result.totalPoints,
       });
       if (result.chapterIds.length === 0) setNotice(fmt.tooShort);
+      // 导入成功后后台入队向量化（D2-A）：不阻塞结果卡；能力不足时内部静默跳过。
+      autoIndexAfterImport();
     } catch (err) {
       setNotice(fmt.splitFail(err instanceof Error ? err.message : String(err)));
     } finally {
@@ -149,6 +152,8 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
         ok: out.ok,
         failed: [...preFailed, ...out.failed],
       });
+      // 批量导入同样后台入队（只补缺失，重复导入不会重复算）。
+      if (out.ok.length > 0) autoIndexAfterImport();
     } catch (err) {
       setNotice(fmt.splitFail(err instanceof Error ? err.message : String(err)));
     } finally {

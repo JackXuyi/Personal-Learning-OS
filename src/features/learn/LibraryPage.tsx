@@ -7,6 +7,7 @@
  * 弹窗完成；导入复用全局 ImportModal（IMPORT_OPEN_EVENT）。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, SectionTitle } from "../../components/primitives";
 import { Button } from "../../components/ui/button";
 import { ConfirmDialog } from "../../components/ui/confirm-dialog";
@@ -20,7 +21,11 @@ import { MASTERY_THRESHOLD } from "../../domain";
 import type { Chapter, LearnerState, SourceDocument } from "../../domain";
 import { sortChaptersByOrder } from "../../domain";
 import { applyForgetting } from "../../engine";
+import { hybridSearch } from "../../ai/retrieval/hybrid-search";
+import type { SearchHit } from "../../ai/retrieval/hybrid-search";
 import { storage } from "../../stores/useLoopStore";
+import { buildActiveProvider } from "../../stores/useSettingsStore";
+import { useIndexStore } from "../../stores/useIndexStore";
 import { useI18n } from "../../i18n";
 import { SegmentedTabs } from "../../components/primitives";
 import DocumentCard from "./library/DocumentCard";
@@ -34,6 +39,13 @@ import {
   UpdateDocModal,
 } from "./library/dialogs";
 
+/** 正文检索段：命中片段的最大字符数（与方案 §7.1 一致）。 */
+const HIT_SNIPPET_CHARS = 120;
+/** 查询防抖时长（与方案 §7.4 一致）。 */
+const SEARCH_DEBOUNCE_MS = 300;
+/** 触发内容检索的最小查询长度（1 字符检索噪声过大）。 */
+const MIN_QUERY_CHARS = 2;
+
 type Filter = "all" | "unsplit" | "active";
 type Sort = "newest" | "oldest" | "title";
 type DialogState = { kind: DocActionKind; doc: SourceDocument };
@@ -41,6 +53,8 @@ type DialogState = { kind: DocActionKind; doc: SourceDocument };
 export default function LibraryPage() {
   const { m } = useI18n();
   const lib = m.learn.library;
+  const searchT = m.learn.search;
+  const navigate = useNavigate();
   const [docs, setDocs] = useState<SourceDocument[]>([]);
   const [chaptersByDoc, setChaptersByDoc] = useState<Record<string, Chapter[]>>({});
   const [learner, setLearner] = useState<LearnerState | undefined>();
@@ -56,6 +70,13 @@ export default function LibraryPage() {
   const [confirmDoc, setConfirmDoc] = useState<SourceDocument>();
   /** 切分重入锁：state 更新异步，同帧连点需 ref 兜底，避免并发 saveChapters。 */
   const splitLock = useRef(false);
+  /** 正文检索结果（RAG 接线后的 chunk 级命中）。 */
+  const [contentHits, setContentHits] = useState<SearchHit[]>([]);
+  const [searchMode, setSearchMode] = useState<"hybrid" | "fulltext">("fulltext");
+  const [searching, setSearching] = useState(false);
+  /** 向量索引进度（仅用于徽标提示，检索本身不等索引）。 */
+  const indexRunning = useIndexStore((s) => s.running);
+  const indexProgress = useIndexStore((s) => s.progress);
 
   const load = async () => {
     const [ds, ls] = await Promise.all([storage.listDocuments(), storage.getLearnerState()]);
@@ -75,6 +96,44 @@ export default function LibraryPage() {
     window.addEventListener(DOCS_CHANGED_EVENT, h);
     return () => window.removeEventListener(DOCS_CHANGED_EVENT, h);
   }, []);
+
+  /**
+   * 正文检索（内容级）：查询防抖 300ms → 混合检索（FTS + 向量，RRF 融合）。
+   *
+   * 与上面的「元信息过滤」分工明确：
+   * - 元信息（标题 / 来源 / 章标题 / 要点）由页面本地过滤承担，决定**卡片网格**显示什么；
+   * - 正文内容由本效果检索，决定**正文命中段**显示什么。
+   * 两者互不替代——资料列表始终是页面主体（产品红线）。
+   */
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < MIN_QUERY_CHARS) {
+      setContentHits([]);
+      setSearching(false);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    const timer = window.setTimeout(() => {
+      void hybridSearch(q, { storage, provider: buildActiveProvider(), limit: 8 })
+        .then((r) => {
+          if (cancelled) return;
+          setContentHits(r.hits);
+          setSearchMode(r.mode);
+        })
+        .catch(() => {
+          // 检索失败不该打断页面：静默清空正文段（元信息结果照常显示）
+          if (!cancelled) setContentHits([]);
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false);
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [query]);
 
   /** 过滤 + 搜索 + 排序后的可见资料。 */
   const visible = useMemo(() => {
@@ -223,6 +282,53 @@ export default function LibraryPage() {
             />
           </div>
         </div>
+      ) : null}
+
+      {/* 正文命中（RAG 内容级检索）：无命中 / 未搜索时整段隐藏，不留空壳占位 */}
+      {searched && (searching || contentHits.length > 0) ? (
+        <section data-testid="learn-content-hits" className="mt-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-ink-3">
+              {searching ? searchT.loading : searchT.contentHits(contentHits.length)}
+            </p>
+            {indexRunning && indexProgress.total > 0 ? (
+              <span className="text-xs text-ink-3">
+                {searchT.indexing(indexProgress.done, indexProgress.total)}
+              </span>
+            ) : searchMode === "fulltext" ? (
+              <span className="text-xs text-ink-3" title={searchT.fulltextOnlyHint}>
+                {searchT.fulltextOnly} ⓘ
+              </span>
+            ) : null}
+          </div>
+          {contentHits.length > 0 ? (
+            <div className="mt-2 space-y-2">
+              {contentHits.map((hit) => (
+                <button
+                  key={hit.chunk.id}
+                  type="button"
+                  onClick={() => navigate(`/learn/chapter/${hit.chunk.chapterId}`)}
+                  className="block w-full rounded-lg border border-line bg-surface p-3 text-left transition-colors focus-visible:border-primary focus-visible:outline-none hover:border-primary"
+                >
+                  <p className="flex flex-wrap items-center gap-1.5 text-xs text-ink-3">
+                    <span className="text-ink-2">{hit.docTitle}</span>
+                    {hit.chapterTitle ? <span>· {hit.chapterTitle}</span> : null}
+                    {hit.semantic ? (
+                      <span className="rounded border border-line px-1 text-[10px] text-primary">
+                        {searchT.semanticTag}
+                      </span>
+                    ) : null}
+                  </p>
+                  <p className="mt-1 text-sm leading-relaxed text-ink-2">
+                    {hit.chunk.content.length <= HIT_SNIPPET_CHARS
+                      ? hit.chunk.content
+                      : `${hit.chunk.content.slice(0, HIT_SNIPPET_CHARS)}…`}
+                  </p>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
       {/* 就地切分的 inline 反馈（无 toast 体系，与详情页 SplitTab 同款样式） */}
