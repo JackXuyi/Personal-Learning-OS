@@ -7,13 +7,18 @@
  */
 import type {
   Chapter,
+  Chunk,
+  Embedding,
   EvidenceEntry,
   KnowledgeGraph,
+  KnowledgeRelation,
+  KnowledgeUnit,
   LearnerState,
   LearningGoal,
   Paper,
   PaperAnswers,
   PaperResult,
+  Section,
   SourceDocument,
 } from "../domain";
 import { InMemoryStorage } from "./memory";
@@ -21,6 +26,12 @@ import type { StorageAdapter } from "./types";
 
 const KEY_DOCUMENTS = "plos.documents";
 const KEY_CHAPTERS = "plos.chapters";
+// RAG 存储层新增
+const KEY_SECTIONS = "plos.sections";
+const KEY_CHUNKS = "plos.chunks";
+const KEY_KNOWLEDGE_UNITS = "plos.knowledge-units";
+const KEY_KNOWLEDGE_RELATIONS = "plos.knowledge-relations";
+const KEY_EMBEDDINGS = "plos.embeddings";
 const KEY_PAPERS = "plos.papers";
 const KEY_PAPER_DRAFTS = "plos.paper-drafts";
 const KEY_PAPER_RESULTS = "plos.paper-results";
@@ -50,6 +61,18 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     this.chaptersByDocument = new Map(
       Object.entries(load<Record<string, Chapter[]>>(KEY_CHAPTERS, {})),
     );
+    // RAG 存储层：Section / Chunk / Knowledge / Relation / Embedding
+    this.sections = new Map(load<Section[]>(KEY_SECTIONS, []).map((s) => [s.id, s]));
+    this.chunks = new Map(load<Chunk[]>(KEY_CHUNKS, []).map((c) => [c.id, c]));
+    this.knowledgeUnits = new Map(
+      load<KnowledgeUnit[]>(KEY_KNOWLEDGE_UNITS, []).map((u) => [u.id, u]),
+    );
+    this.knowledgeRelations = new Map(
+      load<KnowledgeRelation[]>(KEY_KNOWLEDGE_RELATIONS, []).map((r) => [r.id, r]),
+    );
+    this.embeddings = new Map(
+      load<Embedding[]>(KEY_EMBEDDINGS, []).map((e) => [e.id, e]),
+    );
     this.papers = new Map(load<Paper[]>(KEY_PAPERS, []).map((p) => [p.id, p]));
     this.paperDrafts = new Map(
       Object.entries(load<Record<string, PaperAnswers>>(KEY_PAPER_DRAFTS, {})),
@@ -70,6 +93,18 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
       KEY_CHAPTERS,
       JSON.stringify(Object.fromEntries(this.chaptersByDocument)),
     );
+    // RAG 存储层持久化
+    localStorage.setItem(KEY_SECTIONS, JSON.stringify([...this.sections.values()]));
+    localStorage.setItem(KEY_CHUNKS, JSON.stringify([...this.chunks.values()]));
+    localStorage.setItem(
+      KEY_KNOWLEDGE_UNITS,
+      JSON.stringify([...this.knowledgeUnits.values()]),
+    );
+    localStorage.setItem(
+      KEY_KNOWLEDGE_RELATIONS,
+      JSON.stringify([...this.knowledgeRelations.values()]),
+    );
+    localStorage.setItem(KEY_EMBEDDINGS, JSON.stringify([...this.embeddings.values()]));
     localStorage.setItem(KEY_PAPERS, JSON.stringify([...this.papers.values()]));
     localStorage.setItem(
       KEY_PAPER_DRAFTS,
@@ -95,6 +130,76 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
   }
   override async saveChapters(documentId: string, chapters: Chapter[]): Promise<void> {
     await super.saveChapters(documentId, chapters);
+    this.persist();
+  }
+
+  // ===== RAG 存储层写操作（override 以触发持久化）=====
+  override async saveSection(section: Section): Promise<void> {
+    await super.saveSection(section);
+    this.persist();
+  }
+  override async saveSections(sections: Section[]): Promise<void> {
+    await super.saveSections(sections);
+    this.persist();
+  }
+  override async deleteSection(id: string): Promise<void> {
+    await super.deleteSection(id);
+    this.persist();
+  }
+
+  override async saveChunk(chunk: Chunk): Promise<void> {
+    await super.saveChunk(chunk);
+    this.persist();
+  }
+  override async saveChunks(chunks: Chunk[]): Promise<void> {
+    await super.saveChunks(chunks);
+    this.persist();
+  }
+  override async deleteChunk(id: string): Promise<void> {
+    await super.deleteChunk(id);
+    this.persist();
+  }
+
+  override async saveKnowledgeUnit(unit: KnowledgeUnit): Promise<void> {
+    await super.saveKnowledgeUnit(unit);
+    this.persist();
+  }
+  override async saveKnowledgeUnits(units: KnowledgeUnit[]): Promise<void> {
+    await super.saveKnowledgeUnits(units);
+    this.persist();
+  }
+  override async deleteKnowledgeUnit(id: string): Promise<void> {
+    await super.deleteKnowledgeUnit(id);
+    this.persist();
+  }
+
+  override async saveRelation(relation: KnowledgeRelation): Promise<void> {
+    await super.saveRelation(relation);
+    this.persist();
+  }
+  override async saveRelations(relations: KnowledgeRelation[]): Promise<void> {
+    await super.saveRelations(relations);
+    this.persist();
+  }
+  override async deleteRelation(id: string): Promise<void> {
+    await super.deleteRelation(id);
+    this.persist();
+  }
+
+  override async saveEmbedding(embedding: Embedding): Promise<void> {
+    await super.saveEmbedding(embedding);
+    this.persist();
+  }
+  override async saveEmbeddings(embeddings: Embedding[]): Promise<void> {
+    await super.saveEmbeddings(embeddings);
+    this.persist();
+  }
+  override async deleteEmbedding(id: string): Promise<void> {
+    await super.deleteEmbedding(id);
+    this.persist();
+  }
+  override async deleteEmbeddingsByTarget(targetId: string): Promise<void> {
+    await super.deleteEmbeddingsByTarget(targetId);
     this.persist();
   }
   override async savePaper(paper: Paper): Promise<void> {
