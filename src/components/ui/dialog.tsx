@@ -5,14 +5,14 @@ import { cn } from "../../lib/utils";
 
 /**
  * Dialog（UI Kit；Base UI 底层，M2 落地，docs 方案 §6.3）。
- * 用法（受控）：
- *   <Dialog.Root open={open} onOpenChange={setOpen}>
- *     <Dialog.Content>
- *       <Dialog.Header><Dialog.Title/><Dialog.Description/></Dialog.Header>
+ * 用法（受控；`Dialog` 即 Root，不再有 `Dialog.Root` 一层）：
+ *   <Dialog open={open} onOpenChange={setOpen}>
+ *     <DialogContent>
+ *       <DialogHeader><DialogTitle/><DialogDescription/></DialogHeader>
  *       …内容…
- *       <Dialog.Footer>…按钮…</Dialog.Footer>
- *     </Dialog.Content>
- *   </Dialog.Root>
+ *       <DialogFooter>…按钮…</DialogFooter>
+ *     </DialogContent>
+ *   </Dialog>
  * 关闭方式：Esc / 点遮罩 / 右上 × / 调用方按钮置 onOpenChange(false)。
  */
 
@@ -85,5 +85,6 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-const Dialog = Object.assign(BaseDialog, {});
+/** 受控根组件（`<Dialog open onOpenChange>` 用法）。 */
+const Dialog = DialogRoot;
 export { Dialog, DialogRoot, DialogTrigger, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription };
