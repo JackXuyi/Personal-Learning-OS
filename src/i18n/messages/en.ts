@@ -334,6 +334,34 @@ export const en: Messages = {
           "First download of the recommended tier is ~2.5 GB (Qwen3.5-4B) and takes a few minutes depending on speed; downloads run in the background and can be cancelled anytime.",
       },
     },
+    /** Settings · vector index (needed by semantic retrieval). */
+    embedding: {
+      title: "Vector index",
+      desc:
+        "Build a vector index over document bodies so search can hit passages that mean the same thing in different words. Vectors stay in your local SQLite and are never uploaded.",
+      model: "Embedding model",
+      modelPlaceholder: "e.g. text-embedding-v3",
+      modelHint:
+        "Model name only; base URL and API key are inherited from the current model above.",
+      suggestion: (name: string) => `Try ${name}`,
+      endpoint: "Endpoint",
+      endpointInherit: "Inherited from current model",
+      endpointMissing: "No current model selected yet",
+      coverage: "Index coverage",
+      coverageValue: (indexed: number, total: number) => `${indexed} / ${total} blocks`,
+      coverageEmpty: "Nothing to index yet (import and split a document first)",
+      rebuild: "Rebuild index",
+      onlyMissing: "Fill missing only",
+      desktopOnly: "Desktop app required",
+      notSupported:
+        "The current model cannot embed (the built-in local model has no embedding support; configure an API model)",
+      noModel: "Enter an embedding model name first",
+      running: (done: number, total: number) => `Indexing ${done}/${total}…`,
+      failedPartial: (n: number) => `${n} blocks failed; use “Fill missing only” to retry`,
+      doneAll: "Index complete",
+      previewHint:
+        "In browser preview vectors are not persisted (storage quota), so retrieval falls back to full-text matching.",
+    },
   },
   chapter: {
     ordinal: (n: number) => `Chapter ${n}`,
@@ -651,10 +679,23 @@ export const en: Messages = {
       },
       del: {
         title: (t: string) => `Delete “${t}”?`,
-        desc: (c: number, p: number, k: number) =>
-          `This will also remove ${c} chapters, ${p} papers and ${k} concepts. This cannot be undone.`,
+        desc: (c: number, p: number, k: number, chunks: number) =>
+          `This will also remove ${c} chapters, ${p} papers, ${k} concepts${
+            chunks > 0 ? ` and ${chunks} content index blocks` : ""
+          }. This cannot be undone.`,
         confirm: "Delete",
       },
+    },
+    /** Library search · content hits section (chunk-level hits after RAG wiring). */
+    search: {
+      contentHits: (n: number) => `${n} content hits`,
+      contentEmpty: "No content match",
+      fulltextOnly: "Full-text only",
+      fulltextOnlyHint:
+        "Vector index unavailable (no embedding model configured, or index not built yet)",
+      indexing: (done: number, total: number) => `Indexing ${done}/${total}`,
+      semanticTag: "Semantic",
+      loading: "Searching…",
     },
     /** Document detail page (/learn/doc/:docId, 4 tabs). */
     detail: {

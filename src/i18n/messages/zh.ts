@@ -332,6 +332,32 @@ export const zh = {
           "首次下载设备推荐档约 2.5 GB(Qwen3.5-4B),视网速需要几分钟;下载在后台进行,可随时取消。",
       },
     },
+    /** 设置 · 向量索引（RAG 接线：语义检索所需）。 */
+    embedding: {
+      title: "向量索引",
+      desc:
+        "为资料正文建立向量索引，让搜索能命中「意思相近但用词不同」的段落。向量只存本机 SQLite，不上传。",
+      model: "Embedding 模型",
+      modelPlaceholder: "如 text-embedding-v3",
+      modelHint: "只填模型名；端点与 API Key 复用上面的「当前使用模型」。",
+      suggestion: (name: string) => `建议 ${name}`,
+      endpoint: "端点",
+      endpointInherit: "继承当前模型",
+      endpointMissing: "尚未选择「当前使用模型」",
+      coverage: "索引覆盖率",
+      coverageValue: (indexed: number, total: number) => `${indexed} / ${total} 块`,
+      coverageEmpty: "还没有可索引的内容（先导入资料并切分）",
+      rebuild: "重建索引",
+      onlyMissing: "仅补齐缺失",
+      desktopOnly: "需桌面端可用",
+      notSupported:
+        "当前模型不支持向量化（内置本地模型无 embedding 能力，请配置 API 模型）",
+      noModel: "请先填写 Embedding 模型名",
+      running: (done: number, total: number) => `索引中 ${done}/${total}…`,
+      failedPartial: (n: number) => `${n} 块失败，可再点「仅补齐缺失」重试`,
+      doneAll: "索引已完成",
+      previewHint: "浏览器预览下向量不落盘（配额所限），检索自动走全文匹配。",
+    },
   },
   chapter: {
     ordinal: (n: number) => `第 ${n} 章`,
@@ -636,10 +662,22 @@ export const zh = {
       },
       del: {
         title: (t: string) => `删除《${t}》？`,
-        desc: (c: number, p: number, k: number) =>
-          `将连带清理 ${c} 个章节、${p} 份试卷、${k} 个知识概念。此操作不可撤销。`,
+        desc: (c: number, p: number, k: number, chunks: number) =>
+          `将连带清理 ${c} 个章节、${p} 份试卷、${k} 个知识概念${
+            chunks > 0 ? `、${chunks} 块正文索引` : ""
+          }。此操作不可撤销。`,
         confirm: "删除",
       },
+    },
+    /** 资料库搜索 · 正文检索段（RAG 接线后的内容级命中）。 */
+    search: {
+      contentHits: (n: number) => `正文命中 ${n} 处`,
+      contentEmpty: "未找到正文匹配",
+      fulltextOnly: "仅全文检索",
+      fulltextOnlyHint: "向量索引不可用（未配置 Embedding 模型或尚未建索引）",
+      indexing: (done: number, total: number) => `索引中 ${done}/${total}`,
+      semanticTag: "语义命中",
+      loading: "检索中…",
     },
     /** 资料详情页（/learn/doc/:docId，4 Tab）。 */
     detail: {
