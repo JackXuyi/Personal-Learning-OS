@@ -17,8 +17,8 @@
 | T2 | 扩展 StorageAdapter 接口 | 🚧 进行中 | 2026-09-10 13:28 | — | 接口定义 |
 | T3 | InMemoryStorage 实现新方法 | ⏸️ 等待 T1 T2 | — | — | 简单 Map + 过滤 |
 | T4 | localStorage 适配器扩展 | ⏸️ 等待 T1 T2 T3 | — | — | JSON 序列化 + 键管理 |
-| T5 | SQLite DDL SQL + 迁移脚本 | 🚧 进行中 | 2026-09-10 14:05 | — | `db/schema.sql` 已建 |
-| T6 | Tauri SQLite 初始化与 CRUD 命令 | 🚧 进行中 | 2026-09-10 14:05 | — | `db/mod.rs`+`commands.rs`+注册 |
+| T5 | SQLite DDL SQL + 迁移脚本 | ✅ 完成 | 2026-09-10 14:05 | 2026-09-10 14:22 | `db/schema.sql`（112 行） |
+| T6 | Tauri SQLite 初始化与 CRUD 命令 | ✅ 完成 | 2026-09-10 14:05 | 2026-09-10 14:22 | 17 个 db_* 命令已注册 |
 | T7 | Tauri 侧工厂函数与后端选择 | ⏸️ 等待 T2 T4 T6 | — | — | `isTauri()` 条件分支 |
 | T8 | 单测：StorageAdapter 新方法 | ⏸️ 等待 T1 T3 | — | — | 内存后端注入 |
 | T9 | 迁移脚本与启动时自动迁移 | ⏸️ 等待 T5 T6 | — | — | Dev 验证 + 生产挂钩 |
