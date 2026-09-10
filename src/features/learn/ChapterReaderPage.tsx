@@ -22,7 +22,9 @@ import { applyKeyPointRating } from "../../engine";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { useI18n } from "../../i18n";
 import { chapterBadge } from "./chapter-badge";
-import ArticleBody from "./ArticleBody";
+import { pickRenderer } from "./render/renderer-registry";
+import PlainTextRenderer from "./render/PlainTextRenderer";
+import RenderErrorBoundary from "./render/RenderErrorBoundary";
 
 /** 本章证据：最近一次含本章的判卷结果（Δ 掌握度）。 */
 type ChapterEvidence =
@@ -154,9 +156,11 @@ export default function ChapterReaderPage() {
 
   const body = doc.textPreview?.slice(chapter.contentRef.start, chapter.contentRef.end) ?? "";
   const whyLead = leadOf(chapter, body);
+  /** 与「资料内容」Tab 同源：markdown 走 GFM，其余按格式回落，规则一致。 */
+  const Renderer = pickRenderer(doc.format);
 
   return (
-    <div className="mx-auto max-w-6xl px-8 py-6">
+    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8 xl:max-w-[1500px]">
       {/* 面包屑 */}
       <div className="mb-4 flex items-center justify-between gap-4">
         <div className="min-w-0">
@@ -176,13 +180,18 @@ export default function ChapterReaderPage() {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         {/* 左：章正文 */}
-        <Card className="px-8 py-7">
+        <Card className="px-4 py-5 sm:px-8 sm:py-7">
           <h1 className="text-xl font-semibold tracking-tight text-ink-1">
             {chapter.title || m.chapter.ordinal(chapter.order)}
           </h1>
-          <div className="mt-4 border-t border-line pt-5">
+          <div className="mt-4 break-words border-t border-line pt-5">
             {body.length > 0 ? (
-              <ArticleBody text={body} />
+              <RenderErrorBoundary
+                resetKey={`${doc.id}:${chapter.id}:${doc.format}`}
+                fallback={<PlainTextRenderer text={body} doc={doc} />}
+              >
+                <Renderer text={body} doc={doc} />
+              </RenderErrorBoundary>
             ) : (
               <p className="text-sm text-ink-3">{t.noSnapshot}</p>
             )}
@@ -282,8 +291,8 @@ export default function ChapterReaderPage() {
         </div>
       </div>
 
-      {/* 底部主行动 */}
-      <div className="sticky bottom-4 z-10 mt-6 flex items-center justify-between gap-4 rounded-2xl border border-line bg-surface/90 px-5 py-3.5 shadow-lg backdrop-blur">
+      {/* 底部主行动：窄屏换行，按钮不挤压提示文案 */}
+      <div className="sticky bottom-4 z-10 mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface/90 px-4 py-3.5 shadow-lg backdrop-blur sm:px-5">
         <div className="min-w-0">
           <p className="hidden text-xs text-ink-3 sm:block">
             {dueReview

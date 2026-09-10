@@ -1,9 +1,9 @@
 /**
  * 纯文本渲染器 —— pdf / docx / epub / web / note / txt / custom 的默认渲染。
  *
- * 沿用 `ArticleBody` 的行渲染规则（`#` 标题放大、空行留白、其余 pre-wrap），
- * 但数据来源改为 props，供注册表统一分派。`ArticleBody` 本身保留给阅读页，
- * 不改动其既有行为。
+ * 行渲染规则（`#` 标题放大、空行留白、其余 pre-wrap）原先定义在 `ArticleBody`；
+ * 该组件已在 v2 优化中删除（阅读页改用 `pickRenderer`），**本文件即该规则的
+ * 唯一实现** —— 需要调整纯文本观感请改这里。
  */
 import type { DocumentRendererProps } from "./renderer-registry";
 
