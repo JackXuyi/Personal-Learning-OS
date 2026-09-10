@@ -232,7 +232,7 @@ node scripts/migrate-rag-to-sqlite.mjs --in export.json --stats
 
 | ID | 问题 | 等级 | 根因 | 建议修法 |
 |----|------|------|------|----------|
-| F1 | **FTS5 中文子串检索失效** | 高（中文优先产品） | 默认 `unicode61` 分词器把连续中文整段当成**一个** token。实测："编码器由六层堆叠而成" 里 `MATCH '编码器'` 命中 0 条；`MATCH '编码器*'`（前缀）与整句才命中 | schema 改 `tokenize = 'trigram'`（SQLite ≥ 3.34，本机 3.43 支持）；代价：索引体积增大、查询词需 ≥ 3 字符，存量库要 DROP + 重建 + 全量重灌（需 `_schema_version` 升到 2 并加迁移步骤） |
+| F1 | **FTS5 中文子串检索失效** | 已修复（2026-09-10，方案 A） | 默认 `unicode61` 分词器把连续中文整段当成**一个** token。实测："编码器由六层堆叠而成" 里 `MATCH '编码器'` 命中 0 条；`MATCH '编码器*'`（前缀）与整句才命中 | ✅ 已修复：schema.sql 切 trigram + db/mod.rs::migrate v1→v2 重建重灌 + commands.db_fts_search 查询路由（≥3 字 MATCH / <3 字 LIKE 兜底）；设计见 docs/storage-architecture-rag-fts-fix-design-2026-09.md |
 | F2 | 降级态新写入的 RAG 数据不回迁 | 低 | 迁移是一次性标记制，见 T9「已知边界」 | 改为记录迁移时间戳做增量搬迁 |
 | F3 | Documents / Chapters 仍在 localStorage | 中 | T5 刻意不为这两张表建表，避免迁移期双写 | 待 F1 一起做，届时把两张表纳入 SQLite 并升 schema v2 |
 | **F4** | **Tauri IPC 契约不成立**：① 7 个命令未注册（前端报 `Command db_get_section not found`）；② 嵌套 `*Input` 字段缺 camelCase 重命名（前端发 camelCase、Rust 按 snake_case 反序列化）→ 静默 `undefined`；③ 工厂未接线，`TauriStorage` 从未被实例化 | **高**（桌面端 RAG 全链路不可用；②属静默失败，最难发现） | T6 未逐一对照 `StorageAdapter` 签名建命令；`#[tauri::command]` 只转换**顶层**参数名、嵌套结构体字段不转；T7 标注完成时只入库了 `tauri.ts` 本体 | ✅ **已修复 `39e96fa`**：补齐 7 命令 + `*Input`/`*Row`/`*Out` 统一 `#[serde(rename_all = "camelCase")]`（含 4 项 Rust 契约单测）+ 工厂接线 + `local.ts` 的 `name: string` 标注 |
@@ -267,4 +267,5 @@ node scripts/migrate-rag-to-sqlite.mjs --in export.json --stats
 |------|------|------|
 | 2026-09-10 | 初稿 Runbook（T1–T4 详细步骤 + T5–T10 占位） | WorkBuddy |
 | 2026-09-10 | 收尾：T1–T10 状态校准，补 T8/T9/T10 实施记录、交付物一览、遗留问题 F1–F3 | WorkBuddy |
+| 2026-09-10 | **F1 按方案 A 修复落地**：schema.sql 切 trigram + db/mod.rs::migrate v1→v2 重建重灌 + commands.db_fts_search 查询路由（≥3 字 MATCH / <3 字 LIKE 兜底）；cargo build 通过、sqlite3 复测中文/英文子串命中、v1→v2 迁移行数一致 | WorkBuddy |
 | 2026-09-10 | 校准：T6 命令数 24 → 26（沿革表）、T7 标注真实入库时点 `39e96fa`、补记 F4（IPC 契约）与教训 | WorkBuddy |
