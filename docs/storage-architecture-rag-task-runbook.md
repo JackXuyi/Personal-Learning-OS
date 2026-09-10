@@ -7,6 +7,7 @@
 | 执行者 | WorkBuddy |
 | 状态 | ✅ 已完成（T1–T10 全部落地） |
 | 收尾时间 | 2026-09-10 16:23 UTC+8 |
+| 最近校准 | 2026-09-10 16:58 UTC+8（T6/T7 计数与入库时点更正 + 补记 F4） |
 
 ---
 
@@ -19,8 +20,8 @@
 | T3 | InMemoryStorage 实现新方法 | ✅ 完成 | 2026-09-10 | memory.ts，Map + 过滤 + 排序 |
 | T4 | localStorage 适配器扩展 | ✅ 完成 | 2026-09-10 | local.ts，5 个新 key + 写操作 override |
 | T5 | SQLite DDL SQL | ✅ 完成 | 2026-09-10 14:22 | `src-tauri/src/db/schema.sql` |
-| T6 | Tauri SQLite 初始化与 CRUD 命令 | ✅ 完成 | 2026-09-10 14:22 | 24 个 `db_*` 命令已注册 |
-| T7 | Tauri 侧工厂函数与后端选择 | ✅ 完成 | 2026-09-10 | storage/index.ts `isTauri()` 分支 + TauriStorage 降级 |
+| T6 | Tauri SQLite 初始化与 CRUD 命令 | ✅ 完成 | 2026-09-10 14:22 | **26 个** `db_*` 命令已注册（初版 19 个；7 个 get/delete 缺口于 `39e96fa` 补齐） |
+| T7 | Tauri 侧工厂函数与后端选择 | ✅ 完成 | 2026-09-10 16:50 | `TauriStorage` 本体随 `e93f4a5` 入库；**工厂接线 `39e96fa` 才真正入库**（此前 index.ts 未引用它） |
 | T8 | 单测：StorageAdapter 新方法 | ✅ 完成 | 2026-09-10 16:00 | `tests/storage-adapter.test.ts`，28/28 通过 |
 | T9 | 迁移脚本与启动时自动迁移 | ✅ 完成 | 2026-09-10 16:20 | 脚本 + `TauriStorage.migrateLegacyRagData()` |
 | T10 | 文档补充 | ✅ 完成 | 2026-09-10 16:23 | 双 README + schema 字段注释 |
@@ -33,7 +34,7 @@
 | 存储层 | `src/storage/types.ts` · `memory.ts` · `local.ts` · `tauri.ts` |
 | Rust 侧 | `src-tauri/src/db/{schema.sql,mod.rs,models.rs,commands.rs}` · `lib.rs` |
 | 迁移脚本 | `scripts/migrate-rag-to-sqlite.mjs` |
-| 单测 | `tests/storage-adapter.test.ts`（`npm run test:storage`） |
+| 单测 | `tests/storage-adapter.test.ts`（`npm run test:storage`，28 项）；Rust `db::models` 4 项 camelCase 契约单测（`cargo test models::tests`） |
 | 文档 | `README.md` · `README.zh-CN.md` · `src-tauri/src/db/schema.sql` |
 
 ---
@@ -94,7 +95,16 @@
 
 **状态**：✅ 完成
 
-`src-tauri/src/db/`（mod.rs 82 行 / models.rs 309 行 / commands.rs 640 行），`lib.rs` 注册 24 个 `db_*` 命令；`init_db()` 在 `setup()` 中执行，`create_if_missing(true)` + 逐条跑 schema.sql，失败只打印日志、不阻塞启动。
+`src-tauri/src/db/`（mod.rs 82 行），`lib.rs` 注册 **26 个** `db_*` 命令；`init_db()` 在 `setup()` 中执行，`create_if_missing(true)` + 逐条跑 schema.sql，失败只打印日志、不阻塞启动。
+
+命令数沿革（此前本节记的「24 个」是误记，逐 commit 核对结果如下）：
+
+| 时点 | commands.rs | models.rs | `lib.rs` 注册命令数 | 说明 |
+|------|-------------|-----------|---------------------|------|
+| `26186b1`（T5–T6 初版） | 541 行 | 215 行 | **19** | list / save / delete 为主 |
+| `39e96fa`（本次补齐） | 640 行 | 309 行 | **26** | +7：`db_get_section` · `db_sections_by_range` · `db_get_chunk` · `db_get_knowledge_unit` · `db_delete_relation` · `db_get_embedding` · `db_delete_embedding` |
+
+缺口成因：T6 当时按「列表 + 批量写 + 删除」建命令，未逐一对照 `StorageAdapter` 的 `get*` / `*-by-range` / `delete*` 签名；而 `TauriStorage`（T7）是严格照契约实现的，于是前端调用了 7 个 Rust 侧并不存在的命令。存量问题由 **F4** 记录。
 
 ---
 
@@ -103,6 +113,16 @@
 **状态**：✅ 完成
 
 `src/storage/index.ts` 的 `detectBestBackend()`：`isTauri()` → `"tauri"`，否则探测 localStorage → `"local"` / `"memory"`。`TauriStorage extends LocalStorageAdapter`，RAG 五类实体走 `db_*` 命令、其余沿用 localStorage；任一命令失败即静默回退父类同名方法（只告警一次）。
+
+**入库时点更正**：`TauriStorage` 本体（`src/storage/tauri.ts`，515 行）随 `e93f4a5` 入库，但**工厂接线漏在同一批之外** —— `e93f4a5`/`ec721ab` 的 `index.ts` 里既无 `TauriStorage` 导入也无 `isTauri()` 分支，所以那段时间桌面端实际仍走 localStorage，TauriStorage 是「写好但从未被实例化」的死代码。`39e96fa` 补齐了三处：
+
+| 文件 | 改动 |
+|------|------|
+| `src/storage/index.ts` | `StorageBackend` 加 `"tauri"`；`detectBestBackend()` 首判 `isTauri()`；`createStorage()` 加分支；导出 `TauriStorage` |
+| `src/storage/local.ts` | `override readonly name: string` 显式标注 —— 否则父类把 `name` 推导成 `"local"` 字面量，子类覆盖成 `"tauri"` 会报 TS2416 |
+| `src-tauri/src/db/*` · `lib.rs` | 补齐并注册 T7 依赖的 7 个命令（见 T6 沿革表） |
+
+接线生效后 `detectBestBackend()` 在桌面端的返回值由 `"local"` 变为 `"tauri"`，即 T9 的惰性迁移（`migrateLegacyRagData()`）自此才有触发路径 —— 这是 T7 必须真正入库才能兑现 T9 的原因。
 
 ---
 
@@ -215,8 +235,11 @@ node scripts/migrate-rag-to-sqlite.mjs --in export.json --stats
 | F1 | **FTS5 中文子串检索失效** | 高（中文优先产品） | 默认 `unicode61` 分词器把连续中文整段当成**一个** token。实测："编码器由六层堆叠而成" 里 `MATCH '编码器'` 命中 0 条；`MATCH '编码器*'`（前缀）与整句才命中 | schema 改 `tokenize = 'trigram'`（SQLite ≥ 3.34，本机 3.43 支持）；代价：索引体积增大、查询词需 ≥ 3 字符，存量库要 DROP + 重建 + 全量重灌（需 `_schema_version` 升到 2 并加迁移步骤） |
 | F2 | 降级态新写入的 RAG 数据不回迁 | 低 | 迁移是一次性标记制，见 T9「已知边界」 | 改为记录迁移时间戳做增量搬迁 |
 | F3 | Documents / Chapters 仍在 localStorage | 中 | T5 刻意不为这两张表建表，避免迁移期双写 | 待 F1 一起做，届时把两张表纳入 SQLite 并升 schema v2 |
+| **F4** | **Tauri IPC 契约不成立**：① 7 个命令未注册（前端报 `Command db_get_section not found`）；② 嵌套 `*Input` 字段缺 camelCase 重命名（前端发 camelCase、Rust 按 snake_case 反序列化）→ 静默 `undefined`；③ 工厂未接线，`TauriStorage` 从未被实例化 | **高**（桌面端 RAG 全链路不可用；②属静默失败，最难发现） | T6 未逐一对照 `StorageAdapter` 签名建命令；`#[tauri::command]` 只转换**顶层**参数名、嵌套结构体字段不转；T7 标注完成时只入库了 `tauri.ts` 本体 | ✅ **已修复 `39e96fa`**：补齐 7 命令 + `*Input`/`*Row`/`*Out` 统一 `#[serde(rename_all = "camelCase")]`（含 4 项 Rust 契约单测）+ 工厂接线 + `local.ts` 的 `name: string` 标注 |
 
-**当前影响面**：F1 不影响功能可用性——桌面端 FTS 查不到中文时，前端会降级到内存子串匹配，用户感知为「能搜到但走的是内存路径」。数据量小的时候无感，量大后才有性能问题。
+**F4 的教训（写给后续 Tauri IPC 改动）**：`rules`/`skills` 里的 tauri-ipc 契约要求「Rust 侧 `Result<T,String>` + serde 镜像 + lib.rs 注册」三步齐全，本次缺的是第 2、3 步的**可验证性** —— 前端 `invoke` 是字符串字面量，命令没注册、字段名写错都不会在 `tsc` 或 `cargo check` 阶段报错。`cargo check` 通过 ≠ IPC 可用；新增/改名命令后应至少跑一次 Rust 契约单测（`cargo test`）并核对 `lib.rs` 注册集合 == 前端 `invoke` 引用集合。
+
+**当前影响面**：F1 不影响功能可用性——桌面端 FTS 查不到中文时，前端会降级到内存子串匹配，用户感知为「能搜到但走的是内存路径」。数据量小的时候无感，量大后才有性能问题。F4 已随 `39e96fa` 修复，不再影响可用性。
 
 ---
 
@@ -226,12 +249,15 @@ node scripts/migrate-rag-to-sqlite.mjs --in export.json --stats
 |------|------|------|
 | 2026-09-10 13:22 | Runbook 创建 | 准备开工 T1 |
 | 2026-09-10 13:27 | T1 完成 | 三个域类型文件 |
-| 2026-09-10 14:22 | T5 + T6 完成 | schema.sql + 24 个 db_* 命令 |
+| 2026-09-10 14:22 | T5 + T6 完成 | schema.sql + 19 个 db_* 命令（原记 24，已更正） |
 | 2026-09-10 15:45 | 续跑：核对现状 | T1–T7 均已落地，`npm run typecheck` 0 error |
 | 2026-09-10 16:00 | T8 完成 | 28 项断言全绿；修正 E3 断言（非代码缺陷） |
 | 2026-09-10 16:15 | T9.1 完成 | 迁移脚本 + sqlite3 实测（英文 FTS 命中、幂等） |
 | 2026-09-10 16:20 | T9.2 完成 | `migrateLegacyRagData()` 惰性一次性迁移 |
 | 2026-09-10 16:23 | T10 完成 | 双 README + schema 字段注释 |
+| 2026-09-10 16:50 | 归属核查：发现 F4 | 工作区 5 个未提交文件实为 T6/T7 补漏（219 insertions）：index.ts 未接线、7 命令未注册、`models.rs` 缺 camelCase |
+| 2026-09-10 16:50 | F4 修复入库 | `39e96fa` fix(tauri)：7 命令 + camelCase 契约 + 工厂接线；门禁 `cargo check` ✓ · `cargo test db::models` 4/4 ✓ · `typecheck` 0 error |
+| 2026-09-10 16:58 | Runbook 校准 | 本节 T6/T7 计数与入库时点更正，补记 F4 与 tauri-ipc 教训 |
 
 ---
 
@@ -241,3 +267,4 @@ node scripts/migrate-rag-to-sqlite.mjs --in export.json --stats
 |------|------|------|
 | 2026-09-10 | 初稿 Runbook（T1–T4 详细步骤 + T5–T10 占位） | WorkBuddy |
 | 2026-09-10 | 收尾：T1–T10 状态校准，补 T8/T9/T10 实施记录、交付物一览、遗留问题 F1–F3 | WorkBuddy |
+| 2026-09-10 | 校准：T6 命令数 24 → 26（沿革表）、T7 标注真实入库时点 `39e96fa`、补记 F4（IPC 契约）与教训 | WorkBuddy |
