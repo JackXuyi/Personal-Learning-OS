@@ -13,7 +13,6 @@
  * 底部主行动保留；「标记学完」后提示下一步并刷新章级计划（plan 头项联动）。
  */
 import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Bar, Card, EvidenceRow, Section } from "../../components/primitives";
 import { Button } from "../../components/ui/button";
@@ -23,6 +22,7 @@ import { applyKeyPointRating } from "../../engine";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { useI18n } from "../../i18n";
 import { chapterBadge } from "./chapter-badge";
+import ArticleBody from "./ArticleBody";
 
 /** 本章证据：最近一次含本章的判卷结果（Δ 掌握度）。 */
 type ChapterEvidence =
@@ -359,38 +359,4 @@ function shortDate(at: number, lang: "zh" | "en"): string {
     month: lang === "zh" ? "numeric" : "short",
     day: "numeric",
   }).format(new Date(at));
-}
-
-/** 极简 Markdown 行渲染：标题加粗放大、空行留白、其余原文 pre-wrap（不做转义/代码高亮）。 */
-function ArticleBody({ text }: { text: string }) {
-  const lines = text.split("\n");
-  const out: ReactNode[] = [];
-  lines.forEach((raw, i) => {
-    const line = raw.trimEnd();
-    const heading = /^(#{1,6})\s+(.*)$/.exec(line);
-    if (heading) {
-      const level = heading[1].length;
-      out.push(
-        <p
-          key={i}
-          className={
-            level <= 2
-              ? "mt-5 mb-2 text-lg font-semibold text-ink-1"
-              : "mt-4 mb-1.5 text-base font-semibold text-ink-1"
-          }
-        >
-          {heading[2].replace(/\s+#+\s*$/, "")}
-        </p>,
-      );
-    } else if (line.trim() === "") {
-      out.push(<div key={i} className="h-3" />);
-    } else {
-      out.push(
-        <p key={i} className="text-[15px] leading-7 text-ink-2">
-          <span className="whitespace-pre-wrap">{line}</span>
-        </p>,
-      );
-    }
-  });
-  return <article>{out}</article>;
 }

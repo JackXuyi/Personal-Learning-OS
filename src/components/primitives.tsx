@@ -312,3 +312,48 @@ export function ActionCard({
     </div>
   );
 }
+
+/* ── SegmentedTabs —— 胶囊分段控件（资料列表页过滤；与设置页 Segment 视觉同源） ── */
+
+/** 胶囊分段控件：`items` 渲染为一组按钮，选中项 primary 实底。 */
+export function SegmentedTabs<T extends string>({
+  value,
+  onChange,
+  items,
+  className = "",
+  testIdPrefix,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  items: { value: T; label: string }[];
+  className?: string;
+  testIdPrefix?: string;
+}) {
+  return (
+    <div
+      role="tablist"
+      className={`inline-flex items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5 ${className}`}
+    >
+      {items.map((it) => {
+        const selected = it.value === value;
+        return (
+          <button
+            key={it.value}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            data-testid={testIdPrefix ? `${testIdPrefix}-${it.value}` : undefined}
+            onClick={() => onChange(it.value)}
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              selected
+                ? "bg-primary text-white"
+                : "text-ink-2 hover:bg-subtle hover:text-ink-1"
+            }`}
+          >
+            {it.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}

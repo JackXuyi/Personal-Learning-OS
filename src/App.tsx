@@ -2,9 +2,11 @@ import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import AppShell from "./components/layout/AppShell";
 import HomePage from "./features/home/HomePage";
 import SpacesPage from "./features/spaces/SpacesPage";
-import ChapterCatalogPage from "./features/learn/ChapterCatalogPage";
+import LibraryPage from "./features/learn/LibraryPage";
+import DocumentDetailPage from "./features/learn/DocumentDetailPage";
 import ChapterReaderPage from "./features/learn/ChapterReaderPage";
 import ChapterGraphPage from "./features/knowledge/ChapterGraphPage";
+import LegacyLearnRedirect from "./features/learn/LegacyLearnRedirect";
 import QuizCenterPage from "./features/quiz/QuizCenterPage";
 import NewQuizPage from "./features/quiz/NewQuizPage";
 import QuizAnswerPage from "./features/quiz/QuizAnswerPage";
@@ -28,10 +30,15 @@ export default function App() {
           <Route path="spaces" element={<SpacesPage />} />
           {/* 原 /knowledge 图谱列表被 V2 章节目录取代（docs §4 P1）；N5 图谱回归为章内概念图谱 */}
           <Route path="knowledge" element={<Navigate to="/learn" replace />} />
-          <Route path="learn" element={<ChapterCatalogPage />} />
-          <Route path="learn/:chapterId" element={<ChapterReaderPage />} />
+          {/* V2 资料库：列表页 + 详情页 + 旧链接兼容 */}
+          <Route path="learn" element={<LibraryPage />} />
+          <Route path="learn/doc/:docId" element={<DocumentDetailPage />} />
+          <Route path="learn/chapter/:chapterId" element={<ChapterReaderPage />} />
           {/* N5 概念层回归：章概念图谱（AI 提炼 + GraphView 可视化 + 概念复习入口） */}
-          <Route path="learn/:chapterId/graph" element={<ChapterGraphPage />} />
+          <Route path="learn/chapter/:chapterId/graph" element={<ChapterGraphPage />} />
+          {/* 旧路径兼容：/learn/<id> 与 /learn/<id>/graph 自动判定为章节链接或资料详情 */}
+          <Route path="learn/:legacyId" element={<LegacyLearnRedirect />} />
+          <Route path="learn/:legacyId/graph" element={<LegacyLearnRedirect variant="graph" />} />
           {/* V2 试卷中心（P3/P4/P5/P6；出卷向导 / 答题 / 判卷 / 报告） */}
           <Route path="quiz" element={<QuizCenterPage />} />
           <Route path="quiz/new" element={<NewQuizPage />} />

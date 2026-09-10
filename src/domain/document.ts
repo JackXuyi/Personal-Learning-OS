@@ -33,4 +33,16 @@ export interface SourceDocument {
   rawSizeBytes?: number;
   /** 可选的纯文本快照，在解析尚未支持时由 Knowledge Engine 使用。 */
   textPreview?: string;
+  /**
+   * AI 分析状态（切分由代码完成，不计入本字段）。
+   * 全部可选：老数据无此字段 → 视为「未分析」，天然兼容。
+   */
+  analysis?: {
+    /** 章节分析（标题 / 要点 / 过碎合并）最近一次完成时间。 */
+    chaptersAt?: number;
+    /** 概念分析（知识概念抽取）最近一次完成时间。 */
+    conceptsAt?: number;
+    /** 分析所用模型标识（展示用，可缺省）。 */
+    model?: string;
+  };
 }

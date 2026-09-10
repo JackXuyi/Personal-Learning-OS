@@ -34,6 +34,9 @@ export class InMemoryStorage implements StorageAdapter {
   async listDocuments(): Promise<SourceDocument[]> {
     return [...this.documents.values()];
   }
+  async getDocument(id: string): Promise<SourceDocument | undefined> {
+    return this.documents.get(id);
+  }
   async saveDocument(doc: SourceDocument): Promise<void> {
     this.documents.set(doc.id, doc);
   }
@@ -55,6 +58,12 @@ export class InMemoryStorage implements StorageAdapter {
   }
   async savePaper(paper: Paper): Promise<void> {
     this.papers.set(paper.id, paper);
+  }
+  async deletePaper(id: string): Promise<void> {
+    // 级联语义：试卷本体 + 答题草稿 + 判卷结果一并移除。
+    this.papers.delete(id);
+    this.paperDrafts.delete(id);
+    this.paperResults.delete(id);
   }
   async getPaperDraft(paperId: string): Promise<PaperAnswers | undefined> {
     return this.paperDrafts.get(paperId);

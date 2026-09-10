@@ -78,3 +78,14 @@ export function providerFromActive(active: SavedActive): AIProvider {
   const cfg = activeToProviderConfig(active);
   return cfg ? createProvider(cfg) : new NoActiveProvider();
 }
+
+/**
+ * buildActiveProvider —— 前端快速构造当前模型 provider。
+ * 与 useSettingsStore.activeSource 耦合，供 UI 层判定 AI 是否就绪。
+ * TODO(P2): 迁移 activeSource 到 useSettingsStore，此处改为注入 store。
+ */
+export function buildActiveProvider(): AIProvider | null {
+  // 临时：若无 active source，返回 null；UI 层自处理禁用/提示。
+  // 最终应从 useSettingsStore 读取。
+  return new NoActiveProvider().isConfigured() ? providerFromActive(null) : null;
+}

@@ -28,6 +28,7 @@ export const zh = {
     all: "全部",
     exit: "退出",
     import: "导入资料",
+    more: "更多操作",
     targetLine: (p: number) => `达标 ${p}%`,
     delta: {
       nextReview: (d: number) => `下次复习：约 ${d} 天后`,
@@ -571,6 +572,159 @@ export const zh = {
       unsplitHint: "这些资料已保存正文但还没有章节，可一键按标题切分。",
       splitting: "切分中…",
       splitNow: "立即切分",
+    },
+    /** 资料库列表页（/learn 改版：卡片网格，docs/library-module-design-2026-09.md §8.18）。 */
+    library: {
+      title: "资料库",
+      subtitleEmpty: "导入一份资料，系统会把它切分成章节，逐章学习。",
+      subtitleStats: (docs: number, chapters: number, mastered: number, p: number) =>
+        `${docs} 份资料 · ${chapters} 章 · 已掌握 ${mastered} 章（达标 ${p}%）`,
+      searchPlaceholder: "搜索资料 / 来源…",
+      searchEmpty: (q: string) => `没有匹配「${q}」的资料`,
+      filterAll: "全部",
+      filterUnsplit: "未切分",
+      filterActive: "进行中",
+      sortNewest: "最新导入",
+      sortOldest: "最早导入",
+      sortTitle: "按名称",
+      noSource: "来源未知",
+      importedAt: (when: string) => `导入于 ${when}`,
+      cardMeta: (chapters: number, points: number, mastered: number) =>
+        `${chapters} 章 · ${points} 要点 · 掌握 ${mastered}/${chapters}`,
+      targetLine: "达标线",
+      unsplitBadge: "未切分",
+      splitNow: "立即切分",
+      resplit: "重新切分",
+      emptyTitle: "还没有资料",
+      emptyDesc: "导入第一份资料（Markdown / 笔记 / PDF），系统会按标题自动切分成章节。",
+      emptyImport: "导入第一份资料",
+      actions: {
+        rename: "重命名",
+        meta: "编辑信息",
+        replace: "替换正文",
+        append: "追加内容",
+        split: "立即切分",
+        resplit: "重新切分",
+        delete: "删除",
+      },
+      rename: { title: "重命名资料", label: "资料名称", empty: "名称不能为空" },
+      meta: {
+        title: "编辑资料信息",
+        name: "资料名称",
+        source: "来源",
+        sourcePlaceholder: "如 github.com/owner/repo 或 本地文件 · x.md",
+        format: "原始类型",
+      },
+      replace: {
+        title: "替换正文",
+        desc: "选择新的正文来源，替换后系统会重新切分章节。",
+        submit: "替换并重新切分",
+        phase: { save: "保存正文", split: "重新切分", migrate: "迁移掌握度" },
+        done: (chapters: number, carried: number, dropped: number) =>
+          dropped > 0
+            ? `已替换 · ${chapters} 章（保留 ${carried} 章掌握度，丢弃 ${dropped} 章）`
+            : `已替换 · ${chapters} 章（保留 ${carried} 章掌握度）`,
+      },
+      append: {
+        title: "追加内容",
+        desc: "在正文末尾追加新内容，系统会重新切分整份资料。",
+        label: "追加内容",
+        placeholder: "把新增的笔记 / 章节粘贴到这里…",
+        count: (n: number, total: number) => `本次 ${n} 字 · 追加后约 ${total} 字`,
+        submit: "追加并重新切分",
+        tooLarge: "追加后正文超出大小上限，请拆分资料后再试。",
+      },
+      del: {
+        title: (t: string) => `删除《${t}》？`,
+        desc: (c: number, p: number, k: number) =>
+          `将连带清理 ${c} 个章节、${p} 份试卷、${k} 个知识概念。此操作不可撤销。`,
+        confirm: "删除",
+      },
+    },
+    /** 资料详情页（/learn/doc/:docId，4 Tab）。 */
+    detail: {
+      back: "← 资料库",
+      missingTitle: "资料不存在",
+      missingDesc: "它可能已被删除。",
+      loading: "加载中…",
+      tabs: { content: "资料内容", split: "切分结果", knowledge: "关键知识点", papers: "章节测评试卷" },
+      metaLine: (source: string, imported: string, chars: number) =>
+        `${source} · 导入于 ${imported} · ${chars} 字`,
+      content: {
+        emptyTitle: "这份资料没有正文",
+        emptyDesc: "它只保存了元信息——用「替换正文」导入内容后即可查看。",
+        showAll: (n: number) => `已显示前 ${n} 字符，显示全文`,
+        metaType: (t: string) => `类型 ${t}`,
+        metaChars: (n: number) => `${n} 字`,
+        metaImported: (d: string) => `导入于 ${d}`,
+        metaSource: (s: string) => `来源 ${s}`,
+      },
+      /** 切分（代码）：确定性、无重试。 */
+      split: {
+        strategyHeadings: "按标题切分",
+        strategyParagraphs: "按段落聚类",
+        refinedYes: "AI 已精修",
+        refinedNo: "本地启发式",
+        keyPoints: "要点",
+        chapters: "章",
+        stats: (c: number, p: number) => `${c} 章 · ${p} 要点`,
+        at: (d: string) => `切分于 ${d}`,
+        split: "立即切分",
+        resplit: "重新切分",
+        analyzeOnly: "仅 AI 精修",
+        splitting: "切分中…",
+        goConfigure: "去配置 AI 模型 →",
+        emptyTitle: "还没有章节",
+        emptyDesc: "点「立即切分」按标题 / 分段自动切分成章。",
+        confirmTitle: "重新切分？",
+        confirmDesc: (n: number) =>
+          `将覆盖现有 ${n} 章的切分结构；掌握度按内容区间同源保留，结构变化过大的章节会丢失掌握度。`,
+        confirmOk: "重新切分",
+        result: (c: number, carried: number, dropped: number, refined: boolean) =>
+          refined
+            ? `已重新切分 · ${c} 章（AI 精修）· 保留 ${carried} 章掌握度${dropped ? `，丢弃 ${dropped} 章` : ""}`
+            : `已切分 · ${c} 章（本地启发式）· 保留 ${carried} 章掌握度${dropped ? `，丢弃 ${dropped} 章` : ""}`,
+        noBody: "这份资料没有正文，请先用「替换正文」导入内容。",
+        noChapters: "没有切出章节——内容可能缺少标题或分段。",
+      },
+      /** 分析（AI）：可重复触发、可重跑。 */
+      analyze: {
+        analyze: "AI 分析章节",
+        reAnalyze: "重新分析",
+        analyzing: "分析中…",
+        notAnalyzed: "尚未分析 · 标题与要点为代码切分的朴素结果",
+        at: (d: string) => `分析于 ${d}`,
+        result: (changed: number, merged: number) =>
+          `已分析 · 改写 ${changed} 章标题${merged ? ` · 合并 ${merged} 个过碎小节` : ""}`,
+        aiOff: "AI 未配置，分析不可用。",
+        goConfigure: "去配置 AI 模型 →",
+        failed: (reason: string) => `分析失败：${reason}（可再次点击重试）`,
+        tooManyChapters: "章节过多（>24 章），暂不支持整篇分析。",
+      },
+      knowledge: {
+        pointsHead: "章要点",
+        graphHead: "概念图谱",
+        pointsEmpty: "还没有要点——先完成切分。",
+        goRead: "去阅读 →",
+        extractAll: "AI 分析概念",
+        reExtract: "重新分析概念",
+        extracting: (i: number, n: number, t: string) => `正在分析 ${i}/${n} · ${t}`,
+        extractDone: (ok: number, failed: number) =>
+          failed > 0 ? `概念分析完成：成功 ${ok} 章 · 失败 ${failed} 章` : `概念分析完成：${ok} 章`,
+        graphStats: (done: number, total: number, units: number, rels: number) =>
+          `已分析 ${done}/${total} 章 · ${units} 个概念 · ${rels} 条关系`,
+        graphEmptyTitle: "还没有概念",
+        graphEmptyDesc: "点「AI 分析概念」，AI 会逐章把正文提炼成可复习的知识概念。",
+        graphNoAi: "配置 AI 模型后可逐章分析概念。",
+      },
+      papers: {
+        head: (n: number, done: number) => `${n} 份试卷 · 已完成 ${done} 份`,
+        newPaper: "为本资料出卷 →",
+        emptyTitle: "还没有试卷",
+        emptyDesc: "为任一章节出一卷，检验掌握程度。",
+        noPapers: "暂无试卷",
+        staleScope: "范围已失效",
+      },
     },
     /** 资料格式标签（文档卡类型徽标；DocumentFormat 全覆盖）。 */
     format: {

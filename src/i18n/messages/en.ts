@@ -24,6 +24,7 @@ export const en: Messages = {
     all: "All",
     exit: "Exit",
     import: "Import material",
+    more: "More actions",
     targetLine: (p: number) => `Target ${p}%`,
     delta: {
       nextReview: (d: number) => `Next review: ~${d} days`,
@@ -585,6 +586,161 @@ export const en: Messages = {
       unsplitHint: "These documents have saved text but no chapters — split by heading in one click.",
       splitting: "Splitting…",
       splitNow: "Split now",
+    },
+    /** Library list page (/learn revamp: card grid, docs/library-module-design-2026-09.md §8.18). */
+    library: {
+      title: "Library",
+      subtitleEmpty: "Import a document and it will be split into chapters for learning.",
+      subtitleStats: (docs: number, chapters: number, mastered: number, p: number) =>
+        `${docs} documents · ${chapters} chapters · ${mastered} mastered (target ${p}%)`,
+      searchPlaceholder: "Search documents / sources…",
+      searchEmpty: (q: string) => `No documents matching “${q}”`,
+      filterAll: "All",
+      filterUnsplit: "Unsplit",
+      filterActive: "In progress",
+      sortNewest: "Newest",
+      sortOldest: "Oldest",
+      sortTitle: "By name",
+      noSource: "Unknown source",
+      importedAt: (when: string) => `Imported ${when}`,
+      cardMeta: (chapters: number, points: number, mastered: number) =>
+        `${chapters} chapters · ${points} points · ${mastered}/${chapters} mastered`,
+      targetLine: "Target",
+      unsplitBadge: "Unsplit",
+      splitNow: "Split now",
+      resplit: "Re-split",
+      emptyTitle: "No documents yet",
+      emptyDesc:
+        "Import your first document (Markdown / notes / PDF) and it will be split into chapters automatically.",
+      emptyImport: "Import first document",
+      actions: {
+        rename: "Rename",
+        meta: "Edit info",
+        replace: "Replace body",
+        append: "Append content",
+        split: "Split now",
+        resplit: "Re-split",
+        delete: "Delete",
+      },
+      rename: { title: "Rename document", label: "Document name", empty: "Name cannot be empty" },
+      meta: {
+        title: "Edit document info",
+        name: "Document name",
+        source: "Source",
+        sourcePlaceholder: "e.g. github.com/owner/repo or local file · x.md",
+        format: "Original format",
+      },
+      replace: {
+        title: "Replace body",
+        desc: "Pick a new body source; chapters will be re-split after replacement.",
+        submit: "Replace & re-split",
+        phase: { save: "Save body", split: "Re-split", migrate: "Migrate mastery" },
+        done: (chapters: number, carried: number, dropped: number) =>
+          dropped > 0
+            ? `Replaced · ${chapters} chapters (${carried} carried, ${dropped} dropped)`
+            : `Replaced · ${chapters} chapters (${carried} carried)`,
+      },
+      append: {
+        title: "Append content",
+        desc: "Append new content to the end; the whole document will be re-split.",
+        label: "Append content",
+        placeholder: "Paste new notes / chapters here…",
+        count: (n: number, total: number) => `${n} chars now · ~${total} after append`,
+        submit: "Append & re-split",
+        tooLarge: "Body would exceed the size limit — split the document first.",
+      },
+      del: {
+        title: (t: string) => `Delete “${t}”?`,
+        desc: (c: number, p: number, k: number) =>
+          `This will also remove ${c} chapters, ${p} papers and ${k} concepts. This cannot be undone.`,
+        confirm: "Delete",
+      },
+    },
+    /** Document detail page (/learn/doc/:docId, 4 tabs). */
+    detail: {
+      back: "← Library",
+      missingTitle: "Document not found",
+      missingDesc: "It may have been deleted.",
+      loading: "Loading…",
+      tabs: { content: "Content", split: "Split", knowledge: "Key points", papers: "Papers" },
+      metaLine: (source: string, imported: string, chars: number) =>
+        `${source} · imported ${imported} · ${chars} chars`,
+      content: {
+        emptyTitle: "This document has no body",
+        emptyDesc: "Only metadata was saved — use “Replace body” to import content.",
+        showAll: (n: number) => `Showing first ${n} chars — show all`,
+        metaType: (t: string) => `Format ${t}`,
+        metaChars: (n: number) => `${n} chars`,
+        metaImported: (d: string) => `Imported ${d}`,
+        metaSource: (s: string) => `Source ${s}`,
+      },
+      /** Split (code): deterministic, no retry. */
+      split: {
+        strategyHeadings: "By headings",
+        strategyParagraphs: "By paragraphs",
+        refinedYes: "AI refined",
+        refinedNo: "Local heuristic",
+        keyPoints: "points",
+        chapters: "chapters",
+        stats: (c: number, p: number) => `${c} chapters · ${p} points`,
+        at: (d: string) => `Split ${d}`,
+        split: "Split now",
+        resplit: "Re-split",
+        analyzeOnly: "Analyze only",
+        splitting: "Splitting…",
+        goConfigure: "Configure AI model →",
+        emptyTitle: "No chapters yet",
+        emptyDesc: "Click \"Split now\" to split by headings / paragraphs automatically.",
+        confirmTitle: "Re-split?",
+        confirmDesc: (n: number) =>
+          `This overwrites the current ${n}-chapter structure; mastery is carried over by content overlap, chapters that change too much will lose mastery.`,
+        confirmOk: "Re-split",
+        result: (c: number, carried: number, dropped: number, refined: boolean) =>
+          refined
+            ? `Re-split · ${c} chapters (AI refined) · ${carried} carried${dropped ? `, ${dropped} dropped` : ""}`
+            : `Split · ${c} chapters (local heuristic) · ${carried} carried${dropped ? `, ${dropped} dropped` : ""}`,
+        noBody: "This document has no body — use \"Replace body\" first.",
+        noChapters: "No chapters were produced — the content may lack headings or paragraphs.",
+      },
+      /** Analyze (AI): repeatable, re-runnable. */
+      analyze: {
+        analyze: "AI analyze chapters",
+        reAnalyze: "Re-analyze",
+        analyzing: "Analyzing…",
+        notAnalyzed: "Not analyzed · titles & points are the plain code-split results",
+        at: (d: string) => `Analyzed ${d}`,
+        result: (changed: number, merged: number) =>
+          `Analyzed · ${changed} titles rewritten${merged ? ` · ${merged} merged` : ""}`,
+        aiOff: "AI is not configured — analysis unavailable.",
+        goConfigure: "Configure AI model →",
+        failed: (reason: string) => `Analysis failed: ${reason} (click to retry)`,
+        tooManyChapters: "Too many chapters (>24); whole-document analysis unsupported.",
+      },
+      knowledge: {
+        pointsHead: "Chapter points",
+        graphHead: "Concept graph",
+        pointsEmpty: "No points yet — split first.",
+        goRead: "Open reader →",
+        extractAll: "AI analyze concepts",
+        reExtract: "Re-analyze concepts",
+        extracting: (i: number, n: number, t: string) => `Analyzing ${i}/${n} · ${t}`,
+        extractDone: (ok: number, failed: number) =>
+          failed > 0 ? `Concept analysis done: ${ok} ok · ${failed} failed` : `Concept analysis done: ${ok} chapters`,
+        graphStats: (done: number, total: number, units: number, rels: number) =>
+          `${done}/${total} chapters analyzed · ${units} concepts · ${rels} relations`,
+        graphEmptyTitle: "No concepts yet",
+        graphEmptyDesc:
+          "Click “AI analyze concepts” — AI distills each chapter into reviewable concepts.",
+        graphNoAi: "Configure an AI model to analyze concepts per chapter.",
+      },
+      papers: {
+        head: (n: number, done: number) => `${n} papers · ${done} completed`,
+        newPaper: "New paper for this document →",
+        emptyTitle: "No papers yet",
+        emptyDesc: "Create a paper for any chapter to test mastery.",
+        noPapers: "No papers yet",
+        staleScope: "Scope outdated",
+      },
     },
     /** Document-format labels (type badge on document cards; covers DocumentFormat). */
     format: {
