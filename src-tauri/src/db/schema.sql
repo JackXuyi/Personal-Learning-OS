@@ -97,21 +97,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_embeddings_unique
   ON embeddings(target_type, target_id, model);
 CREATE INDEX IF NOT EXISTS idx_embeddings_target ON embeddings(target_type, target_id);
 
--- ===== 全文检索（FTS5）=====
+-- ===== 全文检索（FTS5，trigram 分词器）=====
 -- content 列建索引；id / chapter_id / document_id 仅作回表键（UNINDEXED）。
 --
--- ⚠️ 已知限制（2026-09-10 实测）：默认 unicode61 分词器会把连续中文整段
--- 当成**一个** token，导致中文子串查不到——"编码器由六层堆叠而成" 里
--- MATCH '编码器' 命中 0 条，只有 MATCH '编码器*'（前缀）或整句才命中。
--- 修法：改用 tokenize = 'trigram'（SQLite ≥ 3.34），代价是索引体积变大、
--- 查询词需 ≥ 3 字符，且存量库要 DROP + 重建 + 全量重灌。
--- 当前策略：桌面端命中不了就由前端降级到内存子串匹配，功能不中断。
--- 修复排期见 docs/storage-architecture-rag-task-runbook.md 的「遗留问题」。
+-- 分词器 = 'trigram'（SQLite ≥ 3.34，本机 3.43 满足）：按 3 字符滑动窗口建索引，
+-- 中文子串天然可命中——MATCH '编码器' / MATCH 'tion' 都能检索到，彻底解决
+-- unicode61 把连续中文整段当一个 token 的缺陷（详见 runbook 遗留问题 F1）。
+--
+-- 约束：trigram 要求查询词 ≥ 3 字符；应用层 db_fts_search 对 < 3 字符查询自动
+-- 降级为回表 `chunks.content LIKE '%q%'`，保证中文 1–2 字短查询仍出结果；两者都
+-- 未命中时由前端内存子串匹配兜底，功能不中断。
+-- 存量库从 unicode61 切换到 trigram 的重建 + 重灌由 db/mod.rs::migrate 完成（v1→v2）。
 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
   content,
-  id         UNINDEXED,
-  chapter_id UNINDEXED,
-  document_id UNINDEXED
+  id          UNINDEXED,
+  chapter_id  UNINDEXED,
+  document_id UNINDEXED,
+  tokenize = 'trigram'
 );
 
 -- 同步策略：不用触发器，改由 Rust 命令显式维护（db_save_chunks /

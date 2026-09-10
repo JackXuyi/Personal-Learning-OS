@@ -292,6 +292,11 @@ pub async fn db_get_chunk(
 
 /// FTS5 全文检索：命中 chunks_fts 后回表取完整 Chunk。
 /// 未命中或 FTS 不可用时返回空数组（前端可降级到 localStorage 子串匹配）。
+///
+/// 查询路由（chunks_fts 用 trigram 分词器，约束查询 ≥ 3 字符）：
+/// - 查询词 trim 后 ≥ 3 字符 → `f.content MATCH ?`（trigram 子串命中，中英文通用）；
+/// - < 3 字符（含中文 1–2 字）→ 降级回表 `c.content LIKE '%q%'`，保证短查询仍出结果；
+/// - 空查询 → 直接返回空，避免误匹配全库。
 #[tauri::command]
 pub async fn db_fts_search(
     state: State<'_, DbState>,
@@ -301,22 +306,34 @@ pub async fn db_fts_search(
     limit: Option<i64>,
 ) -> Result<Vec<ChunkOut>, String> {
     let limit = limit.unwrap_or(10).max(1);
-    // MATCH 左操作数用列限定（`f.content`）而非裸表名：后者在部分 SQLite
-    // 版本下会报 "unsafe use of virtual table"。
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+    // trigram 要求查询词 ≥ 3 字符；不足时走回表 LIKE（过滤列用 c，因 FTS 表对
+    // 短查询无命中，且 document_id / chapter_id 在 chunks 表同样存在）。
+    let use_like = trimmed.chars().count() < 3;
+    let filter_col = if use_like { "c" } else { "f" };
+
     let mut sql = format!(
         "{CHUNK_SELECT}
          JOIN chunks_fts f ON f.id = c.id
-         WHERE f.content MATCH ?"
+         WHERE {}",
+        if use_like {
+            "c.content LIKE '%' || ? || '%'"
+        } else {
+            "f.content MATCH ?"
+        }
     );
     if document_id.is_some() {
-        sql.push_str(" AND f.document_id = ?");
+        sql.push_str(&format!(" AND {filter_col}.document_id = ?"));
     }
     if chapter_id.is_some() {
-        sql.push_str(" AND f.chapter_id = ?");
+        sql.push_str(&format!(" AND {filter_col}.chapter_id = ?"));
     }
     sql.push_str(" GROUP BY c.id ORDER BY c.position ASC LIMIT ?");
 
-    let mut q = sqlx::query_as::<_, ChunkRow>(&sql).bind(query);
+    let mut q = sqlx::query_as::<_, ChunkRow>(&sql).bind(trimmed);
     if let Some(d) = document_id {
         q = q.bind(d);
     }
