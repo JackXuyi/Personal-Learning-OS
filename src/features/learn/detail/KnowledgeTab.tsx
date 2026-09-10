@@ -1,12 +1,22 @@
+/**
+ * 「关键知识点」Tab —— 章要点（带原文引用）+ 概念图谱。
+ *
+ * 三处关键改动（docs/library-detail-page-design-2026-09.md §8.15）：
+ * - **B2**：AI 就绪判定从恒 null 的 stub 换成 `useAiReady()`（响应式订阅全局配置）；
+ * - 要点带**原文出处**：优先渲染 `chapter.keyPointRefs`（point + quote + 跳转），
+ *   老数据无 refs 时回退 `keyPoints` 纯文本（TC-EDGE-01 不报错）；
+ * - 新增「AI 分析要点」入口（analyzeKeyPointsNow），与既有「AI 分析概念」并列。
+ */
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useI18n } from '../../../i18n';
 import { storage } from '../../../stores/useLoopStore';
 import { Button } from '../../../components/ui/button';
 import { Section } from '../../../components/primitives';
 import { notifyDocsChanged } from '../../../components/layout/AppShell';
-import { buildActiveProvider } from '../../../ai/active';
-import { analyzeConceptsNow } from '../analyze-service';
+import { buildActiveProvider } from '../../../stores/useSettingsStore';
+import { useAiReady } from '../../../hooks/useAiReady';
+import { analyzeConceptsNow, analyzeKeyPointsNow } from '../analyze-service';
 import GraphView from '../../knowledge/GraphView';
 import { subgraphOf } from '../../../engine/graph-engine';
 import type { SourceDocument, Chapter, KnowledgeGraph, LearnerState } from '../../../domain';
@@ -21,10 +31,13 @@ interface KnowledgeTabProps {
 
 export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged }: KnowledgeTabProps) {
   const { m: t } = useI18n();
+  const navigate = useNavigate();
   const [busyTick, setBusyTick] = useState<{ i: number; n: number; title: string }>();
-  const [summary, setSummary] = useState<{ ok: number; failed: string[] }>();
+  const [summary, setSummary] = useState<{ ok: number; failed: string[]; extra?: string }>();
+  const [pointsBusy, setPointsBusy] = useState(false);
 
-  const aiReady = useMemo(() => buildActiveProvider()?.isConfigured() ?? false, []);
+  // 全局 AI 配置（响应式）：替代原 ai/active 的恒 null stub（B2 修复）
+  const aiReady = useAiReady();
 
   const allUnitIds = useMemo(() => chapters.flatMap((c) => c.unitIds ?? []), [chapters]);
   const subgraph = useMemo(() => {
@@ -33,6 +46,7 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
   }, [graph, allUnitIds]);
 
   const extracted = chapters.filter((c) => (c.unitIds?.length ?? 0) > 0).length;
+  const withRefs = chapters.filter((c) => (c.keyPointRefs?.length ?? 0) > 0).length;
 
   const masteryMap = useMemo(() => {
     if (!learner) return {};
@@ -43,10 +57,49 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
     return m;
   }, [learner]);
 
+  /** 跳「资料内容」Tab 并定位到原文区间（DocumentDetailPage 消费 ?at=）。 */
+  const goSource = (start: number) => {
+    navigate(`/learn/doc/${doc.id}?tab=content&at=${start}`);
+  };
+
+  const analyzePoints = async () => {
+    if (chapters.length === 0 || !aiReady) return;
+    const provider = buildActiveProvider();
+    setPointsBusy(true);
+    setSummary(undefined);
+    setBusyTick({ i: 0, n: chapters.length, title: '' });
+    try {
+      const result = await analyzeKeyPointsNow(doc, chapters, {
+        storage,
+        provider,
+        onProgress: (i, n, ch) => setBusyTick({ i, n, title: ch.title }),
+      });
+      setSummary({
+        ok: result.ok,
+        failed: result.failed.map((f) => f.title),
+        extra:
+          result.unanchored > 0
+            ? t.learn.detail.knowledge.pointsUnanchored(result.unanchored)
+            : undefined,
+      });
+      notifyDocsChanged();
+      await onChanged();
+    } catch (e) {
+      // 分析恒由 AI 执行：失败如实抛出，不静默降级（E2）
+      setSummary({
+        ok: 0,
+        failed: chapters.map((c) => c.title),
+        extra: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setPointsBusy(false);
+      setBusyTick(undefined);
+    }
+  };
+
   const extractAll = async () => {
     if (chapters.length === 0 || !aiReady) return;
     const provider = buildActiveProvider();
-    if (!provider) return;
     setBusyTick({ i: 0, n: chapters.length, title: '' });
     setSummary(undefined);
 
@@ -72,8 +125,36 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
 
   return (
     <div className="space-y-6">
-      {/* 章要点汇总 */}
-      <Section title={t.learn.detail.knowledge.pointsHead} />
+      {/* 章要点 */}
+      <div>
+        <Section
+          title={t.learn.detail.knowledge.pointsHead}
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={analyzePoints}
+              disabled={pointsBusy || !!busyTick || !aiReady || chapters.length === 0}
+            >
+              {withRefs > 0
+                ? t.learn.detail.knowledge.reExtractPoints
+                : t.learn.detail.knowledge.extractPoints}
+            </Button>
+          }
+        />
+        {!aiReady && (
+          <p className="mt-2 text-xs text-ink-3">
+            {t.learn.detail.knowledge.pointsNoAi}{' '}
+            <Link to="/settings" className="text-primary hover:underline">
+              {t.learn.detail.split.goConfigure}
+            </Link>
+          </p>
+        )}
+        <p className="mt-2 text-xs text-ink-3">
+          {t.learn.detail.knowledge.pointsDone(withRefs, chapters.length)}
+        </p>
+      </div>
+
       {chapters.length === 0 ? (
         <div className="rounded-lg border border-dashed border-line bg-surface p-6 text-center">
           <p className="text-xs text-ink-3">{t.learn.detail.knowledge.pointsEmpty}</p>
@@ -88,7 +169,29 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
               >
                 {idx + 1}  {ch.title}
               </Link>
-              {ch.keyPoints && ch.keyPoints.length > 0 ? (
+
+              {ch.keyPointRefs && ch.keyPointRefs.length > 0 ? (
+                <ul className="mt-2 space-y-2">
+                  {ch.keyPointRefs.map((ref, i) => (
+                    <li key={i} className="text-xs text-ink-2">
+                      <p>• {ref.point}</p>
+                      <div className="mt-1 border-l-2 border-line pl-2">
+                        <p className="text-ink-3">
+                          {t.learn.detail.knowledge.refLabel}：{ref.quote}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => goSource(ref.start)}
+                          className="mt-0.5 text-primary hover:underline"
+                        >
+                          {t.learn.detail.knowledge.goSource}
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : ch.keyPoints && ch.keyPoints.length > 0 ? (
+                /* 老数据回退：无 keyPointRefs → 纯文本要点（TC-EDGE-01） */
                 <ul className="mt-2 space-y-1 text-xs text-ink-2">
                   {ch.keyPoints.map((kp, i) => (
                     <li key={i}>• {kp}</li>
@@ -164,6 +267,7 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
           <p className="text-xs text-ink-2">
             {t.learn.detail.knowledge.extractDone(summary.ok, summary.failed.length)}
           </p>
+          {summary.extra && <p className="mt-1 text-xs text-ink-3">{summary.extra}</p>}
           {summary.failed.length > 0 && (
             <ul className="mt-2 space-y-1 text-xs text-ink-3">
               {summary.failed.map((title, i) => (

@@ -4,7 +4,7 @@ import { storage } from '../../stores/useLoopStore';
 import { useI18n } from '../../i18n';
 import { PageContainer } from '../../components/layout/AppShell';
 import { Button } from '../../components/ui/button';
-import { Tabs, TabsList, TabsTab, TabsPanel } from '../../components/ui/tabs';
+import { Tabs, TabsList, TabsTab, TabsPanel, TabsIndicator } from '../../components/ui/tabs';
 import { ChevronLeft } from 'lucide-react';
 import type { SourceDocument, Chapter, KnowledgeGraph, LearnerState } from '../../domain';
 
@@ -19,6 +19,9 @@ export default function DocumentDetailPage() {
   const { docId } = useParams<{ docId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = (searchParams.get('tab') || 'content') as 'content' | 'split' | 'knowledge' | 'papers';
+  /** 原文锚点（知识点 Tab 点「原文 →」带过来）；非法值一律当未提供。 */
+  const atRaw = Number(searchParams.get('at') ?? NaN);
+  const at = Number.isFinite(atRaw) && atRaw >= 0 ? atRaw : undefined;
 
   const [doc, setDoc] = useState<SourceDocument | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -110,7 +113,7 @@ export default function DocumentDetailPage() {
         onValueChange={(v) => setSearchParams({ tab: String(v) })}
         className="mt-6"
       >
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList>
           {[
             { value: 'content', label: t.learn.detail.tabs.content },
             { value: 'split', label: t.learn.detail.tabs.split },
@@ -121,10 +124,11 @@ export default function DocumentDetailPage() {
               {item.label}
             </TabsTab>
           ))}
+          <TabsIndicator />
         </TabsList>
 
         <TabsPanel value="content" className="mt-4">
-          <ContentTab doc={doc} />
+          <ContentTab doc={doc} at={at} />
         </TabsPanel>
         <TabsPanel value="split" className="mt-4">
           <SplitTab doc={doc} chapters={chapters} learner={learner} onChanged={handleRefresh} />
@@ -133,7 +137,7 @@ export default function DocumentDetailPage() {
           <KnowledgeTab doc={doc} chapters={chapters} graph={graph} learner={learner} onChanged={handleRefresh} />
         </TabsPanel>
         <TabsPanel value="papers" className="mt-4">
-          <PapersTab chapters={chapters} learner={learner} />
+          <PapersTab doc={doc} chapters={chapters} learner={learner} />
         </TabsPanel>
       </Tabs>
     </PageContainer>

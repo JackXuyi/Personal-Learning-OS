@@ -97,7 +97,8 @@ export default function NewQuizPage() {
         const ids = wantIds.length > 0 ? wantIds : chapters.map((c) => c.id);
         setSelected(new Set(ids));
         const wantMode = searchParams.get("mode");
-        if (wantMode && wantMode !== "retake") {
+        // 只接受向导支持的卷型（补考卷 / 未知值一律忽略，避免非法 mode 流入 createPaper）。
+        if (wantMode && (NEW_MODES as string[]).includes(wantMode)) {
           setMode(wantMode as Exclude<PaperMode, "retake">);
         }
       }

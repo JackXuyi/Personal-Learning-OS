@@ -647,7 +647,16 @@ export const zh = {
       missingTitle: "资料不存在",
       missingDesc: "它可能已被删除。",
       loading: "加载中…",
-      tabs: { content: "资料内容", split: "切分结果", knowledge: "关键知识点", papers: "章节测评试卷" },
+      tabs: { content: "资料内容", split: "章节列表", knowledge: "关键知识点", papers: "章节测评试卷" },
+      /** 章节列表（原「切分结果」Tab）：行内文案。 */
+      chapters: {
+        emptyTitle: "还没有章节",
+        emptyDesc: "点「立即切分」，按标题 / 分段自动把资料切成章。",
+        split: "立即切分",
+        chars: (n: number) => `${n} 字`,
+        keyPoints: (n: number) => `${n} 要点`,
+        totalChars: (n: number) => `共 ${n} 字`,
+      },
       metaLine: (source: string, imported: string, chars: number) =>
         `${source} · 导入于 ${imported} · ${chars} 字`,
       content: {
@@ -658,6 +667,7 @@ export const zh = {
         metaChars: (n: number) => `${n} 字`,
         metaImported: (d: string) => `导入于 ${d}`,
         metaSource: (s: string) => `来源 ${s}`,
+        imageNoText: "该资料为图片，暂无可渲染的正文。",
       },
       /** 切分（代码）：确定性、无重试。 */
       split: {
@@ -706,6 +716,13 @@ export const zh = {
         graphHead: "概念图谱",
         pointsEmpty: "还没有要点——先完成切分。",
         goRead: "去阅读 →",
+        extractPoints: "AI 分析要点",
+        reExtractPoints: "重新分析要点",
+        pointsNoAi: "配置 AI 模型后可解析要点并定位原文。",
+        pointsDone: (done: number, total: number) => `已带原文引用 ${done}/${total} 章`,
+        pointsUnanchored: (n: number) => `其中 ${n} 条未能在原文定位，已丢弃（宁可少一条，也不给假出处）。`,
+        refLabel: "原文",
+        goSource: "原文 →",
         extractAll: "AI 分析概念",
         reExtract: "重新分析概念",
         extracting: (i: number, n: number, t: string) => `正在分析 ${i}/${n} · ${t}`,
@@ -724,6 +741,22 @@ export const zh = {
         emptyDesc: "为任一章节出一卷，检验掌握程度。",
         noPapers: "暂无试卷",
         staleScope: "范围已失效",
+        docAdvice: "整册建议",
+        goNew: "去出卷 →",
+        itemCount: (n: number) => `${n} 题`,
+        score: (n: number) => `${n} 分`,
+        duration: (min: number) => `约 ${min} 分钟`,
+        difficulty: (band: number) => `难度 ${band}`,
+        viewReport: "看报告 →",
+        goAnswer: "去答题 →",
+        reason: {
+          never: "还没测过",
+          failed: "低于及格线，建议补考",
+          weak: "已及格但未达标",
+          near: "接近达标，建议阶段测",
+          mastered: "已达标",
+          allMastered: "全册达标",
+        },
       },
     },
     /** 资料格式标签（文档卡类型徽标；DocumentFormat 全覆盖）。 */

@@ -662,7 +662,16 @@ export const en: Messages = {
       missingTitle: "Document not found",
       missingDesc: "It may have been deleted.",
       loading: "Loading…",
-      tabs: { content: "Content", split: "Split", knowledge: "Key points", papers: "Papers" },
+      tabs: { content: "Content", split: "Chapters", knowledge: "Key points", papers: "Papers" },
+      /** Chapter list (former “Split” tab): in-row copy. */
+      chapters: {
+        emptyTitle: "No chapters yet",
+        emptyDesc: "Click “Split now” to cut this document into chapters by headings or paragraphs.",
+        split: "Split now",
+        chars: (n: number) => `${n} chars`,
+        keyPoints: (n: number) => `${n} points`,
+        totalChars: (n: number) => `${n} chars total`,
+      },
       metaLine: (source: string, imported: string, chars: number) =>
         `${source} · imported ${imported} · ${chars} chars`,
       content: {
@@ -673,6 +682,7 @@ export const en: Messages = {
         metaChars: (n: number) => `${n} chars`,
         metaImported: (d: string) => `Imported ${d}`,
         metaSource: (s: string) => `Source ${s}`,
+        imageNoText: "This document is an image — there is no body to render.",
       },
       /** Split (code): deterministic, no retry. */
       split: {
@@ -721,6 +731,14 @@ export const en: Messages = {
         graphHead: "Concept graph",
         pointsEmpty: "No points yet — split first.",
         goRead: "Open reader →",
+        extractPoints: "AI analyze points",
+        reExtractPoints: "Re-analyze points",
+        pointsNoAi: "Configure an AI model to extract points and locate them in the source.",
+        pointsDone: (done: number, total: number) => `${done}/${total} chapters have source quotes`,
+        pointsUnanchored: (n: number) =>
+          `${n} quote(s) could not be located in the source and were dropped — better no quote than a fake one.`,
+        refLabel: "Source",
+        goSource: "Source →",
         extractAll: "AI analyze concepts",
         reExtract: "Re-analyze concepts",
         extracting: (i: number, n: number, t: string) => `Analyzing ${i}/${n} · ${t}`,
@@ -740,6 +758,22 @@ export const en: Messages = {
         emptyDesc: "Create a paper for any chapter to test mastery.",
         noPapers: "No papers yet",
         staleScope: "Scope outdated",
+        docAdvice: "Whole-document advice",
+        goNew: "New paper →",
+        itemCount: (n: number) => `${n} items`,
+        score: (n: number) => `${n} pts`,
+        duration: (min: number) => `~${min} min`,
+        difficulty: (band: number) => `Level ${band}`,
+        viewReport: "View report →",
+        goAnswer: "Answer →",
+        reason: {
+          never: "Not tested yet",
+          failed: "Below pass line — retake suggested",
+          weak: "Passed but not yet on target",
+          near: "Close to target — stage test suggested",
+          mastered: "On target",
+          allMastered: "Whole document on target",
+        },
       },
     },
     /** Document-format labels (type badge on document cards; covers DocumentFormat). */
