@@ -9,3 +9,7 @@ export * from "./types";
 export { OpenAICompatibleProvider } from "./openai-compatible";
 export { createProvider } from "./registry";
 export * from "./pipelines";
+// 检索层（RAG 链路下游）：向量纯函数 + RRF 融合 + 混合检索编排
+export * from "./retrieval/vector-search";
+export * from "./retrieval/rrf";
+export * from "./retrieval/hybrid-search";
