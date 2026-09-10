@@ -869,10 +869,14 @@ interface StorageAdapter {
 
 | 阶段 | 工作 | 时间 |
 |------|------|------|
-| **N1（P1）** | 向量库选型（SQLite vector vs LanceDB）+ Embedding 表补齐；Chunk 级检索引擎 | 2 周 |
+| ~~**N1（P1）**~~ ✅ **已实施（2026-09-10）** | ~~向量库选型（SQLite vector vs LanceDB）+ Embedding 表补齐；Chunk 级检索引擎~~ → 落地为 `docs/rag-wiring-design-2026-09.md`：不引外部向量库，`embeddings.vector` 直接以 float32 LE BLOB 承载（schema v3）；新增 `engine/chunk-engine`、`ai/retrieval/*`、`features/learn/index-service`，并把写入端接到导入管道与手动切分。实施记录见 `docs/rag-wiring-task-runbook.md` | ~~2 周~~ 已交付 |
 | **N2（P1）** | Knowledge Graph 可视化 + 高级检索（图扩展、重排序） | 3 周 |
 | **N3（P2）** | RAG Context Builder 完整实现；Evidence 链路闭合 | 2 周 |
 | **N4（P2）** | localStorage 下线；Tauri SQLite 生产迁移工具上线 | 1 周 |
+
+> N1 落地后的**能力边界**（与本节原设想的两点差异，均已在本方案中显式记录）：
+> ① 未引入向量库扩展（`sqlite-vec` / LanceDB）——个人资料规模下全量载入 + 内存余弦足够；
+> ② `sections` 表仍留空，本期维持 Chunk 两层结构（`Chapter → Chunk`），Section 三层检索归 N2。
 
 ---
 
@@ -881,3 +885,4 @@ interface StorageAdapter {
 | 日期 | 变更 | 作者 |
 |------|------|------|
 | 2026-09-10 | 初稿：五层存储模型 + SQLite DDL + StorageAdapter 扩展 + 迁移路径 | WorkBuddy |
+| 2026-09-10 | §11 标注 N1 已实施（RAG 全链路接线完成，见 `docs/rag-wiring-design-2026-09.md`） | WorkBuddy |
