@@ -406,6 +406,25 @@ Personal Learner Model
 
 ---
 
+## 🗄️ 存储层（RAG）
+
+数据全部留在本机，通过 `StorageAdapter`（`src/storage/types.ts`）抽象，三档后端按环境自动选择，业务代码零感知：
+
+| 后端 | 环境 | 落盘位置 | 说明 |
+| ---- | ---- | -------- | ---- |
+| `tauri` | 桌面端（生产） | `app_data_dir/plos.db`（SQLite） | Section / Chunk / KnowledgeUnit / Relation / Embedding 五类实体落库，FTS5 全文检索 |
+| `local` | 浏览器预览 | localStorage | 跨刷新保留；同时作为桌面端的降级兜底 |
+| `memory` | 单测 / SSR | 进程内 Map | 无副作用，注入即测 |
+
+**数据层级**：`Document → Chapter → Section → Chunk`。Chunk 是向量化与检索的最小单位，其上挂载知识单元（KnowledgeUnit）与关系（KnowledgeRelation），构成检索与推荐的基础。
+
+- **降级** —— 桌面端任一 `db_*` 命令失败即静默回退 localStorage，应用永不因存储故障而不可用。
+- **自动迁移** —— 首次确认 SQLite 可用时，把 localStorage 侧的遗留 RAG 数据一次性搬入 SQLite（幂等，失败下个启动周期重试）。
+- **手工导入** —— `node scripts/migrate-rag-to-sqlite.mjs --in export.json --db plos.db`（也可只生成 SQL 文件）。
+- **表结构** —— 见 `src-tauri/src/db/schema.sql`，含字段级注释与已知限制说明。
+
+---
+
 ## 🔐 隐私优先 & Local-first
 
 产品默认：
@@ -683,8 +702,9 @@ npm run tauri build    # 先 typecheck + vite build → dist/，再 cargo build 
 ### 质量门禁
 
 ```bash
-npm run typecheck   # tsc --noEmit 类型检查
-npm run build       # 类型检查 + 生产构建 → dist/
+npm run typecheck     # tsc --noEmit 类型检查
+npm run build         # 类型检查 + 生产构建 → dist/
+npm run test:storage  # RAG 存储层单测（内存后端，28 项断言）
 ```
 
 ### 仓库结构
@@ -693,12 +713,14 @@ npm run build       # 类型检查 + 生产构建 → dist/
 src/
   domain/      五核心对象 + goal/assessment/plan 类型（纯 TS）
   ai/          AI Provider 抽象 —— builtin（内置本地模型）· Ollama · OpenAI 兼容 …
-  storage/     StorageAdapter —— 内存 + localStorage（SQLite/Tauri 预留）
+  storage/     StorageAdapter —— 内存 / localStorage / SQLite（Tauri）三档后端
   engine/      七大引擎 + loop.ts 学习闭环编排 demo
   stores/      zustand 状态 —— 闭环快照、Provider 配置
   components/  AppShell 布局 + 通用 UI 原语
   features/    页面骨架 —— home · spaces · knowledge · assessment · career · study · settings
+scripts/       迁移脚本 —— migrate-rag-to-sqlite.mjs（localStorage 导出 → SQLite）
 src-tauri/     Tauri v2 壳 —— Cargo.toml · tauri.conf.json · capabilities · icons
+  db/            SQLite 后端 —— schema.sql · models.rs · commands.rs（db_* 命令）
   llama-helper/  本地推理 sidecar（Rust workspace 成员，llama.cpp 推理进程）
 ```
 

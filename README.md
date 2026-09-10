@@ -399,6 +399,25 @@ You can run the whole product on **fully local models**.
 
 ---
 
+## 🗄️ Storage Layer (RAG)
+
+Everything stays on your machine. Storage sits behind a single `StorageAdapter` (`src/storage/types.ts`) with three backends picked from the runtime — business code never knows which one it got:
+
+| Backend | Environment | Persisted to | Notes |
+| ------- | ----------- | ------------ | ----- |
+| `tauri` | Desktop (production) | `app_data_dir/plos.db` (SQLite) | Section / Chunk / KnowledgeUnit / Relation / Embedding land here, FTS5 full-text search |
+| `local` | Browser preview | localStorage | Survives reloads; doubles as the desktop fallback |
+| `memory` | Tests / SSR | in-process `Map` | No side effects, inject and assert |
+
+**Data hierarchy**: `Document → Chapter → Section → Chunk`. A Chunk is the smallest unit for embedding and retrieval; knowledge units and relations hang off it and form the basis for search and recommendations.
+
+- **Degradation** — if any `db_*` command fails on desktop, calls silently fall back to localStorage. The app never becomes unusable because of a storage fault.
+- **Auto migration** — the first time SQLite proves available, legacy RAG data in localStorage is moved over once (idempotent; a failure retries on the next launch).
+- **Manual import** — `node scripts/migrate-rag-to-sqlite.mjs --in export.json --db plos.db` (or emit a `.sql` file instead).
+- **Schema** — see `src-tauri/src/db/schema.sql` for per-column comments and known limitations.
+
+---
+
 ## 🔐 Privacy & Local-first
 
 The product defaults to:
@@ -677,8 +696,9 @@ Artifacts land in `src-tauri/target/release/`:
 ### Quality gates
 
 ```bash
-npm run typecheck   # tsc --noEmit
-npm run build       # typecheck + production build → dist/
+npm run typecheck     # tsc --noEmit
+npm run build         # typecheck + production build → dist/
+npm run test:storage  # RAG storage layer unit tests (in-memory backend)
 ```
 
 ### Repository layout
@@ -687,12 +707,14 @@ npm run build       # typecheck + production build → dist/
 src/
   domain/      five core objects + goal/assessment/plan types (pure TS)
   ai/          AI Provider abstraction — builtin (local model) · Ollama · OpenAI-compatible …
-  storage/     StorageAdapter — in-memory + localStorage (SQLite/Tauri later)
+  storage/     StorageAdapter — in-memory / localStorage / SQLite (Tauri) backends
   engine/      seven engines + loop.ts orchestration demo
   stores/      zustand state — loop snapshot, provider settings
   components/  AppShell layout + shared UI primitives
   features/    page skeletons — home · spaces · knowledge · assessment · career · study · settings
+scripts/       migration scripts — migrate-rag-to-sqlite.mjs (localStorage export → SQLite)
 src-tauri/     Tauri v2 shell — Cargo.toml · tauri.conf.json · capabilities · icons
+  db/            SQLite backend — schema.sql · models.rs · commands.rs (db_* commands)
   llama-helper/  local-inference sidecar (Rust workspace member, llama.cpp)
 ```
 
