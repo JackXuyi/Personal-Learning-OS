@@ -26,7 +26,8 @@ function TabsList({ className, ...props }: TabsListProps) {
     <BaseTabs.List
       data-slot="tabs-list"
       className={cn(
-        "relative flex w-fit items-center gap-6 border-b border-line bg-transparent p-0",
+        // w-full + Tab flex-1：整行铺满、各项等宽（不再 w-fit 左对齐留白）。
+        "relative flex w-full items-stretch gap-1 border-b border-line bg-transparent p-0",
         className,
       )}
       {...props}
@@ -41,11 +42,12 @@ function TabsTab({ className, ...props }: TabsTabProps) {
     <BaseTabs.Tab
       data-slot="tabs-tab"
       className={cn(
-        // -mb-px：压住容器底边，让 Indicator 与 border-b 对齐成一条线。
-        "-mb-px whitespace-nowrap border-b-2 border-transparent pb-2 pt-1 text-sm font-medium",
+        // 选中态由 TabsIndicator 单独承担：这里不再画 border-b-2（避免 2px 落差
+        // 与「主色条 + 灰线」双层线），只负责等分、字色与焦点环。
+        "min-w-0 flex-1 whitespace-nowrap px-2 pb-2 pt-1 text-center text-sm font-medium",
         "text-ink-3 transition-colors hover:text-ink-2",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
-        "data-selected:border-transparent data-selected:text-ink-1",
+        "data-selected:text-ink-1",
         className,
       )}
       {...props}
@@ -70,13 +72,21 @@ type TabsIndicatorProps = React.ComponentProps<typeof BaseTabs.Indicator>;
 /**
  * 滑动下划线。必须放在 `TabsList` **内部**（它靠 List 的布局测量位置），
  * 且容器需为 `relative` —— TabsList 已带，勿去掉。
+ *
+ * ⚠️ 踩坑记录（Base UI 1.8）：`Tabs.Indicator` **不会自动定位**，它只把量测结果
+ * 写成 CSS 变量（`--active-tab-left` / `--active-tab-width`，值自带 `px`）挂在自身
+ * inline style 上。因此**必须自己把变量绑到 `left` / `width`** —— 早期版本只给了
+ * `absolute bottom-0 h-0.5 bg-primary`，宽度恒为 0，选中态完全不可见。
  */
 function TabsIndicator({ className, ...props }: TabsIndicatorProps) {
   return (
     <BaseTabs.Indicator
       data-slot="tabs-indicator"
       className={cn(
-        "absolute bottom-0 h-0.5 rounded-full bg-primary transition-all duration-200",
+        "absolute left-[var(--active-tab-left)] w-[var(--active-tab-width)]",
+        // -bottom-px：压住 TabsList 的 border-b，避免「2px 主色 + 1px 灰线」两层。
+        "-bottom-px h-0.5 rounded-full bg-primary",
+        "transition-[left,width] duration-200 ease-out motion-reduce:transition-none",
         className,
       )}
       {...props}

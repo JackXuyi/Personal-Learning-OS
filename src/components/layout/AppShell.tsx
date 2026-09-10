@@ -245,6 +245,20 @@ function ShellNavContent({
   );
 }
 
-export function PageContainer({ children }: { children: ReactNode }) {
-  return <div className="mx-auto max-w-5xl px-8 py-8">{children}</div>;
+export function PageContainer({
+  children,
+  size = "default",
+}: {
+  children: ReactNode;
+  /**
+   * `default` = 既有 1024px 居中（全站默认，勿改）；
+   * `wide` = 资料详情页等宽屏内容，随窗口伸展（上限 1600px），内边距按断点收放。
+   */
+  size?: "default" | "wide";
+}) {
+  const cls =
+    size === "wide"
+      ? "mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8"
+      : "mx-auto max-w-5xl px-8 py-8";
+  return <div className={cls}>{children}</div>;
 }

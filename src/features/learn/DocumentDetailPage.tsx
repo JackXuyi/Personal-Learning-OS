@@ -56,6 +56,21 @@ export default function DocumentDetailPage() {
     })();
   }, [docId, storage, navigate]);
 
+  /**
+   * 切换 Tab：**合并式**更新 URL —— 原实现 `setSearchParams({ tab })` 会把 `at`
+   * 一起丢掉，于是「原文锚定」切走一趟就失效。此处保留其余参数（D2 决策）。
+   */
+  const selectTab = (v: string) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('tab', v);
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
   const handleRefresh = async () => {
     if (!doc) return;
     try {
@@ -83,21 +98,21 @@ export default function DocumentDetailPage() {
   }
 
   return (
-    <PageContainer>
-      {/* 顶部工具栏 */}
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+    <PageContainer size="wide">
+      {/* 顶部工具栏：窄屏换行，标题 truncate 不撑破容器 */}
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => navigate('/learn')}
-            className="h-8 w-8"
+            className="h-8 w-8 shrink-0"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div>
-            <h1 className="text-lg font-semibold text-ink-1">{doc.title}</h1>
-            <p className="text-xs text-ink-3">
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-semibold text-ink-1">{doc.title}</h1>
+            <p className="truncate text-xs text-ink-3">
               {doc.source && `${doc.source} · `}
               {new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric' }).format(
                 new Date(doc.importedAt)
@@ -105,14 +120,10 @@ export default function DocumentDetailPage() {
             </p>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Tab 导航：TabsList/Tab/Panel 必须包裹在 Tabs(Root) 内，否则 Base UI 抛 TabsRootContext is missing */}
-      <Tabs
-        value={tab}
-        onValueChange={(v) => setSearchParams({ tab: String(v) })}
-        className="mt-6"
-      >
+      <Tabs value={tab} onValueChange={selectTab} className="mt-6">
         <TabsList>
           {[
             { value: 'content', label: t.learn.detail.tabs.content },
