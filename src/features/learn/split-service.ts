@@ -11,16 +11,19 @@ import type { Chapter, SourceDocument } from "../../domain";
 import type { StorageAdapter } from "../../storage";
 import { splitDocument } from "../../engine/splitter-engine";
 import type { SplitStrategy } from "../../engine/splitter-engine";
+import { rebuildChunks } from "./index-chunks";
 import { matchResplit, remapLearnerStateOnResplit } from "./resplit-mastery";
 
 export type SplitMode = "initial" | "resplit";
 
 export class SplitServiceError extends Error {
-  constructor(
-    readonly kind: "no-body" | "no-chapters",
-    message: string,
-  ) {
+  readonly kind: "no-body" | "no-chapters";
+  // 不用 TS 参数属性（constructor(readonly kind)）——那属于 strip-only 模式不支持的
+  // 语法糖，会让本模块无法被 `--experimental-strip-types` 直跑的单测导入。
+  constructor(kind: "no-body" | "no-chapters", message: string) {
     super(message);
+    this.name = "SplitServiceError";
+    this.kind = kind;
   }
 }
 
@@ -83,6 +86,10 @@ export async function splitDocumentNow(
 
   await storage.saveChapters(doc.id, heuristic.chapters);
   if (remapped.carried > 0) await storage.saveLearnerState(remapped.state);
+
+  // 切分产物同步落成 Chunk（RAG 写入端；纯代码零 AI，与上面同属「确定性」范畴）。
+  // 位置：章节与掌握度都已写成功之后——避免 chunk 先落库而章节写入失败造成不一致。
+  await rebuildChunks({ ...doc, textPreview: text }, heuristic.chapters, storage);
 
   return {
     mode: old.length > 0 ? "resplit" : "initial",

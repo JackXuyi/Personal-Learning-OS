@@ -12,6 +12,10 @@
  * - 内容切不出章节（0 章）→ 仍保存资料，返回空 chapterIds（UI 展示「仅保存」）；
  * - AI 精修仅在传入 provider 且其就绪时发生，失败/未配置静默回退启发式（永不抛错）；
  * - 任何写入失败（如 localStorage 配额）向上抛，由调用方展示错误——不写半成品。
+ *
+ * RAG 接线（docs/rag-wiring-design-2026-09.md §5.1-A）：`link` 阶段原先为空实现，
+ * 现负责把切分结果落成 Chunk（`rebuildChunks`，纯代码零 AI）。向量化不在此处——
+ * 属 AI 侧，由 `index-service` 在导入完成后后台串行执行（D2-A）。
  */
 import type { SourceDocument } from "../../../domain";
 import { newId } from "../../../domain";
@@ -19,6 +23,7 @@ import type { StorageAdapter } from "../../../storage";
 import type { AIProvider } from "../../../ai";
 import { refineSplitResult } from "../../../ai";
 import { splitDocument } from "../../../engine";
+import { rebuildChunks } from "../index-chunks";
 import type { ImportUnit, UnitResult, ImportSummary } from "./types";
 
 /** 与 ImportModal 现状 PHASE_ORDER 一致。 */
@@ -96,7 +101,9 @@ export async function runUnitImport(unit: ImportUnit, opts: RunUnitOptions): Pro
 
   await phase("create", () => storage.saveChapters(doc.id, chapters));
 
-  await phase("link", async () => {});
+  await phase("link", () =>
+    rebuildChunks(doc, chapters, storage).then(() => undefined),
+  );
 
   return {
     unit,

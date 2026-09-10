@@ -22,6 +22,8 @@ export interface DeleteReport {
   chapters: number;
   papers: number;
   concepts: number;
+  /** 该资料已落库的 Chunk 数（RAG 索引；无索引时为 0）。 */
+  chunks: number;
 }
 
 /** 删除前预检：只读统计，返回将被连带清理的数量（供确认弹窗展示）。 */
@@ -43,11 +45,14 @@ export async function previewDeleteCascade(
     const g = await store.getGraph();
     concepts = g.units.filter((u) => unitIds.has(u.id)).length;
   }
-  return { chapters: chapters.length, papers: papers.length, concepts };
+  const chunks = (await store.listChunksByDocument(docId)).length;
+  return { chapters: chapters.length, papers: papers.length, concepts, chunks };
 }
 
 /**
  * 删除资料并级联清理（顺序固定，避免半清理）：
+ *  0) Chunk：先清该资料的 chunk 与其向量（RAG 索引）——必须先查旧 chunk id，
+ *     因为 chunk 行删掉之后就查不到「谁有向量」了
  *  1) 试卷：scope 命中该资料章节的全部试卷 → deletePaper（级联清草稿与结果）
  *  2) 概念：按章 unitIds 反查全局图，清单元与相关关系（无孤儿节点）→ saveGraph
  *  3) 资料本体：deleteDocument（适配器内部再级联删章节）
@@ -58,6 +63,11 @@ export async function deleteDocumentCascade(
 ): Promise<DeleteReport> {
   const chapters = await store.listChapters(docId);
   const chapterIds = new Set(chapters.map((c) => c.id));
+
+  // 0) Chunk + 向量（RAG 索引）
+  const chunks = await store.listChunksByDocument(docId);
+  for (const c of chunks) await store.deleteEmbeddingsByTarget(c.id);
+  await store.deleteChunksByDocument(docId);
 
   // 1) 试卷（含草稿与结果）
   const papers = (await store.listPapers()).filter((p) =>
@@ -81,7 +91,7 @@ export async function deleteDocumentCascade(
 
   // 3) 资料本体（适配器内部再级联删章节）
   await store.deleteDocument(docId);
-  return { chapters: chapters.length, papers: papers.length, concepts };
+  return { chapters: chapters.length, papers: papers.length, concepts, chunks: chunks.length };
 }
 
 /** 重命名（title 去空白，空则拒绝）。 */
