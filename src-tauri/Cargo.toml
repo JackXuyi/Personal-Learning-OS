@@ -32,6 +32,15 @@ dirs = "5"
 tokio = { version = "1", features = ["sync", "time", "process", "io-util", "macros", "rt"] }
 reqwest = { version = "0.12", default-features = false, features = ["stream", "rustls-tls"] }
 futures-util = "0.3"
+# RAG 存储层（T5–T6）：SQLite + FTS5 全文检索。
+# 用 query() 运行时 SQL 而非 query!() 宏，故不依赖 DATABASE_URL（离线可编译）；
+# macros 仍需要——models.rs 用 `#[derive(sqlx::FromRow)]` 做行映射。
+# bundled SQLite 自带 FTS5；runtime-tokio 与既有 tokio 依赖对齐。
+sqlx = { version = "0.8", default-features = false, features = [
+  "runtime-tokio",
+  "sqlite",
+  "macros",
+] }
 
 [profile.release]
 panic = "abort"

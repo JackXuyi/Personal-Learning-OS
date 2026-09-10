@@ -14,9 +14,11 @@ use std::time::Duration;
 use serde_json::json;
 use tauri::Manager;
 
+mod db;
 mod llm;
 mod vault;
 
+use db::init_db;
 use llm::commands::LlmState;
 use llm::manager::ModelManager;
 use llm::sidecar::Sidecar;
@@ -61,6 +63,11 @@ fn init_llm(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            // SQLite 初始化失败不阻塞启动：UI 侧 isTauri() 守卫会回退到
+            // localStorage 后端（db_status 可用于排障）。
+            if let Err(err) = init_db(app) {
+                eprintln!("sqlite init skipped: {err}");
+            }
             if let Err(err) = init_llm(app) {
                 // 本地模型栈初始化失败不阻塞启动:仅记录,UI 侧 llm_status
                 // 会给出可读的 not-configured 提示。
@@ -80,6 +87,26 @@ pub fn run() {
             vault::vault_set_secret,
             vault::vault_get_secret,
             vault::vault_delete_secret,
+            // RAG 存储层（T6）
+            db::commands::db_status,
+            db::commands::db_list_sections,
+            db::commands::db_save_sections,
+            db::commands::db_delete_section,
+            db::commands::db_list_chunks,
+            db::commands::db_list_chunks_by_document,
+            db::commands::db_chunks_by_knowledge,
+            db::commands::db_save_chunks,
+            db::commands::db_delete_chunk,
+            db::commands::db_fts_search,
+            db::commands::db_list_knowledge_units,
+            db::commands::db_save_knowledge_units,
+            db::commands::db_delete_knowledge_unit,
+            db::commands::db_list_relations,
+            db::commands::db_prerequisites_of,
+            db::commands::db_save_relations,
+            db::commands::db_list_embeddings,
+            db::commands::db_save_embeddings,
+            db::commands::db_delete_embeddings_by_target,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the Personal Learning OS shell");
