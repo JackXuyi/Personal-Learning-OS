@@ -8,17 +8,21 @@
  * - 本模块绝不 import splitter-engine 的切分函数（只用 applyChapterRefine
  *   把分析建议写回章节；切分与分析互不调用）；
  * - 分析只写 title / keyPoints / unitIds / doc.analysis，从不改 chapter.id
- *   与 contentRef → learnerState 与试卷范围在分析前后完全稳定，可安全重跑。
+ *   与 contentRef → learnerState 与试卷范围在分析前后完全稳定，可安全重跑；
+ * - ③ 要点分析额外写 `Chapter.keyPointRefs`（要点 ↔ 原文引用）与概念
+ *   `KnowledgeUnit.evidence`；两者都只写**由代码定位**的字符区间。
  */
-import type { Chapter, SourceDocument } from "../../domain";
+import type { Chapter, KeyPointRef, SourceDocument } from "../../domain";
 import type { StorageAdapter } from "../../storage";
 import type { AIProvider } from "../../ai";
 import {
   refineChaptersWithAi,
   extractChapterConceptsWithAi,
+  extractKeyPointsWithAi,
 } from "../../ai/pipelines";
 import { applyChapterRefine } from "../../engine/splitter-engine";
 import { replaceChapterConcepts } from "../../engine/graph-engine";
+import { anchorToDocument } from "./evidence-anchor";
 
 export type AnalyzeErrorKind =
   | "not-configured"
@@ -68,6 +72,25 @@ export interface AnalyzeConceptsOptions {
   model?: string;
   /** true = 只补未提炼的章；false（默认）= 全部重新分析（覆盖旧概念）。 */
   onlyMissing?: boolean;
+  onProgress?: (i: number, total: number, chapter: Chapter) => void;
+  now?: number;
+}
+
+/** ③ 要点分析：逐章抽取要点 + 原文摘录，锚定后写入 Chapter.keyPointRefs。 */
+export interface AnalyzeKeyPointsResult {
+  ok: number;
+  failed: { chapterId: string; title: string; reason: string }[];
+  /** 成功锚定并写回的引用条数。 */
+  refs: number;
+  /** quote 未能在原文定位、因而被丢弃的条数（要点本身不写入）。 */
+  unanchored: number;
+  analyzedAt: number;
+}
+
+export interface AnalyzeKeyPointsOptions {
+  storage: StorageAdapter;
+  provider: AIProvider;
+  model?: string;
   onProgress?: (i: number, total: number, chapter: Chapter) => void;
   now?: number;
 }
@@ -142,9 +165,25 @@ export async function analyzeConceptsNow(
       const out = await extractChapterConceptsWithAi(provider, {
         chapterTitle: c.title,
         text: body,
+        documentId: doc.id,
+      });
+      // 原文锚定：AI 只给 quote，偏移由 locateQuote 算出来（不信 AI 的偏移量）。
+      // 定位失败 → 移除 evidence（概念照常入库，诚实降级，不伪造出处）。
+      const anchored = out.units.map((u) => {
+        const quote = u.evidence?.quote;
+        if (!quote) return u;
+        const hit = anchorToDocument(body, quote, c.contentRef.start);
+        if (!hit) {
+          const { evidence: _drop, ...rest } = u;
+          return rest;
+        }
+        return {
+          ...u,
+          evidence: { documentId: doc.id, start: hit.start, end: hit.end, quote },
+        };
       });
       graph = replaceChapterConcepts(graph, c.unitIds, {
-        units: out.units,
+        units: anchored,
         relations: out.relations,
       });
       touched.set(c.id, { ...c, unitIds: out.units.map((u) => u.id) });
@@ -167,4 +206,95 @@ export async function analyzeConceptsNow(
     analysis: { ...doc.analysis, ...(model ? { model } : {}), conceptsAt: now },
   });
   return { ok: targets.length - failed.length, failed, units, relations, analyzedAt: now };
+}
+
+/**
+ * ③ 要点分析执行序：逐章（串行、单章失败不阻断）抽取「要点 + 原文摘录」，
+ * 用 `anchorToDocument` 把摘录锚定成文档绝对区间，最后一次性写库。
+ *
+ * 与概念分析的两点差异：
+ * - 要点**必须**带原文出处，`parseKeyPointDrafts` 已把无 quote 的条目过滤掉；
+ * - 锚定失败的条目直接丢弃（只计数，不算失败）——宁可少一条要点，也不给一条
+ *   跳过去找不到原文的「引用」（P0-3 不伪造内容）。
+ *
+ * 单一真源：`keyPoints` 与 `keyPointRefs[].point` 同步写入。但当某章
+ * **一条都没锚上**时保留原有 `keyPoints`，避免把代码切分产出的要点抹成空。
+ */
+export async function analyzeKeyPointsNow(
+  doc: SourceDocument,
+  chapters: readonly Chapter[],
+  opts: AnalyzeKeyPointsOptions,
+): Promise<AnalyzeKeyPointsResult> {
+  const { storage, provider, model, onProgress, now = Date.now() } = opts;
+  if (!provider.isConfigured()) {
+    throw new AnalyzeServiceError("not-configured", "AI 未配置。");
+  }
+  if (chapters.length === 0) {
+    throw new AnalyzeServiceError("no-chapters", "还没有章节，先切分。");
+  }
+  const text = doc.textPreview ?? "";
+  if (text.trim().length === 0) {
+    throw new AnalyzeServiceError("no-body", "这份资料没有正文。");
+  }
+
+  const failed: AnalyzeKeyPointsResult["failed"] = [];
+  const touched = new Map<string, Chapter>();
+  let refs = 0;
+  let unanchored = 0;
+
+  for (let i = 0; i < chapters.length; i++) {
+    const c = chapters[i];
+    onProgress?.(i + 1, chapters.length, c);
+    try {
+      const body = text.slice(c.contentRef.start, c.contentRef.end);
+      const drafts = await extractKeyPointsWithAi(provider, {
+        chapterTitle: c.title,
+        text: body,
+      });
+
+      const chapterRefs: KeyPointRef[] = [];
+      for (const d of drafts) {
+        const hit = anchorToDocument(body, d.quote, c.contentRef.start);
+        if (!hit) {
+          unanchored++;
+          continue;
+        }
+        chapterRefs.push({
+          point: d.point,
+          quote: d.quote,
+          start: hit.start,
+          end: hit.end,
+        });
+      }
+
+      touched.set(c.id, {
+        ...c,
+        keyPointRefs: chapterRefs,
+        // 全军覆没时保留原要点，不把已有数据抹空。
+        ...(chapterRefs.length > 0
+          ? { keyPoints: chapterRefs.map((r) => r.point) }
+          : {}),
+      });
+      refs += chapterRefs.length;
+    } catch (err) {
+      failed.push({
+        chapterId: c.id,
+        title: c.title,
+        reason: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  await storage.saveChapters(doc.id, chapters.map((c) => touched.get(c.id) ?? c));
+  await storage.saveDocument({
+    ...doc,
+    analysis: { ...doc.analysis, ...(model ? { model } : {}), keyPointsAt: now },
+  });
+  return {
+    ok: chapters.length - failed.length,
+    failed,
+    refs,
+    unanchored,
+    analyzedAt: now,
+  };
 }

@@ -50,10 +50,15 @@ export const PIPELINE_LIMITS = {
   gradeChunkSize: 8,
   /** 概念抽取的章正文最大字符数（超出拒绝——图谱应聚焦单章）。 */
   conceptMaxTextChars: 40_000,
+  /** 要点抽取的章正文最大字符数（与概念抽取同口径）。 */
+  keyPointMaxTextChars: 40_000,
+  /** 单条要点 / 原文摘录的字符上限（防 AI 灌水）。 */
+  keyPointMaxChars: 60,
+  keyPointQuoteMaxChars: 200,
 };
 
 /** 温度：精修/出题偏稳定，批改最低（事实判定）。 */
-const TEMPERATURE = { refine: 0.2, quiz: 0.3, grade: 0.1, concept: 0.2 };
+const TEMPERATURE = { refine: 0.2, quiz: 0.3, grade: 0.1, concept: 0.2, keyPoint: 0.2 };
 
 /** 取章正文的摘录（去掉标题行与多余空白；maxChars 截断）。 */
 function chapterExcerpt(text: string, start: number, end: number, maxChars: number): string {
@@ -481,10 +486,12 @@ const CONCEPT_SYSTEM =
   "- 概念粒度适中：一章 6–14 个，宁缺毋滥——只收录正文真正讲到、值得单独记忆/复习的原子概念，不编造正文外的内容；\n" +
   "- kind：concept 概念 / skill 技能 / fact 事实 / procedure 流程 / principle 原理（拿不准用 concept）；\n" +
   "- summary：≤120 字的一句话总结，让复习时能快速回忆；tags：0–3 个 ≤12 字的归类标签；\n" +
+  "- quote：该概念在本章正文中的**原文摘录**（≤200 字，逐字照抄，不得改写/概括/拼接）；" +
+  "正文里确实找不到明确出处时给空字符串（宁缺毋滥，不要为了填满而编）；\n" +
   "- relations：概念之间的关键关系，只用 prerequisite（前置依赖）/ related（相关）/ parent-child（上下位）；\n" +
   "  关系两端用 units 数组下标（从 0 起）引用，仅画有信息量的边（6–14 个概念建议 ≤16 条），无强关联可不给。\n" +
   "只输出一个 JSON 对象（不要 markdown 围栏与多余文字），格式：" +
-  '{"units":[{"title":"向量化","kind":"concept","summary":"…","tags":["嵌入"]}],"relations":[{"from":0,"to":1,"type":"prerequisite"}]}。';
+  '{"units":[{"title":"向量化","kind":"concept","summary":"…","tags":["嵌入"],"quote":"向量化是把文本映射为向量的过程"}],"relations":[{"from":0,"to":1,"type":"prerequisite"}]}。';
 
 /** 纯函数：构建章概念抽取提示词。 */
 export function buildConceptMessages(input: {
@@ -506,6 +513,12 @@ export interface AiConceptDraft {
   kind: KnowledgeUnit["kind"];
   summary?: string;
   tags: string[];
+  /**
+   * 原文摘录（可选）——AI 指出该概念出自正文哪一段。
+   * 由执行器透传为 `KnowledgeUnit.evidence.quote`，**偏移一律由
+   * analyze-service 用 `locateQuote` 回填**（不信 AI 的偏移量）。
+   */
+  quote?: string;
 }
 
 /** 单关系草稿：from/to 为 units 数组下标（0 起）。 */
@@ -543,11 +556,14 @@ export function parseConceptDrafts(raw: unknown): {
           .filter((t) => t.length > 0)
           .slice(0, 3)
       : [];
+    const quote = str(item.quote)?.trim().slice(0, PIPELINE_LIMITS.keyPointQuoteMaxChars);
     units.push({
       title,
       kind,
       ...(summary && summary.length <= 120 ? { summary } : summary ? { summary: `${summary.slice(0, 120)}…` } : {}),
       tags,
+      // 缺失 quote 是允许的（evidence 整体可选），不报错。
+      ...(quote ? { quote } : {}),
     });
   }
   if (units.length === 0) {
@@ -586,6 +602,12 @@ export async function extractChapterConceptsWithAi(
     chapterTitle: string;
     /** 章正文（纯净文本；超长抛错，图谱应聚焦单章）。 */
     text: string;
+    /**
+     * 所属资料 id；传入且草稿带 quote 时，产出的 unit 会带 `evidence`。
+     * 注意：`evidence.start/end` 在此处恒为 -1（**未锚定**），偏移量由
+     * analyze-service 用 `locateQuote` 回填；锚定失败时该字段会被整体移除。
+     */
+    documentId?: string;
   },
 ): Promise<{ units: KnowledgeUnit[]; relations: KnowledgeRelation[] }> {
   const text = input.text.trim();
@@ -612,6 +634,10 @@ export async function extractChapterConceptsWithAi(
     ...(u.summary ? { summary: u.summary } : {}),
     tags: u.tags,
     createdAt: now,
+    // 未锚定占位（start/end = -1）；analyze-service 负责定位或移除。
+    ...(u.quote && input.documentId
+      ? { evidence: { documentId: input.documentId, start: -1, end: -1, quote: u.quote } }
+      : {}),
   }));
   const unitIds = created.map((u) => u.id);
   const createdRels: KnowledgeRelation[] = relations.map((r) => ({
@@ -621,4 +647,119 @@ export async function extractChapterConceptsWithAi(
     type: r.type,
   }));
   return { units: created, relations: createdRels };
+}
+
+/* ------------------------------------------------------------------ */
+/* 5) 章要点 AI 抽取 + 原文摘录（资料详情页 · 关键知识点 Tab）          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 要点抽取与「概念抽取」的关键差异：**每条要点都必须附原文摘录**。
+ * 用户的核心诉求是「知识点能对应到原文」，所以提示词把 quote 列为必填项，
+ * 并明确要求逐字照抄——便于 `locateQuote` 精确命中（档 1 就能解决绝大多数）。
+ */
+const KEYPOINT_SYSTEM =
+  "你是严谨的学习资料要点提炼助手。用户会给出一章正文，请提炼这一章的学习要点。\n" +
+  "要求：\n" +
+  "- 2–5 条陈述式要点，每条 ≤60 字、可判对错，只讲正文真正讲到的内容，绝不编造；\n" +
+  "- 每条要点必须附 `quote`：该要点在本章正文中对应的**原文摘录**（≤200 字）。\n" +
+  "  必须逐字照抄正文中的连续片段，不得改写、概括、拼接不相邻的句子；\n" +
+  "- 找不到确切原文出处的要点请不要输出（宁缺毋滥），不要为了凑数给空 quote；\n" +
+  "- 要点之间不要重复，也不要与章标题重复。\n" +
+  "只输出一个 JSON 对象（不要 markdown 围栏与多余文字），格式：" +
+  '{"points":[{"point":"要点","quote":"原文摘录"}]}。';
+
+/** 纯函数：构建要点抽取提示词。 */
+export function buildKeyPointMessages(input: {
+  chapterTitle: string;
+  text: string;
+}): ChatMessage[] {
+  return [
+    { role: "system", content: KEYPOINT_SYSTEM },
+    {
+      role: "user",
+      content: `章「${input.chapterTitle || "(未命名章)"}」正文如下（${input.text.length} 字）：\n\n${input.text}`,
+    },
+  ];
+}
+
+/**
+ * 单条要点草稿。
+ *
+ * 注意：**这里没有 start/end**。偏移量不由 AI 给——AI 报的字符偏移在换行 /
+ * 全角 / 截断场景下经常漂移，交给它等于把「可溯源」这条承诺架空。
+ * 偏移一律由 `locateQuote` 在原文里算出来（见 features/learn/evidence-anchor.ts）。
+ */
+export interface AiKeyPointDraft {
+  point: string;
+  quote: string;
+}
+
+/**
+ * 纯函数：解析 AI 要点响应 → 规范化草稿（裁剪 / 过滤 / 去重）。
+ *
+ * - `point` 裁剪到 60 字，`quote` 裁剪到 200 字；
+ * - 空 point 丢弃；空 quote 丢弃（无原文出处的要点不入库，诚实降级）；
+ * - 按 point 去重；最多留 5 条；
+ * - 全部不合规 → 抛 `request-failed`（由调用方决定是否提示重试）。
+ */
+export function parseKeyPointDrafts(raw: unknown): AiKeyPointDraft[] {
+  if (!isRecord(raw)) {
+    throw new AiProviderError("request-failed", "AI 要点抽取响应不是对象。");
+  }
+  const rawPoints = Array.isArray(raw.points) ? raw.points : [];
+  const out: AiKeyPointDraft[] = [];
+  const seen = new Set<string>();
+
+  for (const item of rawPoints) {
+    if (!isRecord(item)) continue;
+    const point = str(item.point)?.trim();
+    if (!point) continue;
+    const quote = str(item.quote)?.trim();
+    // 无原文摘录 → 该条不可溯源，直接丢弃（E3 诚实降级）。
+    if (!quote) continue;
+    const p = point.slice(0, PIPELINE_LIMITS.keyPointMaxChars);
+    if (seen.has(p)) continue;
+    seen.add(p);
+    out.push({ point: p, quote: quote.slice(0, PIPELINE_LIMITS.keyPointQuoteMaxChars) });
+    if (out.length >= 5) break;
+  }
+
+  if (out.length === 0) {
+    throw new AiProviderError("request-failed", "AI 要点抽取未返回任何带原文出处的要点。");
+  }
+  return out;
+}
+
+/**
+ * 章要点抽取执行器：AI 从章正文提炼要点 + 原文摘录（未配置/失败抛类型化错误）。
+ *
+ * 返回的草稿**不含偏移**——调用方（analyze-service）负责用 `locateQuote`
+ * 把 quote 锚定成 `Chapter.keyPointRefs` 的绝对区间。
+ */
+export async function extractKeyPointsWithAi(
+  provider: AIProvider,
+  input: {
+    /** 章标题（提示词上下文）。 */
+    chapterTitle: string;
+    /** 章正文（纯净文本；超长抛错）。 */
+    text: string;
+  },
+): Promise<AiKeyPointDraft[]> {
+  const text = input.text.trim();
+  if (text.length === 0) {
+    throw new AiProviderError("request-failed", "章正文为空，无法提炼要点。");
+  }
+  if (text.length > PIPELINE_LIMITS.keyPointMaxTextChars) {
+    throw new AiProviderError(
+      "request-failed",
+      `本章正文过长（${text.length} 字，上限 ${PIPELINE_LIMITS.keyPointMaxTextChars}），无法整章提炼——请先精简资料或拆分章节。`,
+    );
+  }
+  const raw = await chatJson(
+    provider,
+    buildKeyPointMessages({ chapterTitle: input.chapterTitle, text }),
+    TEMPERATURE.keyPoint,
+  );
+  return parseKeyPointDrafts(raw);
 }

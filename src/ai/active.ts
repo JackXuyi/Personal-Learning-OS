@@ -80,12 +80,12 @@ export function providerFromActive(active: SavedActive): AIProvider {
 }
 
 /**
- * buildActiveProvider —— 前端快速构造当前模型 provider。
- * 与 useSettingsStore.activeSource 耦合，供 UI 层判定 AI 是否就绪。
- * TODO(P2): 迁移 activeSource 到 useSettingsStore，此处改为注入 store。
+ * ⚠️ 这里曾经有一个 `buildActiveProvider()` 导出，实现为
+ * `new NoActiveProvider().isConfigured() ? … : null` —— 恒返回 `null`，
+ * 导致消费方（资料详情页的切分/知识点 Tab）的 AI 按钮永远禁用（B2 · P0）。
+ *
+ * 已删除。**AI provider 的唯一构造入口是 `stores/useSettingsStore` 的
+ * `buildActiveProvider()`**（它读全局 `active` 并在钥匙串回填后带真值）。
+ * 需要判定「AI 是否就绪」的 UI，用 `hooks/useAiReady`（响应式订阅
+ * `providerReady`），不要在这里再造入口。
  */
-export function buildActiveProvider(): AIProvider | null {
-  // 临时：若无 active source，返回 null；UI 层自处理禁用/提示。
-  // 最终应从 useSettingsStore 读取。
-  return new NoActiveProvider().isConfigured() ? providerFromActive(null) : null;
-}
