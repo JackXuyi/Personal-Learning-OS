@@ -6,6 +6,7 @@ import type { ActiveSource } from "../../ai/active";
 import { labelOfLocalModel, labelOfProvider } from "../../ai/presets";
 import BuiltinModelsPanel from "./BuiltinModelsPanel";
 import ApiModelsTab from "./ApiModelsTab";
+import VectorIndexCard from "./VectorIndexCard";
 
 /**
  * 设置 · AI 模型中心（U6b 由 SettingsPage 迁移，作为「AI」分区内容）。
@@ -152,6 +153,9 @@ export default function AIModelsSection() {
           )}
         </Card>
       </div>
+
+      {/* 向量索引（RAG 语义检索）：端点/Key 继承「当前使用模型」，模型名单独配置。 */}
+      <VectorIndexCard />
     </div>
   );
 }

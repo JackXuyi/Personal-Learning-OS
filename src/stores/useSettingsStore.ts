@@ -2,7 +2,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { PersistOptions } from "zustand/middleware";
 import type { AIProvider, ProviderKind } from "../ai";
-import { providerFromActive, type SavedActive } from "../ai/active";
+import { createProvider } from "../ai";
+import { activeToProviderConfig, providerFromActive, type SavedActive } from "../ai/active";
 import {
   hasKeyring,
   vaultDeleteSecret,
@@ -45,6 +46,11 @@ export interface SavedSettings {
   active: SavedActive;
   /** 当前激活模型是否已就绪(本地=文件在;API=通过连接测试)。 */
   providerReady: boolean;
+  /**
+   * 向量化模型配置(D3-A:端点/Key 继承 active,模型名单独配置)。
+   * null / undefined = 未配置 → provider 不挂载 `embed` 能力 → 检索降级纯 FTS。
+   */
+  embedding?: { model: string } | null;
   /** 该配置最后一次通过连接测试的时间戳(通过才记录)。 */
   testedAt?: number;
   /** 最近一次通过测试的往返耗时(毫秒)。 */
@@ -61,11 +67,14 @@ interface SettingsState extends SavedSettings {
   ) => void;
   /** 回到「未选择模型」(删除当前本地模型等场景)。 */
   clearActive: () => void;
+  /** 设置 Embedding 模型名(空串 = 清除,恢复「无向量能力」)。 */
+  setEmbeddingModel: (model: string) => void;
 }
 
 const DEFAULTS: SavedSettings = {
   active: null,
   providerReady: false,
+  embedding: null,
 };
 
 function legacyToActive(p: LegacyFlatSettings): NonNullable<SavedActive> {
@@ -89,6 +98,7 @@ function normalizePersisted(persisted: unknown): SavedSettings | null {
     return {
       active: p.active as SavedActive,
       providerReady: Boolean(p.providerReady),
+      embedding: normalizeEmbedding(p.embedding),
       testedAt: typeof p.testedAt === "number" ? p.testedAt : undefined,
       lastLatencyMs:
         typeof p.lastLatencyMs === "number" ? p.lastLatencyMs : undefined,
@@ -100,12 +110,22 @@ function normalizePersisted(persisted: unknown): SavedSettings | null {
     return {
       active: legacyToActive(flat),
       providerReady: Boolean(flat.providerReady),
+      embedding: null, // 旧结构无向量化配置
       testedAt: flat.testedAt,
       lastLatencyMs: flat.lastLatencyMs,
       savedAt: flat.savedAt,
     };
   }
   return null;
+}
+
+/** 归一化持久化的 embedding 字段：只接受形如 `{ model: string }` 的非空模型名。 */
+function normalizeEmbedding(raw: unknown): { model: string } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const model = (raw as { model?: unknown }).model;
+  if (typeof model !== "string") return null;
+  const trimmed = model.trim();
+  return trimmed ? { model: trimmed } : null;
 }
 
 // 自定义 merge:无论存储里是 v2 形状、旧扁平结构还是空数据,都归一到 v2。
@@ -159,6 +179,11 @@ export const useSettingsStore = create<SettingsState>()(
           savedAt: Date.now(),
         });
       },
+
+      setEmbeddingModel: (model) => {
+        const trimmed = model.trim();
+        set({ embedding: trimmed ? { model: trimmed } : null, savedAt: Date.now() });
+      },
     }),
     {
       name: "plos:settings:v1", // key 沿用旧名以兼容历史数据;schema 版本 v2
@@ -170,6 +195,7 @@ export const useSettingsStore = create<SettingsState>()(
             ? { ...s.active, apiKey: "" }
             : s.active,
         providerReady: s.providerReady,
+        embedding: s.embedding ?? null,
         testedAt: s.testedAt,
         lastLatencyMs: s.lastLatencyMs,
         savedAt: s.savedAt,
@@ -212,8 +238,18 @@ export async function restoreVaultApiKey(): Promise<void> {
   }
 }
 
-/** 根据「当前使用模型」构建活跃的 Provider(未选择时为离线兜底 provider)。 */
+/**
+ * 根据「当前使用模型」构建活跃的 Provider(未选择时为离线兜底 provider)。
+ *
+ * 顺带注入向量化模型名(D3-A):端点/Key 复用 active,模型名来自 `embedding`。
+ * 只有配置了 embedding 模型的 API provider 才会挂上 `embed` 能力,
+ * builtin(本地模型)与未选择模型时能力不存在 → 检索层自然降级为纯 FTS。
+ */
 export function buildActiveProvider(): AIProvider {
-  const { active } = useSettingsStore.getState();
-  return providerFromActive(active);
+  const { active, embedding } = useSettingsStore.getState();
+  const cfg = activeToProviderConfig(active);
+  // 未选择模型 → 复用 providerFromActive 的离线兜底（NoActiveProvider：无任何能力）
+  if (!cfg) return providerFromActive(null);
+  const model = embedding?.model?.trim();
+  return createProvider(model ? { ...cfg, embeddingModel: model } : cfg);
 }
