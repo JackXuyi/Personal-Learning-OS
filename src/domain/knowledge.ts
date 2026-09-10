@@ -8,6 +8,20 @@
 
 export type KnowledgeKind = "concept" | "skill" | "fact" | "procedure" | "principle";
 
+/**
+ * 概念的原文出处（Evidence 链在正文档案侧的落点）。
+ *
+ * 由 AI 给出 `quote`、代码经 `locateQuote` 定位后回填 `start/end`；
+ * 定位失败时整个 `evidence` 省略（诚实降级），概念本身照常入库。
+ */
+export interface ConceptEvidence {
+  documentId: string;
+  /** 原文（doc.textPreview）绝对字符区间：start 含、end 不含。 */
+  start: number;
+  end: number;
+  quote: string;
+}
+
 export interface KnowledgeUnit {
   id: string;
   title: string;
@@ -19,6 +33,8 @@ export interface KnowledgeUnit {
   /** 在完整图谱工具就绪前的轻量级归类标签。 */
   tags: string[];
   createdAt: number;
+  /** 概念在原文中的出处（可选；定位失败时缺省）。 */
+  evidence?: ConceptEvidence;
 }
 
 export type RelationType =

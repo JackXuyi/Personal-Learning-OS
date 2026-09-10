@@ -44,6 +44,23 @@ export interface ChapterRange {
   end: number;
 }
 
+/**
+ * 要点 ↔ 原文引用（AI 提炼 + 代码锚定）。
+ *
+ * 设计（docs/library-detail-page-design-2026-09.md §4.3）：
+ * `quote` 由 AI 给出、`start/end` 由代码定位（`locateQuote`）**回填**——绝不信
+ * 任 AI 自带的偏移量。定位失败时整条引用省略（诚实降级），要点本身保留。
+ * 区间语义同 ChapterRange：start 含、end 不含，且为 **doc.textPreview 绝对偏移**。
+ */
+export interface KeyPointRef {
+  /** AI 提炼的要点（≤60 字）。 */
+  point: string;
+  /** 原文摘录（verbatim）；空串表示未定位到原文。 */
+  quote: string;
+  start: number;
+  end: number;
+}
+
 export interface Chapter {
   id: string;
   /** 所属文档（SourceDocument.id）。 */
@@ -53,8 +70,13 @@ export interface Chapter {
   title: string;
   /** 正文切片引用。 */
   contentRef: ChapterRange;
-  /** 章内要点（AI 提炼；本地兜底为正文首句摘要）。 */
+  /** 章内要点（AI 提炼；本地兜底为正文首句摘要）。唯一真源，UI 与引擎均读此字段。 */
   keyPoints: string[];
+  /**
+   * 要点 ↔ 原文出处（可选；老数据缺省 → UI 降级为「无引用」）。
+   * 由 AI 分析写入；`keyPoints` 与 `keyPointRefs[].point` 保持同步。
+   */
+  keyPointRefs?: KeyPointRef[];
   /** 章下概念留位（N5 抽取引擎写入；V2 首版恒空）。 */
   unitIds: string[];
   /** 章状态（切分产出时恒为 not-started，由学习/测评推进）。 */

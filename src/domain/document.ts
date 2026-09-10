@@ -42,6 +42,12 @@ export interface SourceDocument {
     chaptersAt?: number;
     /** 概念分析（知识概念抽取）最近一次完成时间。 */
     conceptsAt?: number;
+    /**
+     * 要点分析（要点 ↔ 原文引用抽取）最近一次完成时间。
+     * 与 chaptersAt 分开记：两者入口不同（「AI 精修」vs「AI 分析要点」），
+     * 用户可能只跑其中一个。
+     */
+    keyPointsAt?: number;
     /** 分析所用模型标识（展示用，可缺省）。 */
     model?: string;
   };
