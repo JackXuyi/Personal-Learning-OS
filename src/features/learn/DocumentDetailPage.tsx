@@ -24,7 +24,7 @@ export default function DocumentDetailPage() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [graph, setGraph] = useState<KnowledgeGraph | null>(null);
   const [learner, setLearner] = useState<LearnerState | null>(null);
-  const t = useI18n();
+  const { m: t } = useI18n();
 
   // 加载数据
   useEffect(() => {

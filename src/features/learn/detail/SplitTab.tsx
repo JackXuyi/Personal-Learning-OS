@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { storage } from '../../../stores/useLoopStore';
 import { Button } from '../../../components/ui/button';
@@ -18,7 +18,7 @@ interface SplitTabProps {
 }
 
 export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTabProps) {
-  const t = useI18n();
+  const { m: t } = useI18n();
   const [busy, setBusy] = useState<'split' | 'analyze' | undefined>();
   const [notice, setNotice] = useState<string>();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -47,7 +47,7 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
           result.chapters.length,
           result.carriedMastery,
           result.droppedMastery,
-          result.refined
+          false
         )
       );
       notifyDocsChanged();
@@ -71,13 +71,15 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
       setNotice(t.learn.detail.split.noChapters);
       return;
     }
+    const provider = buildActiveProvider();
+    if (!provider) return;
     setBusy('analyze');
     setNotice(undefined);
     try {
-      await analyzeChaptersNow(doc, { storage });
+      const result = await analyzeChaptersNow(doc, chapters, { storage, provider });
       setNotice(
         t.learn.detail.split.result(
-          chapters.length,
+          result.chapters.length,
           0,
           0,
           true

@@ -8,7 +8,7 @@ interface PapersTabProps {
 }
 
 export default function PapersTab({ chapters }: PapersTabProps) {
-  const t = useI18n();
+  const { m: t } = useI18n();
 
   if (chapters.length === 0) {
     return (

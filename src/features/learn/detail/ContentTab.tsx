@@ -7,7 +7,7 @@ import type { SourceDocument } from '../../../domain';
 const PREVIEW_CHARS = 200000;
 
 export default function ContentTab({ doc }: { doc: SourceDocument }) {
-  const t = useI18n();
+  const { m: t } = useI18n();
   const [showAll, setShowAll] = useState(false);
 
   const text = doc.textPreview || '';

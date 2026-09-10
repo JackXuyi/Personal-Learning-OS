@@ -20,7 +20,7 @@ interface KnowledgeTabProps {
 }
 
 export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged }: KnowledgeTabProps) {
-  const t = useI18n();
+  const { m: t } = useI18n();
   const [busyTick, setBusyTick] = useState<{ i: number; n: number; title: string }>();
   const [summary, setSummary] = useState<{ ok: number; failed: string[] }>();
 
@@ -45,27 +45,29 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
 
   const extractAll = async () => {
     if (chapters.length === 0 || !aiReady) return;
+    const provider = buildActiveProvider();
+    if (!provider) return;
     setBusyTick({ i: 0, n: chapters.length, title: '' });
     setSummary(undefined);
-    const failed: string[] = [];
-    let ok = 0;
 
-    for (let i = 0; i < chapters.length; i++) {
-      const ch = chapters[i];
-      setBusyTick({ i: i + 1, n: chapters.length, title: ch.title });
-      try {
-        await analyzeConceptsNow(ch, doc, { storage });
-        ok++;
-      } catch (e) {
-        console.error(`Failed to extract concepts for chapter ${ch.id}:`, e);
-        failed.push(ch.title);
-      }
+    try {
+      const result = await analyzeConceptsNow(doc, chapters, {
+        storage,
+        provider,
+        onProgress: (i, n, ch) => setBusyTick({ i, n, title: ch.title }),
+      });
+      setSummary({
+        ok: result.ok,
+        failed: result.failed.map((f) => f.title),
+      });
+      notifyDocsChanged();
+      await onChanged();
+    } catch (e) {
+      console.error('Failed to analyze concepts:', e);
+      setSummary({ ok: 0, failed: chapters.map((c) => c.title) });
+    } finally {
+      setBusyTick(undefined);
     }
-
-    setBusyTick(undefined);
-    setSummary({ ok, failed });
-    notifyDocsChanged();
-    await onChanged();
   };
 
   return (

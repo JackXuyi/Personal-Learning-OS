@@ -20,12 +20,14 @@ import {
 } from "../../../components/ui/dialog";
 import { Select } from "../../../components/ui/select";
 import { useI18n } from "../../../i18n";
+import { storage } from "../../../stores/useLoopStore";
 import { notifyDocsChanged } from "../../../components/layout/AppShell";
 import LocalFilePanel from "../import/LocalFilePanel";
 import GithubPanel from "../import/GithubPanel";
 import { fileToUnit } from "../import/local-files";
 import { buildGithubUnit } from "../import/github";
-import type { GithubPreview, ImportUnit } from "../import/types";
+import type { GithubPreview } from "../import/github";
+import type { ImportUnit } from "../import/types";
 import { LIMITS } from "../import/types";
 import {
   appendDocumentBody,
@@ -430,7 +432,7 @@ export function AppendDocModal({
       const res = await appendDocumentBody(doc, text, { storage });
       setResult(
         t.count(res.appendedChars, (doc.textPreview?.length ?? 0) + res.appendedChars) +
-          ` · ${m.learn.detail.split.result(res.chapters.length, res.carriedMastery, res.droppedMastery)}`,
+          ` · ${m.learn.detail.split.result(res.chapters.length, res.carriedMastery, res.droppedMastery, false)}`,
       );
       notifyDocsChanged();
     } catch (err) {
