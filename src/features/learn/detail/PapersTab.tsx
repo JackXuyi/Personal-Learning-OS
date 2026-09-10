@@ -104,7 +104,7 @@ export default function PapersTab({ doc, chapters, learner }: PapersTabProps) {
           </span>
           <Link
             to={`/quiz/new?doc=${doc.id}&chapters=${chapters.map((c) => c.id).join(',')}&mode=${docAdvice.mode}`}
-            className="ml-auto text-xs text-primary hover:underline"
+            className="text-xs text-primary hover:underline sm:ml-auto"
           >
             {t.papers.goNew}
           </Link>
@@ -150,7 +150,7 @@ export default function PapersTab({ doc, chapters, learner }: PapersTabProps) {
                 </span>
                 <Link
                   to={`/quiz/new?doc=${doc.id}&chapters=${ch.id}&mode=${advice.mode}`}
-                  className="ml-auto text-xs text-primary hover:underline"
+                  className="text-xs text-primary hover:underline sm:ml-auto"
                 >
                   {t.papers.goNew}
                 </Link>
@@ -182,7 +182,7 @@ export default function PapersTab({ doc, chapters, learner }: PapersTabProps) {
                       )}
                       <Link
                         to={target}
-                        className="ml-auto text-xs text-primary hover:underline"
+                        className="text-xs text-primary hover:underline sm:ml-auto"
                       >
                         {p.status === 'done' ? t.papers.viewReport : t.papers.goAnswer}
                       </Link>

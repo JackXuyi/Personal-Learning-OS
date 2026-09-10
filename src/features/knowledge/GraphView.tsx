@@ -21,6 +21,7 @@ import { BandBadge } from "../../components/primitives";
 import { useI18n } from "../../i18n";
 import { bandOf } from "../../engine";
 import { unitTitle } from "../units";
+import { MarkdownBlock } from "../learn/render/markdown-core";
 import {
   GRAPH_H,
   GRAPH_W,
@@ -133,12 +134,13 @@ export default function GraphView({
     graph.units.find((u) => u.id === r.fromId || u.id === r.toId);
 
   return (
-    <div className="flex gap-4">
+    // 窄屏：侧栏堆叠到画布下方（lg 起才并排）
+    <div className="flex flex-col gap-4 lg:flex-row">
       {/* 图谱画布 */}
       <div className="relative min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white">
         <svg
           viewBox={`0 0 ${GRAPH_W} ${GRAPH_H}`}
-          className="h-[560px] w-full touch-none select-none"
+          className="h-[320px] w-full touch-none select-none sm:h-[440px] lg:h-[560px]"
           onWheel={onWheel}
           onClick={(e) => {
             const target = e.target as Element;
@@ -300,8 +302,8 @@ export default function GraphView({
         </div>
       </div>
 
-      {/* 聚焦侧栏 */}
-      <aside className="w-72 shrink-0">
+      {/* 聚焦侧栏：窄屏整宽，宽屏固定 288px */}
+      <aside className="w-full shrink-0 lg:w-72">
         {focusUnit ? (
           <div className="sticky top-4 space-y-4">
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -313,7 +315,10 @@ export default function GraphView({
                 {unitTitle(focusUnit.id)} · {k.masteryOf(Math.round((masteryByUnit[focusUnit.id] ?? 0) * 100), degreeOf(graph.relations, focusUnit.id))}
               </p>
               {focusUnit.summary ? (
-                <p className="mt-2 text-sm text-slate-600">{focusUnit.summary}</p>
+                <MarkdownBlock
+                  text={focusUnit.summary}
+                  className="mt-2 text-sm leading-6 text-slate-600"
+                />
               ) : (
                 <p className="mt-2 text-xs text-slate-400">{k.noSummary}</p>
               )}
