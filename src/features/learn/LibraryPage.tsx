@@ -6,12 +6,14 @@
  * 资料级操作（重命名 / 元信息 / 替换 / 追加 / 删除 / 切分）经右上「⋯」菜单 +
  * 弹窗完成；导入复用全局 ImportModal（IMPORT_OPEN_EVENT）。
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, SectionTitle } from "../../components/primitives";
 import { Button } from "../../components/ui/button";
+import { ConfirmDialog } from "../../components/ui/confirm-dialog";
 import {
   DOCS_CHANGED_EVENT,
   PageContainer,
+  notifyDocsChanged,
   openImportModal,
 } from "../../components/layout/AppShell";
 import { MASTERY_THRESHOLD } from "../../domain";
@@ -23,6 +25,7 @@ import { useI18n } from "../../i18n";
 import { SegmentedTabs } from "../../components/primitives";
 import DocumentCard from "./library/DocumentCard";
 import type { DocActionKind } from "./library/DocActionsMenu";
+import { SplitServiceError, splitDocumentNow } from "./split-service";
 import {
   AppendDocModal,
   DeleteDocDialog,
@@ -45,6 +48,14 @@ export default function LibraryPage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort>("newest");
   const [dialog, setDialog] = useState<DialogState | undefined>();
+  /** 正在切分的资料 id（禁用重复触发 + 按钮态）。 */
+  const [splitBusy, setSplitBusy] = useState<string>();
+  /** 列表页就地切分的 inline 反馈（成功 / 无正文 / 未切出章）。 */
+  const [notice, setNotice] = useState<string>();
+  /** 待确认的重新切分目标（重构章节会迁移掌握度 → 必须确认）。 */
+  const [confirmDoc, setConfirmDoc] = useState<SourceDocument>();
+  /** 切分重入锁：state 更新异步，同帧连点需 ref 兜底，避免并发 saveChapters。 */
+  const splitLock = useRef(false);
 
   const load = async () => {
     const [ds, ls] = await Promise.all([storage.listDocuments(), storage.getLearnerState()]);
@@ -110,9 +121,46 @@ export default function LibraryPage() {
     return { docs: docs.length, chapters, mastered };
   }, [docs, chaptersByDoc, learner]);
 
+  /**
+   * 列表页就地切分（纯代码、零 AI、确定性无重试，与详情页 SplitTab 同源服务）。
+   * 成功后广播 DOCS_CHANGED_EVENT 并重载本页；失败按类型化错误给文案，不改动旧章。
+   */
+  const runSplit = async (doc: SourceDocument) => {
+    if (splitLock.current) return;
+    splitLock.current = true;
+    setSplitBusy(doc.id);
+    setNotice(undefined);
+    try {
+      const result = await splitDocumentNow(doc, { storage });
+      setNotice(
+        m.learn.detail.split.result(
+          result.chapters.length,
+          result.carriedMastery,
+          result.droppedMastery,
+          false,
+        ),
+      );
+      notifyDocsChanged();
+      await load();
+    } catch (e) {
+      const kind = e instanceof SplitServiceError ? e.kind : undefined;
+      setNotice(
+        kind === "no-body" ? m.learn.detail.split.noBody : m.learn.detail.split.noChapters,
+      );
+    } finally {
+      splitLock.current = false;
+      setSplitBusy(undefined);
+    }
+  };
+
   const onCardAction = (doc: SourceDocument, kind: DocActionKind) => {
-    // 切分操作由详情页 SplitTab 处理；列表快捷入口暂不实现
-    if (kind === "split" || kind === "resplit") {
+    // 切分：纯代码操作，列表页就地执行；重新切分会重构章节并迁移掌握度 → 先确认。
+    if (kind === "split") {
+      void runSplit(doc);
+      return;
+    }
+    if (kind === "resplit") {
+      setConfirmDoc(doc);
       return;
     }
     setDialog({ kind, doc });
@@ -177,6 +225,16 @@ export default function LibraryPage() {
         </div>
       ) : null}
 
+      {/* 就地切分的 inline 反馈（无 toast 体系，与详情页 SplitTab 同款样式） */}
+      {notice ? (
+        <div
+          data-testid="library-notice"
+          className="mt-3 rounded-lg border border-line bg-surface p-3"
+        >
+          <p className="text-xs text-ink-2">{notice}</p>
+        </div>
+      ) : null}
+
       {docs.length === 0 ? (
         <Card className="mt-4 border-dashed">
           <p className="text-base font-semibold text-ink-1">{lib.emptyTitle}</p>
@@ -199,6 +257,7 @@ export default function LibraryPage() {
               doc={d}
               chapters={chaptersByDoc[d.id] ?? []}
               learner={learner}
+              busy={splitBusy === d.id}
               onAction={(kind) => onCardAction(d, kind)}
             />
           ))}
@@ -213,6 +272,25 @@ export default function LibraryPage() {
       <DeleteDocDialog
         doc={dialog?.kind === "delete" ? dialog.doc : undefined}
         onClose={() => setDialog(undefined)}
+      />
+
+      {/* 重新切分确认（与详情页 SplitTab 同文案；确认后回列表就地执行） */}
+      <ConfirmDialog
+        open={confirmDoc !== undefined}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDoc(undefined);
+        }}
+        title={m.learn.detail.split.confirmTitle}
+        description={m.learn.detail.split.confirmDesc(
+          confirmDoc ? (chaptersByDoc[confirmDoc.id] ?? []).length : 0,
+        )}
+        confirmLabel={m.learn.detail.split.confirmOk}
+        cancelLabel={m.common.cancel}
+        onConfirm={() => {
+          const target = confirmDoc;
+          setConfirmDoc(undefined);
+          if (target) void runSplit(target);
+        }}
       />
     </PageContainer>
   );

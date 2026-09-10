@@ -16,11 +16,14 @@ export default function DocumentCard({
   doc,
   chapters,
   learner,
+  busy,
   onAction,
 }: {
   doc: SourceDocument;
   chapters: Chapter[];
   learner: LearnerState | undefined;
+  /** 该卡正在进行就地切分（禁用重复触发并切换按钮文案）。 */
+  busy?: boolean;
   onAction: (kind: DocActionKind) => void;
 }) {
   const { m, lang } = useI18n();
@@ -57,11 +60,11 @@ export default function DocumentCard({
         <button
           type="button"
           onClick={() => onAction("split")}
-          disabled={!doc.textPreview}
+          disabled={!doc.textPreview || busy}
           data-testid={`doc-card-split-${doc.id}`}
           className="mt-2 rounded-md border border-line px-2 py-0.5 text-xs text-primary hover:bg-subtle disabled:opacity-40"
         >
-          {lib.splitNow}
+          {busy ? m.learn.detail.split.splitting : lib.splitNow}
         </button>
       ) : null}
       <DocActionsMenu docId={doc.id} unsplit={unsplit} hasBody={hasBody(doc)} onAction={onAction} />
