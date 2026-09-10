@@ -4,6 +4,13 @@
 //! - `*Row`：sqlx `FromRow` 直接映射的列结构（多值字段为 JSON 文本）；
 //! - `*Out`：命令返回值（多值字段已解析为 `Vec<String>`），前端拿到即可用。
 //!
+//! ## 序列化约定
+//! 所有对外结构统一 `rename_all = "camelCase"`：
+//! - **入参**：`#[tauri::command]` 只把*顶层*参数名转成 camelCase（宏默认
+//!   `ArgumentCase::Camel`），**嵌套结构体的字段名不做转换**——所以 `*Input`
+//!   必须自带 camelCase 重命名，否则前端得发 snake_case；
+//! - **出参**：Rust 侧按字段名原样序列化，不加重命名前端收到的就是 snake_case。
+//!
 //! TS/Rust 两侧同改，勿单向漂移（skills/tauri-ipc §Payload）。
 
 use serde::{Deserialize, Serialize};
@@ -11,6 +18,7 @@ use serde::{Deserialize, Serialize};
 // ========== Section ==========
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SectionInput {
     pub id: String,
     pub chapter_id: String,
@@ -24,6 +32,7 @@ pub struct SectionInput {
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct SectionRow {
     pub id: String,
     pub chapter_id: String,
@@ -40,6 +49,7 @@ pub struct SectionRow {
 
 /// 写入用的 Chunk（knowledge_ids 走 chunk_knowledge 关联表，不落主表）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChunkInput {
     pub id: String,
     pub document_id: String,
@@ -75,6 +85,7 @@ pub struct ChunkRow {
 
 /// 对外返回的 Chunk（与 src/domain/chunk.ts 的 Chunk 对齐）。
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChunkOut {
     pub id: String,
     pub document_id: String,
@@ -119,6 +130,7 @@ impl From<ChunkRow> for ChunkOut {
 // ========== KnowledgeUnit ==========
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct KnowledgeUnitInput {
     pub id: String,
     pub title: String,
@@ -142,6 +154,7 @@ pub struct KnowledgeUnitRow {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct KnowledgeUnitOut {
     pub id: String,
     pub title: String,
@@ -173,6 +186,7 @@ impl From<KnowledgeUnitRow> for KnowledgeUnitOut {
 // ========== KnowledgeRelation ==========
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct KnowledgeRelationInput {
     pub id: String,
     pub from_id: String,
@@ -183,6 +197,7 @@ pub struct KnowledgeRelationInput {
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct KnowledgeRelationRow {
     pub id: String,
     pub from_id: String,
@@ -195,6 +210,7 @@ pub struct KnowledgeRelationRow {
 // ========== Embedding ==========
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EmbeddingInput {
     pub id: String,
     pub target_type: String,
@@ -205,6 +221,7 @@ pub struct EmbeddingInput {
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct EmbeddingRow {
     pub id: String,
     pub target_type: String,
@@ -212,4 +229,81 @@ pub struct EmbeddingRow {
     pub model: String,
     pub vector_dim: i64,
     pub created_at: i64,
+}
+
+#[cfg(test)]
+mod tests {
+    //! IPC 命名契约守卫：前端 `src/storage/tauri.ts` 一律收发 camelCase。
+    //! 入参侧尤其危险——`#[tauri::command]` 只转换*顶层*参数名，嵌套结构体
+    //! 字段不做转换，一旦这里丢掉 rename_all，前端就会静默拿到 undefined。
+
+    use super::*;
+
+    #[test]
+    fn section_input_accepts_camel_case() {
+        let json = serde_json::json!({
+            "id": "s1", "chapterId": "ch7", "documentId": "d1", "title": "Reranking",
+            "level": 2, "idx": 1, "contentRefStart": 0, "contentRefEnd": 120, "createdAt": 42
+        });
+        let s: SectionInput = serde_json::from_value(json).expect("camelCase SectionInput");
+        assert_eq!(s.chapter_id, "ch7");
+        assert_eq!(s.content_ref_start, 0);
+        assert_eq!(s.content_ref_end, 120);
+    }
+
+    #[test]
+    fn chunk_input_accepts_camel_case() {
+        let json = serde_json::json!({
+            "id": "c1", "documentId": "d1", "chapterId": "ch7", "sectionId": "s2",
+            "content": "Reranking improves ordering", "position": 3, "tokenCount": 7,
+            "metadataHeading": "Reranking", "metadataPage": 128,
+            "metadataSourceLocation": "7.2", "knowledgeIds": ["reranking"], "createdAt": 1
+        });
+        let c: ChunkInput = serde_json::from_value(json).expect("camelCase ChunkInput");
+        assert_eq!(c.metadata_source_location.as_deref(), Some("7.2"));
+        assert_eq!(c.knowledge_ids, vec!["reranking".to_string()]);
+    }
+
+    #[test]
+    fn relation_input_accepts_camel_case() {
+        let json = serde_json::json!({
+            "id": "r1", "fromId": "u1", "toId": "u2",
+            "relType": "prerequisite", "strength": 0.8, "createdAt": 1
+        });
+        let r: KnowledgeRelationInput =
+            serde_json::from_value(json).expect("camelCase KnowledgeRelationInput");
+        assert_eq!(r.rel_type, "prerequisite");
+    }
+
+    #[test]
+    fn chunk_out_serializes_to_camel_case() {
+        let out = ChunkOut {
+            id: "c1".into(),
+            document_id: "d1".into(),
+            chapter_id: "ch7".into(),
+            section_id: Some("s2".into()),
+            content: "x".into(),
+            position: 1,
+            token_count: Some(3),
+            metadata_heading: Some("Reranking".into()),
+            metadata_page: Some(128),
+            metadata_source_location: None,
+            knowledge_ids: vec!["reranking".into()],
+            created_at: 1,
+        };
+        let v = serde_json::to_value(&out).expect("serialize ChunkOut");
+        for key in [
+            "documentId",
+            "chapterId",
+            "sectionId",
+            "tokenCount",
+            "metadataHeading",
+            "metadataPage",
+            "knowledgeIds",
+            "createdAt",
+        ] {
+            assert!(v.get(key).is_some(), "缺少 camelCase 字段 {key}：{v}");
+        }
+        assert!(v.get("document_id").is_none(), "不应出现 snake_case：{v}");
+    }
 }

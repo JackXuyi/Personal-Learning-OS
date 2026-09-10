@@ -51,7 +51,9 @@ function load<T>(key: string, fallback: T): T {
 }
 
 export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapter {
-  override readonly name = "local";
+  // 显式标注 string：子类（TauriStorage）要覆盖成别的字面量，
+  // 若此处推导成 "local" 字面量类型，子类覆盖会报 TS2416。
+  override readonly name: string = "local";
 
   constructor() {
     super();

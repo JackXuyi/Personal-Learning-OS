@@ -86,6 +86,41 @@ pub async fn db_delete_section(state: State<'_, DbState>, id: String) -> Result<
     Ok(())
 }
 
+/// 单条读取（StorageAdapter.getSection；不存在返回 None）。
+#[tauri::command]
+pub async fn db_get_section(
+    state: State<'_, DbState>,
+    id: String,
+) -> Result<Option<SectionRow>, String> {
+    sqlx::query_as::<_, SectionRow>("SELECT * FROM sections WHERE id = ?")
+        .bind(id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|err| e("读取小节", err))
+}
+
+/// 与 [start, end) 有交叠的小节（区间半开：起点含、终点不含）。
+/// 用于从 Chapter 的正文切片快速定位其下 Sections。
+#[tauri::command]
+pub async fn db_sections_by_range(
+    state: State<'_, DbState>,
+    document_id: String,
+    start: i64,
+    end: i64,
+) -> Result<Vec<SectionRow>, String> {
+    sqlx::query_as::<_, SectionRow>(
+        "SELECT * FROM sections
+          WHERE document_id = ? AND content_ref_start < ? AND content_ref_end > ?
+          ORDER BY idx ASC",
+    )
+    .bind(document_id)
+    .bind(end)
+    .bind(start)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|err| e("按区间读取小节", err))
+}
+
 // ========== Chunk ==========
 
 /// 通用 Chunk 查询：LEFT JOIN chunk_knowledge 后用 GROUP_CONCAT 聚合关联概念，
@@ -240,6 +275,21 @@ pub async fn db_delete_chunk(state: State<'_, DbState>, id: String) -> Result<()
     Ok(())
 }
 
+/// 单条读取（StorageAdapter.getChunk；不存在返回 None）。
+#[tauri::command]
+pub async fn db_get_chunk(
+    state: State<'_, DbState>,
+    id: String,
+) -> Result<Option<ChunkOut>, String> {
+    let sql = format!("{CHUNK_SELECT} WHERE c.id = ? GROUP BY c.id");
+    let row = sqlx::query_as::<_, ChunkRow>(&sql)
+        .bind(id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|err| e("读取块", err))?;
+    Ok(row.map(ChunkOut::from))
+}
+
 /// FTS5 全文检索：命中 chunks_fts 后回表取完整 Chunk。
 /// 未命中或 FTS 不可用时返回空数组（前端可降级到 localStorage 子串匹配）。
 #[tauri::command]
@@ -356,6 +406,22 @@ pub async fn db_delete_knowledge_unit(
     Ok(())
 }
 
+/// 单条读取（StorageAdapter.getKnowledgeUnit；不存在返回 None）。
+#[tauri::command]
+pub async fn db_get_knowledge_unit(
+    state: State<'_, DbState>,
+    id: String,
+) -> Result<Option<KnowledgeUnitOut>, String> {
+    let row = sqlx::query_as::<_, KnowledgeUnitRow>(
+        "SELECT * FROM knowledge_units WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|err| e("读取知识单元", err))?;
+    Ok(row.map(KnowledgeUnitOut::from))
+}
+
 // ========== KnowledgeRelation ==========
 
 #[tauri::command]
@@ -434,6 +500,16 @@ pub async fn db_save_relations(
     tx.commit().await.map_err(|err| e("提交事务", err))
 }
 
+#[tauri::command]
+pub async fn db_delete_relation(state: State<'_, DbState>, id: String) -> Result<(), String> {
+    sqlx::query("DELETE FROM knowledge_relations WHERE id = ?")
+        .bind(id)
+        .execute(&state.pool)
+        .await
+        .map_err(|err| e("删除知识关系", err))?;
+    Ok(())
+}
+
 // ========== Embedding ==========
 
 #[tauri::command]
@@ -495,6 +571,29 @@ pub async fn db_delete_embeddings_by_target(
 ) -> Result<(), String> {
     sqlx::query("DELETE FROM embeddings WHERE target_id = ?")
         .bind(target_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|err| e("删除向量元数据", err))?;
+    Ok(())
+}
+
+/// 单条读取（StorageAdapter.getEmbedding；不存在返回 None）。
+#[tauri::command]
+pub async fn db_get_embedding(
+    state: State<'_, DbState>,
+    id: String,
+) -> Result<Option<EmbeddingRow>, String> {
+    sqlx::query_as::<_, EmbeddingRow>("SELECT * FROM embeddings WHERE id = ?")
+        .bind(id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|err| e("读取向量元数据", err))
+}
+
+#[tauri::command]
+pub async fn db_delete_embedding(state: State<'_, DbState>, id: String) -> Result<(), String> {
+    sqlx::query("DELETE FROM embeddings WHERE id = ?")
+        .bind(id)
         .execute(&state.pool)
         .await
         .map_err(|err| e("删除向量元数据", err))?;
