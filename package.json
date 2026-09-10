@@ -19,7 +19,8 @@
     "test:advice": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/library-paper-advice.test.ts",
     "test:keypoint": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/library-keypoint.test.ts",
     "test:preview": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/library-chapter-preview.test.ts",
-    "test:library": "npm run test:anchor && npm run test:advice && npm run test:keypoint && npm run test:preview",
+    "test:overview": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/library-overview.test.ts",
+    "test:library": "npm run test:anchor && npm run test:advice && npm run test:keypoint && npm run test:preview && npm run test:overview",
     "tauri": "tauri"
   },
   "engines": {
