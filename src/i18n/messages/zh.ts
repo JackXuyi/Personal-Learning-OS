@@ -656,6 +656,10 @@ export const zh = {
         chars: (n: number) => `${n} 字`,
         keyPoints: (n: number) => `${n} 要点`,
         totalChars: (n: number) => `共 ${n} 字`,
+        expand: "展开正文",
+        collapse: "收起正文",
+        openFull: "去阅读页 →",
+        previewEmpty: "这一章没有正文快照。",
       },
       metaLine: (source: string, imported: string, chars: number) =>
         `${source} · 导入于 ${imported} · ${chars} 字`,

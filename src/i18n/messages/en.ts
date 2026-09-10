@@ -671,6 +671,10 @@ export const en: Messages = {
         chars: (n: number) => `${n} chars`,
         keyPoints: (n: number) => `${n} points`,
         totalChars: (n: number) => `${n} chars total`,
+        expand: "Show text",
+        collapse: "Hide text",
+        openFull: "Open reader →",
+        previewEmpty: "No text snapshot for this chapter.",
       },
       metaLine: (source: string, imported: string, chars: number) =>
         `${source} · imported ${imported} · ${chars} chars`,

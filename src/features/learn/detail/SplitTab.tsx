@@ -19,6 +19,7 @@ import { ConfirmDialog } from '../../../components/ui/confirm-dialog';
 import { notifyDocsChanged } from '../../../components/layout/AppShell';
 import { splitDocumentNow, SplitServiceError } from '../split-service';
 import { analyzeChaptersNow } from '../analyze-service';
+import { chapterCharCount } from '../chapter-preview';
 import { ChapterRow } from './ChapterRow';
 import type { SourceDocument, Chapter, LearnerState } from '../../../domain';
 
@@ -47,8 +48,9 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
       ),
     [chapters],
   );
+  /** 字数口径统一走 `chapterCharCount`（与 ChapterRow 的「N 字」单一真源）。 */
   const totalChars = useMemo(
-    () => chapters.reduce((sum, c) => sum + Math.max(0, c.contentRef.end - c.contentRef.start), 0),
+    () => chapters.reduce((sum, c) => sum + chapterCharCount(c), 0),
     [chapters],
   );
   /** 切分由代码完成，故恒为「本地启发式」；AI 是否精修过看 analysis.chaptersAt。 */
@@ -113,7 +115,7 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
     <div className="space-y-4">
       {/* 工具条：常显 —— 无章节时也必须能触发首次切分（B1） */}
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface p-3">
-        <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-ink-2">
           <span>{t.learn.detail.split.strategyHeadings}</span>
           <span>·</span>
           <span>{refined ? t.learn.detail.split.refinedYes : t.learn.detail.split.refinedNo}</span>
@@ -127,7 +129,8 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
           )}
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        {/* 窄屏：按钮区整行占满（不再与信息区各占一半）；sm 起回到右侧 */}
+        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
           <Button
             size="sm"
             variant={hasChapters ? 'outline' : 'default'}
@@ -185,6 +188,7 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
               chapter={ch}
               index={idx + 1}
               learner={learner}
+              doc={doc}
             />
           ))}
         </div>

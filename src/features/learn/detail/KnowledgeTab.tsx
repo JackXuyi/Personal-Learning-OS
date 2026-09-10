@@ -17,6 +17,7 @@ import { notifyDocsChanged } from '../../../components/layout/AppShell';
 import { buildActiveProvider } from '../../../stores/useSettingsStore';
 import { useAiReady } from '../../../hooks/useAiReady';
 import { analyzeConceptsNow, analyzeKeyPointsNow } from '../analyze-service';
+import { MarkdownInline } from '../render/markdown-core';
 import GraphView from '../../knowledge/GraphView';
 import { subgraphOf } from '../../../engine/graph-engine';
 import type { SourceDocument, Chapter, KnowledgeGraph, LearnerState } from '../../../domain';
@@ -174,10 +175,14 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
                 <ul className="mt-2 space-y-2">
                   {ch.keyPointRefs.map((ref, i) => (
                     <li key={i} className="text-xs text-ink-2">
-                      <p>• {ref.point}</p>
+                      <p>
+                        <span className="mr-1">•</span>
+                        <MarkdownInline text={ref.point} />
+                      </p>
                       <div className="mt-1 border-l-2 border-line pl-2">
                         <p className="text-ink-3">
-                          {t.learn.detail.knowledge.refLabel}：{ref.quote}
+                          {t.learn.detail.knowledge.refLabel}：
+                          <MarkdownInline text={ref.quote} className="text-ink-3" />
                         </p>
                         <button
                           type="button"
@@ -191,10 +196,13 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
                   ))}
                 </ul>
               ) : ch.keyPoints && ch.keyPoints.length > 0 ? (
-                /* 老数据回退：无 keyPointRefs → 纯文本要点（TC-EDGE-01） */
+                /* 老数据回退：无 keyPointRefs → 仅要点文本（TC-EDGE-01） */
                 <ul className="mt-2 space-y-1 text-xs text-ink-2">
                   {ch.keyPoints.map((kp, i) => (
-                    <li key={i}>• {kp}</li>
+                    <li key={i}>
+                      <span className="mr-1">•</span>
+                      <MarkdownInline text={kp} />
+                    </li>
                   ))}
                 </ul>
               ) : (
