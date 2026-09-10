@@ -89,6 +89,18 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     this.evidenceLog = load<EvidenceEntry[]>(KEY_EVIDENCE, []);
   }
 
+  /**
+   * 持久化前剥离向量本体。
+   *
+   * 为什么：1000 chunk × 768 维的 JSON 约 15MB，必然击穿 localStorage 5–10MB 配额，
+   * 一旦写失败会让**整个 persist() 抛错**，连带资料 / 章节 / 学习进度都写不进去。
+   * 因此 localStorage 后端只持久化向量元数据；本会话内存镜像仍持有向量，
+   * 刷新后 `listEmbeddingVectors` 返回空 → 检索自动降级为纯 FTS（与 D1-A 一致）。
+   */
+  private embeddingsForPersist(): Embedding[] {
+    return [...this.embeddings.values()].map(({ vector: _vector, ...meta }) => meta);
+  }
+
   private persist() {
     localStorage.setItem(KEY_DOCUMENTS, JSON.stringify([...this.documents.values()]));
     localStorage.setItem(
@@ -106,7 +118,7 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
       KEY_KNOWLEDGE_RELATIONS,
       JSON.stringify([...this.knowledgeRelations.values()]),
     );
-    localStorage.setItem(KEY_EMBEDDINGS, JSON.stringify([...this.embeddings.values()]));
+    localStorage.setItem(KEY_EMBEDDINGS, JSON.stringify(this.embeddingsForPersist()));
     localStorage.setItem(KEY_PAPERS, JSON.stringify([...this.papers.values()]));
     localStorage.setItem(
       KEY_PAPER_DRAFTS,
@@ -159,6 +171,10 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
   }
   override async deleteChunk(id: string): Promise<void> {
     await super.deleteChunk(id);
+    this.persist();
+  }
+  override async deleteChunksByDocument(documentId: string): Promise<void> {
+    await super.deleteChunksByDocument(documentId);
     this.persist();
   }
 

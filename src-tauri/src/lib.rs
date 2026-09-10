@@ -100,6 +100,7 @@ pub fn run() {
             db::commands::db_get_chunk,
             db::commands::db_save_chunks,
             db::commands::db_delete_chunk,
+            db::commands::db_delete_chunks_by_document,
             db::commands::db_fts_search,
             db::commands::db_list_knowledge_units,
             db::commands::db_get_knowledge_unit,
@@ -112,6 +113,7 @@ pub fn run() {
             db::commands::db_list_embeddings,
             db::commands::db_get_embedding,
             db::commands::db_save_embeddings,
+            db::commands::db_list_embedding_vectors,
             db::commands::db_delete_embedding,
             db::commands::db_delete_embeddings_by_target,
         ])

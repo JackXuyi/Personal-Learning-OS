@@ -9,7 +9,17 @@
 //! 初始化：app_data_dir/plos.db，首次启动执行 schema.sql（幂等 DDL）。
 
 pub mod commands;
+pub mod embedding_commands;
 pub mod models;
+
+/// 统一错误转换：日志留详情，前端拿短提示。
+///
+/// 放在模块根（而非某个子模块）以便 commands / embedding_commands 共用，
+/// 同时避免两个子模块互相引用形成环。
+pub(crate) fn db_err(context: &str, err: impl std::fmt::Display) -> String {
+    eprintln!("db error [{context}]: {err}");
+    format!("数据库操作失败：{context}")
+}
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -48,7 +58,7 @@ pub async fn init_pool(path: &Path) -> Result<SqlitePool, Box<dyn std::error::Er
     // 逐条执行 DDL。sqlx 的 execute 单次只接受一条语句，故按分号切分；
     // 用 raw_sql 亦可，但切分后单条失败能给出更明确的错误位置。
     apply_schema(&pool).await?;
-    // 版本迁移（当前仅 v1 → v2：chunks_fts 改 trigram 分词器）。
+    // 版本迁移（v1 → v2：chunks_fts 改 trigram；v2 → v3：embeddings 加 vector）。
     migrate(&pool).await?;
 
     Ok(pool)
@@ -63,19 +73,31 @@ async fn apply_schema(pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
-/// 版本迁移（幂等）。当前仅 v1 → v2：chunks_fts 切换 trigram 分词器。
+/// 版本迁移入口（幂等）。按版本号顺序执行，每一步自行判断是否需要跑。
+///
+/// 注意：两步的版本判定互相独立，因此 v1 存量库会连跑 v2 与 v3 一次到位。
+/// 新库在 `apply_schema` 阶段就已带全部列，两步都会走「无需变更」分支。
+async fn migrate(pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
+    let mut conn = pool.acquire().await?;
+    migrate_v2(&mut conn).await?;
+    migrate_v3(&mut conn).await?;
+    Ok(())
+}
+
+/// v1 → v2：chunks_fts 切换 trigram 分词器。
 ///
 /// 背景：v1 用默认 unicode61 分词器，连续中文被当成一个 token，中文子串检索
 /// 失效（runbook 遗留问题 F1）。trigram 按 3 字符窗口建索引，中文子串天然可用，
 /// 但存量库已建的旧 FTS 表不会被 `CREATE IF NOT EXISTS` 覆盖，必须显式 DROP 后
 /// 由 schema.sql 的新定义重建，并从 chunks 全量重灌（数据不丢，仅重建索引）。
-async fn migrate(pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
-    let mut conn = pool.acquire().await?;
+async fn migrate_v2(
+    conn: &mut sqlx::SqliteConnection,
+) -> Result<(), Box<dyn std::error::Error>> {
     let cur: i64 = sqlx::query_scalar("SELECT COALESCE(MAX(version), 0) FROM _schema_version")
         .fetch_one(&mut *conn)
         .await?;
     if cur >= 2 {
-        return Ok(()); // 已是目标版本，跳过
+        return Ok(()); // 已是目标版本（或更高），跳过
     }
     // 删旧 FTS 表，让 schema.sql 的 CREATE IF NOT EXISTS 用 trigram 定义重建。
     sqlx::query("DROP TABLE IF EXISTS chunks_fts")
@@ -97,6 +119,51 @@ async fn migrate(pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
         .execute(&mut *conn)
         .await?;
     Ok(())
+}
+
+/// v2 → v3：`embeddings` 增加 `vector BLOB`（向量本体）。
+///
+/// 幂等做法：先 `PRAGMA table_info(embeddings)` 探列——新库在 `apply_schema` 阶段
+/// 已带该列（CREATE 语句里就有），此步直接写版本号；只有 v2 及更早的存量库才会真正
+/// 执行 ALTER。不用「先 ALTER 再捕获 duplicate column 错误」，因为那样无法区分
+/// 「列已存在」与「表不存在」两类失败。
+async fn migrate_v3(
+    conn: &mut sqlx::SqliteConnection,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let cur: i64 = sqlx::query_scalar("SELECT COALESCE(MAX(version), 0) FROM _schema_version")
+        .fetch_one(&mut *conn)
+        .await?;
+    if cur >= 3 {
+        return Ok(()); // 已是目标版本，跳过
+    }
+    if !has_column(conn, "embeddings", "vector").await? {
+        sqlx::query("ALTER TABLE embeddings ADD COLUMN vector BLOB")
+            .execute(&mut *conn)
+            .await?;
+    }
+    sqlx::query("INSERT INTO _schema_version (version, applied_at) VALUES (3, ?)")
+        .bind(now_ms())
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}
+
+/// 探测表是否已有某列。
+///
+/// 用 SQLite 的表值函数 `pragma_table_info(?)` 而不是裸 `PRAGMA table_info`：
+/// 前者可当普通表查询（能 bind 参数、能 WHERE、返回单列），后者只能拿整行再按列名取值。
+async fn has_column(
+    conn: &mut sqlx::SqliteConnection,
+    table: &str,
+    column: &str,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let n: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?")
+            .bind(table)
+            .bind(column)
+            .fetch_one(&mut *conn)
+            .await?;
+    Ok(n > 0)
 }
 
 /// 当前 epoch ms（与 TS 侧 Date.now() 对齐，便于审计）。

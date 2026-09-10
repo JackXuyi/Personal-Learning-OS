@@ -11,6 +11,8 @@ import type {
   Chapter,
   Chunk,
   Embedding,
+  EmbeddingTargetType,
+  EmbeddingVector,
   EvidenceEntry,
   KnowledgeGraph,
   KnowledgeRelation,
@@ -129,6 +131,16 @@ export class InMemoryStorage implements StorageAdapter {
       c.knowledgeIds.includes(knowledgeId),
     );
   }
+  /**
+   * 删除整份文档的全部 chunk（幂等）。
+   * 内存版没有独立的 chunk_knowledge 关联表（chunk 自带 knowledgeIds），
+   * 故只需删 chunk 本体；向量由调用方先行清理（见契约注释）。
+   */
+  async deleteChunksByDocument(documentId: string): Promise<void> {
+    for (const [id, c] of this.chunks) {
+      if (c.documentId === documentId) this.chunks.delete(id);
+    }
+  }
 
   // ===== KnowledgeUnit 层 =====
   async listKnowledgeUnits(documentId?: string): Promise<KnowledgeUnit[]> {
@@ -195,6 +207,29 @@ export class InMemoryStorage implements StorageAdapter {
     for (const [id, e] of this.embeddings) {
       if (e.targetId === targetId) this.embeddings.delete(id);
     }
+  }
+  /**
+   * 取回向量本体（检索用）。只返回**持有向量**（vector 非空）的记录。
+   * targetIds 传值时按目标过滤；内存后端总是能拿到（测试可覆盖向量检索）。
+   */
+  async listEmbeddingVectors(
+    targetType: EmbeddingTargetType,
+    targetIds?: readonly string[],
+  ): Promise<EmbeddingVector[]> {
+    const wanted = targetIds ? new Set(targetIds) : undefined;
+    const out: EmbeddingVector[] = [];
+    for (const e of this.embeddings.values()) {
+      if (e.targetType !== targetType) continue;
+      if (wanted && !wanted.has(e.targetId)) continue;
+      if (!e.vector || e.vector.length === 0) continue;
+      out.push({
+        targetId: e.targetId,
+        model: e.model,
+        dim: e.vector.length,
+        vector: e.vector,
+      });
+    }
+    return out;
   }
 
   // ===== Evidence 链 =====

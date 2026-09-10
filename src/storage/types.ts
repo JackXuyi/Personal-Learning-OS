@@ -12,6 +12,8 @@ import type {
   Chapter,
   Chunk,
   Embedding,
+  EmbeddingTargetType,
+  EmbeddingVector,
   EvidenceEntry,
   KnowledgeGraph,
   KnowledgeRelation,
@@ -66,6 +68,14 @@ export interface StorageAdapter {
   deleteChunk(id: string): Promise<void>;
   /** 按知识单元查询相关 Chunks。 */
   chunksByKnowledge(knowledgeId: string): Promise<Chunk[]>;
+  /**
+   * 删除整份文档的全部 chunk（含 FTS 索引与 chunk_knowledge 关联）。
+   * 重切分与删除资料时调用；幂等（文档无 chunk 时是空操作）。
+   *
+   * 注意：**不清 embeddings** —— 向量按 targetId 记录，调用方须在删除前先取出
+   * 旧 chunk id 逐个 `deleteEmbeddingsByTarget`，否则会留下指不到 chunk 的孤儿向量。
+   */
+  deleteChunksByDocument(documentId: string): Promise<void>;
 
   // ===== KnowledgeUnit 层（概念/技能原子语义）=====
   listKnowledgeUnits(documentId?: string): Promise<KnowledgeUnit[]>;
@@ -89,6 +99,18 @@ export interface StorageAdapter {
   saveEmbeddings(embeddings: Embedding[]): Promise<void>;
   deleteEmbedding(id: string): Promise<void>;
   deleteEmbeddingsByTarget(targetId: string): Promise<void>;
+  /**
+   * 取回向量本体（检索用）。
+   * @param targetType 目标类型（当前检索只消费 "chunk"）
+   * @param targetIds  传值时按目标过滤（减少传输量）；不传 = 该类型全量
+   *
+   * 未持有向量的后端返回空数组（如纯 localStorage 预览、向量尚未生成）——
+   * 调用方据此降级为 FTS-only 检索，而不是当成错误。
+   */
+  listEmbeddingVectors(
+    targetType: EmbeddingTargetType,
+    targetIds?: readonly string[],
+  ): Promise<EmbeddingVector[]>;
 
   // ===== Evidence 链（改进查询）=====
   listEvidence(): Promise<EvidenceEntry[]>;

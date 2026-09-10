@@ -3,21 +3,22 @@
 //! 命令命名 `db_*`，参数 snake_case（Tauri 自动把前端 camelCase 映射过来）。
 //! 全部返回 `Result<T, String>`：内部错误转成简短中文提示，详细原因留在
 //! Rust 侧的 eprintln。
+//!
+//! 分工：本模块承担 Section / Chunk / KnowledgeUnit / KnowledgeRelation / 全文检索 /
+//! 健康探针；**Embedding 命令已拆到 `embedding_commands.rs`** 并在下方 `pub use` 再导出，
+//! 因此 `lib.rs` 的注册路径与前端 `invoke("db_*")` 调用点均保持不变。
 
 use tauri::State;
 
+use super::db_err;
 use super::models::{
-    ChunkInput, ChunkOut, ChunkRow, EmbeddingInput, EmbeddingRow, KnowledgeRelationInput,
-    KnowledgeRelationRow, KnowledgeUnitInput, KnowledgeUnitOut, KnowledgeUnitRow, SectionInput,
-    SectionRow,
+    ChunkInput, ChunkOut, ChunkRow, KnowledgeRelationInput, KnowledgeRelationRow,
+    KnowledgeUnitInput, KnowledgeUnitOut, KnowledgeUnitRow, SectionInput, SectionRow,
 };
 use super::DbState;
 
-/// 统一错误转换：日志留详情，前端拿短提示。
-fn e(context: &str, err: impl std::fmt::Display) -> String {
-    eprintln!("db error [{context}]: {err}");
-    format!("数据库操作失败：{context}")
-}
+// Embedding 命令再导出（保持 `db::commands::db_save_embeddings` 等旧路径可用）。
+pub use super::embedding_commands::*;
 
 // ========== Section ==========
 
@@ -32,7 +33,7 @@ pub async fn db_list_sections(
     .bind(chapter_id)
     .fetch_all(&state.pool)
     .await
-    .map_err(|err| e("读取小节列表", err))
+    .map_err(|err| db_err("读取小节列表", err))
 }
 
 /// 批量写入（同 id 覆盖）。前端 saveSections 走这里，减少 IPC 往返。
@@ -45,7 +46,7 @@ pub async fn db_save_sections(
         .pool
         .begin()
         .await
-        .map_err(|err| e("开启事务", err))?;
+        .map_err(|err| db_err("开启事务", err))?;
 
     for s in sections {
         sqlx::query(
@@ -70,10 +71,10 @@ pub async fn db_save_sections(
         .bind(s.created_at)
         .execute(&mut *tx)
         .await
-        .map_err(|err| e("写入小节", err))?;
+        .map_err(|err| db_err("写入小节", err))?;
     }
 
-    tx.commit().await.map_err(|err| e("提交事务", err))
+    tx.commit().await.map_err(|err| db_err("提交事务", err))
 }
 
 #[tauri::command]
@@ -82,7 +83,7 @@ pub async fn db_delete_section(state: State<'_, DbState>, id: String) -> Result<
         .bind(id)
         .execute(&state.pool)
         .await
-        .map_err(|err| e("删除小节", err))?;
+        .map_err(|err| db_err("删除小节", err))?;
     Ok(())
 }
 
@@ -96,7 +97,7 @@ pub async fn db_get_section(
         .bind(id)
         .fetch_optional(&state.pool)
         .await
-        .map_err(|err| e("读取小节", err))
+        .map_err(|err| db_err("读取小节", err))
 }
 
 /// 与 [start, end) 有交叠的小节（区间半开：起点含、终点不含）。
@@ -118,7 +119,7 @@ pub async fn db_sections_by_range(
     .bind(start)
     .fetch_all(&state.pool)
     .await
-    .map_err(|err| e("按区间读取小节", err))
+    .map_err(|err| db_err("按区间读取小节", err))
 }
 
 // ========== Chunk ==========
@@ -142,7 +143,7 @@ pub async fn db_list_chunks(
         .bind(chapter_id)
         .fetch_all(&state.pool)
         .await
-        .map_err(|err| e("读取块列表", err))?;
+        .map_err(|err| db_err("读取块列表", err))?;
     Ok(rows.into_iter().map(ChunkOut::from).collect())
 }
 
@@ -157,7 +158,7 @@ pub async fn db_list_chunks_by_document(
         .bind(document_id)
         .fetch_all(&state.pool)
         .await
-        .map_err(|err| e("按资料读取块", err))?;
+        .map_err(|err| db_err("按资料读取块", err))?;
     Ok(rows.into_iter().map(ChunkOut::from).collect())
 }
 
@@ -175,7 +176,7 @@ pub async fn db_chunks_by_knowledge(
         .bind(knowledge_id)
         .fetch_all(&state.pool)
         .await
-        .map_err(|err| e("按概念读取块", err))?;
+        .map_err(|err| db_err("按概念读取块", err))?;
     Ok(rows.into_iter().map(ChunkOut::from).collect())
 }
 
@@ -185,7 +186,7 @@ pub async fn db_save_chunks(
     state: State<'_, DbState>,
     chunks: Vec<ChunkInput>,
 ) -> Result<(), String> {
-    let mut tx = state.pool.begin().await.map_err(|err| e("开启事务", err))?;
+    let mut tx = state.pool.begin().await.map_err(|err| db_err("开启事务", err))?;
 
     for c in chunks {
         sqlx::query(
@@ -214,14 +215,14 @@ pub async fn db_save_chunks(
         .bind(c.created_at)
         .execute(&mut *tx)
         .await
-        .map_err(|err| e("写入块", err))?;
+        .map_err(|err| db_err("写入块", err))?;
 
         // 关联关系整组重建：删旧再插新（概念抽取重跑时语义正确）。
         sqlx::query("DELETE FROM chunk_knowledge WHERE chunk_id = ?")
             .bind(&c.id)
             .execute(&mut *tx)
             .await
-            .map_err(|err| e("清理块关联", err))?;
+            .map_err(|err| db_err("清理块关联", err))?;
 
         for kid in c.knowledge_ids {
             sqlx::query("INSERT OR IGNORE INTO chunk_knowledge (chunk_id, knowledge_id) VALUES (?, ?)")
@@ -229,7 +230,7 @@ pub async fn db_save_chunks(
                 .bind(kid)
                 .execute(&mut *tx)
                 .await
-                .map_err(|err| e("写入块关联", err))?;
+                .map_err(|err| db_err("写入块关联", err))?;
         }
 
         // FTS 索引同步（不用触发器，见 schema.sql 说明）：先删旧行再插新行，
@@ -238,7 +239,7 @@ pub async fn db_save_chunks(
             .bind(&c.id)
             .execute(&mut *tx)
             .await
-            .map_err(|err| e("清理全文索引", err))?;
+            .map_err(|err| db_err("清理全文索引", err))?;
         sqlx::query(
             "INSERT INTO chunks_fts (content, id, chapter_id, document_id) VALUES (?, ?, ?, ?)",
         )
@@ -248,10 +249,10 @@ pub async fn db_save_chunks(
         .bind(&c.document_id)
         .execute(&mut *tx)
         .await
-        .map_err(|err| e("写入全文索引", err))?;
+        .map_err(|err| db_err("写入全文索引", err))?;
     }
 
-    tx.commit().await.map_err(|err| e("提交事务", err))
+    tx.commit().await.map_err(|err| db_err("提交事务", err))
 }
 
 #[tauri::command]
@@ -261,18 +262,58 @@ pub async fn db_delete_chunk(state: State<'_, DbState>, id: String) -> Result<()
         .bind(&id)
         .execute(&state.pool)
         .await
-        .map_err(|err| e("删除块关联", err))?;
+        .map_err(|err| db_err("删除块关联", err))?;
     sqlx::query("DELETE FROM chunks_fts WHERE id = ?")
         .bind(&id)
         .execute(&state.pool)
         .await
-        .map_err(|err| e("删除全文索引", err))?;
+        .map_err(|err| db_err("删除全文索引", err))?;
     sqlx::query("DELETE FROM chunks WHERE id = ?")
         .bind(&id)
         .execute(&state.pool)
         .await
-        .map_err(|err| e("删除块", err))?;
+        .map_err(|err| db_err("删除块", err))?;
     Ok(())
+}
+
+/// 按文档删除全部 Chunk（重切分 / 删除资料时用）。单事务清理三张表。
+///
+/// 顺序与 `db_delete_chunk` 一致（关联表 → FTS 索引 → 主表）：无外键级联，
+/// 三处都必须显式清，否则会留下指不到 chunk 的孤儿关联与 FTS 残留行。
+///
+/// 注意：**不清理 embeddings** —— 向量按 target_id 记录，调用方需在删 chunk 之前
+/// 先取出旧 chunk id 并逐个 `db_delete_embeddings_by_target`（否则清理失去依据）。
+#[tauri::command]
+pub async fn db_delete_chunks_by_document(
+    state: State<'_, DbState>,
+    document_id: String,
+) -> Result<(), String> {
+    let mut tx = state.pool.begin().await.map_err(|err| db_err("开启事务", err))?;
+
+    sqlx::query(
+        "DELETE FROM chunk_knowledge WHERE chunk_id IN \
+         (SELECT id FROM chunks WHERE document_id = ?)",
+    )
+    .bind(&document_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|err| db_err("删除块关联", err))?;
+
+    sqlx::query(
+        "DELETE FROM chunks_fts WHERE id IN (SELECT id FROM chunks WHERE document_id = ?)",
+    )
+    .bind(&document_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|err| db_err("删除全文索引", err))?;
+
+    sqlx::query("DELETE FROM chunks WHERE document_id = ?")
+        .bind(&document_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|err| db_err("删除块", err))?;
+
+    tx.commit().await.map_err(|err| db_err("提交事务", err))
 }
 
 /// 单条读取（StorageAdapter.getChunk；不存在返回 None）。
@@ -286,7 +327,7 @@ pub async fn db_get_chunk(
         .bind(id)
         .fetch_optional(&state.pool)
         .await
-        .map_err(|err| e("读取块", err))?;
+        .map_err(|err| db_err("读取块", err))?;
     Ok(row.map(ChunkOut::from))
 }
 
@@ -345,7 +386,7 @@ pub async fn db_fts_search(
     let rows = q
         .fetch_all(&state.pool)
         .await
-        .map_err(|err| e("全文检索", err))?;
+        .map_err(|err| db_err("全文检索", err))?;
     Ok(rows.into_iter().map(ChunkOut::from).collect())
 }
 
@@ -373,7 +414,7 @@ pub async fn db_list_knowledge_units(
             .await
         }
     }
-    .map_err(|err| e("读取知识单元", err))?;
+    .map_err(|err| db_err("读取知识单元", err))?;
     Ok(rows.into_iter().map(KnowledgeUnitOut::from).collect())
 }
 
@@ -382,7 +423,7 @@ pub async fn db_save_knowledge_units(
     state: State<'_, DbState>,
     units: Vec<KnowledgeUnitInput>,
 ) -> Result<(), String> {
-    let mut tx = state.pool.begin().await.map_err(|err| e("开启事务", err))?;
+    let mut tx = state.pool.begin().await.map_err(|err| db_err("开启事务", err))?;
 
     for u in units {
         let tags = serde_json::to_string(&u.tags).unwrap_or_else(|_| "[]".to_string());
@@ -404,10 +445,10 @@ pub async fn db_save_knowledge_units(
         .bind(u.created_at)
         .execute(&mut *tx)
         .await
-        .map_err(|err| e("写入知识单元", err))?;
+        .map_err(|err| db_err("写入知识单元", err))?;
     }
 
-    tx.commit().await.map_err(|err| e("提交事务", err))
+    tx.commit().await.map_err(|err| db_err("提交事务", err))
 }
 
 #[tauri::command]
@@ -419,7 +460,7 @@ pub async fn db_delete_knowledge_unit(
         .bind(id)
         .execute(&state.pool)
         .await
-        .map_err(|err| e("删除知识单元", err))?;
+        .map_err(|err| db_err("删除知识单元", err))?;
     Ok(())
 }
 
@@ -435,7 +476,7 @@ pub async fn db_get_knowledge_unit(
     .bind(id)
     .fetch_optional(&state.pool)
     .await
-    .map_err(|err| e("读取知识单元", err))?;
+    .map_err(|err| db_err("读取知识单元", err))?;
     Ok(row.map(KnowledgeUnitOut::from))
 }
 
@@ -464,7 +505,7 @@ pub async fn db_list_relations(
             .await
         }
     }
-    .map_err(|err| e("读取知识关系", err))?;
+    .map_err(|err| db_err("读取知识关系", err))?;
     Ok(rows)
 }
 
@@ -483,7 +524,7 @@ pub async fn db_prerequisites_of(
     .bind(unit_id)
     .fetch_all(&state.pool)
     .await
-    .map_err(|err| e("读取前置概念", err))?;
+    .map_err(|err| db_err("读取前置概念", err))?;
     Ok(rows.into_iter().map(KnowledgeUnitOut::from).collect())
 }
 
@@ -492,7 +533,7 @@ pub async fn db_save_relations(
     state: State<'_, DbState>,
     relations: Vec<KnowledgeRelationInput>,
 ) -> Result<(), String> {
-    let mut tx = state.pool.begin().await.map_err(|err| e("开启事务", err))?;
+    let mut tx = state.pool.begin().await.map_err(|err| db_err("开启事务", err))?;
 
     for r in relations {
         sqlx::query(
@@ -511,10 +552,10 @@ pub async fn db_save_relations(
         .bind(r.created_at)
         .execute(&mut *tx)
         .await
-        .map_err(|err| e("写入知识关系", err))?;
+        .map_err(|err| db_err("写入知识关系", err))?;
     }
 
-    tx.commit().await.map_err(|err| e("提交事务", err))
+    tx.commit().await.map_err(|err| db_err("提交事务", err))
 }
 
 #[tauri::command]
@@ -523,97 +564,7 @@ pub async fn db_delete_relation(state: State<'_, DbState>, id: String) -> Result
         .bind(id)
         .execute(&state.pool)
         .await
-        .map_err(|err| e("删除知识关系", err))?;
-    Ok(())
-}
-
-// ========== Embedding ==========
-
-#[tauri::command]
-pub async fn db_list_embeddings(
-    state: State<'_, DbState>,
-    target_type: Option<String>,
-) -> Result<Vec<EmbeddingRow>, String> {
-    let rows = match target_type {
-        Some(t) => {
-            sqlx::query_as::<_, EmbeddingRow>(
-                "SELECT * FROM embeddings WHERE target_type = ? ORDER BY created_at ASC",
-            )
-            .bind(t)
-            .fetch_all(&state.pool)
-            .await
-        }
-        None => {
-            sqlx::query_as::<_, EmbeddingRow>("SELECT * FROM embeddings ORDER BY created_at ASC")
-                .fetch_all(&state.pool)
-                .await
-        }
-    }
-    .map_err(|err| e("读取向量元数据", err))?;
-    Ok(rows)
-}
-
-#[tauri::command]
-pub async fn db_save_embeddings(
-    state: State<'_, DbState>,
-    embeddings: Vec<EmbeddingInput>,
-) -> Result<(), String> {
-    let mut tx = state.pool.begin().await.map_err(|err| e("开启事务", err))?;
-
-    for em in embeddings {
-        sqlx::query(
-            "INSERT INTO embeddings (id, target_type, target_id, model, vector_dim, created_at)
-             VALUES (?, ?, ?, ?, ?, ?)
-             ON CONFLICT(id) DO UPDATE SET
-               vector_dim = excluded.vector_dim, created_at = excluded.created_at",
-        )
-        .bind(&em.id)
-        .bind(&em.target_type)
-        .bind(&em.target_id)
-        .bind(&em.model)
-        .bind(em.vector_dim)
-        .bind(em.created_at)
-        .execute(&mut *tx)
-        .await
-        .map_err(|err| e("写入向量元数据", err))?;
-    }
-
-    tx.commit().await.map_err(|err| e("提交事务", err))
-}
-
-#[tauri::command]
-pub async fn db_delete_embeddings_by_target(
-    state: State<'_, DbState>,
-    target_id: String,
-) -> Result<(), String> {
-    sqlx::query("DELETE FROM embeddings WHERE target_id = ?")
-        .bind(target_id)
-        .execute(&state.pool)
-        .await
-        .map_err(|err| e("删除向量元数据", err))?;
-    Ok(())
-}
-
-/// 单条读取（StorageAdapter.getEmbedding；不存在返回 None）。
-#[tauri::command]
-pub async fn db_get_embedding(
-    state: State<'_, DbState>,
-    id: String,
-) -> Result<Option<EmbeddingRow>, String> {
-    sqlx::query_as::<_, EmbeddingRow>("SELECT * FROM embeddings WHERE id = ?")
-        .bind(id)
-        .fetch_optional(&state.pool)
-        .await
-        .map_err(|err| e("读取向量元数据", err))
-}
-
-#[tauri::command]
-pub async fn db_delete_embedding(state: State<'_, DbState>, id: String) -> Result<(), String> {
-    sqlx::query("DELETE FROM embeddings WHERE id = ?")
-        .bind(id)
-        .execute(&state.pool)
-        .await
-        .map_err(|err| e("删除向量元数据", err))?;
+        .map_err(|err| db_err("删除知识关系", err))?;
     Ok(())
 }
 
@@ -630,19 +581,19 @@ async fn count_rows(pool: &sqlx::SqlitePool, table: &str) -> Result<i64, sqlx::E
 pub async fn db_status(state: State<'_, DbState>) -> Result<serde_json::Value, String> {
     let sections = count_rows(&state.pool, "sections")
         .await
-        .map_err(|err| e("统计 sections", err))?;
+        .map_err(|err| db_err("统计 sections", err))?;
     let chunks = count_rows(&state.pool, "chunks")
         .await
-        .map_err(|err| e("统计 chunks", err))?;
+        .map_err(|err| db_err("统计 chunks", err))?;
     let units = count_rows(&state.pool, "knowledge_units")
         .await
-        .map_err(|err| e("统计 knowledge_units", err))?;
+        .map_err(|err| db_err("统计 knowledge_units", err))?;
     let relations = count_rows(&state.pool, "knowledge_relations")
         .await
-        .map_err(|err| e("统计 knowledge_relations", err))?;
+        .map_err(|err| db_err("统计 knowledge_relations", err))?;
     let embeddings = count_rows(&state.pool, "embeddings")
         .await
-        .map_err(|err| e("统计 embeddings", err))?;
+        .map_err(|err| db_err("统计 embeddings", err))?;
 
     Ok(serde_json::json!({
         "ready": true,

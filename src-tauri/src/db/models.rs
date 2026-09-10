@@ -217,9 +217,17 @@ pub struct EmbeddingInput {
     pub target_id: String,
     pub model: String,
     pub vector_dim: i64,
+    /// 向量本体（v3）。None = 只写元数据（老调用点 / 生成失败留空）。
+    #[serde(default)]
+    pub vector: Option<Vec<f32>>,
     pub created_at: i64,
 }
 
+/// 查询行：**刻意不含 vector**。
+///
+/// `db_list_embeddings` 的语义是「元数据清单」（供判重与覆盖率统计），若把向量一起
+/// `SELECT *` 出来，每次判重都要搬运 MB 级字节。取向量是 `db_list_embedding_vectors`
+/// （`EmbeddingVectorOut`）的职责。
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct EmbeddingRow {
@@ -229,6 +237,36 @@ pub struct EmbeddingRow {
     pub model: String,
     pub vector_dim: i64,
     pub created_at: i64,
+}
+
+/// 检索用轻量视图（与 src/domain/embedding.ts 的 `EmbeddingVector` 对齐）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbeddingVectorOut {
+    pub target_id: String,
+    pub model: String,
+    /// 向量维度；以解码后的实际长度为准（BLOB 长度 ÷ 4）。
+    pub dim: i64,
+    pub vector: Vec<f32>,
+}
+
+/// 向量 → BLOB：float32 little-endian 逐元素拼接（4 字节 / 元素）。
+///
+/// 为什么手写而不引 `bytemuck`：本仓库 Rust 侧只有这一处二进制编解码，
+/// 加一个依赖换取 10 行代码不划算；且 LE 显式写出，跨平台读写一致。
+pub fn f32_to_blob(vector: &[f32]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(vector.len() * 4);
+    for v in vector {
+        out.extend_from_slice(&v.to_le_bytes());
+    }
+    out
+}
+
+/// BLOB → 向量。长度不是 4 的倍数时，尾部残字节忽略（不 panic、不报错）。
+pub fn blob_to_f32(blob: &[u8]) -> Vec<f32> {
+    blob.chunks_exact(4)
+        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .collect()
 }
 
 #[cfg(test)]
@@ -276,8 +314,7 @@ mod tests {
     }
 
     #[test]
-    fn chunk_out_serializes_to_camel_case() {
-        let out = ChunkOut {
+    fn chunk_out_serializes_to_camel_case() {        let out = ChunkOut {
             id: "c1".into(),
             document_id: "d1".into(),
             chapter_id: "ch7".into(),
@@ -305,5 +342,54 @@ mod tests {
             assert!(v.get(key).is_some(), "缺少 camelCase 字段 {key}：{v}");
         }
         assert!(v.get("document_id").is_none(), "不应出现 snake_case：{v}");
+    }
+
+    #[test]
+    fn embedding_input_accepts_camel_case_with_vector() {
+        // 前端 saveEmbeddings 会带 vector（number[]）；缺省时也必须能反序列化（老调用点）。
+        let json = serde_json::json!({
+            "id": "e1", "targetType": "chunk", "targetId": "c1", "model": "text-embedding-v3",
+            "vectorDim": 3, "vector": [1.0, 0.0, -0.5], "createdAt": 7
+        });
+        let e: EmbeddingInput = serde_json::from_value(json).expect("camelCase EmbeddingInput");
+        assert_eq!(e.target_id, "c1");
+        assert_eq!(e.vector.as_deref(), Some([1.0_f32, 0.0, -0.5].as_slice()));
+
+        let no_vec = serde_json::json!({
+            "id": "e2", "targetType": "chunk", "targetId": "c2", "model": "m",
+            "vectorDim": 0, "createdAt": 7
+        });
+        let e2: EmbeddingInput =
+            serde_json::from_value(no_vec).expect("vector 可缺省（serde default）");
+        assert!(e2.vector.is_none());
+    }
+
+    #[test]
+    fn embedding_vector_out_serializes_to_camel_case() {
+        let out = EmbeddingVectorOut {
+            target_id: "c1".into(),
+            model: "text-embedding-v3".into(),
+            dim: 2,
+            vector: vec![0.25, -0.75],
+        };
+        let v = serde_json::to_value(&out).expect("serialize EmbeddingVectorOut");
+        assert!(v.get("targetId").is_some(), "缺少 camelCase targetId：{v}");
+        assert!(v.get("dim").is_some());
+        assert!(v.get("target_id").is_none(), "不应出现 snake_case：{v}");
+    }
+
+    #[test]
+    fn f32_blob_roundtrip_is_lossless_le() {
+        let src = vec![0.0_f32, 1.0, -1.5, 3.0625, f32::MIN_POSITIVE];
+        let blob = f32_to_blob(&src);
+        assert_eq!(blob.len(), src.len() * 4, "每元素 4 字节");
+        assert_eq!(blob_to_f32(&blob), src, "编解码必须无损");
+
+        // 显式验证字节序：1.0f32 的 LE 字节是 00 00 80 3F。
+        assert_eq!(&f32_to_blob(&[1.0])[..], &[0x00, 0x00, 0x80, 0x3F]);
+
+        // 空向量 / 尾部残字节：不 panic，残字节被忽略。
+        assert!(blob_to_f32(&[]).is_empty());
+        assert_eq!(blob_to_f32(&[0x00, 0x00, 0x80]), Vec::<f32>::new());
     }
 }

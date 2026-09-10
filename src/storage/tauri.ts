@@ -20,6 +20,8 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   Chunk,
   Embedding,
+  EmbeddingTargetType,
+  EmbeddingVector,
   KnowledgeRelation,
   KnowledgeUnit,
   Section,
@@ -81,7 +83,17 @@ interface EmbeddingDto {
   targetId: string;
   model: string;
   vectorDim: number;
+  /** 向量本体（v3）。写入时带上；读路径（listEmbeddings）不回传。 */
+  vector?: number[];
   createdAt: number;
+}
+
+/** `db_list_embedding_vectors` 返回体（检索用轻量视图）。 */
+interface EmbeddingVectorDto {
+  targetId: string;
+  model: string;
+  dim: number;
+  vector: number[];
 }
 
 // ===== 领域对象 ↔ DTO 映射 =====
@@ -212,6 +224,8 @@ function toEmbeddingDto(e: Embedding): EmbeddingDto {
     targetId: e.targetId,
     model: e.model,
     vectorDim: e.vectorDim,
+    // undefined 不写进 JSON（Rust 侧 serde default → None → SQL NULL）。
+    ...(e.vector ? { vector: e.vector } : {}),
     createdAt: e.createdAt,
   };
 }
@@ -491,6 +505,11 @@ export class TauriStorage extends LocalStorageAdapter implements StorageAdapter 
     return r.ok ? r.value.map(fromChunkDto) : super.chunksByKnowledge(knowledgeId);
   }
 
+  override async deleteChunksByDocument(documentId: string): Promise<void> {
+    const r = await this.trySqlite("db_delete_chunks_by_document", { documentId });
+    if (!r.ok) await super.deleteChunksByDocument(documentId);
+  }
+
   // ===== KnowledgeUnit =====
 
   override async listKnowledgeUnits(documentId?: string): Promise<KnowledgeUnit[]> {
@@ -599,6 +618,24 @@ export class TauriStorage extends LocalStorageAdapter implements StorageAdapter 
   override async deleteEmbeddingsByTarget(targetId: string): Promise<void> {
     const r = await this.trySqlite("db_delete_embeddings_by_target", { targetId });
     if (!r.ok) await super.deleteEmbeddingsByTarget(targetId);
+  }
+
+  override async listEmbeddingVectors(
+    targetType: EmbeddingTargetType,
+    targetIds?: readonly string[],
+  ): Promise<EmbeddingVector[]> {
+    const r = await this.trySqlite<EmbeddingVectorDto[]>("db_list_embedding_vectors", {
+      targetType,
+      targetIds: targetIds ? [...targetIds] : undefined,
+    });
+    return r.ok
+      ? r.value.map((d) => ({
+          targetId: d.targetId,
+          model: d.model,
+          dim: d.dim,
+          vector: d.vector,
+        }))
+      : super.listEmbeddingVectors(targetType, targetIds);
   }
 
   // ===== 全文检索（FTS5）=====
