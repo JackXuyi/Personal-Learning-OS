@@ -49,6 +49,8 @@ description: PLOS UI 实现规范——先读语义 token（src/styles/main.css 
 3. hooks：优先项目现有 hooks 与 `src/stores/*`（zustand）；不造通用 hook 库。
 4. **Base UI 交互件手写约定（M2 实测 `@base-ui/react` 1.8，禁 asChild/render 深水区避坑）**：
    - import 命名空间：`import { Dialog } from "@base-ui/react/dialog"`（root/dialog、select、checkbox、alert-dialog 子路径均存在）；
+   - **命名空间 ≠ 组件（高频踩坑）**：`import { Tabs } from "@base-ui/react/tabs"` 拿到的 `Tabs` 是 `{Root,List,Tab,Panel}` 的**命名空间对象**，`<Tabs>` 渲染会报 `Element type is invalid: got object`。封装时必须 `const Tabs = BaseTabs.Root;`（与 `ui/dialog.tsx` 的 `Dialog = DialogRoot` 同法），**禁止** `Object.assign(Base*, {})` 这种写法；
+   - **子件必须有 Root 包裹**：`List/Tab/Panel/Popup/Trigger` 等依赖 Root context，直接渲染会报 `XxxRootContext is missing. Xxx parts must be placed within <Xxx.Root>`。受控 Tabs 标准形态：`<Tabs value onValueChange><TabsList><TabsTab value/><TabsPanel value/></TabsList? 各自平级></Tabs>`（List 与 Panel 同为 Root 的直接子节点）；
    - 浮层三件套样式基类（overlay `bg-ink-1/40` + Popup `data-starting-style`/`data-ending-style` 进出场动画）见 `ui/dialog.tsx` 导出的 `overlayBase`/`contentBase`，新增浮层直接复用，勿重写；
    - 受控全部走 `open`/`onOpenChange`、`checked`/`onCheckedChange`、`value`/`onValueChange`（值改变回调第一个参数）；
    - Select 显示 label：`Select.Value` 的 children 可传函数 `(value) => label`；弹层默认 `alignItemWithTrigger` 会覆盖触发区，需要下方弹出设 `alignItemWithTrigger={false}` + `side="bottom"`；
