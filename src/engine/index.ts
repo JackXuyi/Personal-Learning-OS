@@ -14,5 +14,6 @@ export * from "./assessment-engine";
 export * from "./learning-planner";
 export * from "./recommendation-engine";
 export * from "./splitter-engine";
+export * from "./chunk-engine";
 export * from "./quiz-engine";
 export * from "./loop";
