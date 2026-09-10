@@ -11,8 +11,10 @@
  *   与 contentRef → learnerState 与试卷范围在分析前后完全稳定，可安全重跑；
  * - ③ 要点分析额外写 `Chapter.keyPointRefs`（要点 ↔ 原文引用）与概念
  *   `KnowledgeUnit.evidence`；两者都只写**由代码定位**的字符区间。
+ * - ④ 概览（整篇级）：AI 读正文出导读，写 `doc.overview`；**不依赖切分**
+ *   （无章节时按段落分块），因此不像 ①②③ 那样要求已切分。
  */
-import type { Chapter, KeyPointRef, SourceDocument } from "../../domain";
+import type { Chapter, DocumentOverview, KeyPointRef, SourceDocument } from "../../domain";
 import type { StorageAdapter } from "../../storage";
 import type { AIProvider } from "../../ai";
 import {
@@ -20,6 +22,8 @@ import {
   extractChapterConceptsWithAi,
   extractKeyPointsWithAi,
 } from "../../ai/pipelines";
+import type { OverviewProgress } from "../../ai/overview-pipeline";
+import { summarizeDocumentWithAi } from "../../ai/overview-pipeline";
 import { applyChapterRefine } from "../../engine/splitter-engine";
 import { replaceChapterConcepts } from "../../engine/graph-engine";
 import { anchorToDocument } from "./evidence-anchor";
@@ -297,4 +301,67 @@ export async function analyzeKeyPointsNow(
     unanchored,
     analyzedAt: now,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* ④ 概览（整篇级 AI 总结 → doc.overview）                             */
+/* ------------------------------------------------------------------ */
+
+export interface GenerateOverviewOptions {
+  storage: StorageAdapter;
+  provider: AIProvider;
+  /** 分析所用模型标识（仅展示用）。 */
+  model?: string;
+  onProgress?: OverviewProgress;
+  now?: number;
+}
+
+export interface GenerateOverviewResult {
+  overview: DocumentOverview;
+  /** map 阶段跳过（AI 失败）的块数；> 0 时 UI 需告知覆盖范围。 */
+  skipped: number;
+}
+
+/**
+ * 概览生成执行序：校验 → 管道 → 组装 `DocumentOverview` → 写库。
+ *
+ * 与另三条分析的关键差异：**不校验「有没有章节」**。概览只依赖正文，
+ * 未切分的资料同样能出概览（无章时按段落分块）—— 因此这里**不抛 no-chapters**。
+ *
+ * 单一真源：时间戳只写 `overview.generatedAt`，不另写 `analysis.overviewAt`。
+ * 写入是**整体覆盖**：`saveDocument({ ...doc, overview })` 只在成功后执行，
+ * 因此失败时旧概览原样保留（不破坏已有数据）。
+ */
+export async function generateOverviewNow(
+  doc: SourceDocument,
+  chapters: readonly Chapter[],
+  opts: GenerateOverviewOptions,
+): Promise<GenerateOverviewResult> {
+  const { storage, provider, model, onProgress, now = Date.now() } = opts;
+  if (!provider.isConfigured()) {
+    throw new AnalyzeServiceError("not-configured", "AI 未配置。");
+  }
+  const text = doc.textPreview ?? "";
+  if (text.trim().length === 0) {
+    throw new AnalyzeServiceError("no-body", "这份资料没有正文。");
+  }
+
+  // 直接消费「抛错版」管道：长度超限 / 解析不合规都由它抛类型化错误。
+  const { draft, mode, chunks, skipped } = await summarizeDocumentWithAi(provider, {
+    title: doc.title,
+    text,
+    chapters,
+    ...(onProgress ? { onProgress } : {}),
+  });
+
+  const overview: DocumentOverview = {
+    ...draft,
+    generatedAt: now,
+    sourceChars: text.length,
+    mode,
+    ...(mode === "map-reduce" ? { chunks } : {}),
+    ...(model ? { model } : {}),
+  };
+  await storage.saveDocument({ ...doc, overview });
+  return { overview, skipped };
 }

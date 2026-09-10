@@ -12,13 +12,28 @@ import ContentTab from './detail/ContentTab';
 import SplitTab from './detail/SplitTab';
 import KnowledgeTab from './detail/KnowledgeTab';
 import PapersTab from './detail/PapersTab';
+import OverviewTab from './detail/OverviewTab';
 
-/** 资料详情页：4 个 Tab（资料内容 / 切分结果 / 关键知识点 / 章节测评试卷） */
+/**
+ * Tab 取值白名单。
+ *
+ * 顺带修掉一个既有缺陷：原实现是 `(searchParams.get('tab') || 'content') as …`
+ * 的无校验断言，`?tab=foo` 会让 `Tabs.Root` 的 value 匹配不到任何 Panel ——
+ * 页面**所有 Panel 都不渲染**（整页空白）。
+ */
+const TAB_VALUES = ['overview', 'content', 'split', 'knowledge', 'papers'] as const;
+type TabValue = (typeof TAB_VALUES)[number];
+const isTabValue = (v: string | null): v is TabValue =>
+  v !== null && (TAB_VALUES as readonly string[]).includes(v);
+
+/** 资料详情页：5 个 Tab（概览 / 资料内容 / 章节列表 / 关键知识点 / 章节测评试卷） */
 export default function DocumentDetailPage() {
   const navigate = useNavigate();
   const { docId } = useParams<{ docId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = (searchParams.get('tab') || 'content') as 'content' | 'split' | 'knowledge' | 'papers';
+  // D4：不带 tab 参数时落到首个 Tab「概览」；非法值同样回落 overview。
+  const tabParam = searchParams.get('tab');
+  const tab: TabValue = isTabValue(tabParam) ? tabParam : 'overview';
   /** 原文锚点（知识点 Tab 点「原文 →」带过来）；非法值一律当未提供。 */
   const atRaw = Number(searchParams.get('at') ?? NaN);
   const at = Number.isFinite(atRaw) && atRaw >= 0 ? atRaw : undefined;
@@ -126,6 +141,7 @@ export default function DocumentDetailPage() {
       <Tabs value={tab} onValueChange={selectTab} className="mt-6">
         <TabsList>
           {[
+            { value: 'overview', label: t.learn.detail.tabs.overview },
             { value: 'content', label: t.learn.detail.tabs.content },
             { value: 'split', label: t.learn.detail.tabs.split },
             { value: 'knowledge', label: t.learn.detail.tabs.knowledge },
@@ -138,6 +154,9 @@ export default function DocumentDetailPage() {
           <TabsIndicator />
         </TabsList>
 
+        <TabsPanel value="overview" className="mt-4">
+          <OverviewTab doc={doc} chapters={chapters} learner={learner} onChanged={handleRefresh} />
+        </TabsPanel>
         <TabsPanel value="content" className="mt-4">
           <ContentTab doc={doc} at={at} />
         </TabsPanel>
