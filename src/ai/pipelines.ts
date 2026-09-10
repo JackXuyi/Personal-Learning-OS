@@ -115,11 +115,13 @@ export async function chatJson(
   return extractJson(content);
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
+/** 供同目录管道模块（overview-pipeline）复用 —— 不复制第二份归一化工具。 */
+export function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-function str(v: unknown): string | undefined {
+/** 同上。 */
+export function str(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
