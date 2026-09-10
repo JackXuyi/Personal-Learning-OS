@@ -11,8 +11,6 @@ import { cn } from "../../lib/utils";
  *   </Tabs>
  */
 
-const TabsRoot = BaseTabs.Root;
-
 type TabsListProps = React.ComponentProps<typeof BaseTabs.List>;
 
 function TabsList({ className, ...props }: TabsListProps) {
@@ -57,5 +55,10 @@ function TabsPanel({ className, ...props }: TabsPanelProps) {
   );
 }
 
-const Tabs = Object.assign(BaseTabs, {});
+/**
+ * 注意：`BaseTabs` 是命名空间对象（Root/List/Tab/Panel），**不能**直接当组件渲染，
+ * 否则会得到 "Element type is invalid: got object"。此处 `Tabs` 指向真正的 Root 组件。
+ */
+const Tabs = BaseTabs.Root;
+const TabsRoot = BaseTabs.Root;
 export { Tabs, TabsRoot, TabsList, TabsTab, TabsPanel };

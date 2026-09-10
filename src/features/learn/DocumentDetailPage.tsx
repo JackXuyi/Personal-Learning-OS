@@ -4,7 +4,7 @@ import { storage } from '../../stores/useLoopStore';
 import { useI18n } from '../../i18n';
 import { PageContainer } from '../../components/layout/AppShell';
 import { Button } from '../../components/ui/button';
-import { TabsList } from '../../components/ui/tabs';
+import { Tabs, TabsList, TabsTab, TabsPanel } from '../../components/ui/tabs';
 import { ChevronLeft } from 'lucide-react';
 import type { SourceDocument, Chapter, KnowledgeGraph, LearnerState } from '../../domain';
 
@@ -104,35 +104,38 @@ export default function DocumentDetailPage() {
         </div>
       </div>
 
-      {/* Tab 导航 */}
-      <TabsList className="mt-6 grid w-full grid-cols-4">
-        {[
-          { value: 'content' as const, label: t.learn.detail.tabs.content },
-          { value: 'split' as const, label: t.learn.detail.tabs.split },
-          { value: 'knowledge' as const, label: t.learn.detail.tabs.knowledge },
-          { value: 'papers' as const, label: t.learn.detail.tabs.papers },
-        ].map((item) => (
-          <button
-            key={item.value}
-            onClick={() => setSearchParams({ tab: item.value })}
-            className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-              tab === item.value
-                ? 'bg-primary text-white'
-                : 'text-ink-2 hover:bg-subtle'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </TabsList>
+      {/* Tab 导航：TabsList/Tab/Panel 必须包裹在 Tabs(Root) 内，否则 Base UI 抛 TabsRootContext is missing */}
+      <Tabs
+        value={tab}
+        onValueChange={(v) => setSearchParams({ tab: String(v) })}
+        className="mt-6"
+      >
+        <TabsList className="grid w-full grid-cols-4">
+          {[
+            { value: 'content', label: t.learn.detail.tabs.content },
+            { value: 'split', label: t.learn.detail.tabs.split },
+            { value: 'knowledge', label: t.learn.detail.tabs.knowledge },
+            { value: 'papers', label: t.learn.detail.tabs.papers },
+          ].map((item) => (
+            <TabsTab key={item.value} value={item.value}>
+              {item.label}
+            </TabsTab>
+          ))}
+        </TabsList>
 
-      {/* Tab 内容 */}
-      <div className="mt-4">
-        {tab === 'content' && <ContentTab doc={doc} />}
-        {tab === 'split' && <SplitTab doc={doc} chapters={chapters} learner={learner} onChanged={handleRefresh} />}
-        {tab === 'knowledge' && <KnowledgeTab doc={doc} chapters={chapters} graph={graph} learner={learner} onChanged={handleRefresh} />}
-        {tab === 'papers' && <PapersTab chapters={chapters} learner={learner} />}
-      </div>
+        <TabsPanel value="content" className="mt-4">
+          <ContentTab doc={doc} />
+        </TabsPanel>
+        <TabsPanel value="split" className="mt-4">
+          <SplitTab doc={doc} chapters={chapters} learner={learner} onChanged={handleRefresh} />
+        </TabsPanel>
+        <TabsPanel value="knowledge" className="mt-4">
+          <KnowledgeTab doc={doc} chapters={chapters} graph={graph} learner={learner} onChanged={handleRefresh} />
+        </TabsPanel>
+        <TabsPanel value="papers" className="mt-4">
+          <PapersTab chapters={chapters} learner={learner} />
+        </TabsPanel>
+      </Tabs>
     </PageContainer>
   );
 }
