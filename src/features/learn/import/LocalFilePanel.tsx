@@ -99,7 +99,7 @@ export default function LocalFilePanel({ files, onFilesChange, disabled }: Local
           ref={inputRef}
           type="file"
           multiple
-          accept=".md,.markdown,.mdown,.pdf"
+          accept=".md,.markdown,.mdown,.txt,.pdf"
           className="hidden"
           data-testid="local-file-input"
           disabled={disabled}
@@ -142,7 +142,11 @@ export default function LocalFilePanel({ files, onFilesChange, disabled }: Local
                 <StatusIcon state={row.state} />
                 <span className="min-w-0 flex-1 truncate text-ink-1">{row.file.name}</span>
                 <span className="shrink-0 rounded border border-line px-1.5 py-0.5 text-[10px] text-ink-3">
-                  {kindLabel(row.state, { md: fmt.local.kindMd, pdf: fmt.local.kindPdf })}
+                  {kindLabel(row.state, {
+                    md: fmt.local.kindMd,
+                    txt: fmt.local.kindTxt,
+                    pdf: fmt.local.kindPdf,
+                  })}
                 </span>
                 <span className="shrink-0 tabular-nums text-ink-3">{formatBytes(row.file.size)}</span>
                 {row.state !== "unsupported" && row.state.overLimit ? (
@@ -175,8 +179,12 @@ function StatusIcon({ state }: { state: Row["state"] }) {
   return <span className="shrink-0 font-bold text-state-mastered">✓</span>;
 }
 
-/** 类型徽标文案：md → Markdown；pdf → PDF；不支持 → 占位符（文案走 i18n）。 */
-function kindLabel(state: Row["state"], labels: { md: string; pdf: string }): string {
+/** 类型徽标文案：md → Markdown；txt → 纯文本；pdf → PDF；不支持 → 占位符（文案走 i18n）。 */
+function kindLabel(
+  state: Row["state"],
+  labels: { md: string; txt: string; pdf: string },
+): string {
   if (state === "unsupported") return "—";
-  return state.kind === "pdf" ? labels.pdf : labels.md;
+  if (state.kind === "pdf") return labels.pdf;
+  return state.kind === "txt" ? labels.txt : labels.md;
 }

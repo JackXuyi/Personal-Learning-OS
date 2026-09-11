@@ -934,18 +934,19 @@ export const en: Messages = {
         "Paste Markdown, or import from local files / public GitHub repos — it will be split into chapters, then learn chapter by chapter.",
       sourceTab: { paste: "Paste", local: "Local files", github: "GitHub" },
       local: {
-        dropTitle: "Drop .md / .pdf here, or click to select files",
+        dropTitle: "Drop .md / .txt / .pdf here, or click to select files",
         dropHint: "Multiple files supported; scanned PDFs are not supported (text PDFs work)",
         selected: (n: number) => `${n} file(s) selected`,
         importable: (n: number) => `${n} importable`,
         removeAll: "Remove all",
         remove: "Remove",
         kindMd: "Markdown",
+        kindTxt: "Plain text",
         kindPdf: "PDF",
         import: (n: number) => `Save & split ${n} document(s)`,
         /** Conversion failure copy; keys mirror `LocalFileErrorKind`. */
         errors: {
-          unsupported: "Unsupported type (only .md / .pdf)",
+          unsupported: "Unsupported type (only .md / .txt / .pdf)",
           "too-large": "Exceeds the size limit",
           "pdf-no-text": "No extractable text (likely a scanned PDF)",
           "pdf-too-large": "PDF exceeds the page limit",

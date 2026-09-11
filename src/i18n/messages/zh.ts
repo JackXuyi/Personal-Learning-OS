@@ -911,18 +911,19 @@ export const zh = {
       sourceTab: { paste: "粘贴", local: "本地文件", github: "GitHub" },
       /** 本地文件面板。 */
       local: {
-        dropTitle: "拖拽 .md / .pdf 到此处，或点击选择文件",
+        dropTitle: "拖拽 .md / .txt / .pdf 到此处，或点击选择文件",
         dropHint: "支持批量选择多个文件；扫描版 PDF 暂不支持（文本型 PDF 可导入）",
         selected: (n: number) => `已选 ${n} 个文件`,
         importable: (n: number) => `其中 ${n} 份可导入`,
         removeAll: "全部移除",
         remove: "移除",
         kindMd: "Markdown",
+        kindTxt: "纯文本",
         kindPdf: "PDF",
         import: (n: number) => `保存并切分 ${n} 份资料`,
         /** 转换失败文案；键与 `LocalFileErrorKind` 对齐（import/error-text.ts 消费）。 */
         errors: {
-          unsupported: "不支持的类型（仅 .md / .pdf）",
+          unsupported: "不支持的类型（仅 .md / .txt / .pdf）",
           "too-large": "超出大小限制",
           "pdf-no-text": "未抽取到文本（可能为扫描件）",
           "pdf-too-large": "PDF 页数超出上限",

@@ -15,7 +15,7 @@ export type ImportTab = "paste" | "local" | "github";
 
 /** 各来源体积护栏（localStorage 占位后端的安全线；SQLite 落地后可放宽）。 */
 export const LIMITS = {
-  /** 单个 .md ≤ 1MB。 */
+  /** 单个 .md / .txt ≤ 1MB（纯文本类共用护栏）。 */
   localMdBytes: 1 * 1024 * 1024,
   /** 单个 .pdf ≤ 30MB（pdf.js 内存解析护栏）。 */
   localPdfBytes: 30 * 1024 * 1024,
@@ -75,8 +75,8 @@ export interface ImportSummary {
   failed: { title: string; reason: string }[];
 }
 
-/** 本地文件类型判定（仅 .md / .pdf 两类被支持）。 */
-export type LocalFileKind = "md" | "pdf";
+/** 本地文件类型判定（纯文本类 .md / .txt + .pdf）。 */
+export type LocalFileKind = "md" | "txt" | "pdf";
 
 export interface LocalFileClassified {
   kind: LocalFileKind;
@@ -94,6 +94,10 @@ export function classifyLocalFile(file: { name: string; size: number }): LocalFi
   if (lower.endsWith(".md") || lower.endsWith(".markdown") || lower.endsWith(".mdown")) {
     return { kind: "md", overLimit: file.size > LIMITS.localMdBytes };
   }
+  // .txt 与 md 同为纯文本来源：走同一套解码嗅探（BOM/UTF-8/GB18030）与切分探测。
+  if (lower.endsWith(".txt")) {
+    return { kind: "txt", overLimit: file.size > LIMITS.localMdBytes };
+  }
   if (lower.endsWith(".pdf")) {
     return { kind: "pdf", overLimit: file.size > LIMITS.localPdfBytes };
   }
@@ -102,7 +106,7 @@ export function classifyLocalFile(file: { name: string; size: number }): LocalFi
 
 /** 去掉文件扩展名作为默认资料标题。 */
 export function stripExtension(name: string): string {
-  return name.replace(/\.(md|markdown|mdown|pdf)$/i, "");
+  return name.replace(/\.(md|markdown|mdown|txt|pdf)$/i, "");
 }
 
 /** 文件大小格式化（B/KB/MB，无小数）。 */

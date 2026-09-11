@@ -40,18 +40,20 @@ export async function fileToUnit(file: File): Promise<ImportUnit | LocalFileErro
     return err("unsupported", file.name);
   }
   if (cls.overLimit) {
-    const limit = cls.kind === "md" ? LIMITS.localMdBytes : LIMITS.localPdfBytes;
+    const limit = cls.kind === "pdf" ? LIMITS.localPdfBytes : LIMITS.localMdBytes;
     return err("too-large", `${file.name} size>${limit}`);
   }
   const title = stripExtension(file.name);
   const source = `本地文件 · ${file.name}`;
   try {
-    if (cls.kind === "md") {
+    if (cls.kind === "md" || cls.kind === "txt") {
       const decoded = decodeBytes(await file.arrayBuffer());
+      const asMarkdown = cls.kind === "md";
       return {
         title,
-        format: "markdown",
-        splitFormat: "markdown",
+        format: asMarkdown ? "markdown" : "txt",
+        // .txt 按纯文本切分（空行聚类）；.md 走标题切分。
+        splitFormat: asMarkdown ? "markdown" : "txt",
         text: decoded.text,
         source,
         extract: { encoding: decoded.encoding },
