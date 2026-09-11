@@ -24,10 +24,21 @@ import type {
 } from "./types";
 import { AiProviderError } from "./types";
 
+/**
+ * 本地模型结构化调用的默认输出上限。
+ * 原 Rust 兜底 2048 会在概念抽取的长 JSON（单章 6~14 条概念）中途截断，
+ * 导致解析层拿到不闭合的 JSON —— 见 docs/ai-analysis-summary-fix-design-2026-09.md。
+ */
+export const BUILTIN_MAX_TOKENS = 4096;
+
 export interface LlmGenerateRequest {
   model: string;
   messages: { role: string; content: string }[];
   maxTokens?: number;
+  /** 覆盖模型预设温度（JSON 管道传 0.1~0.3；缺省用模型预设）。 */
+  temperature?: number;
+  /** 采样预设："tight" = 近贪心结构化预设（Rust 侧 tight_structured()）。 */
+  samplingPreset?: "tight";
 }
 
 /** Rust `manager.rs` 序列化出的模型信息(键保持 snake_case)。 */
@@ -122,6 +133,12 @@ export class BuiltinProvider implements AIProvider {
     const request: LlmGenerateRequest = {
       model: this.model,
       messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
+      // 输出上限：未指定时用 builtin 默认（2048 会截断长 JSON）。
+      maxTokens: input.maxTokens ?? BUILTIN_MAX_TOKENS,
+      // 温度透传（此前被静默丢弃，管道层设置的低温度全部作废）。
+      ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
+      // 结构化意图 → 近贪心采样预设（抑制 JSON 键名漂移）。
+      ...(input.jsonMode ? { samplingPreset: "tight" as const } : {}),
     };
     try {
       const content = await invoke<string>("llm_generate", { request });

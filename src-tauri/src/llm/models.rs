@@ -42,9 +42,9 @@ pub struct SamplingParams {
 }
 
 impl SamplingParams {
-    /// 近贪心预设:结构化输出(出题/评估/JSON)稳定性优先。
-    /// 供 N4 的评估/出题提示词管线切换使用(现默认使用 qwen35_summary)。
-    #[allow(dead_code)]
+    /// 近贪心预设:结构化输出(JSON 管道)稳定性优先。
+    /// 由 `commands::resolve_sampling` 在请求 `samplingPreset == "tight"` 时选用
+    /// (概念/要点/概览/出题等走 `chatJson` 的调用均带该标记)。
     pub fn tight_structured() -> Self {
         Self {
             temperature: 0.1,

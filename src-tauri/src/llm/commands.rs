@@ -10,7 +10,8 @@ use super::manager::{
     block_reason_if_unsupported, current_device, DownloadProgress, ModelInfo, ModelManager,
 };
 use super::models::{
-    get_default_model, get_model_by_name, render_prompt, ChatMessage, ChatRole,
+    get_default_model, get_model_by_name, render_prompt, ChatMessage, ChatRole, ModelDef,
+    SamplingParams,
 };
 use super::sidecar::Sidecar;
 
@@ -41,6 +42,36 @@ pub struct GenerateRequest {
     pub messages: Vec<JsonChatMessage>,
     #[serde(rename = "maxTokens")]
     pub max_tokens: Option<i32>,
+    /// 覆盖模型预设温度(结构化/JSON 调用传 0.1~0.3;缺省用模型预设)。
+    #[serde(rename = "temperature")]
+    pub temperature: Option<f32>,
+    /// 采样预设名:"tight" → `SamplingParams::tight_structured()`(近贪心,
+    /// 供 JSON 结构化输出);未知/缺省回落模型自带预设。
+    #[serde(rename = "samplingPreset")]
+    pub sampling_preset: Option<String>,
+}
+
+/// 输出上限兜底。原 2048 会在概念抽取这类长 JSON(单章 6~14 条概念,一条
+/// 150~250 token)中途截断,导致解析层拿到不闭合的 JSON —— 提至 4096。
+const DEFAULT_MAX_TOKENS: i32 = 4096;
+
+/// 纯函数:按请求解析出本次生成实际使用的采样参数(采样唯一真源)。
+///
+/// 优先级:① `sampling_preset == "tight"` → `tight_structured()`,否则模型
+/// 自带预设;② 请求显式带 `temperature`(有限值)→ 覆盖基线温度,其余参数
+/// (top_k / penalty 等)仍取基线。可脱离模型文件单测。
+pub fn resolve_sampling(def: &ModelDef, request: &GenerateRequest) -> SamplingParams {
+    let mut sampling = match request.sampling_preset.as_deref() {
+        Some("tight") => SamplingParams::tight_structured(),
+        _ => def.sampling.clone(),
+    };
+    if let Some(t) = request.temperature {
+        // 与 helper 侧清洗口径一致:非有限值忽略,负温度按 0(贪心解码)。
+        if t.is_finite() {
+            sampling.temperature = t.max(0.0);
+        }
+    }
+    sampling
 }
 
 #[tauri::command]
@@ -136,21 +167,22 @@ pub async fn llm_generate(
     }
     let prompt = render_prompt(&messages);
 
-    // 3. 组装 generate 请求(采样默认取该模型的预设)
+    // 3. 组装 generate 请求(采样按请求解析:preset/温度覆盖 → 模型预设)
+    let sampling = resolve_sampling(&def, &request);
     let request_json = json!({
         "type": "generate",
         "prompt": prompt,
-        "max_tokens": request.max_tokens.unwrap_or(2048),
+        "max_tokens": request.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS),
         "context_size": def.context_size,
         "model_path": model_path_str,
-        "temperature": def.sampling.temperature,
-        "top_k": def.sampling.top_k,
-        "top_p": def.sampling.top_p,
-        "presence_penalty": def.sampling.presence_penalty,
-        "frequency_penalty": def.sampling.frequency_penalty,
-        "repeat_penalty": def.sampling.repeat_penalty,
-        "penalty_last_n": def.sampling.penalty_last_n,
-        "stop_tokens": &def.sampling.stop_tokens,
+        "temperature": sampling.temperature,
+        "top_k": sampling.top_k,
+        "top_p": sampling.top_p,
+        "presence_penalty": sampling.presence_penalty,
+        "frequency_penalty": sampling.frequency_penalty,
+        "repeat_penalty": sampling.repeat_penalty,
+        "penalty_last_n": sampling.penalty_last_n,
+        "stop_tokens": &sampling.stop_tokens,
     })
     .to_string();
 
@@ -177,4 +209,68 @@ pub async fn llm_status(state: State<'_, LlmState>) -> Result<serde_json::Value,
         "helper_path": state.sidecar.helper_path().to_string_lossy(),
         "device": device_json,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 构造一个最小 GenerateRequest(仅填采样相关字段)。
+    fn req(temperature: Option<f32>, preset: Option<&str>, max_tokens: Option<i32>) -> GenerateRequest {
+        GenerateRequest {
+            model: "qwen3.5:4b".into(),
+            messages: vec![],
+            max_tokens,
+            temperature,
+            sampling_preset: preset.map(|s| s.to_string()),
+        }
+    }
+
+    #[test]
+    fn default_uses_model_preset() {
+        let def = get_default_model();
+        let s = resolve_sampling(&def, &req(None, None, None));
+        assert_eq!(s.temperature, def.sampling.temperature); // qwen35_summary = 0.5
+        assert_eq!(s.presence_penalty, 0.3);
+        assert_eq!(s.repeat_penalty, 1.05);
+    }
+
+    #[test]
+    fn tight_preset_drops_penalties() {
+        let def = get_default_model();
+        let s = resolve_sampling(&def, &req(None, Some("tight"), None));
+        assert_eq!(s.temperature, 0.1);
+        assert_eq!(s.presence_penalty, 0.0);
+        assert_eq!(s.frequency_penalty, 0.0);
+        assert_eq!(s.repeat_penalty, 1.0);
+        assert_eq!(s.penalty_last_n, 0);
+    }
+
+    #[test]
+    fn explicit_temperature_overrides_preset() {
+        let def = get_default_model();
+        let s = resolve_sampling(&def, &req(Some(0.2), Some("tight"), None));
+        assert!((s.temperature - 0.2).abs() < f32::EPSILON);
+        // 其余采样参数仍取 tight 预设,不受温度覆盖影响。
+        assert_eq!(s.presence_penalty, 0.0);
+        assert_eq!(s.penalty_last_n, 0);
+    }
+
+    #[test]
+    fn unknown_preset_and_non_finite_temperature_fall_back() {
+        let def = get_default_model();
+        // 未知预设 → 回落模型自带预设,不报错。
+        let s = resolve_sampling(&def, &req(None, Some("nope"), None));
+        assert_eq!(s.temperature, def.sampling.temperature);
+        // 非有限温度(NaN)被忽略 → 仍为模型预设。
+        let s = resolve_sampling(&def, &req(Some(f32::NAN), None, None));
+        assert_eq!(s.temperature, def.sampling.temperature);
+    }
+
+    #[test]
+    fn default_max_tokens_budget() {
+        // 兜底值必须大于 2048:概念抽取的长 JSON 曾在 2048 被截断。
+        assert!(DEFAULT_MAX_TOKENS > 2048);
+        assert_eq!(DEFAULT_MAX_TOKENS, 4096);
+    }
 }

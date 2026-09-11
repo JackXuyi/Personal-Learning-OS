@@ -32,6 +32,17 @@ export interface ChatMessage {
 export interface ChatInput {
   messages: ChatMessage[];
   temperature?: number;
+  /**
+   * 输出上限（token）；未给则由各 Provider 自决默认值
+   * （builtin: 4096 —— 低于此值长 JSON 会在中途被截断；HTTP: 不设上限）。
+   */
+  maxTokens?: number;
+  /**
+   * 期望结构化（JSON）输出。
+   * - builtin：映射为近贪心采样预设（`samplingPreset: "tight"`）；
+   * - HTTP provider：当前忽略（API 档零改动，见 ai-analysis-summary-fix-design）。
+   */
+  jsonMode?: boolean;
 }
 
 export interface ChatOutput {

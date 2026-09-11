@@ -31,6 +31,7 @@ import type { ChapterRefine } from "../engine/splitter-engine";
 import { applyChapterRefine } from "../engine/splitter-engine";
 import type { AIProvider, ChatMessage } from "./types";
 import { AiProviderError } from "./types";
+import { repairTruncatedJson } from "./json-repair";
 
 /* ------------------------------------------------------------------ */
 /* 共享工具                                                            */
@@ -80,18 +81,32 @@ export function extractJson(content: string): unknown {
   // 取剥离后首个「{ 或 [」到末个「} 或 ]」。
   const open = stripped.search(/[\[{]/);
   const close = Math.max(stripped.lastIndexOf("}"), stripped.lastIndexOf("]"));
-  if (open === -1 || close <= open) {
+  if (open === -1) {
     throw new AiProviderError(
       "request-failed",
       `AI 返回内容中未找到 JSON：${stripped.slice(0, 120) || "(空)"}`,
     );
   }
+  // close <= open：从 open 起没有任何闭合符 —— 截断发生在第一个元素中间，
+  // 同样交给截断修复（回退容器边界）处理，而不是直接判死。
+  const slice = stripped.slice(open, close > open ? close + 1 : undefined);
   try {
-    return JSON.parse(stripped.slice(open, close + 1)) as unknown;
+    return JSON.parse(slice) as unknown;
   } catch {
+    // 输出被 max_tokens 截断是本地小模型的常见失败模式：JSON 停在半途、
+    // 花括号不闭合。先尝试抢救「完整前缀」（只保留完整元素，不伪造半条），
+    // 不可修复再走统一抛错。
+    const repaired = repairTruncatedJson(slice);
+    if (repaired !== undefined) {
+      try {
+        return JSON.parse(repaired) as unknown;
+      } catch {
+        // 理论不可达（repair 内部已验证过），落到统一抛错
+      }
+    }
     throw new AiProviderError(
       "request-failed",
-      `AI 返回的 JSON 无法解析：${stripped.slice(open, Math.min(close + 1, open + 160))}…`,
+      `AI 返回的 JSON 无法解析（可能是输出被长度截断）：${stripped.slice(open, Math.min(close + 1, open + 160))}…`,
     );
   }
 }
@@ -108,7 +123,9 @@ export async function chatJson(
       "AI 未就绪：请到「设置 → AI 模型中心」配置本地模型或 API。",
     );
   }
-  const { content } = await provider.chat({ messages, temperature });
+  // 关键修复：temperature 此前对 builtin 档被静默丢弃（builtin.chat 只组
+  // model+messages）；jsonMode 声明结构化意图 → builtin 映射为近贪心采样预设。
+  const { content } = await provider.chat({ messages, temperature, jsonMode: true });
   if (!content) {
     throw new AiProviderError("request-failed", "AI 返回了空内容。");
   }
