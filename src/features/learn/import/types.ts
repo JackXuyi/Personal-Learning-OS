@@ -41,6 +41,16 @@ export interface ImportUnit {
   text: string;
   /** 出处：GitHub 仓库 URL / 本地文件名（写入 SourceDocument.source）。 */
   source?: string;
+  /**
+   * 抽取元信息（结果卡可观测性，G6）：仅本地文件来源填充。
+   * - `pages` / `nonEmptyPages`：PDF 总页数与抽到文本的页数（差值大 → 疑似扫描件）；
+   * - `encoding`：md 实际采用的解码名（非 utf-8 时提示，避免静默乱码，G4）。
+   */
+  extract?: {
+    pages?: number;
+    nonEmptyPages?: number;
+    encoding?: string;
+  };
 }
 
 /** 单份导入成功结果。 */

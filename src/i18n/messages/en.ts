@@ -888,11 +888,15 @@ export const en: Messages = {
         remove: "Remove",
         kindMd: "Markdown",
         kindPdf: "PDF",
-        unsupported: "Unsupported type (only .md / .pdf)",
-        tooLarge: "Exceeds size limit",
-        scanningNoText: "No extractable text (likely a scanned PDF)",
-        readFailed: "Read failed",
         import: (n: number) => `Save & split ${n} document(s)`,
+        /** Conversion failure copy; keys mirror `LocalFileErrorKind`. */
+        errors: {
+          unsupported: "Unsupported type (only .md / .pdf)",
+          "too-large": "Exceeds the size limit",
+          "pdf-no-text": "No extractable text (likely a scanned PDF)",
+          "pdf-too-large": "PDF exceeds the page limit",
+          "read-failed": "Failed to read the file",
+        },
       },
       github: {
         label: "GitHub link (public repo)",
@@ -904,7 +908,18 @@ export const en: Messages = {
         skipped: (n: number) => `${n} skipped (over limit)`,
         filesHead: "Markdown file list",
         emptyPreview: "Paste a public repo link and hit “Resolve” to preview the files",
-        fileTooMany: "Too many Markdown files — use a subdirectory or single-file link instead",
+        /** Resolve / import failure copy; keys mirror `GhErrorKind`. */
+        errors: {
+          invalid:
+            "Cannot parse this link — paste a public github.com repo / subdirectory / single-file link.",
+          unavailable: "Repository not found, or it is private.",
+          network: "Request failed — check your network and retry.",
+          "rate-limit": "GitHub API rate limit reached (60/h unauthenticated) — retry later.",
+          "too-many-files": "Too many Markdown files — use a subdirectory or single-file link.",
+          "merged-too-large": "Merged text exceeds the size limit — use a subdirectory or single-file link.",
+          "fetch-failed": "Failed to fetch all Markdown files — check your network and retry.",
+          empty: "No importable Markdown found in this scope.",
+        },
       },
       batch: {
         importing: (i: number, n: number, title: string) => `Importing ${i}/${n} · ${title}`,
@@ -918,16 +933,12 @@ export const en: Messages = {
       formatWeb: "Web",
       formatTxt: "Plain text",
       stepSource: (n: number) => `${n} · Source`,
-      stepPreview: (n: number) => `${n} · Split preview`,
       titlePlaceholder: "Name this document, e.g. “RAG System Design”",
       bodyPlaceholder:
         "Paste your notes / Markdown here…\nUse # / ## for chapters (e.g. “# Chapter 1: Embedding”); plain text is auto-clustered by blank lines.",
       format: "Format",
       saveOnly: "Save document only",
       unnamedDoc: "Untitled document",
-      previewHead: (title: string, n: number) =>
-        `“${title}” split into ${n} chapter(s)`,
-      refinedBadge: "AI refined",
       noSplitWarn:
         "No chapters detected — content may lack headings or paragraphs. Add some and retry.",
       tooShort:
@@ -940,7 +951,6 @@ export const en: Messages = {
       saveSplit: "Save & split chapters",
       /** U5: stage progress (read → detect → refine → create → link) and result card. */
       progressTitle: "Importing…",
-      progressDone: "✓ Import complete",
       phaseLabel: {
         read: "Reading document",
         detect: "Detecting structure",
@@ -957,6 +967,14 @@ export const en: Messages = {
       },
       statChapter: (n: number) => `${n} chapter(s)`,
       statPoints: (n: number) => `${n} point(s)`,
+      /** Result card observability (G6): extraction volume / pages / decoding / scan suspicion. */
+      statChars: (n: number) => `${n} characters extracted`,
+      statPages: (done: number, total: number) => `${done}/${total} pages with text`,
+      encodingHint: (name: string) => `Decoded as ${name}`,
+      scannedHint: "Some pages had no extractable text — may contain scanned pages",
+      /** Result card index status (G7). */
+      indexQueued: "Vector indexing queued",
+      indexOff: "No embedding model · full-text search only",
       mergedN: (n: number) => `${n} over-fragmented section(s) auto-merged`,
       structureRefined: "AI refined titles & key points",
       structureLocal: "Local heuristic split · no AI configured",

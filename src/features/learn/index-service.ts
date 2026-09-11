@@ -175,16 +175,28 @@ export async function rebuildIndex(opts: { onlyMissing?: boolean } = {}): Promis
 }
 
 /**
+ * 当前是否具备「自动向量化」能力：配置了 Embedding 模型名且 provider 挂了 embed。
+ *
+ * UI（导入结果卡 / 设置页）与 `autoIndexAfterImport` 共用同一判定，
+ * 避免两处口径漂移导致「卡片说已入队、实际没跑」。
+ */
+export function isAutoIndexCapable(): boolean {
+  if (!activeEmbeddingModel()) return false;
+  return typeof buildActiveProvider().embed === "function";
+}
+
+/**
  * 导入完成后的后台入队（D2-A：切分后自动入队，不阻塞导入完成态）。
  *
  * 与设置页手动重建的区别：**完全静默**——能力不足（未配模型 / 本地模型不支持
  * 向量化）时直接跳过，不弹错、不改状态，因为导入本身的成功与向量化无关。
  * 即使失败，用户仍可用「重建索引」补上（幂等）。
+ *
+ * 调用方（除导入外）：替换 / 追加正文、详情页与列表页的手动重切分——
+ * 这些路径的 `rebuildChunks` 会清掉旧向量，必须补一次重算（G1）。
  */
 export function autoIndexAfterImport(): void {
-  const provider = buildActiveProvider();
-  if (typeof provider.embed !== "function") return;
-  if (!activeEmbeddingModel()) return;
+  if (!isAutoIndexCapable()) return;
   // 不 await：后台串行执行，让导入结果卡立即返回。
   void rebuildIndex({ onlyMissing: true }).catch(() => undefined);
 }

@@ -25,8 +25,9 @@ import { notifyDocsChanged } from "../../../components/layout/AppShell";
 import LocalFilePanel from "../import/LocalFilePanel";
 import GithubPanel from "../import/GithubPanel";
 import { fileToUnit } from "../import/local-files";
-import { buildGithubUnit } from "../import/github";
+import { buildGithubUnit, GithubImportError } from "../import/github";
 import type { GithubPreview } from "../import/github";
+import { githubErrorText, localErrorText } from "../import/error-text";
 import type { ImportUnit } from "../import/types";
 import { LIMITS } from "../import/types";
 import {
@@ -37,6 +38,7 @@ import {
   replaceDocumentBody,
   updateDocumentMeta,
 } from "../library-actions";
+import { autoIndexAfterImport } from "../index-service";
 import type { DeleteReport, ReplacePhaseKey } from "../library-actions";
 import type { DocActionKind } from "./DocActionsMenu";
 
@@ -255,7 +257,7 @@ export function UpdateDocModal({
     if (tab === "local") {
       const out = await fileToUnit(files[0]);
       if ("error" in out) {
-        setNotice(out.message);
+        setNotice(localErrorText(out, m.learn.import.local.errors));
         return undefined;
       }
       return out;
@@ -278,14 +280,22 @@ export function UpdateDocModal({
         onPhase: (k, s) => setPhase(k, s),
       });
       setResult(t.done(res.chapters.length, res.carriedMastery, res.droppedMastery));
+      // 正文已变 → 旧 chunk 与其向量已被 rebuildChunks 清掉（G1）：补一次后台重算入队，
+      // 否则该资料的向量索引会静默清零、检索退化成纯 FTS。
+      autoIndexAfterImport();
       notifyDocsChanged();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setNotice(
-        msg.includes("上限") || msg.includes("limit")
-          ? m.learn.library.append.tooLarge
-          : msg,
-      );
+      if (err instanceof GithubImportError) {
+        // GitHub 错误按 kind 取文案（G2）。
+        setNotice(githubErrorText(err, m.learn.import.github.errors));
+      } else {
+        const msg = err instanceof Error ? err.message : String(err);
+        setNotice(
+          msg.includes("上限") || msg.includes("limit")
+            ? m.learn.library.append.tooLarge
+            : msg,
+        );
+      }
     } finally {
       setBusy(false);
     }
@@ -434,6 +444,8 @@ export function AppendDocModal({
         t.count(res.appendedChars, (doc.textPreview?.length ?? 0) + res.appendedChars) +
           ` · ${m.learn.detail.split.result(res.chapters.length, res.carriedMastery, res.droppedMastery, false)}`,
       );
+      // 追加同样整篇重切 → 旧向量已失效：补后台重算（与替换同理，G1）。
+      autoIndexAfterImport();
       notifyDocsChanged();
     } catch (err) {
       setNotice(err instanceof Error ? err.message : t.tooLarge);

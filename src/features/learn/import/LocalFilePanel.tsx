@@ -142,14 +142,14 @@ export default function LocalFilePanel({ files, onFilesChange, disabled }: Local
                 <StatusIcon state={row.state} />
                 <span className="min-w-0 flex-1 truncate text-ink-1">{row.file.name}</span>
                 <span className="shrink-0 rounded border border-line px-1.5 py-0.5 text-[10px] text-ink-3">
-                  {kindLabel(row.state)}
+                  {kindLabel(row.state, { md: fmt.local.kindMd, pdf: fmt.local.kindPdf })}
                 </span>
                 <span className="shrink-0 tabular-nums text-ink-3">{formatBytes(row.file.size)}</span>
                 {row.state !== "unsupported" && row.state.overLimit ? (
-                  <span className="shrink-0 text-state-weak">{fmt.local.tooLarge}</span>
+                  <span className="shrink-0 text-state-weak">{fmt.local.errors["too-large"]}</span>
                 ) : null}
                 {row.state === "unsupported" ? (
-                  <span className="shrink-0 text-state-weak">{fmt.local.unsupported}</span>
+                  <span className="shrink-0 text-state-weak">{fmt.local.errors.unsupported}</span>
                 ) : null}
                 <button
                   onClick={() => removeRow(i)}
@@ -175,8 +175,8 @@ function StatusIcon({ state }: { state: Row["state"] }) {
   return <span className="shrink-0 font-bold text-state-mastered">✓</span>;
 }
 
-/** 类型徽标文案：md → Markdown；pdf → PDF；其它 → 类型未知。 */
-function kindLabel(state: Row["state"]): string {
+/** 类型徽标文案：md → Markdown；pdf → PDF；不支持 → 占位符（文案走 i18n）。 */
+function kindLabel(state: Row["state"], labels: { md: string; pdf: string }): string {
   if (state === "unsupported") return "—";
-  return state.kind === "pdf" ? "PDF" : "Markdown";
+  return state.kind === "pdf" ? labels.pdf : labels.md;
 }

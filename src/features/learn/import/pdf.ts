@@ -5,12 +5,21 @@
  * 浏览器预览同一条代码路径；Worker 以 asset URL 运行时解析（Vite 自动打包），
  * 无需额外构建插件。
  *
+ * 版式处理（G5 修复）：抽取结果先经 `pdf-layout.ts` 做
+ * **y 聚类成行 → 分栏重排 → 行内补空格 → 跨页页眉/页码去噪 → 折行/连字符修复**，
+ * 再交给切分器。此前只按 `str + hasEOL` 顺序拼接，双栏论文阅读顺序错乱、
+ * 中文段落被逐视觉行硬换行。
+ *
  * 范围护栏（docs/knowledge-import-design-2026-09.md §3.3）：
  * - 仅文本型 PDF；扫描件（抽不出文本）抛 PdfNoTextError，由 UI 提示，不做 OCR；
  * - 页数超过 LIMITS.pdfMaxPages 拒绝（内存/耗时护栏）。
+ *
+ * 错误对象**不携带用户可见文案**（G2）：UI 按 `kind` 取 i18n，`message` 只作排障。
  */
 import * as pdfjs from "pdfjs-dist";
 import { LIMITS } from "./types";
+import { joinPageLines, reflowPageItems, stripRunningHeads } from "./pdf-layout";
+import type { PdfTextItem } from "./pdf-layout";
 
 // Vite：worker 以 asset URL 形式随构建产物发布。
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -20,7 +29,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 /** 扫描件 / 无法抽取文本。 */
 export class PdfNoTextError extends Error {
-  constructor(message = "未抽取到文本（PDF 可能为扫描件或图片型）。") {
+  constructor(message = "no extractable text (scanned or image-only PDF?)") {
     super(message);
     this.name = "PdfNoTextError";
   }
@@ -29,42 +38,50 @@ export class PdfNoTextError extends Error {
 /** PDF 页数超出护栏。 */
 export class PdfTooLargeError extends Error {
   constructor() {
-    super(`PDF 页数超过上限（${LIMITS.pdfMaxPages} 页）。`);
+    super(`pdf pages exceed limit (${LIMITS.pdfMaxPages})`);
     this.name = "PdfTooLargeError";
   }
 }
 
-/** 把一页的文本项组装为行（近似换行：利用 item.hasEOL）。 */
-function pageToText(items: readonly { str?: string; hasEOL?: boolean }[]): string {
-  let out = "";
-  for (const item of items) {
-    if (typeof item.str !== "string") continue;
-    out += item.str;
-    if (item.hasEOL) out += "\n";
-  }
-  return out;
+/** 抽取结果：正文 + 页数统计（供结果卡展示「抽全了吗」，G6）。 */
+export interface PdfExtractResult {
+  text: string;
+  /** 总页数。 */
+  pageCount: number;
+  /** 抽到非空文本的页数（远小于总页数 → 疑似扫描件/图片页）。 */
+  nonEmptyPages: number;
 }
 
 /** 抽取 PDF 全文为纯文本（不落盘；内存解析）。失败抛 PdfNoTextError / PdfTooLargeError。 */
-export async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
+export async function extractPdfText(buffer: ArrayBuffer): Promise<PdfExtractResult> {
   const data = new Uint8Array(buffer);
   const doc = await pdfjs.getDocument({ data }).promise;
   try {
     if (doc.numPages > LIMITS.pdfMaxPages) throw new PdfTooLargeError();
-    const lines: string[] = [];
+    const pages: string[][] = [];
+    let nonEmptyPages = 0;
     for (let p = 1; p <= doc.numPages; p += 1) {
       const page = await doc.getPage(p);
       try {
         const content = await page.getTextContent();
-        const text = pageToText(content.items as { str?: string; hasEOL?: boolean }[]);
-        if (text.trim()) lines.push(text);
+        const pageWidth = page.getViewport({ scale: 1 }).width;
+        const lines = reflowPageItems(content.items as unknown as PdfTextItem[], { pageWidth });
+        if (lines.some((line) => line.trim())) nonEmptyPages += 1;
+        pages.push(lines);
       } finally {
         page.cleanup();
       }
     }
-    const full = lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-    if (!full) throw new PdfNoTextError();
-    return full;
+    // 页眉/页脚去噪需要跨页证据，故先收集每页行数组、再统一过滤。
+    const cleaned = stripRunningHeads(pages);
+    const text = cleaned
+      .map(joinPageLines)
+      .filter((s) => s.trim())
+      .join("\n\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    if (!text) throw new PdfNoTextError();
+    return { text, pageCount: doc.numPages, nonEmptyPages };
   } finally {
     await doc.destroy();
   }

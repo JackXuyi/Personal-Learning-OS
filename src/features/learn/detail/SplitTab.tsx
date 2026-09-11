@@ -18,6 +18,7 @@ import { Button } from '../../../components/ui/button';
 import { ConfirmDialog } from '../../../components/ui/confirm-dialog';
 import { notifyDocsChanged } from '../../../components/layout/AppShell';
 import { splitDocumentNow, SplitServiceError } from '../split-service';
+import { autoIndexAfterImport } from '../index-service';
 import { analyzeChaptersNow } from '../analyze-service';
 import { chapterCharCount } from '../chapter-preview';
 import { ChapterRow } from './ChapterRow';
@@ -69,6 +70,8 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
           false,
         ),
       );
+      // 重切后旧 chunk 与旧向量一并失效 → 补后台重算入队（G1），避免向量索引静默清零。
+      autoIndexAfterImport();
       notifyDocsChanged();
       await onChanged();
     } catch (e) {

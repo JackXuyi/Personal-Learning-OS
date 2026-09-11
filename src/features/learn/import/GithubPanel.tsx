@@ -13,11 +13,9 @@
  */
 import { useEffect, useState } from "react";
 import { useI18n } from "../../../i18n";
-import {
-  GithubImportError,
-  resolveGithubUrl,
-} from "./github";
+import { resolveGithubUrl } from "./github";
 import type { GithubPreview } from "./github";
+import { githubErrorText } from "./error-text";
 import { formatBytes } from "./types";
 
 interface GithubPanelProps {
@@ -56,13 +54,8 @@ export default function GithubPanel({ onPreview, disabled }: GithubPanelProps) {
       setPreview(p);
       onPreview(p);
     } catch (err) {
-      const message =
-        err instanceof GithubImportError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : String(err);
-      setError(message);
+      // 文案由 kind 决定（G2）：错误对象本身不再携带面向用户的中文。
+      setError(githubErrorText(err, fmt.errors));
     } finally {
       setResolving(false);
     }

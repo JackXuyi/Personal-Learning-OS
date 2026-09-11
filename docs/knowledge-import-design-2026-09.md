@@ -696,9 +696,61 @@ import: {
 
 ---
 
+## 13. 提取层增强（2026-09-11 · 缺口修复 M-2~M-5）
+
+> 来源：`docs/library-import-extraction-audit-2026-09.md`（缺口清单 G1–G8）；
+> 实施与验证记录：`docs/library-import-extraction-fix-runbook.md`。
+
+### 13.1 错误文案归属（M-2 · G2/G3）
+
+- **导入适配层不产出用户可见文案**：`github.ts` / `local-files.ts` / `pdf.ts` 的错误对象只携带
+  `kind` + 语言中立 `detail`（HTTP 状态、上限值、原始异常），`message` 仅作排障兜底；
+- 文案唯一映射点：`src/features/learn/import/error-text.ts`，按 kind 查表；
+- i18n 键与 kind 强绑定：`learn.import.github.errors`（`Record<GhErrorKind,string>`）、
+  `learn.import.local.errors`（`Record<LocalFileErrorKind,string>`）—— 新增 kind 时
+  typecheck 强制 zh/en 双语补齐；
+- `GhErrorKind` 新增 `fetch-failed`，区分「清单内文件全部拉取失败」与「范围内无 md」；
+- 死键清理：删除 `progressDone` / `refinedBadge` / `previewHead` / `stepPreview` / `github.fileTooMany`；
+  `local.{unsupported,tooLarge,scanningNoText,readFailed}` 归并入 `local.errors`；
+  `local.kindMd/kindPdf` 由 `LocalFilePanel` 消费。
+
+### 13.2 本地文本编码嗅探（M-3 · G4）
+
+`import/decode.ts`：BOM（UTF-8 / UTF-16LE / UTF-16BE）→ 严格 UTF-8 试探 → GB18030 兜底，
+**零依赖**（用运行时自带 `TextDecoder` 的 `gb18030` 标签）。实际采用的编码名写入
+`ImportUnit.extract.encoding`，非 `utf-8` 时结果卡明示「已按 XX 解码」。
+
+### 13.3 PDF 版式后处理（M-5 · G5）
+
+`import/pdf-layout.ts`（纯函数，**不依赖 pdfjs**，可 node 直测）：
+
+| 函数 | 职责 |
+|---|---|
+| `reflowPageItems(items, { pageWidth })` | 按 y 聚类成行 → 行内按 x 间距补空格 → 分栏重排（通栏 → 左栏 → 右栏，栏间 `""` 哨兵）；缺坐标时退化为 `hasEOL` 顺序拼接 |
+| `stripRunningHeads(pages)` | ≥3 页时删除「≥50% 页面重复的短行」与纯页码行；<3 页不做（证据不足） |
+| `joinPageLines(lines)` | 行尾连字符（`embed-` + `ding`）与中文折行直连；句末标点 / 栏断保留换行 |
+| `promotePdfHeadings(text)` | 疑似标题行（第 X 章 / Chapter N / 数字编号）提升为 `## `；提升 >0 时 PDF 改走 `splitFormat:"markdown"` |
+
+`extractPdfText` 返回 `{ text, pageCount, nonEmptyPages }`，页数统计进入结果卡（M-4）。
+分栏判据保守（左右各 ≥2 行 + 真实 gutter），宁可不拆也不误拆。
+
+### 13.4 结果卡可观测性（M-4 · G6/G7）
+
+单份结果卡新增：`抽取 N 字符` · `M/N 页有文本` ·（非 utf-8 时）`已按 XX 解码` ·
+（有空白页时）`部分页面未抽到文本`；末行显示索引态：`向量化进行中 i/n` / `已入队向量化` /
+`未配置向量化模型 · 仅全文检索`（与 `autoIndexAfterImport` 共用 `isAutoIndexCapable()`，避免口径漂移）。
+
+### 13.5 新增单测
+
+`tests/import-extract.test.ts`（`npm run test:extract`，13 例）：编码嗅探 4 态、版式重排 /
+分栏 / 去噪 / 折行 / 标题提升 8 条规则、错误文案映射 + 「导入层不得出现中文错误文案」静态断言。
+
+---
+
 ## 变更记录
 
 | 日期 | 变更 | 作者 |
 |------|------|------|
 | 2026-09-09 | 初稿（待用户确认后同步 runbook 实施） | WorkBuddy |
 | 2026-09-09 | 方案获用户确认（默认「仓库合并为一份资料」）；同步 runbook `docs/knowledge-import-task-runbook.md` 进入实施；`src/features/learn/import/types.ts` 已按 §10 步骤 1 落地 | WorkBuddy |
+| 2026-09-11 | 按审计缺口 M-2~M-5 补提取层：错误文案按 kind 归 i18n（G2/G3）、GB18030 编码嗅探（G4）、PDF 版式后处理（G5）、结果卡抽取量与索引态（G6/G7）；新增 §13 与 `test:extract` 13 例 | WorkBuddy |

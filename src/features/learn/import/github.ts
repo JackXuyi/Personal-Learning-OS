@@ -17,18 +17,26 @@ import type { ImportUnit } from "./types";
 export type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 export type GhErrorKind =
-  | "invalid"          // URL 无法解析 / 非 github.com
+  | "invalid"          // URL 无法解析 / 非 github.com / 非 md 目标
   | "unavailable"      // 仓库不存在或为私有（匿名 API 对两者都返回 404）
-  | "network"          // 网络失败 / 超时
+  | "network"          // 网络失败 / 超时 / 非 2xx
   | "rate-limit"       // API 限流（未认证 60/h/IP）
   | "too-many-files"   // md 文件数超过护栏
   | "merged-too-large" // 合并正文超过字符护栏
+  | "fetch-failed"     // 清单内文件全部拉取失败（网络问题）
   | "empty";           // 目标范围内没有任何 md
 
+/**
+ * GitHub 导入错误。
+ *
+ * **不携带用户可见文案**：只带 `kind` +语言中立的 `detail`（HTTP 状态 / 上限值等），
+ * 文案由 UI 层经 `import/error-text.ts` 按 `kind` 取 i18n（G2 修复）。
+ * `message` 仅作排障兜底，不应直接展示。
+ */
 export class GithubImportError extends Error {
   readonly kind: GhErrorKind;
-  constructor(kind: GhErrorKind, message: string) {
-    super(message);
+  constructor(kind: GhErrorKind, detail?: string) {
+    super(detail ? `${kind}: ${detail}` : kind);
     this.name = "GithubImportError";
     this.kind = kind;
   }
@@ -95,18 +103,15 @@ function encodeSegments(p: string): string {
     .join("/");
 }
 
-/** 统一把响应错误映射为 GhErrorKind。 */
+/** 统一把响应错误映射为 GhErrorKind（detail 只放语言中立的技术信息）。 */
 async function mapError(url: string, res: Response): Promise<never> {
   if (res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0") {
-    throw new GithubImportError("rate-limit", "GitHub API 限流（未认证 60 次/时），请稍后重试。");
+    throw new GithubImportError("rate-limit");
   }
   if (res.status === 404) {
-    throw new GithubImportError("unavailable", "仓库不存在或为私有仓库。");
+    throw new GithubImportError("unavailable");
   }
-  throw new GithubImportError(
-    "network",
-    `GitHub 请求失败（HTTP ${res.status}）：${url}`,
-  );
+  throw new GithubImportError("network", `HTTP ${res.status} ${url}`);
 }
 
 async function getJson(fetchImpl: FetchLike, url: string): Promise<unknown> {
@@ -114,10 +119,7 @@ async function getJson(fetchImpl: FetchLike, url: string): Promise<unknown> {
   try {
     res = await fetchImpl(url, { headers: { Accept: "application/vnd.github+json" } });
   } catch (err) {
-    throw new GithubImportError(
-      "network",
-      `GitHub 请求失败：${err instanceof Error ? err.message : String(err)}`,
-    );
+    throw new GithubImportError("network", err instanceof Error ? err.message : String(err));
   }
   if (!res.ok) return mapError(url, res);
   return res.json() as Promise<unknown>;
@@ -183,10 +185,7 @@ export function pickMarkdownEntries(
     }
     files.push({ path, size: entry.size ?? 0 });
     if (files.length > limits.maxCount) {
-      throw new GithubImportError(
-        "too-many-files",
-        `Markdown 文件超过上限（${limits.maxCount}），请改用子目录或单文件链接。`,
-      );
+      throw new GithubImportError("too-many-files", `max=${limits.maxCount}`);
     }
   }
   files.sort((a, b) => a.path.localeCompare(b.path));
@@ -205,7 +204,7 @@ export async function listMarkdownFiles(
   const raw = await getJson(fetchImpl, url);
   const record = raw as { tree?: unknown; truncated?: unknown };
   if (!Array.isArray(record.tree)) {
-    throw new GithubImportError("unavailable", "GitHub 未返回文件树（仓库可能为空或过深）。");
+    throw new GithubImportError("unavailable", "no-tree");
   }
   return { ...pickMarkdownEntries(record.tree as TreeEntry[], prefix), branch: ref };
 }
@@ -223,15 +222,12 @@ export async function fetchRawText(
   try {
     res = await fetchImpl(url);
   } catch (err) {
-    throw new GithubImportError(
-      "network",
-      `文件拉取失败：${err instanceof Error ? err.message : String(err)}`,
-    );
+    throw new GithubImportError("network", err instanceof Error ? err.message : String(err));
   }
   if (!res.ok) return mapError(url, res);
   const text = await res.text();
   if (text.length > LIMITS.githubTotalChars) {
-    throw new GithubImportError("merged-too-large", "单文件超出合并文本上限，请改用子目录导入。");
+    throw new GithubImportError("merged-too-large", `file ${text.length}>${LIMITS.githubTotalChars}`);
   }
   return text;
 }
@@ -336,12 +332,7 @@ export async function resolveGithubUrl(
 ): Promise<GithubPreview> {
   const parsed = parseGithubUrl(rawUrl);
   if ("error" in parsed) {
-    throw new GithubImportError(
-      parsed.error,
-      parsed.error === "invalid"
-        ? "无法解析该链接：请粘贴公开 github.com 仓库 / 子目录 / 单文件链接。"
-        : "该链接不受支持。",
-    );
+    throw new GithubImportError(parsed.error, parsed.error);
   }
   const { owner, repo } = parsed;
   const meta = await fetchRepoMeta(fetchImpl, owner, repo);
@@ -349,7 +340,7 @@ export async function resolveGithubUrl(
   if (parsed.kind === "repo") {
     const { files, skipped } = await listMarkdownFiles(fetchImpl, owner, repo, meta.defaultBranch, "");
     if (files.length === 0) {
-      throw new GithubImportError("empty", "该仓库内没有可导入的 Markdown 文件。");
+      throw new GithubImportError("empty", "repo");
     }
     return {
       sourceUrl: rawUrl,
@@ -367,7 +358,7 @@ export async function resolveGithubUrl(
       fetchImpl, owner, repo, parsed.ref, parsed.path,
     );
     if (files.length === 0) {
-      throw new GithubImportError("empty", "该目录下没有 Markdown 文件，请改用整库或单文件链接。");
+      throw new GithubImportError("empty", "tree");
     }
     return {
       sourceUrl: rawUrl,
@@ -382,10 +373,7 @@ export async function resolveGithubUrl(
 
   // blob：单文件（绕过 60 上限）。文件存在性/大小在导入拉取时实测。
   if (!MD_RE.test(parsed.path)) {
-    throw new GithubImportError(
-      "invalid",
-      "该链接不是 Markdown 文件：请粘贴 .md 文件链接（如 …/blob/main/README.md）。",
-    );
+    throw new GithubImportError("invalid", "not-markdown");
   }
   return {
     sourceUrl: rawUrl,
@@ -427,7 +415,7 @@ export async function buildGithubUnit(
   if (p.target.kind === "blob") {
     const text = await fetchRawText(fetchImpl, owner, repo, p.branch, p.prefix);
     if (!text.trim()) {
-      throw new GithubImportError("empty", "该文件为空，没有可导入内容。");
+      throw new GithubImportError("empty", "blob");
     }
     return {
       title: githubPreviewTitle(p),
@@ -442,17 +430,14 @@ export async function buildGithubUnit(
     fetchImpl, owner, repo, p.branch, p.files,
   );
   if (contents.length === 0) {
-    throw new GithubImportError(
-      "empty",
-      failed.length > 0 ? "Markdown 拉取全部失败，请检查网络后重试。" : "没有可导入的 Markdown 内容。",
-    );
+    // 「全部拉取失败」与「范围内确实没有内容」是两种不同的用户动作，分开报（G2）。
+    throw failed.length > 0
+      ? new GithubImportError("fetch-failed", `failed=${failed.length}`)
+      : new GithubImportError("empty", "no-content");
   }
   const text = buildRepoMarkdown(contents);
   if (text.length > LIMITS.githubTotalChars) {
-    throw new GithubImportError(
-      "merged-too-large",
-      `合并文本超过大小上限（${Math.round(LIMITS.githubTotalChars / 10_000) / 100} 万字符），请改用子目录或单文件链接。`,
-    );
+    throw new GithubImportError("merged-too-large", `merged ${text.length}>${LIMITS.githubTotalChars}`);
   }
   return {
     title: githubPreviewTitle(p),

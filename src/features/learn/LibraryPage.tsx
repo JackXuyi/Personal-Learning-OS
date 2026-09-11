@@ -31,6 +31,7 @@ import { SegmentedTabs } from "../../components/primitives";
 import DocumentCard from "./library/DocumentCard";
 import type { DocActionKind } from "./library/DocActionsMenu";
 import { SplitServiceError, splitDocumentNow } from "./split-service";
+import { autoIndexAfterImport } from "./index-service";
 import {
   AppendDocModal,
   DeleteDocDialog,
@@ -199,6 +200,8 @@ export default function LibraryPage() {
           false,
         ),
       );
+      // 列表页就地重切同样使旧向量失效 → 补后台重算入队（G1）。
+      autoIndexAfterImport();
       notifyDocsChanged();
       await load();
     } catch (e) {

@@ -8,7 +8,8 @@
  * 级联清理），不触真实 SQLite / 真实网络。SQLite 路径的差异（BLOB 编解码、
  * db_delete_chunks_by_document）由 `cargo test` 的契约单测 + 桌面端手工验证承担。
  *
- * 覆盖：TC-UC01-01/02、TC-UC02-01/02、TC-UC05-01、TC-EDGE-09/10。
+ * 覆盖：TC-UC01-01/02、TC-UC02-01/02/03/04（含 G1 向量重算回归）、TC-UC05-01、
+ * TC-EDGE-09/10/11。
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -18,7 +19,13 @@ import { InMemoryStorage } from "../src/storage/memory.ts";
 import { runUnitImport } from "../src/features/learn/import/pipeline.ts";
 import { splitDocumentNow } from "../src/features/learn/split-service.ts";
 import { rebuildChunks } from "../src/features/learn/index-chunks.ts";
-import { deleteDocumentCascade, previewDeleteCascade } from "../src/features/learn/library-actions.ts";
+import { buildIndex } from "../src/features/learn/index-service.ts";
+import type { AIProvider } from "../src/ai/types.ts";
+import {
+  deleteDocumentCascade,
+  previewDeleteCascade,
+  replaceDocumentBody,
+} from "../src/features/learn/library-actions.ts";
 import type { ImportUnit } from "../src/features/learn/import/types.ts";
 
 const results: string[] = [];
@@ -66,6 +73,29 @@ class FailingSaveStorage extends InMemoryStorage {
     throw new Error("模拟写入失败");
   }
 }
+
+/** 假向量 provider：只挂 embed（其余能力本测试不触达）。 */
+const fakeEmbedProvider = {
+  kind: "custom",
+  isConfigured: () => true,
+  chat: () => Promise.reject(new Error("not needed in tests")),
+  embed: async (texts: readonly string[]) => texts.map(() => [1, 0, 0]),
+} as unknown as AIProvider;
+
+/** 替换正文用的新正文（结构与 SAMPLE 不同，确保 chunk id 全变）。 */
+const NEXT_BODY = [
+  "# 强化学习进阶",
+  "",
+  "策略梯度直接用奖励的期望估计梯度方向，方差较大。",
+  "",
+  "## 第 1 章 演员评论家",
+  "",
+  "演员负责策略，评论家估计价值函数，两者互相促进。",
+  "",
+  "## 第 2 章 探索与利用",
+  "",
+  "ε-贪心在探索新动作与利用已知最优之间做权衡。",
+].join("\n");
 
 const run = async () => {
   // ===== UC-01 导入后正文可检索 =====
@@ -175,6 +205,71 @@ const run = async () => {
     const chunks = await s.listChunksByDocument(docId);
     assert.ok(chunks.length > 0, "手动切分也必须落 chunk");
     assert.equal(chunks.length, (await s.listChunksByDocument(docId)).length);
+  });
+
+  // ===== UC-02 补：正文变更后向量必须「重算」而非只「失效」（G1 回归） =====
+
+  await check("UC02-04 替换正文后重算向量：条数恢复为 chunk 数（G1）", async () => {
+    const s = new InMemoryStorage();
+    const res = await runUnitImport(unit(SAMPLE), { storage: s });
+    const doc0 = (await s.getDocument(res.docId))!;
+
+    // 先铺旧向量（模拟「替换前已索引」）
+    const before = await s.listChunksByDocument(res.docId);
+    assert.ok(before.length > 0, "导入后应有 chunk");
+    await s.saveEmbeddings(
+      before.map(
+        (c, i): Embedding => ({
+          id: embeddingKey("chunk", c.id, "test-model"),
+          targetType: "chunk",
+          targetId: c.id,
+          model: "test-model",
+          vectorDim: 3,
+          vector: [1, 0, i % 2],
+          createdAt: 1,
+        }),
+      ),
+    );
+    assert.equal((await s.listEmbeddingVectors("chunk")).length, before.length);
+
+    // 替换正文 → rebuildChunks 清掉旧 chunk 与旧向量（只失效）
+    await replaceDocumentBody(doc0, unit(NEXT_BODY, doc0.title), { storage: s });
+    assert.equal(
+      (await s.listEmbeddingVectors("chunk")).length,
+      0,
+      "替换正文后旧向量必须失效（与新 chunk 不得错配）",
+    );
+
+    // 重算（= autoIndexAfterImport 走的同一入口 buildIndex）→ 向量条数应恢复为 chunk 数
+    const after = await s.listChunksByDocument(res.docId);
+    assert.ok(after.length > 0, "替换后应有新 chunk");
+    const out = await buildIndex({ storage: s, provider: fakeEmbedProvider, model: "test-model" });
+    assert.equal(out.failed, 0, "重算不应有失败批次");
+    assert.equal(
+      (await s.listEmbeddingVectors("chunk")).length,
+      after.length,
+      "重算后向量条数应恢复为 chunk 数",
+    );
+    const ids = new Set(after.map((c) => c.id));
+    const indexed = await s.listEmbeddings("chunk");
+    assert.ok(
+      indexed.every((e) => ids.has(e.targetId)),
+      "每条向量都应挂在新 chunk 上（不得残留旧 target）",
+    );
+  });
+
+  await check("TC-EDGE-11 接线：替换 / 追加 / 手动重切分均触发向量化入队（G1）", () => {
+    const read = (rel: string) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
+    const dialogs = read("src/features/learn/library/dialogs.tsx");
+    // dialogs 覆盖「替换正文」与「追加正文」两条路径 → 要求 ≥2 处触发
+    assert.ok(
+      (dialogs.match(/autoIndexAfterImport\(\)/g) ?? []).length >= 2,
+      "替换 / 追加正文都必须触发向量化入队",
+    );
+    const splitTab = read("src/features/learn/detail/SplitTab.tsx");
+    assert.ok(splitTab.includes("autoIndexAfterImport()"), "详情页手动重切分必须触发向量化入队");
+    const libraryPage = read("src/features/learn/LibraryPage.tsx");
+    assert.ok(libraryPage.includes("autoIndexAfterImport()"), "列表页手动重切分必须触发向量化入队");
   });
 
   // ===== UC-05 + TC-EDGE-09 =====

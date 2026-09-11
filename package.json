@@ -14,6 +14,7 @@
     "test:scope": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/chapter-scope.test.ts",
     "test:eta": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/plan-eta.test.ts",
     "test:import": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/import-core.test.ts",
+    "test:extract": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/import-extract.test.ts",
     "test:storage": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/storage-adapter.test.ts",
     "test:anchor": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/library-anchor.test.ts",
     "test:advice": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/library-paper-advice.test.ts",

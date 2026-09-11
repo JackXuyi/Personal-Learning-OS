@@ -867,11 +867,15 @@ export const zh = {
         remove: "移除",
         kindMd: "Markdown",
         kindPdf: "PDF",
-        unsupported: "不支持的类型（仅 .md / .pdf）",
-        tooLarge: "超出大小限制",
-        scanningNoText: "未抽取到文本（可能为扫描件）",
-        readFailed: "读取失败",
         import: (n: number) => `保存并切分 ${n} 份资料`,
+        /** 转换失败文案；键与 `LocalFileErrorKind` 对齐（import/error-text.ts 消费）。 */
+        errors: {
+          unsupported: "不支持的类型（仅 .md / .pdf）",
+          "too-large": "超出大小限制",
+          "pdf-no-text": "未抽取到文本（可能为扫描件）",
+          "pdf-too-large": "PDF 页数超出上限",
+          "read-failed": "读取失败",
+        },
       },
       /** GitHub 面板。 */
       github: {
@@ -884,7 +888,17 @@ export const zh = {
         skipped: (n: number) => `${n} 个超限跳过`,
         filesHead: "Markdown 文件清单",
         emptyPreview: "粘贴公开仓库链接后点「解析」，可预览将导入的文件",
-        fileTooMany: "Markdown 文件过多，请改用子目录或单文件链接",
+        /** 解析 / 导入失败文案；键与 `GhErrorKind` 对齐（import/error-text.ts 消费）。 */
+        errors: {
+          invalid: "无法解析该链接：请粘贴公开 github.com 仓库 / 子目录 / 单文件链接。",
+          unavailable: "仓库不存在或为私有仓库。",
+          network: "网络请求失败，请检查网络后重试。",
+          "rate-limit": "GitHub API 限流（未认证 60 次/时），请稍后重试。",
+          "too-many-files": "Markdown 文件过多，请改用子目录或单文件链接。",
+          "merged-too-large": "合并文本超过大小上限，请改用子目录或单文件链接。",
+          "fetch-failed": "Markdown 拉取全部失败，请检查网络后重试。",
+          empty: "该范围内没有可导入的 Markdown 文件。",
+        },
       },
       /** 批量导入进度与汇总。 */
       batch: {
@@ -899,15 +913,12 @@ export const zh = {
       formatWeb: "网页",
       formatTxt: "纯文本",
       stepSource: (n: number) => `${n} · 资料`,
-      stepPreview: (n: number) => `${n} · 切分预览`,
       titlePlaceholder: "给这份资料起个名字，例如《RAG 系统设计》",
       bodyPlaceholder:
         "把笔记 / Markdown 正文粘贴到这里…\n建议用 # / ## 分章节（如「# 第一章 向量化」），纯文本会按空行自动聚类。",
       format: "格式",
       saveOnly: "仅保存资料",
       unnamedDoc: "未命名资料",
-      previewHead: (title: string, n: number) => `「${title}」切出 ${n} 个章节`,
-      refinedBadge: "AI 精修",
       noSplitWarn: "没有切出章节——内容可能缺少标题或分段，建议补充后重试。",
       tooShort:
         "这段内容太短或缺少标题/分段，没有切出章节。资料已保存，可以粘贴更完整的内容后重试。",
@@ -919,7 +930,6 @@ export const zh = {
       saveSplit: "保存并切分章节",
       /** U5：阶段进度（读取→检测→提炼→创建→关联）与结果卡。 */
       progressTitle: "正在导入…",
-      progressDone: "✓ 导入完成",
       phaseLabel: {
         read: "读取文档",
         detect: "检测结构",
@@ -936,6 +946,14 @@ export const zh = {
       },
       statChapter: (n: number) => `${n} 章`,
       statPoints: (n: number) => `${n} 条要点`,
+      /** 结果卡可观测性（G6）：抽取量 / 页数 / 解码 / 疑似扫描件。 */
+      statChars: (n: number) => `抽取 ${n} 字符`,
+      statPages: (done: number, total: number) => `${done}/${total} 页有文本`,
+      encodingHint: (name: string) => `已按 ${name} 解码`,
+      scannedHint: "部分页面未抽到文本，可能含扫描页",
+      /** 结果卡索引态（G7）。 */
+      indexQueued: "已入队向量化",
+      indexOff: "未配置向量化模型 · 仅全文检索",
       mergedN: (n: number) => `已自动合并 ${n} 个过碎小节`,
       structureRefined: "AI 已精修标题与要点",
       structureLocal: "本地启发式切分 · 未配置 AI",

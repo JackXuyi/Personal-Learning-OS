@@ -344,6 +344,16 @@ async fn migrate_v3(conn) -> Result<()> {
 | 检索 provider 未就绪 | 未配置任何模型 | 向量路跳过 | 结果区标注「仅全文检索」 |
 | 删除资料 | 用户在卡片菜单删除 | `deleteDocumentCascade` 增加 `deleteChunksByDocument` | 既有确认弹窗 |
 | 替换 / 追加正文 | 详情页操作 | 正文变更 → chapters 重切 → chunk 重建 → 向量失效重算 | 既有流程 + 索引状态刷新 |
+| 手动重切分（详情页 / 列表页） | 用户点「重新切分」 | 同上（`splitDocumentNow` → `rebuildChunks` → 旧向量失效） | 同上 |
+
+> **实现状态（2026-09-11 修正）**：上表「向量失效重算」曾长期只做到「失效」——
+> `autoIndexAfterImport` 仅被 `ImportModal` 调用，替换 / 追加 / 手动重切分三条旁支
+> 走完 `rebuildChunks` 就结束，向量被清空且不重算，检索静默退化为纯 FTS。
+> 现已在 `library/dialogs.tsx`（替换、追加）、`detail/SplitTab.tsx`、`LibraryPage.tsx`
+> 四條路径补 `autoIndexAfterImport()`；回归单测见
+> `tests/rag-wiring.test.ts` 的 `UC02-04`（替换后向量条数恢复为 chunk 数）与
+> `TC-EDGE-11`（静态接线断言）。缺口审计见
+> `docs/library-import-extraction-audit-2026-09.md` G1。
 
 ### 5.3 时序图
 

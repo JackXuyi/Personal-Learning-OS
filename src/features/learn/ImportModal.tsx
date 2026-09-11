@@ -22,7 +22,9 @@ import LocalFilePanel from "./import/LocalFilePanel";
 import GithubPanel from "./import/GithubPanel";
 import type { ImportTab, ImportUnit, ImportSummary } from "./import/types";
 import { runUnitImport, runBatchImport } from "./import/pipeline";
-import { autoIndexAfterImport } from "./index-service";
+import { autoIndexAfterImport, isAutoIndexCapable } from "./index-service";
+import { githubErrorText, localErrorText } from "./import/error-text";
+import { useIndexStore } from "../../stores/useIndexStore";
 import { Select } from "../../components/ui/select";
 import { Button } from "../../components/ui/button";
 import { fileToUnit } from "./import/local-files";
@@ -58,12 +60,19 @@ interface SingleResult {
   merged: number;
   /** 全资料要点总数。 */
   totalPoints: number;
+  /** 归一化正文的字符数（抽取量可观测性，G6）。 */
+  chars: number;
+  /** 本地文件来源的抽取元信息（PDF 页数 / md 解码名）。 */
+  extract?: ImportUnit["extract"];
 }
 
 export default function ImportModal({ onClose, onImported, onInspect }: ImportModalProps) {
   const { m } = useI18n();
   const fmt = m.learn.import;
   const phasesI18n = fmt.phaseLabel;
+  /** 向量索引态（G7）：结果卡展示「已入队 / 进行中 i/n / 未配置」。 */
+  const indexRunning = useIndexStore((s) => s.running);
+  const indexProgress = useIndexStore((s) => s.progress);
 
   const [tab, setTab] = useState<ImportTab>("paste");
   /** 当前运行模式：single（五阶段 + 单份卡）| batch（文件级进度 + 汇总卡）。 */
@@ -125,6 +134,8 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
         refined: result.refined,
         merged: result.merged,
         totalPoints: result.totalPoints,
+        chars: result.unit.text.length,
+        ...(result.unit.extract ? { extract: result.unit.extract } : {}),
       });
       if (result.chapterIds.length === 0) setNotice(fmt.tooShort);
       // 导入成功后后台入队向量化（D2-A）：不阻塞结果卡；能力不足时内部静默跳过。
@@ -182,7 +193,7 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
       const failed: { title: string; reason: string }[] = [];
       for (const file of localFiles) {
         const out = await fileToUnit(file);
-        if ("error" in out) failed.push({ title: file.name, reason: out.message });
+        if ("error" in out) failed.push({ title: file.name, reason: localErrorText(out, fmt.local.errors) });
         else units.push(out);
       }
       if (units.length === 0) {
@@ -201,7 +212,8 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
         const unit = await buildGithubUnit((input, init) => fetch(input, init), ghPreview);
         await runSingleImport(unit);
       } catch (err) {
-        setNotice(err instanceof Error ? err.message : String(err));
+        // 文案由 kind 决定（G2）：不再直接展示错误对象的 message。
+        setNotice(githubErrorText(err, fmt.github.errors));
       }
     }
   }
@@ -376,6 +388,14 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
               ? fmt.structureRefined
               : fmt.structureLocal
           : undefined;
+      const ex = single.extract;
+      // 索引态（G7）：进行中优先展示进度，否则按「是否具备向量化能力」二选一。
+      const indexStatus =
+        indexRunning && indexProgress.total > 0
+          ? m.learn.search.indexing(indexProgress.done, indexProgress.total)
+          : isAutoIndexCapable()
+            ? fmt.indexQueued
+            : fmt.indexOff;
       return (
         <div className="rounded-xl border border-line bg-subtle/60 px-4 py-3">
           <p className="flex items-center gap-2 text-sm font-semibold text-ink-1">
@@ -386,6 +406,19 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
                 : fmt.savedDoc(single.docTitle)}
             </span>
           </p>
+          {/* 抽取量（G6）：抽取是否「抽全」在导入当刻可见 */}
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3">
+            <span className="tabular-nums">{fmt.statChars(single.chars)}</span>
+            {ex?.pages ? (
+              <span className="tabular-nums">{fmt.statPages(ex.nonEmptyPages ?? 0, ex.pages)}</span>
+            ) : null}
+            {ex?.encoding && ex.encoding !== "utf-8" ? (
+              <span>{fmt.encodingHint(ex.encoding)}</span>
+            ) : null}
+            {ex?.pages && (ex.nonEmptyPages ?? 0) < ex.pages ? (
+              <span className="text-state-weak">{fmt.scannedHint}</span>
+            ) : null}
+          </div>
           {single.chapterIds.length > 0 ? (
             <>
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-2">
@@ -402,6 +435,10 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
           ) : (
             <p className="mt-1 text-xs text-state-weak">{fmt.noSplitWarn}</p>
           )}
+          {/* 索引态（G7）：不必去设置页才能知道向量化有没有入队 */}
+          <p className="mt-1.5 text-xs text-ink-3" data-testid="import-index-status">
+            {indexStatus}
+          </p>
         </div>
       );
     }
