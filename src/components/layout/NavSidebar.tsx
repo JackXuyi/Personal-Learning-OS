@@ -39,7 +39,7 @@ export default function NavSidebar() {
               title={entry.hint}
               data-testid={`nav-${item.navKey}`}
               className={({ isActive }) =>
-                `group relative flex items-center gap-2.5 rounded-md px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 ${
+                `group relative flex items-center gap-2.5 rounded-md px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
                   isActive
                     ? "bg-subtle text-ink-1"
                     : "text-ink-2 hover:bg-subtle hover:text-ink-1"
