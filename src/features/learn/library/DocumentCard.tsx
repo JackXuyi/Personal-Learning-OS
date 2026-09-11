@@ -10,7 +10,7 @@ import type { Chapter, LearnerState, SourceDocument } from "../../../domain";
 import { useI18n } from "../../../i18n";
 import DocActionsMenu from "./DocActionsMenu";
 import type { DocActionKind } from "./DocActionsMenu";
-import { formatLabel, shortDate } from "./shared";
+import { formatLabel, isDocMastered, nextStudyChapter, shortDate } from "./shared";
 
 export default function DocumentCard({
   doc,
@@ -34,6 +34,9 @@ export default function DocumentCard({
   ).length;
   const points = chapters.reduce((n, c) => n + c.keyPoints.length, 0);
   const unsplit = chapters.length === 0;
+  /** 「继续学习」落点：第一个未达标章；全达标 → 第一章（复习）。 */
+  const nextChapter = nextStudyChapter(chapters, learner);
+  const allMastered = isDocMastered(chapters, learner);
 
   return (
     <div className="group relative rounded-xl border border-line bg-surface p-4 transition hover:border-ink-3/40 hover:shadow-sm">
@@ -66,6 +69,15 @@ export default function DocumentCard({
         >
           {busy ? m.learn.detail.split.splitting : lib.splitNow}
         </button>
+      ) : nextChapter ? (
+        /* 已切分：给一个直达「下一步该学哪章」的入口，让列表页驱动行动而非只做陈列 */
+        <Link
+          to={`/learn/chapter/${nextChapter.id}`}
+          data-testid={`doc-card-continue-${doc.id}`}
+          className="mt-2 inline-flex items-center rounded-md border border-line px-2 py-0.5 text-xs text-primary hover:bg-subtle"
+        >
+          {allMastered ? lib.review : lib.continue}
+        </Link>
       ) : null}
       <DocActionsMenu docId={doc.id} unsplit={unsplit} hasBody={hasBody(doc)} onAction={onAction} />
     </div>

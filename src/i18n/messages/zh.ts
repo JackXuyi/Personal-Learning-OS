@@ -659,6 +659,8 @@ export const zh = {
       targetLine: "达标线",
       unsplitBadge: "未切分",
       splitNow: "立即切分",
+      continue: "继续学习",
+      review: "去复习",
       resplit: "重新切分",
       emptyTitle: "还没有资料",
       emptyDesc: "导入第一份资料（Markdown / 笔记 / PDF），系统会按标题自动切分成章节。",

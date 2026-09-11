@@ -677,6 +677,8 @@ export const en: Messages = {
       targetLine: "Target",
       unsplitBadge: "Unsplit",
       splitNow: "Split now",
+      continue: "Continue",
+      review: "Review",
       resplit: "Re-split",
       emptyTitle: "No documents yet",
       emptyDesc:
