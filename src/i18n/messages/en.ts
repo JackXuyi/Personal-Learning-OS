@@ -834,6 +834,8 @@ export const en: Messages = {
         graphEmptyDesc:
           "Click “AI analyze concepts” — AI distills each chapter into reviewable concepts.",
         graphNoAi: "Configure an AI model to analyze concepts per chapter.",
+        failedItem: (title: string, reason: string) => `${title}: ${reason}`,
+        failedUnknown: "Analysis failed (no reason returned)",
       },
       papers: {
         head: (n: number, done: number) => `${n} papers · ${done} completed`,

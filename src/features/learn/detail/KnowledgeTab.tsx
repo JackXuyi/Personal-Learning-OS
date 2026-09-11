@@ -30,11 +30,21 @@ interface KnowledgeTabProps {
   onChanged: () => Promise<void>;
 }
 
+/** 汇总区的失败项：对齐 analyze-service 的 { chapterId, title, reason }（此处不保留 chapterId）。 */
+interface FailedItem {
+  title: string;
+  reason: string;
+}
+
+/** 概念 / 要点两路径共用：service 已逐章采集 reason，此前被 UI 丢弃（只渲染标题）。 */
+const toFailedItems = (failed: readonly { title: string; reason: string }[]): FailedItem[] =>
+  failed.map((f) => ({ title: f.title, reason: f.reason }));
+
 export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged }: KnowledgeTabProps) {
   const { m: t } = useI18n();
   const navigate = useNavigate();
   const [busyTick, setBusyTick] = useState<{ i: number; n: number; title: string }>();
-  const [summary, setSummary] = useState<{ ok: number; failed: string[]; extra?: string }>();
+  const [summary, setSummary] = useState<{ ok: number; failed: FailedItem[]; extra?: string }>();
   const [pointsBusy, setPointsBusy] = useState(false);
 
   // 全局 AI 配置（响应式）：替代原 ai/active 的恒 null stub（B2 修复）
@@ -77,7 +87,7 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
       });
       setSummary({
         ok: result.ok,
-        failed: result.failed.map((f) => f.title),
+        failed: toFailedItems(result.failed),
         extra:
           result.unanchored > 0
             ? t.learn.detail.knowledge.pointsUnanchored(result.unanchored)
@@ -89,7 +99,7 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
       // 分析恒由 AI 执行：失败如实抛出，不静默降级（E2）
       setSummary({
         ok: 0,
-        failed: chapters.map((c) => c.title),
+        failed: chapters.map((c) => ({ title: c.title, reason: t.learn.detail.knowledge.failedUnknown })),
         extra: e instanceof Error ? e.message : String(e),
       });
     } finally {
@@ -112,13 +122,18 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
       });
       setSummary({
         ok: result.ok,
-        failed: result.failed.map((f) => f.title),
+        failed: toFailedItems(result.failed),
       });
       notifyDocsChanged();
       await onChanged();
     } catch (e) {
+      // 原实现只 console.error → 用户只看到「失败 N 章」却不知为何；现补总体原因 + 逐章占位
       console.error('Failed to analyze concepts:', e);
-      setSummary({ ok: 0, failed: chapters.map((c) => c.title) });
+      setSummary({
+        ok: 0,
+        failed: chapters.map((c) => ({ title: c.title, reason: t.learn.detail.knowledge.failedUnknown })),
+        extra: e instanceof Error ? e.message : String(e),
+      });
     } finally {
       setBusyTick(undefined);
     }
@@ -278,8 +293,8 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
           {summary.extra && <p className="mt-1 text-xs text-ink-3">{summary.extra}</p>}
           {summary.failed.length > 0 && (
             <ul className="mt-2 space-y-1 text-xs text-ink-3">
-              {summary.failed.map((title, i) => (
-                <li key={i}>• {title}</li>
+              {summary.failed.map((f, i) => (
+                <li key={i}>• {t.learn.detail.knowledge.failedItem(f.title, f.reason)}</li>
               ))}
             </ul>
           )}

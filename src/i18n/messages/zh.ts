@@ -812,6 +812,8 @@ export const zh = {
         graphEmptyTitle: "还没有概念",
         graphEmptyDesc: "点「AI 分析概念」，AI 会逐章把正文提炼成可复习的知识概念。",
         graphNoAi: "配置 AI 模型后可逐章分析概念。",
+        failedItem: (title: string, reason: string) => `${title}：${reason}`,
+        failedUnknown: "分析失败（未返回原因）",
       },
       papers: {
         head: (n: number, done: number) => `${n} 份试卷 · 已完成 ${done} 份`,
