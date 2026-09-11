@@ -1274,6 +1274,14 @@ export const en: Messages = {
     todayCount: (n: number) => `${n} answer(s)`,
     correct: "Correct",
     wrong: "Wrong",
+    /* Document-scoped assessment (review M2-7): per-chapter papers that write chapter mastery. */
+    docScopeTitle: "Document assessment",
+    docScopeHint: "Create a single-chapter paper from any chapter — results write chapter mastery and enter the learning loop.",
+    docScopeEmpty: "No documents to assess yet — import one in the Library first.",
+    docChapters: (n: number) => `${n} chapter(s)`,
+    testChapter: "Create paper",
+    testing: "Creating…",
+    docScopeFailed: "Failed to create the paper. Please try again.",
   },
 
   quiz: {

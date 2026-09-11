@@ -1230,6 +1230,14 @@ export const zh = {
     todayCount: (n: number) => `${n} 次作答`,
     correct: "答对",
     wrong: "答错",
+    /* 资料作用域测评（评审 M2-7）：以资料章节为单位出卷，结果写章掌握度。 */
+    docScopeTitle: "资料测评",
+    docScopeHint: "从资料的章节直接出单章测评卷——结果写入章掌握度，进入学习闭环。",
+    docScopeEmpty: "还没有可测评的资料——先去资料库导入一份。",
+    docChapters: (n: number) => `${n} 章`,
+    testChapter: "出卷",
+    testing: "出卷中…",
+    docScopeFailed: "出卷失败，请稍后再试。",
   },
 
   quiz: {

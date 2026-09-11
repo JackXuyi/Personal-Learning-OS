@@ -1,15 +1,23 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { BandBadge, Card, SectionTitle } from "../../components/primitives";
 import { Button } from "../../components/ui/button";
 import { PageContainer } from "../../components/layout/AppShell";
-import { bandOf } from "../../engine";
-import type { KnowledgeGraph, KnowledgeUnit } from "../../domain";
+import { applyForgetting, bandOf } from "../../engine";
+import { sortChaptersByOrder } from "../../domain";
+import type { Chapter, KnowledgeGraph, KnowledgeUnit, LearnerState, SourceDocument } from "../../domain";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { useI18n } from "../../i18n";
 import AssessmentSession from "./AssessmentSession";
 import { unitTitle } from "../units";
+import { createPaperAndSave } from "../quiz/paper-flow";
+
+/** 资料作用域测评的行模型（评审 M2-7：以资料章集合为作用域出卷）。 */
+interface DocScopeRow {
+  doc: SourceDocument;
+  chapters: Chapter[];
+}
 
 /**
  * 测评 —— 自适应题目（从回忆到应用）。
@@ -19,6 +27,7 @@ import { unitTitle } from "../units";
 export default function AssessmentPage() {
   const { m } = useI18n();
   const a = m.assessment;
+  const navigate = useNavigate();
   const snapshot = useLoopStore((s) => s.snapshot);
   const refresh = useLoopStore((s) => s.refresh);
   const records = useSessionStore((s) => s.records);
@@ -27,13 +36,58 @@ export default function AssessmentPage() {
 
   const [graph, setGraph] = useState<KnowledgeGraph | undefined>();
   const [active, setActive] = useState<KnowledgeUnit | undefined>();
+  /** 资料作用域（有章的资料 + 章 + 衰减后学习态）。 */
+  const [docRows, setDocRows] = useState<DocScopeRow[]>([]);
+  const [learner, setLearner] = useState<LearnerState | undefined>();
+  /** 正在出卷的章 id（禁用并发点击）。 */
+  const [busyChapter, setBusyChapter] = useState<string>();
+  const [scopeError, setScopeError] = useState(false);
 
   useEffect(() => {
     void (async () => {
       if (!useLoopStore.getState().snapshot) await refresh(m);
       setGraph(await storage.getGraph());
+      // 资料作用域数据：与概念层区块并行存在，失败只隐藏本区块，不影响上面。
+      try {
+        const [docs, ls] = await Promise.all([
+          storage.listDocuments(),
+          storage.getLearnerState(),
+        ]);
+        const learnerNow = applyForgetting(ls, Date.now());
+        const rows = await Promise.all(
+          docs.map(async (doc) => ({
+            doc,
+            chapters: sortChaptersByOrder(await storage.listChapters(doc.id)),
+          })),
+        );
+        setDocRows(rows.filter((r) => r.chapters.length > 0));
+        setLearner(learnerNow);
+      } catch {
+        setDocRows([]);
+      }
     })();
   }, [refresh]);
+
+  /** 单章测评：出一张单章单元测卷 → 跳答题页（掌握度写入与出卷向导同源）。 */
+  const startChapterPaper = async (row: DocScopeRow, chapter: Chapter) => {
+    if (busyChapter) return;
+    setBusyChapter(chapter.id);
+    setScopeError(false);
+    try {
+      const { paper } = await createPaperAndSave({
+        chapters: [chapter],
+        allChapters: row.chapters,
+        mode: "unit-test",
+        learnerState: learner,
+        text: row.doc.textPreview,
+      });
+      navigate(`/quiz/${paper.id}`);
+    } catch {
+      setScopeError(true);
+    } finally {
+      setBusyChapter(undefined);
+    }
+  };
 
   // ?unit=xxx 直达会话
   useEffect(() => {
@@ -118,6 +172,50 @@ export default function AssessmentPage() {
           </div>
         )}
       </Card>
+
+      {/* 资料作用域测评：单章单元测 → 章掌握度（学习闭环的真实写方） */}
+      {docRows.length > 0 ? (
+        <Card className="mt-6">
+          <p className="text-sm font-semibold text-ink-2">{a.docScopeTitle}</p>
+          <p className="mt-1 text-xs text-ink-3">{a.docScopeHint}</p>
+          <div className="mt-3 space-y-3">
+            {docRows.map(({ doc, chapters }) => (
+              <div key={doc.id} className="rounded-lg border border-line bg-subtle/40 p-2.5">
+                <p className="text-xs font-medium text-ink-1">
+                  {doc.title}
+                  <span className="ml-2 text-ink-3">{a.docChapters(chapters.length)}</span>
+                </p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {chapters.map((c) => {
+                    const mastery = learner?.byUnit[c.id]?.mastery ?? 0;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        disabled={!!busyChapter}
+                        onClick={() => void startChapterPaper({ doc, chapters }, c)}
+                        data-testid={`assess-chapter-${c.id}`}
+                        className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs text-ink-2 transition hover:border-primary/50 hover:bg-primary/5 disabled:opacity-40"
+                      >
+                        <span className="max-w-[12rem] truncate">
+                          {c.title?.trim() || m.chapter.ordinal(c.order)}
+                        </span>
+                        <BandBadge band={bandOf(mastery)} />
+                        <span className="font-medium text-primary">
+                          {busyChapter === c.id ? a.testing : a.testChapter}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          {scopeError ? (
+            <p className="mt-2 text-xs text-state-failed">{a.docScopeFailed}</p>
+          ) : null}
+        </Card>
+      ) : null}
 
       {/* 今日已测 */}
       {todayAssessments.length > 0 ? (
