@@ -147,6 +147,7 @@ export const zh = {
     typeDoc: "资料",
     typeChapter: "章节",
     typeGoal: "目标",
+    typeContent: "正文",
     emptyNoMatch: (q: string) => `没有匹配「${q}」的内容`,
     searchWords: {
       start: "开始 下一步 学习 复习 测评 今天 启动",

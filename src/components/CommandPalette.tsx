@@ -5,6 +5,9 @@ import { useSessionStore, type DoneRecord } from "../stores/useSessionStore";
 import { unitTitle } from "../features/units";
 import type { Chapter, LearningGoal } from "../domain";
 import { useI18n, type Messages } from "../i18n";
+import { hybridSearch, type SearchHit } from "../ai/retrieval/hybrid-search";
+import { createEmbedder } from "../ai/embedding";
+import { activeEmbeddingModel } from "../features/learn/index-service";
 import {
   actionPath,
   chapterDisplayTitle,
@@ -33,6 +36,13 @@ interface Command {
 
 const SECTION_ORDER: SectionKey[] = ["action", "search", "commands", "recent"];
 
+/** 正文检索（hybridSearch）防抖与触发阈值（与 LibraryPage 同口径）。 */
+const CONTENT_DEBOUNCE_MS = 250;
+const CONTENT_MIN_CHARS = 2;
+const CONTENT_LIMIT = 5;
+/** 正文命中摘要的最大字符数。 */
+const CONTENT_SNIPPET_CHARS = 120;
+
 /** 跳转项与侧边栏可达项一一对应（不改路由；label/hint 取自当前语言字典）。 */
 const NAV_ENTRIES = ["/", "/learn", "/plan", "/quiz", "/goals", "/learner", "/settings"] as const;
 
@@ -55,6 +65,8 @@ export default function CommandPalette() {
   const refresh = useLoopStore((s) => s.refresh);
   const recent = useSessionStore((s) => s.records);
   const [index, setIndex] = useState<SearchIndex>({ goals: [], ready: false });
+  /** 正文级命中（hybridSearch：FTS + 向量 RRF；标题匹配之外的第三层）。 */
+  const [contentHits, setContentHits] = useState<SearchHit[]>([]);
 
   /** 章 id → Chapter（章级行动跳转用）。 */
   const chapterIndex = useMemo(() => {
@@ -98,6 +110,33 @@ export default function CommandPalette() {
   useEffect(() => {
     setActive(0);
   }, [query]);
+
+  // 正文级检索：防抖 hybridSearch（FTS + 向量降级均内置，失败静默清空）。
+  useEffect(() => {
+    const q = query.trim();
+    if (!open || q.length < CONTENT_MIN_CHARS) {
+      setContentHits([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void hybridSearch(q, {
+        storage,
+        embedder: createEmbedder(activeEmbeddingModel()),
+        limit: CONTENT_LIMIT,
+      })
+        .then((r) => {
+          if (!cancelled) setContentHits(r.hits);
+        })
+        .catch(() => {
+          if (!cancelled) setContentHits([]);
+        });
+    }, CONTENT_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [open, query]);
 
   const commands = useMemo<Command[]>(() => {
     const list: Command[] = [];
@@ -211,6 +250,20 @@ export default function CommandPalette() {
             run: () => navigate(`/goals/${g.id}`),
           });
         }
+      }
+      // 正文级命中（hybridSearch 召回的 chunk）：标题匹配不到但正文含关键词时兜底。
+      // search 字段附 snippet 保证不被 visible 的二次过滤滤掉（FTS 分词未必含原词）。
+      for (const hit of contentHits) {
+        const { chunk, docTitle, chapterTitle } = hit;
+        const snippet = chunk.content.slice(0, CONTENT_SNIPPET_CHARS);
+        list.push({
+          id: `s-content-${chunk.id}`,
+          label: `${m.cmd.typeContent} · ${chapterTitle || docTitle || chunk.id}`,
+          hint: docTitle,
+          section: "search",
+          search: `${chapterTitle} ${docTitle} ${snippet}`,
+          run: () => navigate(`/learn/chapter/${chunk.chapterId}`),
+        });
       }
     }
 

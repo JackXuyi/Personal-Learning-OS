@@ -140,6 +140,7 @@ export const en: Messages = {
     typeDoc: "Document",
     typeChapter: "Chapter",
     typeGoal: "Goal",
+    typeContent: "Body text",
     emptyNoMatch: (q: string) => `No content matching “${q}”`,
     searchWords: {
       start: "start next learn review quiz today run",
