@@ -106,6 +106,12 @@ struct Sink {
 
 struct LogState {
     config_path: PathBuf,
+    /// 默认写入目录（`<app_data>/logs`）：`config.dir` 为空/空白时的唯一回退目标。
+    ///
+    /// **必须显式持有**——曾用 `sink.dir.parent()` 兜底，导致每次保存配置
+    /// （改开关或级别）目录都上移一级：`<app_data>/logs` → `<app_data>` → …，
+    /// 表现为「改配置时路径被改」。
+    default_dir: PathBuf,
     sink: Sink,
     last_error: Option<String>,
 }
@@ -120,6 +126,7 @@ pub fn init(app_data_dir: &Path) {
     let dir = resolve_dir(&config.dir, &default_dir);
     let _ = STATE.set(Mutex::new(LogState {
         config_path,
+        default_dir: default_dir.clone(),
         sink: Sink {
             enabled: config.enabled,
             level: config.level,
@@ -135,11 +142,43 @@ fn state_or_noop() -> Option<&'static Mutex<LogState>> {
     STATE.get()
 }
 
-/// config.dir 优先；为空/解析失败回默认目录。
+/// config.dir 优先（去首尾空白）；为空/解析失败回 `default_dir`。
 fn resolve_dir(dir: &Option<String>, default_dir: &Path) -> PathBuf {
     match dir {
-        Some(d) if !d.trim().is_empty() => PathBuf::from(d),
+        Some(d) if !d.trim().is_empty() => PathBuf::from(d.trim()),
         _ => default_dir.to_path_buf(),
+    }
+}
+
+/// 把一份配置应用到内存态（不做 IO），返回实际落地目录。
+///
+/// 目录解析永远相对 `state.default_dir`——**绝不能用当前 `sink.dir` 派生**，
+/// 否则「改开关/级别」这类不含目录的保存会逐次移动目录（见 LogState 注释）。
+/// 与 `log_set_config` 共用，便于脱离 Tauri 单测这条回归。
+fn apply_config(state: &mut LogState, config: &LogConfig) -> PathBuf {
+    let dir = resolve_dir(&config.dir, &state.default_dir);
+    state.sink = Sink {
+        enabled: config.enabled,
+        level: config.level,
+        dir: dir.clone(),
+        day: today_string(),
+    };
+    state.last_error = None;
+    dir
+}
+
+/// 落盘形态的配置：写入**解析后的规范路径**（去首尾空白），而不是入参原文，
+/// 保证 config.json 与内存 sink 始终一致；解析结果等于默认目录时归一化为
+/// `None`，避免把「默认」写死成绝对路径（app_data 变化后即失效）。
+fn persisted_config(state: &LogState, config: &LogConfig, dir: &Path) -> LogConfig {
+    LogConfig {
+        enabled: config.enabled,
+        level: config.level,
+        dir: if dir == state.default_dir {
+            None
+        } else {
+            Some(dir.to_string_lossy().to_string())
+        },
     }
 }
 
@@ -340,21 +379,21 @@ pub fn log_set_config(config: LogConfig) -> Result<String, String> {
         return Err("logging 未初始化（非桌面环境?）".to_string());
     };
     let mut state = state.lock().map_err(|e| e.to_string())?;
-    let dir = resolve_dir(&config.dir, state.sink.dir.parent().unwrap_or(Path::new("/")));
+    // ★ 空 dir 回「默认目录」，不是「当前目录的父级」（防路径漂移）。
+    let dir = resolve_dir(&config.dir, &state.default_dir);
     // 目录现在就建好：配置即生效，别等第一条日志才发现路径不可写。
     fs::create_dir_all(&dir).map_err(|e| format!("无法创建日志目录 {}: {e}", dir.display()))?;
     if let Some(parent) = state.config_path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    fs::write(&state.config_path, serde_json::to_string(&config).map_err(|e| e.to_string())?)
-        .map_err(|e| format!("持久化日志配置失败: {e}"))?;
-    state.sink = Sink {
-        enabled: config.enabled,
-        level: config.level,
-        day: today_string(),
-        dir: dir.clone(),
-    };
-    state.last_error = None;
+    // 落盘前归一化：等值于默认目录时不写绝对路径。
+    let persisted = persisted_config(&state, &config, &dir);
+    fs::write(
+        &state.config_path,
+        serde_json::to_string(&persisted).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| format!("持久化日志配置失败: {e}"))?;
+    apply_config(&mut state, &config);
     Ok(dir.to_string_lossy().to_string())
 }
 
@@ -462,6 +501,86 @@ mod tests {
         // camelCase 契约（rules/rust.mdc：模型 serde camelCase）
         assert!(raw.contains("\"level\":\"warn\""));
         assert_eq!(serde_json::from_str::<LogConfig>(&raw).unwrap(), config);
+    }
+
+    /// 构造一个脱离 Tauri 的内存态：default_dir = <tmp>/logs，sink 已指向它。
+    fn test_state(tmp: &TempDir) -> LogState {
+        let default_dir = tmp.0.join("logs");
+        fs::create_dir_all(&default_dir).unwrap();
+        LogState {
+            config_path: tmp.0.join("logging").join("config.json"),
+            default_dir: default_dir.clone(),
+            sink: Sink {
+                enabled: true,
+                level: LogLevel::Info,
+                dir: default_dir,
+                day: "2026-09-11".into(),
+            },
+            last_error: None,
+        }
+    }
+
+    #[test]
+    fn saving_without_dir_keeps_default_dir() {
+        // 回归（用户报障「改日志配置时路径被修改」）：旧实现以 sink.dir.parent()
+        // 兜底空 dir，每保存一次（开关/级别）目录就上移一级。
+        let tmp = TempDir::new("no-dir-drift");
+        let mut state = test_state(&tmp);
+        let default = state.default_dir.clone();
+
+        let dir = apply_config(
+            &mut state,
+            &LogConfig {
+                enabled: false,
+                level: LogLevel::Warn,
+                dir: None,
+            },
+        );
+        assert_eq!(dir, default);
+        assert_ne!(dir, default.parent().unwrap().to_path_buf()); // 不是父级
+        // 连续保存仍稳定（旧实现第二次会漂到祖父级）
+        let again = apply_config(
+            &mut state,
+            &LogConfig {
+                enabled: true,
+                level: LogLevel::Debug,
+                dir: None,
+            },
+        );
+        assert_eq!(again, default);
+        assert_eq!(state.sink.dir, default);
+        assert_eq!(state.sink.level, LogLevel::Debug);
+    }
+
+    #[test]
+    fn blank_and_custom_dirs_resolve_and_persist() {
+        let tmp = TempDir::new("dir-normalize");
+        let mut state = test_state(&tmp);
+        let default = state.default_dir.clone();
+
+        // 空白串 = 恢复默认（且首尾空白被裁掉）
+        assert_eq!(resolve_dir(&Some("   ".into()), &default), default);
+
+        let custom = tmp.0.join("custom-logs");
+        let cfg = LogConfig {
+            enabled: true,
+            level: LogLevel::Info,
+            dir: Some(format!("  {}  ", custom.display())),
+        };
+        let dir = apply_config(&mut state, &cfg);
+        assert_eq!(dir, custom);
+        // 自定义目录原样落盘
+        assert_eq!(
+            persisted_config(&state, &cfg, &dir).dir.as_deref(),
+            Some(custom.to_string_lossy().as_ref())
+        );
+        // 解析结果等于默认目录 → 归一化为 None（不写死绝对路径）
+        let cfg_default = LogConfig {
+            enabled: true,
+            level: LogLevel::Info,
+            dir: None,
+        };
+        assert!(persisted_config(&state, &cfg_default, &default).dir.is_none());
     }
 
     #[test]

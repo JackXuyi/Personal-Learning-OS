@@ -225,6 +225,30 @@ if (isTauri()) void invoke("log_write", { level, scope, message }).catch(() => {
 | D4 | **按天文件 + 保留 7 天自动清理**（推荐项默认入档） | 清理逻辑在跨天首次写入时执行 |
 | D5 | **新增「日志」Tab**（第 7 个分区，纯浏览器隐藏） | `SECTION_ORDER` + i18n `sections.logs` |
 
+## 附：缺陷修复记录
+
+### B1 · 改配置时日志目录被改（2026-09-11 修）
+
+**现象**：在设置里切换日志开关或级别，目录显示值就会变一级（`<app_data>/logs` → `<app_data>` → `Application Support` → …）。
+
+**根因**（两处事实叠加）：
+
+| # | 位置 | 事实 |
+|---|------|------|
+| ① | `SettingsPage.tsx`（`LogsSection.update`） | 决策 D3 下 UI 不提供路径输入，**恒发 `dir: null`**（也承担「恢复默认」语义） |
+| ② | `logging.rs` `log_set_config` | 空 dir 的兜底写成了 `state.sink.dir.parent()`——**当前目录的父级**，而非默认目录 `<app_data>/logs` |
+
+于是每次保存都是一次「目录上移」；`create_dir_all` 还会把错误目录真的建出来，`log_get_config` 再把它显示回 UI。重启回默认（config.json 存的是 `null`），所以表现为「改一次变一次」。
+
+**修复**：
+
+1. `LogState` 显式持有 `default_dir`（`<app_data>/logs`）——空 dir 的唯一回退目标，**不再从当前 sink 目录派生**；
+2. 抽出 `apply_config(state, config) -> PathBuf`（纯内存态应用）与 `persisted_config(state, config, dir)`（落盘归一化），`log_set_config` 只管 IO；
+3. `resolve_dir` 去首尾空白；落盘**一律写解析后的规范路径**（修掉「内存用裁剪值、磁盘写原文」的不一致）；
+4. 解析结果等于默认目录时 `dir` 归一化为 `None`，不把默认路径写死。
+
+**回归测试**：`saving_without_dir_keeps_default_dir`（连续保存两次目录不得漂移，且不等于父级）、`blank_and_custom_dirs_resolve_and_persist`（空白=默认、自定义目录裁剪后落盘、默认归一化为 None）。
+
 ## 变更记录
 
 | 日期 | 变更 | 作者 |
@@ -232,3 +256,4 @@ if (isTauri()) void invoke("log_write", { level, scope, message }).catch(() => {
 | 2026-09-11 | 初稿 v1.0：自研零依赖方案（logging.rs + 5 命令 + 设置页分区），含 5 个决策点待确认 | Agent |
 | 2026-09-11 | v1.1：决策入档（D1 双端同写 / D2 默认开 info / D3 只读+恢复默认 / D4 按天+7天清理 / D5 新增日志 Tab）；状态定稿待实施 | Agent |
 | 2026-09-11 | v1.2：**已实施**——logging.rs（29/29 含 10 例新单测）+ lib.rs/llm_generate 接线 + desktop-log.ts + aiLog 转发 + 设置页日志 Tab（zh/en）；typecheck 0 error、test:ai 6/6、test:library 全过、test:rag 10/10 | Agent |
+| 2026-09-11 | v1.3：**缺陷 B1 修复**——改配置时目录漂移（空 dir 误以 `sink.dir.parent()` 兜底）；`LogState` 增 `default_dir`、抽 `apply_config`/`persisted_config`、路径规范化；cargo 31/31（+2 例回归） | Agent |
