@@ -77,7 +77,6 @@ function fakeProvider(map: Record<string, number[]>, opts: { failOn?: string } =
           return map[t] ?? [0, 0];
         }),
       ),
-    extractKnowledge: () => Promise.resolve([]),
     generateAssessment: () => Promise.reject(new Error("not needed in tests")),
     evaluateAnswer: () => Promise.reject(new Error("not needed in tests")),
   };
@@ -89,7 +88,6 @@ function noEmbedProvider(): AIProvider {
     kind: "custom",
     isConfigured: () => true,
     chat: () => Promise.resolve({ content: "" }),
-    extractKnowledge: () => Promise.resolve([]),
     generateAssessment: () => Promise.reject(new Error("not needed in tests")),
     evaluateAnswer: () => Promise.reject(new Error("not needed in tests")),
   };

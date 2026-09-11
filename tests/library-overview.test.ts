@@ -65,7 +65,6 @@ function mkProvider(reply: (input: ChatInput) => Promise<ChatOutput>): AIProvide
     kind: "builtin",
     isConfigured: () => true,
     chat: reply,
-    extractKnowledge: () => Promise.reject(new Error("不应被调用")),
     generateAssessment: () => Promise.reject(new Error("不应被调用")),
     evaluateAnswer: () => Promise.reject(new Error("不应被调用")),
   };

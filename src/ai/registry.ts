@@ -5,7 +5,7 @@
  * 单独的里程碑。在此之前，注册表返回一个 `NotImplementedProvider`，
  * 它会以带类型的错误"大声失败"（绝不静默）。
  */
-import type { Answer, Evaluation, KnowledgeUnit, Question, SourceDocument } from "../domain";
+import type { Answer, Evaluation, Question } from "../domain";
 import { BuiltinProvider } from "./builtin";
 import { OpenAICompatibleProvider } from "./openai-compatible";
 import type {
@@ -34,9 +34,6 @@ class NotImplementedProvider implements AIProvider {
     );
   }
   chat(): Promise<ChatOutput> {
-    return Promise.reject(this.fail());
-  }
-  extractKnowledge(_document: SourceDocument): Promise<KnowledgeUnit[]> {
     return Promise.reject(this.fail());
   }
   generateAssessment(): Promise<Question> {

@@ -5,7 +5,7 @@
  * (source: local),要么是配置好的 API 端点(source: api)。
  * 详见 docs/ai-model-center-plan-2026-09.md §3。
  */
-import type { Answer, Evaluation, KnowledgeUnit, Question, SourceDocument } from "../domain";
+import type { Answer, Evaluation, Question } from "../domain";
 import { createProvider } from "./registry";
 import type {
   AIProvider,
@@ -60,9 +60,6 @@ class NoActiveProvider implements AIProvider {
     );
   }
   chat(_input: ChatInput): Promise<ChatOutput> {
-    return Promise.reject(this.fail());
-  }
-  extractKnowledge(_document: SourceDocument): Promise<KnowledgeUnit[]> {
     return Promise.reject(this.fail());
   }
   generateAssessment(): Promise<Question> {

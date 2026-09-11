@@ -7,11 +7,13 @@
  *
  * 能力边界:
  * - `chat` 已打通(llm_generate)。
- * - `extractKnowledge / generateAssessment / evaluateAnswer` 属提示词管线
- *   里程碑,当前显式 not-implemented(与 OpenAI 兼容层保持一致)。
+ * - `generateAssessment / evaluateAnswer` 属提示词管线里程碑,当前显式
+ *   not-implemented(与 OpenAI 兼容层保持一致)。
+ * - 概念抽取不走本 Provider 接口：见 `ai/pipelines.ts`
+ *   `extractChapterConceptsWithAi`（G8：接口上的 `extractKnowledge` 空实现已删除）。
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import type { Answer, Evaluation, KnowledgeUnit, Question, SourceDocument } from "../domain";
+import type { Answer, Evaluation, Question } from "../domain";
 import type {
   AIProvider,
   AssessmentContext,
@@ -128,13 +130,6 @@ export class BuiltinProvider implements AIProvider {
       const message = err instanceof Error ? err.message : String(err);
       throw new AiProviderError("request-failed", message);
     }
-  }
-
-  async extractKnowledge(_document: SourceDocument): Promise<KnowledgeUnit[]> {
-    throw new AiProviderError(
-      "not-implemented",
-      "extractKnowledge prompt pipeline is not implemented yet (next milestone).",
-    );
   }
 
   async generateAssessment(_context: AssessmentContext): Promise<Question> {

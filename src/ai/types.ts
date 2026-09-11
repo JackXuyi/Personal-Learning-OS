@@ -7,13 +7,7 @@
  * （OpenAI / Anthropic / Gemini / DeepSeek）以及未来的社区
  * Provider 都可以自由替换。
  */
-import type {
-  Answer,
-  Evaluation,
-  KnowledgeUnit,
-  Question,
-  SourceDocument,
-} from "../domain";
+import type { Answer, Evaluation, Question } from "../domain";
 
 export type ProviderKind =
   | "builtin"
@@ -105,8 +99,12 @@ export interface AIProvider {
    */
   embed?(texts: readonly string[]): Promise<number[][]>;
 
-  extractKnowledge(document: SourceDocument): Promise<KnowledgeUnit[]>;
-
+  /**
+   * 概念抽取**不在此接口**（G8 修复）：真实实现是
+   * `ai/pipelines.ts` 的 `extractChapterConceptsWithAi`（章级、带原文锚定）。
+   * 接口上曾有一个 `extractKnowledge(document)` 空实现（恒抛 not-implemented、
+   * 零调用方），与真实实现构成双轨隐性坑 —— 已删除。
+   */
   generateAssessment(context: AssessmentContext): Promise<Question>;
 
   evaluateAnswer(question: Question, answer: Answer): Promise<Evaluation>;
