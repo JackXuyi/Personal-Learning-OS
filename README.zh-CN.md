@@ -135,7 +135,10 @@ Personal Learning OS 希望解决的是：
 
 用户自己的知识来源。
 
-支持格式：**PDF · Markdown · TXT · DOCX · EPUB · 网页 · 笔记 · 代码 · 图片 / OCR · 自定义文本**
+支持格式：**Markdown**（`.md` / `.markdown` / `.mdown`）· **纯文本**（`.txt`）· **PDF**（含分栏与跨页页眉的版面重排）· **笔记 / 网页摘录**（粘贴导入）· **GitHub 公开仓库的 Markdown**。
+
+> 当前**未实现**：DOCX · EPUB · 网页 URL 抓取 · 图片 / OCR · 代码仓库的私有访问。
+> 与其在 README 上许诺，不如先把已支持的格式做透——格式清单以本节为准。
 
 原则：
 
@@ -516,7 +519,7 @@ Cloud AI · 加密同步 · 高级 AI 模型 · Deep Research
 
 Document → Knowledge → Knowledge Graph → Learning Goal → Assessment → Mastery → Next Learning Action
 
-- 知识库：创建 Learning Space、导入 PDF/MD/TXT、文档解析、Chunk、知识提取、来源引用
+- 知识库：创建 Learning Space、导入 PDF / Markdown、文档解析、Chunk、知识提取、来源引用
 - 知识图谱：知识点、父子关系、前置关系、相关关系、图谱可视化
 - 学习者状态：掌握度、置信度、尝试次数、正确率、最近复习、学习历史
 - 测评：自动生成题目、多种题型、AI 答案评估、掌握度更新

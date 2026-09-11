@@ -135,7 +135,10 @@ The product is made of five core objects:
 
 The user's own knowledge sources.
 
-Supported formats: **PDF · Markdown · TXT · DOCX · EPUB · Web pages · Notes · Code · Images / OCR · Custom text**
+Supported formats: **Markdown** (`.md` / `.markdown` / `.mdown`) · **plain text** (`.txt`) · **PDF** (with column and running-header layout repair) · **notes / web excerpts** (paste) · **Markdown from public GitHub repositories**.
+
+> **Not implemented yet:** DOCX · EPUB · web page fetching by URL · images / OCR · private repositories.
+> This section is the source of truth for format support.
 
 > **Your raw material always belongs to you.**
 
@@ -507,7 +510,7 @@ Stable local-first desktop base: Tauri Desktop · React + TypeScript · SQLite �
 
 Document → Knowledge → Knowledge Graph → Learning Goal → Assessment → Mastery → Next Learning Action
 
-- Knowledge Base: Learning Space, import PDF/MD/TXT, parsing, chunking, knowledge extraction, source citation
+- Knowledge Base: Learning Space, import PDF / Markdown, parsing, chunking, knowledge extraction, source citation
 - Knowledge Graph: knowledge points, parent/child, prerequisite, related, graph visualization
 - Learner State: mastery, confidence, attempts, correctness, last reviewed, history
 - Assessment: auto-generated questions, multiple question types, AI evaluation, mastery update
