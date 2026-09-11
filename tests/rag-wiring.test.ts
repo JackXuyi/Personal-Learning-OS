@@ -20,7 +20,7 @@ import { runUnitImport } from "../src/features/learn/import/pipeline.ts";
 import { splitDocumentNow } from "../src/features/learn/split-service.ts";
 import { rebuildChunks } from "../src/features/learn/index-chunks.ts";
 import { buildIndex } from "../src/features/learn/index-service.ts";
-import type { AIProvider } from "../src/ai/types.ts";
+import type { Embedder } from "../src/ai/embedding.ts";
 import {
   deleteDocumentCascade,
   previewDeleteCascade,
@@ -74,13 +74,12 @@ class FailingSaveStorage extends InMemoryStorage {
   }
 }
 
-/** 假向量 provider：只挂 embed（其余能力本测试不触达）。 */
-const fakeEmbedProvider = {
-  kind: "custom",
-  isConfigured: () => true,
-  chat: () => Promise.reject(new Error("not needed in tests")),
+/** 假的本地 Embedder：向量化不再经 `AIProvider`（决策 D1/D5）。 */
+const fakeEmbedder: Embedder = {
+  model: "test-model",
+  dim: 3,
   embed: async (texts: readonly string[]) => texts.map(() => [1, 0, 0]),
-} as unknown as AIProvider;
+};
 
 /** 替换正文用的新正文（结构与 SAMPLE 不同，确保 chunk id 全变）。 */
 const NEXT_BODY = [
@@ -243,7 +242,7 @@ const run = async () => {
     // 重算（= autoIndexAfterImport 走的同一入口 buildIndex）→ 向量条数应恢复为 chunk 数
     const after = await s.listChunksByDocument(res.docId);
     assert.ok(after.length > 0, "替换后应有新 chunk");
-    const out = await buildIndex({ storage: s, provider: fakeEmbedProvider, model: "test-model" });
+    const out = await buildIndex({ storage: s, embedder: fakeEmbedder, model: "test-model" });
     assert.equal(out.failed, 0, "重算不应有失败批次");
     assert.equal(
       (await s.listEmbeddingVectors("chunk")).length,

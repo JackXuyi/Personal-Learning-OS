@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import type { Chapter, Chunk, Embedding, EmbeddingVector, SourceDocument } from "../src/domain/index.ts";
 import { embeddingKey } from "../src/domain/embedding.ts";
 import { InMemoryStorage } from "../src/storage/memory.ts";
-import type { AIProvider } from "../src/ai/types.ts";
+import type { Embedder } from "../src/ai/embedding.ts";
 import { cosineSimilarity, cosineTopK } from "../src/ai/retrieval/vector-search.ts";
 import { fuseRankings } from "../src/ai/retrieval/rrf.ts";
 import { hybridSearch } from "../src/ai/retrieval/hybrid-search.ts";
@@ -64,12 +64,19 @@ function chapter(id: string, title: string): Chapter {
   };
 }
 
-/** 按「文本 → 向量」映射造一个假 provider；`failOn` 指定抛错的入参文本。 */
-function fakeProvider(map: Record<string, number[]>, opts: { failOn?: string } = {}): AIProvider {
+/**
+ * 按「文本 → 向量」映射造一个假的本地 Embedder；`failOn` 指定抛错的入参文本。
+ *
+ * 注：向量化走的是 `Embedder`（ai/embedding.ts），不再挂在 `AIProvider` 上
+ * （决策 D1/D5）——聊天可能用云端 API，向量化恒定走本机。
+ */
+function fakeEmbedder(
+  map: Record<string, number[]>,
+  opts: { failOn?: string } = {},
+): Embedder {
   return {
-    kind: "custom",
-    isConfigured: () => true,
-    chat: () => Promise.resolve({ content: "" }),
+    model: "m",
+    dim: 2,
     embed: (texts) =>
       Promise.resolve(
         texts.map((t) => {
@@ -77,19 +84,6 @@ function fakeProvider(map: Record<string, number[]>, opts: { failOn?: string } =
           return map[t] ?? [0, 0];
         }),
       ),
-    generateAssessment: () => Promise.reject(new Error("not needed in tests")),
-    evaluateAnswer: () => Promise.reject(new Error("not needed in tests")),
-  };
-}
-
-/** 一个没有向量化能力的 provider（builtin 同款：embed 属性不存在）。 */
-function noEmbedProvider(): AIProvider {
-  return {
-    kind: "custom",
-    isConfigured: () => true,
-    chat: () => Promise.resolve({ content: "" }),
-    generateAssessment: () => Promise.reject(new Error("not needed in tests")),
-    evaluateAnswer: () => Promise.reject(new Error("not needed in tests")),
   };
 }
 
@@ -206,13 +200,11 @@ const run = async () => {
 
   // ===== C. 混合检索 =====
 
-  await check("C1 provider 无 embed 能力 → 仅全文检索，不抛错（TC-UC04-03）", async () => {
+  await check("C1 无本地 Embedder → 仅全文检索，不抛错（TC-UC04-03）", async () => {
     const s = new InMemoryStorage();
     await seed(s, [chunk("c1", "反向传播利用链式法则")]);
-    const out = await hybridSearch("链式法则", {
-      storage: s,
-      provider: noEmbedProvider(),
-    });
+    // 不传 embedder（浏览器预览 / 未下载模型）→ 向量路整体跳过
+    const out = await hybridSearch("链式法则", { storage: s });
     assert.equal(out.mode, "fulltext");
     assert.equal(out.hits.length, 1);
     assert.equal(out.hits[0].semantic, false);
@@ -241,7 +233,7 @@ const run = async () => {
 
     const out = await hybridSearch("链式法则", {
       storage: s,
-      provider: fakeProvider({ 链式法则: [1, 0] }),
+      embedder: fakeEmbedder({ 链式法则: [1, 0] }),
     });
     assert.equal(out.mode, "hybrid");
     const ids = out.hits.map((h) => h.chunk.id);
@@ -256,7 +248,7 @@ const run = async () => {
     await seed(s, [chunk("c1", "反向传播")]);
     const noVec = await hybridSearch("反向传播", {
       storage: s,
-      provider: fakeProvider({ 反向传播: [1, 0] }),
+      embedder: fakeEmbedder({ 反向传播: [1, 0] }),
     });
     assert.equal(noVec.mode, "fulltext", "库里没有向量时不算 hybrid");
     assert.equal(noVec.hits.length, 1);
@@ -281,7 +273,7 @@ const run = async () => {
     ]);
     const out = await hybridSearch("反向传播", {
       storage: s,
-      provider: fakeProvider({}, { failOn: "反向传播" }),
+      embedder: fakeEmbedder({}, { failOn: "反向传播" }),
     });
     assert.equal(out.mode, "fulltext");
     assert.equal(out.hits.length, 1, "FTS 路结果必须保留");
@@ -306,14 +298,15 @@ const run = async () => {
       ]);
     }
     const seen: string[] = [];
-    const provider: AIProvider = {
-      ...fakeProvider({}),
+    const embedder: Embedder = {
+      model: "m",
+      dim: 2,
       embed: (texts) => {
         seen.push(...texts);
         return Promise.resolve(texts.map(() => [1, 0]));
       },
     };
-    const p = await buildIndex({ storage: s, provider, model: "m", onlyMissing: true });
+    const p = await buildIndex({ storage: s, embedder, model: "m", onlyMissing: true });
     assert.equal(p.total, 2, "只应处理缺失的 2 条");
     assert.deepEqual(seen.sort(), ["D", "E"]);
     assert.equal(p.done, 2);
@@ -331,7 +324,7 @@ const run = async () => {
     ]);
     const p = await buildIndex({
       storage: s,
-      provider: fakeProvider({}, { failOn: "坏" }),
+      embedder: fakeEmbedder({}, { failOn: "坏" }),
       model: "m",
       batchSize: 2,
     });
@@ -344,9 +337,9 @@ const run = async () => {
   await check("D3 幂等：embedding id = embeddingKey，重复执行不新增", async () => {
     const s = new InMemoryStorage();
     await seed(s, [chunk("c1", "A")]);
-    const provider = fakeProvider({ A: [1, 0] });
-    await buildIndex({ storage: s, provider, model: "m" });
-    await buildIndex({ storage: s, provider, model: "m" });
+    const embedder = fakeEmbedder({ A: [1, 0] });
+    await buildIndex({ storage: s, embedder, model: "m" });
+    await buildIndex({ storage: s, embedder, model: "m" });
     const list = await s.listEmbeddings("chunk");
     assert.equal(list.length, 1);
     assert.equal(list[0].id, embeddingKey("chunk", "c1", "m"));
@@ -355,8 +348,8 @@ const run = async () => {
   await check("D4 换模型 → 新旧向量并存，覆盖率按模型独立", async () => {
     const s = new InMemoryStorage();
     await seed(s, [chunk("c1", "A")]);
-    await buildIndex({ storage: s, provider: fakeProvider({ A: [1, 0] }), model: "m1" });
-    await buildIndex({ storage: s, provider: fakeProvider({ A: [1, 0, 0] }), model: "m2" });
+    await buildIndex({ storage: s, embedder: fakeEmbedder({ A: [1, 0] }), model: "m1" });
+    await buildIndex({ storage: s, embedder: fakeEmbedder({ A: [1, 0, 0] }), model: "m2" });
     assert.equal((await s.listEmbeddings("chunk")).length, 2, "多模型共存");
     assert.equal(
       (await s.listEmbeddingVectors("chunk")).filter((v) => v.model === "m2").length,
@@ -367,13 +360,11 @@ const run = async () => {
   await check("D5 前置能力不足 → 抛错而不是静默空跑", async () => {
     const s = new InMemoryStorage();
     await seed(s, [chunk("c1", "A")]);
+    // 未注入 embedder 且非桌面端 → 本地向量模型不可用
+    await assert.rejects(() => buildIndex({ storage: s, model: "m" }), /本地向量模型不可用/);
     await assert.rejects(
-      () => buildIndex({ storage: s, provider: noEmbedProvider(), model: "m" }),
-      /不支持向量化/,
-    );
-    await assert.rejects(
-      () => buildIndex({ storage: s, provider: fakeProvider({ A: [1, 0] }), model: "  " }),
-      /未配置 Embedding 模型/,
+      () => buildIndex({ storage: s, embedder: fakeEmbedder({ A: [1, 0] }), model: "  " }),
+      /未启用本地向量模型/,
     );
   });
 
@@ -382,7 +373,7 @@ const run = async () => {
     await seed(s, [chunk("c1", "A"), chunk("c2", "   ")]);
     const p = await buildIndex({
       storage: s,
-      provider: fakeProvider({ A: [1, 0] }),
+      embedder: fakeEmbedder({ A: [1, 0] }),
       model: "m",
     });
     assert.equal(p.total, 1);
@@ -405,7 +396,7 @@ const run = async () => {
     const snaps: number[] = [];
     await buildIndex({
       storage: s,
-      provider: fakeProvider({ A: [1, 0], B: [1, 0], C: [1, 0] }),
+      embedder: fakeEmbedder({ A: [1, 0], B: [1, 0], C: [1, 0] }),
       model: "m",
       batchSize: 1,
       onProgress: (p) => snaps.push(p.done + p.failed),

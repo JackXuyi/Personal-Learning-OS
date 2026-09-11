@@ -18,7 +18,7 @@
 |----|------|----------|-----------|
 | **D1** | 向量本体存哪里 | **A. 只存 SQLite BLOB（float32 LE），浏览器预览降级为「仅 FTS」** | B. 向量也写 localStorage → 1000 chunk × 768 维 ≈ 15MB JSON，**必然击穿 5–10MB 配额**；C. 引 `sqlite-vec` 扩展 → 部署复杂度上升，且需改 Rust 依赖链 |
 | **D2** | embedding 生成时机 | **A. 切分后自动入队，后台串行执行；设置页提供「重建索引」** | B. 纯手动按钮 → 用户容易忘记，检索长期空转（正是本次要修的病灶）；C. 导入时同步阻塞 → 导入 1 份 50 章的 PDF 要等几十次 API 往返 |
-| **D3** | embedding 模型来源 | **A. 复用「当前使用模型」的 baseUrl / apiKey，模型名单独配置**（可指向 Ollama / Qwen / OpenAI） | B. 完全独立的第二套 provider 配置 → 配置面翻倍，收益有限 |
+| **D3** | embedding 模型来源 | ~~A. 复用「当前使用模型」的端点/Key~~ → **2026-09-11 改为：只用本地模型**（D1/D5）。云端 `/embeddings` 全部移除，向量化恒定走内置 llama-helper（`qwen3-embed:0.6b`，639 MB，1024 维） | 见 `docs/embedding-default-config-design-2026-09.md` |
 | **D4** | 检索消费点 | **A. 资料库搜索框（`/learn`）升级为「元信息匹配 + 内容检索」双段，融合算法用 RRF** | B. 仅接 FTS 不接向量 → 与「全链路含向量」的诉求不符；C. 新增独立检索页 → 增加一个入口，与「搜索服务于列表」的产品红线冲突 |
 
 > 若 D1 选 A，需接受一条明确的能力边界：**纯浏览器预览下无向量检索**（改走 FTS + 内存子串匹配）。这与现状（桌面端才有 SQLite）一致，不算退化。
@@ -83,7 +83,7 @@ RAG 不在这条链上。`pipeline.ts:99` 的 `"link"` 阶段是空实现 `async
 | RAG 写入 | ❌ **零调用者** | `pipeline.ts:97` 只 `saveChapters`；`pipeline.ts:99` link 阶段空实现 |
 | 全文检索 | ⚠️ 实现就绪、**零消费方** | `storage/tauri.ts:606` `fullTextSearch` → `db_fts_search` |
 | 向量能力（AI 侧） | ❌ **契约无此能力** | `ai/types.ts:78-91` `AIProvider` 只有 `chat` + 3 个 not-implemented 方法 |
-| 向量能力（桌面侧） | ❌ **不存在** | `grep -i embed` 在 `src-tauri/src` 只命中 `db` 模块，`llm` 模块无 embedding |
+| 向量能力（桌面侧） | ✅ **已落地** （2026-09-11 更新：向量化已改为**本地模型**链路，见 `docs/embedding-default-config-design-2026-09.md` v2.0） | `llm::commands::embed_texts` + 独立 sidecar 进程；helper 新增 `embed` 协议 |
 | 向量存储 | ❌ **无位置** | `domain/embedding.ts:15-26` 只有元数据；`schema.sql:86-88` 注释明写「不含向量本体」 |
 | 级联清理 | ⚠️ 部分 | `library-actions.ts` 已级联 documents/chapters/papers，未含 chunks |
 
@@ -106,7 +106,7 @@ RAG 不在这条链上。`pipeline.ts:99` 的 `"link"` 阶段是空实现 `async
 | FTS5 trigram | 查询词 ≥3 字符；<3 字符走 `LIKE` 兜底 | 检索层需保留现有兜底逻辑，不做改动 |
 | IPC 契约 | `#[tauri::command]` 只转换顶层参数名 | 所有 `*Input` / `*Row` / `*Out` 必须 `#[serde(rename_all = "camelCase")]` |
 | schema 版本 | 当前 `_schema_version` = **2**（F1 的 trigram 迁移写入） | 本方案升 **v3**（`embeddings` 加向量列） |
-| AI provider | 唯一构造入口 `useSettingsStore.buildActiveProvider()` | embedding 能力亦须经此出口，不得另造入口（B2 教训） |
+| AI provider | 唯一构造入口 `useSettingsStore.buildActiveProvider()` | **向量化例外**：恒定走本地 `ai/embedding.ts` 的 `createEmbedder()`，不挂 provider（D5 解耦）——聊天用云端 API 时向量化照走本机 |
 | 浏览器预览 | 无 SQLite、无 Keychain | 向量与 embedding 需显式守卫降级 |
 
 ---
@@ -275,7 +275,7 @@ async fn migrate_v3(conn) -> Result<()> {
 | 链路 | 路径 | 说明 |
 |------|------|------|
 | 切分落库 | `pipeline` / `split-service` → `chunk-engine`（纯函数）→ `StorageAdapter.saveChunks` | UI 不直接碰 storage 写入以外的层；引擎不 import storage |
-| 向量生成 | `useIndexStore` → `index-service` → `buildActiveProvider().embed()` → `StorageAdapter.saveEmbeddings` | AI 能力只经 `useSettingsStore.buildActiveProvider()` 获取（B2 教训，不得另造入口） |
+| 向量生成 | `useIndexStore` → `index-service` → **`createEmbedder(model).embed()`（本地）** → `StorageAdapter.saveEmbeddings` | （2026-09-11 更新：向量化已改为**本地模型**链路，见 `docs/embedding-default-config-design-2026-09.md` v2.0） 云端 `/embeddings` 已按 D1 移除 |
 | 检索读取 | `LibraryPage` → `hybrid-search` → `StorageAdapter.fullTextSearch` + `listEmbeddingVectors` | 检索结果在纯逻辑层融合，UI 只渲染 |
 | 桌面能力 | `storage/tauri.ts` 内部 `invoke("db_*")` | 沿用既有 `trySqlite()` 包装，失败静默回退父类（localStorage） |
 | 非 Tauri 守卫 | `isTauri()` 已在 `storage/index.ts::detectBestBackend` 分流 | 浏览器预览 = local/memory 后端 = 无向量能力，UI 据此降级 |
@@ -285,7 +285,7 @@ async fn migrate_v3(conn) -> Result<()> {
 | 状态 | 归属 | 生命周期 |
 |------|------|---------|
 | 索引任务进度（`idle`/`running`/`done`/`error` + 已完成 / 总数） | `useIndexStore`（新增） | 会话级；不持久化（重启后据 `listEmbeddings` 派生真实状态） |
-| embedding 模型配置 | `useSettingsStore.embedding`（扩展，persist） | 长期；API Key 与 `active` 同策略走 Keychain |
+| embedding 模型配置 | `useSettingsStore.embedding`（默认 `qwen3-embed:0.6b`）+ `autoIndexOnImport`（默认 true） | 长期；只存本地模型名，无 Key（本地推理不需要） |
 | 检索查询与结果 | `LibraryPage` 本地 state | 页面级；不持久化 |
 | 副作用触发 | ① 切分成功 → `rebuildChunks`（同步，纯代码，快）；② 切分成功 → `enqueueEmbedding`（后台串行，AI，慢）；③ 进入设置页 → 派生索引覆盖率；④ 删除 / 替换正文 → 级联清理 | — |
 
@@ -306,7 +306,7 @@ async fn migrate_v3(conn) -> Result<()> {
    2. 逐章 `chunkChapter(...)` 生成，position 跨章全局递增
    3. `saveChunks(all)`
 4. 导入结果卡展示完成后，**后台**触发向量化入队（D2-A）：`useIndexStore.enqueue(docId)`；
-5. 向量化按 32 条 / 批调用 `provider.embed()`，写回 `saveEmbeddings`；UI 在资料卡 / 详情页显示索引状态。
+5. 向量化按 **16 条 / 批**（D6）调用本地 `embedder.embed()`，写回 `saveEmbeddings`；UI 在资料卡 / 详情页显示索引状态。单批失败折半重试一次。
 
 **B. 重新切分（幂等重建）**
 
@@ -320,7 +320,7 @@ async fn migrate_v3(conn) -> Result<()> {
 1. 用户输入查询词（≥2 字符，防抖 300ms）；
 2. 并行两路：
    - **FTS 路**：`storage.fullTextSearch(query, scope, 20)`
-   - **向量路**：`provider.embed([query])` → `listEmbeddingVectors("chunk")` → 余弦 top-20（向量不可用时此路跳过）
+   - **向量路**：`createEmbedder(activeEmbeddingModel()).embed([query])` → `listEmbeddingVectors("chunk")` → 余弦 top-20（本地模型不可用时此路跳过）
 3. `fuseRankings([ftsIds, vecIds])` 做 RRF 融合，取前 N（默认 8）；
 4. 结果按所属文档分组展示：文档标题 + 命中片段（FTS 用 snippet / 向量路用 chunk 前 120 字）；
 5. 点击命中项 → 跳 `/learn/chapter/:chapterId?at=<chunk 起止>` 复用既有高亮机制。
@@ -338,8 +338,8 @@ async fn migrate_v3(conn) -> Result<()> {
 | 无正文 | `textPreview` 为空 | 切分抛 `no-body`（既有）；不产生 chunk | 既有文案 |
 | 0 章 | 切不出章节 | 仅保存资料，不写 chunk（既有行为） | 既有「仅保存」 |
 | chunk 写入失败 | 配额 / IPC 错误 | **向上抛**，不写半成品（与 `runUnitImport` 契约一致）；chapters 已写则保留 | 导入结果卡该项标失败并给原因 |
-| 向量化失败 | provider 未配置 / 网络错误 | 捕获并记录该批失败；chunk 保持 `vector = NULL`；下次「重建索引」可补 | 索引卡显示「部分失败，可重试」 |
-| provider 无 embed 能力 | builtin 本地模型 | `index-service` 前置检查 `typeof provider.embed !== "function"` → 直接拒绝并解释 | 提示「当前模型不支持向量化，请配置 API 模型或 Ollama」 |
+| 向量化失败 | 本地推理异常 / IPC 错误 | 捕获并记录该批失败（先折半重试一次）；chunk 保持 `vector = NULL`；下次「重建索引」可补 | 索引卡显示「N 块失败，可再点『仅补齐缺失』重试」 |
+| 本地向量模型不可用 | 浏览器预览 / 模型未下载 / 开关关闭 | `createEmbedder()` 返回 `undefined` → `buildIndex` 抛错；`autoIndexAfterImport` 静默跳过 | 导入卡细分原因；设置卡显示「下载并启用（639 MB）」 |
 | 向量维度变化 | 换 embedding 模型（768 → 1536） | 按 `(targetType,targetId,model)` 唯一索引并存；检索时**只取当前配置模型的向量** | 索引卡提示「模型已变更，需重建」 |
 | 检索 provider 未就绪 | 未配置任何模型 | 向量路跳过 | 结果区标注「仅全文检索」 |
 | 删除资料 | 用户在卡片菜单删除 | `deleteDocumentCascade` 增加 `deleteChunksByDocument` | 既有确认弹窗 |
@@ -393,10 +393,10 @@ sequenceDiagram
 | 项 | 内容 |
 |----|------|
 | 角色 | 学习者 |
-| 前置条件 | 桌面端已选好「当前使用模型」（支持 embeddings 的 API 或 Ollama） |
+| 前置条件 | 桌面端已下载并启用本地向量模型 `qwen3-embed:0.6b`（与「当前使用模型」无关） |
 | 主流程步骤 | 1. `/learn` 点「＋ 导入」→ 粘贴一段 Markdown（含小标题与正文）<br>2. 确认导入 |
 | 期望结果 | ① 资料出现在列表；② 章正常切出；③ 等索引完成后，搜索正文中的词能命中该资料并显示片段 |
-| 异常/边界 | 未配模型 → 仍可导入，搜索仅走 FTS（结果区标注「仅全文检索」） |
+| 异常/边界 | 未下载本地向量模型 → 仍可导入，搜索仅走 FTS（导入卡提示「未下载本地向量模型 · 本次仅全文索引」） |
 
 ### UC-02：重新切分不产生重复索引
 
