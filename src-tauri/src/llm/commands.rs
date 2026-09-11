@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
 
@@ -10,18 +10,24 @@ use super::manager::{
     block_reason_if_unsupported, current_device, DownloadProgress, ModelInfo, ModelManager,
 };
 use super::models::{
-    get_default_model, get_model_by_name, render_prompt, ChatMessage, ChatRole, ModelDef,
-    SamplingParams,
+    get_default_embedding_model, get_default_model, get_model_by_name, render_prompt, ChatMessage,
+    ChatRole, ModelDef, ModelKind, PoolingKind, SamplingParams,
 };
 use super::sidecar::Sidecar;
 
 /// 下载进度事件名(前端经 `@tauri-apps/api/event` 监听)。
 pub const DOWNLOAD_PROGRESS_EVENT: &str = "llm://download-progress";
+/// 向量模型下载进度事件名(与 llm:// 同构,独立通道便于卡片各自订阅)。
+pub const EMBED_DOWNLOAD_PROGRESS_EVENT: &str = "embed://download-progress";
 
 /// 汇总的应用状态,由 `lib.rs` setup 创建并 `manage`。
 pub struct LlmState {
     pub manager: Arc<ModelManager>,
     pub sidecar: Arc<Sidecar>,
+    /// 向量模型管理器(models/embedding)。
+    pub embed_manager: Arc<ModelManager>,
+    /// 向量推理进程:与聊天进程分离,避免两模型来回重载(D4)。
+    pub embed_sidecar: Arc<Sidecar>,
 }
 
 /// 前端传来的消息(与 src/ai/types.ts 的 ChatMessage 对应)。
@@ -235,6 +241,185 @@ pub async fn llm_default_model() -> String {
     get_default_model().name
 }
 
+// ---------------------------------------------------------------------------
+// 向量化(embedding)命令面
+//
+// 与 llm_* 并列但完全独立:独立清单、独立目录、独立 sidecar 进程(D4)。
+// 只走本地模型,不发起任何 HTTP 请求(D1)。
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+pub struct EmbedRequest {
+    /// 模型名,如 "qwen3-embed:0.6b"。
+    #[serde(rename = "model")]
+    pub model: String,
+    #[serde(rename = "texts")]
+    pub texts: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct EmbedResponse {
+    pub dim: usize,
+    pub vectors: Vec<Vec<f32>>,
+    /// 因超过 context_size 被截断的条数(>0 时已记 warn 日志)。
+    pub truncated: usize,
+}
+
+/// 向量模型清单(供设置页展示状态:未下载/下载中/已就绪/损坏)。
+#[tauri::command]
+pub async fn embed_list_models(state: State<'_, LlmState>) -> Result<Vec<ModelInfo>, String> {
+    Ok(state.embed_manager.scan_models().await)
+}
+
+#[tauri::command]
+pub async fn embed_download(
+    app: AppHandle,
+    state: State<'_, LlmState>,
+    model: String,
+) -> Result<(), String> {
+    if get_model_by_name(&model).map(|d| d.kind) != Some(ModelKind::Embedding) {
+        return Err(format!("unknown embedding model: {model}"));
+    }
+    if let Some(reason) = block_reason_if_unsupported(&model) {
+        return Err(format!("model '{model}' is not supported on this device: {reason}"));
+    }
+    let manager = state.embed_manager.clone();
+    let app = app.clone();
+    let model_name = model.clone();
+
+    manager
+        .download(
+            &model,
+            Box::new(move |p: DownloadProgress| {
+                let _ = app.emit(
+                    EMBED_DOWNLOAD_PROGRESS_EVENT,
+                    json!({ "model": model_name, "percent": p.percent, "downloadedBytes": p.downloaded_bytes, "totalBytes": p.total_bytes, "mbps": p.mbps }),
+                );
+            }),
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn embed_cancel_download(
+    state: State<'_, LlmState>,
+    model: String,
+) -> Result<(), String> {
+    state.embed_manager.request_cancel(&model).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn embed_delete(state: State<'_, LlmState>, model: String) -> Result<(), String> {
+    state
+        .embed_manager
+        .delete(&model)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 默认向量模型名(供设置页默认值与迁移校验)。
+#[tauri::command]
+pub async fn embed_default_model() -> String {
+    get_default_embedding_model().name
+}
+
+/// 批量文本向量化。失败一律返回 Err(含维度不符),**绝不返回脏向量**。
+#[tauri::command]
+pub async fn embed_texts(
+    state: State<'_, LlmState>,
+    request: EmbedRequest,
+) -> Result<EmbedResponse, String> {
+    let def = get_model_by_name(&request.model)
+        .ok_or_else(|| format!("unknown model: {}", request.model))?;
+    if def.kind != ModelKind::Embedding {
+        return Err(format!("{} is not an embedding model", request.model));
+    }
+    if let Some(reason) = block_reason_if_unsupported(&request.model) {
+        return Err(format!(
+            "model '{}' is not supported on this device: {reason}",
+            request.model
+        ));
+    }
+    if !state.embed_manager.is_model_ready(&request.model).await {
+        return Err(format!(
+            "embedding model '{}' is not downloaded yet. Call embed_download first.",
+            request.model
+        ));
+    }
+    if request.texts.is_empty() {
+        return Ok(EmbedResponse { dim: 0, vectors: vec![], truncated: 0 });
+    }
+
+    let model_path = state
+        .embed_manager
+        .path_of(&request.model)
+        .ok_or_else(|| "model path unavailable".to_string())?;
+    let pooling = match def.pooling {
+        Some(PoolingKind::Cls) => "cls",
+        Some(PoolingKind::Mean) => "mean",
+        Some(PoolingKind::Last) | None => "last",
+    };
+    let request_json = json!({
+        "type": "embed",
+        "texts": request.texts,
+        "model_path": model_path.to_string_lossy(),
+        "context_size": def.context_size,
+        "pooling": pooling,
+        "n_gpu_layers": def.n_gpu_layers.unwrap_or(0),
+    })
+    .to_string();
+
+    let started = std::time::Instant::now();
+    let raw: super::sidecar::EmbedResponse =
+        state.embed_sidecar.embed(request_json).await.map_err(|e| e.to_string())?;
+
+    // 维度硬校验:与清单不符说明模型文件或清单写错,宁可失败也不能写脏向量。
+    let expected = def.dim.unwrap_or(raw.dim as u32) as usize;
+    if raw.dim != expected {
+        crate::logging::log_line(
+            crate::logging::LogLevel::Error,
+            "embed",
+            &format!(
+                "dim mismatch model={} expected={} got={}",
+                request.model, expected, raw.dim
+            ),
+        );
+        return Err(format!(
+            "embedding dim mismatch: expected {expected}, got {}",
+            raw.dim
+        ));
+    }
+    if raw.truncated > 0 {
+        crate::logging::log_line(
+            crate::logging::LogLevel::Warn,
+            "embed",
+            &format!(
+                "truncated {} text(s) exceeding context_size={} (model={})",
+                raw.truncated, def.context_size, request.model
+            ),
+        );
+    }
+    crate::logging::log_line(
+        crate::logging::LogLevel::Info,
+        "embed",
+        &format!(
+            "embed done model={} n={} dim={} truncated={} ms={}",
+            request.model,
+            raw.vectors.len(),
+            raw.dim,
+            raw.truncated,
+            started.elapsed().as_millis()
+        ),
+    );
+    Ok(EmbedResponse {
+        dim: raw.dim,
+        vectors: raw.vectors,
+        truncated: raw.truncated,
+    })
+}
+
 /// 供设置页/诊断使用:当前 helper 是否健康 + 设备能力(返回错误则说明不可用)。
 #[tauri::command]
 pub async fn llm_status(state: State<'_, LlmState>) -> Result<serde_json::Value, String> {
@@ -304,6 +489,28 @@ mod tests {
         // 非有限温度(NaN)被忽略 → 仍为模型预设。
         let s = resolve_sampling(&def, &req(Some(f32::NAN), None, None));
         assert_eq!(s.temperature, def.sampling.temperature);
+    }
+
+    #[test]
+    fn embedding_default_is_a_local_embedding_model() {
+        // 设置页默认值必须落到本地向量清单内(非云端名)
+        let def = get_default_embedding_model();
+        assert_eq!(def.kind, ModelKind::Embedding);
+        assert_eq!(def.dim, Some(1024));
+        assert!(
+            get_model_by_name("qwen3.5:4b").expect("llm").kind == ModelKind::Llm,
+            "聊天模型不得被当作向量模型调用"
+        );
+    }
+
+    #[test]
+    fn embed_request_deserializes_frontend_payload() {
+        // 前端以 camelCase 之外的扁平字段传(见 src/ai/builtin.ts embedTexts)
+        let request: EmbedRequest =
+            serde_json::from_str(r#"{"model":"qwen3-embed:0.6b","texts":["a","b"]}"#)
+                .expect("should parse");
+        assert_eq!(request.model, "qwen3-embed:0.6b");
+        assert_eq!(request.texts, vec!["a".to_string(), "b".to_string()]);
     }
 
     #[test]

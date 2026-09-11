@@ -77,6 +77,27 @@ impl SamplingParams {
 // 模型定义
 // ---------------------------------------------------------------------------
 
+/// 模型用途。LLM 与 Embedding 由**不同的 sidecar 进程**承载,互不重载(D4)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelKind {
+    /// 聊天/生成(目录 models/llm)。
+    Llm,
+    /// 向量化(目录 models/embedding)。
+    Embedding,
+}
+
+/// 序列级池化方式(仅 Embedding 有意义)。与 llama.cpp 的
+/// `LLAMA_POOLING_TYPE_*` 一一对应。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PoolingKind {
+    /// 取最后一个 token 的隐状态(Qwen3-Embedding 官方口径)。
+    Last,
+    Cls,
+    Mean,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ModelDef {
     /// 稳定标识,如 "qwen3.5:4b"(持久化于设置)。
@@ -98,10 +119,44 @@ pub struct ModelDef {
     pub sampling: SamplingParams,
     pub template: &'static str,
     pub description: String,
+    /// 用途:LLM 走聊天进程,Embedding 走独立的向量进程(D4)。
+    pub kind: ModelKind,
+    /// 向量维度(仅 Embedding;LLM 为 None)。
+    pub dim: Option<u32>,
+    /// 池化方式(仅 Embedding;LLM 为 None)。
+    pub pooling: Option<PoolingKind>,
+    /// GPU 卸载层数覆盖;None = 由 helper 按显存估算。
+    /// Embedding 默认 0(CPU),不与聊天模型抢显存(D7)。
+    pub n_gpu_layers: Option<u32>,
 }
 
-/// 可用的内置模型清单。**默认档排首位**(决策 Q2:Qwen3.5-4B)。
+/// 可用的内置 LLM 清单。**默认档排首位**(决策 Q2:Qwen3.5-4B)。
+/// 仅返回 `ModelKind::Llm`(语义与引入 embedding 前一致)。
 pub fn get_available_models() -> Vec<ModelDef> {
+    all_models()
+        .into_iter()
+        .filter(|m| m.kind == ModelKind::Llm)
+        .collect()
+}
+
+/// 可用的内置向量模型清单。**默认档排首位**(D2:Qwen3-Embedding-0.6B Q8_0)。
+pub fn get_embedding_models() -> Vec<ModelDef> {
+    all_models()
+        .into_iter()
+        .filter(|m| m.kind == ModelKind::Embedding)
+        .collect()
+}
+
+/// 默认向量模型(清单首位)。
+pub fn get_default_embedding_model() -> ModelDef {
+    get_embedding_models()
+        .into_iter()
+        .next()
+        .expect("at least one embedding model must be defined")
+}
+
+/// 全量清单(LLM + Embedding),按用途分流前的唯一真源。
+fn all_models() -> Vec<ModelDef> {
     vec![
         // ---- L2 默认档:Qwen3.5-4B(16GB 机器舒适,质量/速度平衡)----
         model_def(
@@ -155,6 +210,25 @@ pub fn get_available_models() -> Vec<ModelDef> {
             SamplingParams::qwen35_summary(),
             "需要最高本地质量时使用;需 ≥20GB 内存(16GB 机器默认禁用)。",
         ),
+        // ---- 向量模型(唯一档,D2):Qwen3-Embedding-0.6B Q8_0 ----
+        //
+        // 双镜像(ModelScope 主 / HuggingFace 备)为同一仓库同一文件,
+        // 实测大小一致:639,150,592 字节。1024 维 / 32k 上下文 / last pooling。
+        embedding_def(
+            "qwen3-embed:0.6b",
+            "Qwen3 Embedding 0.6B(默认)",
+            "Qwen3-Embedding-0.6B-Q8_0.gguf",
+            "Qwen/Qwen3-Embedding-0.6B-GGUF",
+            639_150_592,
+            // n_ctx 远小于 32k 上限:省 KV 显存;chunk ≤512 token 绝不截断。
+            4096,
+            4,
+            1024,
+            PoolingKind::Last,
+            // CPU 推理:不与 4B 聊天模型抢显存(D7)。
+            0,
+            "本地向量模型:1024 维 · 32k 上下文 · 中文语义检索;639 MB,首次需下载。",
+        ),
     ]
 }
 
@@ -186,11 +260,55 @@ fn model_def(
         sampling,
         template: "qwen3.5",
         description: description.to_string(),
+        kind: ModelKind::Llm,
+        dim: None,
+        pooling: None,
+        n_gpu_layers: None, // 由 helper 按显存估算
     }
 }
 
+/// 构造一条 Embedding 模型声明。与 `model_def` 的差异:无采样/模板语义,
+/// 必填 维度、池化、GPU 层数。
+#[allow(clippy::too_many_arguments)]
+fn embedding_def(
+    name: &str,
+    display_name: &str,
+    gguf_file: &str,
+    repo: &str,
+    approx_bytes: u64,
+    context_size: u32,
+    min_ram_gb: u64,
+    dim: u32,
+    pooling: PoolingKind,
+    n_gpu_layers: u32,
+    description: &str,
+) -> ModelDef {
+    ModelDef {
+        name: name.to_string(),
+        display_name: display_name.to_string(),
+        gguf_file: gguf_file.to_string(),
+        mirrors: vec![
+            format!("https://modelscope.cn/models/{repo}/resolve/master/{gguf_file}"),
+            format!("https://huggingface.co/{repo}/resolve/main/{gguf_file}"),
+        ],
+        approx_bytes,
+        context_size,
+        layer_count: None,
+        min_ram_gb,
+        // 向量化不走采样;填中性预设仅为满足结构(helper 侧不使用)。
+        sampling: SamplingParams::tight_structured(),
+        template: "embedding",
+        description: description.to_string(),
+        kind: ModelKind::Embedding,
+        dim: Some(dim),
+        pooling: Some(pooling),
+        n_gpu_layers: Some(n_gpu_layers),
+    }
+}
+
+/// 按名字查模型(LLM 与 Embedding 都查)。
 pub fn get_model_by_name(name: &str) -> Option<ModelDef> {
-    get_available_models().into_iter().find(|m| m.name == name)
+    all_models().into_iter().find(|m| m.name == name)
 }
 
 /// 默认模型(清单首位 = Qwen3.5-4B)。
@@ -203,7 +321,20 @@ pub fn get_default_model() -> ModelDef {
 
 /// 模型存储目录:`<app_data>/models/llm`(不进安装包,按需下载)。
 pub fn get_models_directory(app_data_dir: &std::path::Path) -> std::path::PathBuf {
-    app_data_dir.join("models").join("llm")
+    directory_for_kind(app_data_dir, ModelKind::Llm)
+}
+
+/// 向量模型存储目录:`<app_data>/models/embedding`。
+pub fn get_embedding_models_directory(app_data_dir: &std::path::Path) -> std::path::PathBuf {
+    directory_for_kind(app_data_dir, ModelKind::Embedding)
+}
+
+/// 目录按用途隔离:两个 sidecar 各管一个目录,删除/扫描互不干扰。
+fn directory_for_kind(app_data_dir: &std::path::Path, kind: ModelKind) -> std::path::PathBuf {
+    match kind {
+        ModelKind::Llm => app_data_dir.join("models").join("llm"),
+        ModelKind::Embedding => app_data_dir.join("models").join("embedding"),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -301,6 +432,87 @@ mod tests {
             );
             assert!(m.sampling.stop_tokens.contains(&"<|im_end|>".to_string()));
         }
+    }
+
+    // ---- embedding 清单(TC-R3) ----
+
+    #[test]
+    fn llm_catalog_is_unchanged_by_embedding_addition() {
+        // get_available_models() 语义不变:仅 LLM,且默认档仍排首位
+        let llm = get_available_models();
+        assert_eq!(llm.len(), 4);
+        assert!(llm.iter().all(|m| m.kind == ModelKind::Llm));
+        assert_eq!(llm[0].name, "qwen3.5:4b");
+        assert_eq!(get_default_model().name, "qwen3.5:4b");
+    }
+
+    #[test]
+    fn default_embedding_model_is_qwen3_0b6() {
+        let def = get_default_embedding_model();
+        assert_eq!(def.name, "qwen3-embed:0.6b");
+        assert_eq!(def.gguf_file, "Qwen3-Embedding-0.6B-Q8_0.gguf");
+        assert_eq!(def.kind, ModelKind::Embedding);
+        assert_eq!(def.dim, Some(1024));
+        assert_eq!(def.pooling, Some(PoolingKind::Last));
+        // CPU 推理(D7):不占用聊天模型的显存
+        assert_eq!(def.n_gpu_layers, Some(0));
+    }
+
+    #[test]
+    fn embedding_defs_have_dim_and_pooling() {
+        let models = get_embedding_models();
+        assert_eq!(models.len(), 1, "当前只内置一档向量模型(D2)");
+        for m in models {
+            assert_eq!(m.kind, ModelKind::Embedding);
+            assert!(m.dim.unwrap_or(0) > 0, "{} must declare dim", m.name);
+            assert!(m.pooling.is_some(), "{} must declare pooling", m.name);
+            assert!(m.n_gpu_layers.is_some(), "{} must declare n_gpu_layers", m.name);
+        }
+    }
+
+    #[test]
+    fn embedding_mirrors_follow_convention() {
+        // 与既有 LLM 同一套双镜像约定:ModelScope 主 / HuggingFace 备
+        for m in get_embedding_models() {
+            assert_eq!(m.mirrors.len(), 2, "{} must have modelscope+hf mirrors", m.name);
+            assert!(m.mirrors[0].starts_with("https://modelscope.cn/"));
+            assert!(m.mirrors[1].starts_with("https://huggingface.co/"));
+            assert!(m.mirrors[0].ends_with(&m.gguf_file));
+            assert!(m.mirrors[1].ends_with(&m.gguf_file));
+        }
+    }
+
+    #[test]
+    fn approx_bytes_matches_upstream() {
+        // 639,150,592 为 ModelScope / HuggingFace 双端实测一致的大小
+        let def = get_default_embedding_model();
+        assert_eq!(def.approx_bytes, 639_150_592);
+    }
+
+    #[test]
+    fn directories_are_isolated_by_kind() {
+        let root = std::path::Path::new("/tmp/plos-app-data");
+        assert_eq!(
+            get_models_directory(root),
+            std::path::PathBuf::from("/tmp/plos-app-data/models/llm")
+        );
+        assert_eq!(
+            get_embedding_models_directory(root),
+            std::path::PathBuf::from("/tmp/plos-app-data/models/embedding")
+        );
+    }
+
+    #[test]
+    fn model_lookup_spans_both_kinds() {
+        assert_eq!(
+            get_model_by_name("qwen3.5:4b").map(|m| m.kind),
+            Some(ModelKind::Llm)
+        );
+        assert_eq!(
+            get_model_by_name("qwen3-embed:0.6b").map(|m| m.kind),
+            Some(ModelKind::Embedding)
+        );
+        assert!(get_model_by_name("text-embedding-v3").is_none(), "云端模型不在本地清单");
     }
 
     #[test]

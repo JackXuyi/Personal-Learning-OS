@@ -23,7 +23,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use encoding_rs;
-use llama_cpp_2::context::params::LlamaContextParams;
+use llama_cpp_2::context::params::{LlamaContextParams, LlamaPoolingType};
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
@@ -63,6 +63,23 @@ enum Request {
         #[serde(default)]
         stop_tokens: Option<Vec<String>>,
     },
+    /// 向量化(embedding)。与 generate 共用模型常驻缓存,但走独立上下文参数
+    /// (`embeddings=true` + pooling);主应用侧由**独立进程**发起,避免与
+    /// 聊天模型来回重载(docs/embedding-default-config-design-2026-09.md D4)。
+    Embed {
+        texts: Vec<String>,
+        #[serde(default)]
+        context_size: Option<u32>,
+        #[serde(default)]
+        model_path: Option<String>,
+        /// "last" | "cls" | "mean" | "none";缺省/未知一律回落 last
+        /// (Qwen3-Embedding 的推荐池化方式)。
+        #[serde(default)]
+        pooling: Option<String>,
+        /// GPU 卸载层数覆盖;None = 由 helper 按显存估算。
+        #[serde(default)]
+        n_gpu_layers: Option<u32>,
+    },
     /// 健康检查(主应用周期性发送)。
     Ping,
     /// 优雅退出(空闲回收时由主应用发送)。
@@ -74,9 +91,28 @@ enum Request {
 enum Response {
     /// 生成结果。`error` 为 Some 时表示本次生成失败,`text` 为空。
     Response { text: String, error: Option<String> },
+    /// 向量化结果。`error` 为 Some 时表示整批失败(`vectors` 为空)。
+    Embeddings {
+        dim: usize,
+        vectors: Vec<Vec<f32>>,
+        /// 因超过 context_size 被截断的条数(>0 时调用方应告警)。
+        truncated: usize,
+        error: Option<String>,
+    },
     Pong,
     Goodbye,
     Error { message: String },
+}
+
+/// 池化方式解析:未知值/缺省一律回落 `Last`(Qwen3-Embedding 官方口径)。
+fn parse_pooling(value: Option<&str>) -> LlamaPoolingType {
+    match value.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
+        Some("cls") => LlamaPoolingType::Cls,
+        Some("mean") => LlamaPoolingType::Mean,
+        Some("none") => LlamaPoolingType::None,
+        // "last" 之外的任何值(含缺省/未知)一律按 last 处理
+        _ => LlamaPoolingType::Last,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -288,7 +324,15 @@ impl ModelState {
     }
 
     /// 仅当模型路径或上下文长度变化时才重新加载(M3 常驻缓存)。
-    fn load_model_if_needed(&mut self, model_path: PathBuf, context_size: u32) -> Result<()> {
+    ///
+    /// `gpu_layers_override` 为 Some 时跳过显存估算(embedding 模型走 CPU,
+    /// 见 D7),None 时沿用原有估算口径。
+    fn load_model_if_needed(
+        &mut self,
+        model_path: PathBuf,
+        context_size: u32,
+        gpu_layers_override: Option<u32>,
+    ) -> Result<()> {
         if let Some(ref loaded_path) = self.model_path {
             if loaded_path == &model_path && self.context_size == context_size {
                 eprintln!("Model already loaded: {}", model_path.display());
@@ -298,7 +342,8 @@ impl ModelState {
         }
 
         eprintln!("Loading model: {}", model_path.display());
-        let gpu_layers = get_default_gpu_layers(&model_path, context_size);
+        let gpu_layers = gpu_layers_override
+            .unwrap_or_else(|| get_default_gpu_layers(&model_path, context_size));
         let model_params = LlamaModelParams::default().with_n_gpu_layers(gpu_layers);
         let model_params = pin!(model_params);
 
@@ -484,6 +529,88 @@ impl ModelState {
         self.update_activity();
         Ok(output)
     }
+
+    /// 批量文本向量化:tokenize → encode → 取序列级池化向量。
+    ///
+    /// 返回一个 `(vectors, truncated)`:
+    /// - `vectors[i]` 对应 `texts[i]`,长度 = `model.n_embd()`;
+    /// - `truncated` 为因超过 `context_size` 被截断的条数(chunk ≤512 token
+    ///   的日常路径下恒为 0,仅作兜底告警)。
+    ///
+    /// 上下文在批内复用:每条文本都从位置 0 起重新 encode,KV 同名位置被整体
+    /// 覆盖,因果掩码屏蔽更高位的陈旧 KV,结果与「每条新建上下文」等价。
+    fn embed(
+        &mut self,
+        texts: &[String],
+        context_size: u32,
+        pooling: LlamaPoolingType,
+    ) -> Result<(Vec<Vec<f32>>, usize)> {
+        let start_time = Instant::now();
+        let model = self.model.as_ref().context("Model not loaded")?;
+
+        let threads: i32 = std::thread::available_parallelism()
+            .map(|n| ((n.get() as i32 / 2) + 2).max(1))
+            .unwrap_or(2);
+
+        let ctx_params = LlamaContextParams::default()
+            .with_n_ctx(Some(
+                NonZeroU32::new(context_size).context("Invalid ctx size")?,
+            ))
+            .with_n_batch(context_size)
+            .with_n_threads(threads)
+            .with_n_threads_batch(threads)
+            .with_embeddings(true)
+            .with_pooling_type(pooling);
+
+        let mut ctx = model
+            .new_context(&self.backend, ctx_params)
+            .context("unable to create the embedding llama_context")?;
+
+        let n_embd = model.n_embd().max(1) as usize;
+        let max_tokens = context_size as usize;
+        let mut vectors: Vec<Vec<f32>> = Vec::with_capacity(texts.len());
+        let mut truncated = 0usize;
+
+        for text in texts {
+            let mut tokens = model
+                .str_to_token(text, AddBos::Always)
+                .context("failed to tokenize text")?;
+            // 兜底截断:超过 n_ctx 只保留前 n_ctx 个 token。
+            if tokens.len() > max_tokens {
+                tokens.truncate(max_tokens);
+                truncated += 1;
+            }
+            // 空文本 tokenize 后可能为空 → 回零向量,保持与输入条数对齐。
+            if tokens.is_empty() {
+                vectors.push(vec![0.0f32; n_embd]);
+                continue;
+            }
+
+            let mut batch = LlamaBatch::new(tokens.len(), 1);
+            let last_index = tokens.len() as i32 - 1;
+            for (i, token) in tokens.into_iter().enumerate() {
+                batch
+                    .add(token, i as i32, &[0], i as i32 == last_index)
+                    .context("Failed to add token to batch")?;
+            }
+            ctx.encode(&mut batch).context("llama_encode() failed")?;
+            let vec = ctx
+                .embeddings_seq_ith(0)
+                .context("failed to read sequence embeddings")?
+                .to_vec();
+            vectors.push(vec);
+        }
+
+        eprintln!(
+            "Embedding stats: texts={} dim={} truncated={} ms={}",
+            vectors.len(),
+            n_embd,
+            truncated,
+            start_time.elapsed().as_millis()
+        );
+        self.update_activity();
+        Ok((vectors, truncated))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -563,7 +690,7 @@ fn main() -> Result<()> {
 
                         if let Some(path_str) = model_path {
                             let path = PathBuf::from(path_str);
-                            if let Err(err) = state.load_model_if_needed(path, context_size) {
+                            if let Err(err) = state.load_model_if_needed(path, context_size, None) {
                                 send_response(&Response::Response {
                                     text: String::new(),
                                     error: Some(format!("Failed to load model: {err}")),
@@ -580,6 +707,51 @@ fn main() -> Result<()> {
                                 send_response(&Response::Response {
                                     text: String::new(),
                                     error: Some(format!("Generation failed: {err}")),
+                                })?;
+                            }
+                        }
+                    }
+                    Ok(Request::Embed {
+                        texts,
+                        context_size,
+                        model_path,
+                        pooling,
+                        n_gpu_layers,
+                    }) => {
+                        let context_size = context_size.unwrap_or(2048);
+                        let pooling = parse_pooling(pooling.as_deref());
+
+                        if let Some(path_str) = model_path {
+                            let path = PathBuf::from(path_str);
+                            if let Err(err) =
+                                state.load_model_if_needed(path, context_size, n_gpu_layers)
+                            {
+                                send_response(&Response::Embeddings {
+                                    dim: 0,
+                                    vectors: Vec::new(),
+                                    truncated: 0,
+                                    error: Some(format!("Failed to load model: {err}")),
+                                })?;
+                                continue;
+                            }
+                        }
+
+                        match state.embed(&texts, context_size, pooling) {
+                            Ok((vectors, truncated)) => {
+                                let dim = vectors.first().map(|v| v.len()).unwrap_or(0);
+                                send_response(&Response::Embeddings {
+                                    dim,
+                                    vectors,
+                                    truncated,
+                                    error: None,
+                                })?;
+                            }
+                            Err(err) => {
+                                send_response(&Response::Embeddings {
+                                    dim: 0,
+                                    vectors: Vec::new(),
+                                    truncated: 0,
+                                    error: Some(format!("Embedding failed: {err}")),
                                 })?;
                             }
                         }
@@ -674,6 +846,85 @@ mod tests {
     fn unknown_type_is_rejected() {
         let result: Result<Request, _> = serde_json::from_str(r#"{"type":"explode"}"#);
         assert!(result.is_err());
+    }
+
+    // ---- embedding 协议(TC-R1/TC-R2) ----
+
+    #[test]
+    fn embed_request_parses_fields() {
+        let json = r#"{"type":"embed","texts":["你好","世界"],"context_size":4096,"model_path":"/tmp/e.gguf","pooling":"last","n_gpu_layers":0}"#;
+        let request: Request = serde_json::from_str(json).expect("should parse");
+        match request {
+            Request::Embed { texts, context_size, model_path, pooling, n_gpu_layers } => {
+                assert_eq!(texts, vec!["你好".to_string(), "世界".to_string()]);
+                assert_eq!(context_size, Some(4096));
+                assert_eq!(model_path.as_deref(), Some("/tmp/e.gguf"));
+                assert_eq!(pooling.as_deref(), Some("last"));
+                assert_eq!(n_gpu_layers, Some(0));
+            }
+            _ => panic!("expected embed"),
+        }
+    }
+
+    #[test]
+    fn embed_request_fields_default_to_none() {
+        let request: Request =
+            serde_json::from_str(r#"{"type":"embed","texts":["a"]}"#).expect("should parse");
+        match request {
+            Request::Embed { context_size, model_path, pooling, n_gpu_layers, .. } => {
+                assert_eq!(context_size, None);
+                assert_eq!(model_path, None);
+                assert_eq!(pooling, None);
+                assert_eq!(n_gpu_layers, None);
+            }
+            _ => panic!("expected embed"),
+        }
+    }
+
+    #[test]
+    fn pooling_unknown_defaults_to_last() {
+        // 缺省、未知值、大小写差异一律回落 Last(Qwen3-Embedding 口径)
+        assert_eq!(parse_pooling(None), LlamaPoolingType::Last);
+        assert_eq!(parse_pooling(Some("nonsense")), LlamaPoolingType::Last);
+        assert_eq!(parse_pooling(Some(" LAST ")), LlamaPoolingType::Last);
+        // 显式三档
+        assert_eq!(parse_pooling(Some("last")), LlamaPoolingType::Last);
+        assert_eq!(parse_pooling(Some("cls")), LlamaPoolingType::Cls);
+        assert_eq!(parse_pooling(Some("mean")), LlamaPoolingType::Mean);
+        assert_eq!(parse_pooling(Some("none")), LlamaPoolingType::None);
+    }
+
+    #[test]
+    fn embeddings_response_serializes_shape() {
+        let response = Response::Embeddings {
+            dim: 2,
+            vectors: vec![vec![0.5f32, -0.25f32]],
+            truncated: 0,
+            error: None,
+        };
+        let json = serde_json::to_string(&response).expect("serialize");
+        assert!(json.starts_with(r#"{"type":"embeddings","#), "got {json}");
+        let value: serde_json::Value = serde_json::from_str(&json).expect("parse");
+        assert_eq!(value["dim"], 2);
+        assert_eq!(value["truncated"], 0);
+        assert_eq!(value["vectors"][0][1], -0.25);
+        assert!(value["error"].is_null());
+    }
+
+    #[test]
+    fn embeddings_error_response_keeps_shape() {
+        // 失败也必须回 embeddings 类型(前端靠 error 字段判失败,不靠 type)
+        let response = Response::Embeddings {
+            dim: 0,
+            vectors: Vec::new(),
+            truncated: 0,
+            error: Some("Model not loaded".to_string()),
+        };
+        let json = serde_json::to_string(&response).expect("serialize");
+        let value: serde_json::Value = serde_json::from_str(&json).expect("parse");
+        assert_eq!(value["type"], "embeddings");
+        assert_eq!(value["error"], "Model not loaded");
+        assert!(value["vectors"].as_array().expect("array").is_empty());
     }
 
     // ---- 采样清洗(meetily 移植) ----

@@ -13,10 +13,20 @@ use tokio::sync::Mutex;
 
 /// 生成超时(单次最长等待;helper 端 15 分钟内通常远早完成)。
 const GENERATION_TIMEOUT_SECS: u64 = 900;
+/// 向量化超时(本地小模型,单次 16 条远早于生成完成)。
+const EMBED_TIMEOUT_SECS: u64 = 300;
 /// ping 健康检查超时。
 const PING_TIMEOUT_SECS: u64 = 5;
 /// 默认空闲回收阈值(与 helper 端兜底一致,可用 env 覆盖)。
 pub const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 300;
+
+/// helper 返回的原始向量化结果(维度校验在主应用命令层做,见 commands.rs)。
+#[derive(Debug, Clone)]
+pub struct EmbedResponse {
+    pub dim: usize,
+    pub vectors: Vec<Vec<f32>>,
+    pub truncated: usize,
+}
 
 struct IoState {
     child: Option<Child>,
@@ -136,37 +146,49 @@ impl Sidecar {
         Ok(())
     }
 
-    /// 生成文本:串行临界区内写请求并读回完整响应(helper 为同步单连接)。
-    pub async fn generate(&self, request_json: String) -> Result<String> {
-        let mut io = self.io.lock().await;
-        Self::ensure_locked(&mut io, &self.helper_path).await?;
-        Self::touch(&mut io);
-
+    /// 写一行 JSON 请求 + 读一行 JSON 响应。**必须在串行临界区内调用**
+    /// (helper 为同步单连接,并发读写会串包)。
+    async fn request_raw(
+        &self,
+        io: &mut IoState,
+        request_json: &str,
+        timeout_secs: u64,
+        timeout_hint: &str,
+    ) -> Result<Value> {
         let stdin = io.stdin.as_mut().context("helper stdin missing")?;
         stdin
             .write_all(request_json.as_bytes())
             .await
-            .context("write generate request")?;
+            .context("write request")?;
         stdin.write_all(b"\n").await.context("write newline")?;
         stdin.flush().await.context("flush stdin")?;
 
         let stdout = io.stdout.as_mut().context("helper stdout missing")?;
         let mut line = String::new();
         tokio::time::timeout(
-            Duration::from_secs(GENERATION_TIMEOUT_SECS),
+            Duration::from_secs(timeout_secs),
             stdout.read_line(&mut line),
         )
         .await
-        .context("generation timed out waiting for helper response")?
+        .with_context(|| format!("{timeout_hint} timed out waiting for helper response"))?
         .context("read helper response")?;
-
-        Self::touch(&mut io);
 
         if line.is_empty() {
             return Err(anyhow!("llama-helper exited before responding"));
         }
-        let value: Value =
-            serde_json::from_str(line.trim()).context("parse helper response JSON")?;
+        serde_json::from_str(line.trim()).context("parse helper response JSON")
+    }
+
+    /// 生成文本:串行临界区内写请求并读回完整响应(helper 为同步单连接)。
+    pub async fn generate(&self, request_json: String) -> Result<String> {
+        let mut io = self.io.lock().await;
+        Self::ensure_locked(&mut io, &self.helper_path).await?;
+        Self::touch(&mut io);
+
+        let value = self
+            .request_raw(&mut io, &request_json, GENERATION_TIMEOUT_SECS, "generation")
+            .await?;
+        Self::touch(&mut io);
 
         match value.get("type").and_then(|t| t.as_str()) {
             Some("response") => {
@@ -180,6 +202,59 @@ impl Sidecar {
                     .and_then(|t| t.as_str())
                     .map(|s| s.to_string())
                     .ok_or_else(|| anyhow!("helper response missing text"))
+            }
+            Some("error") => Err(anyhow!(
+                "llama-helper error: {}",
+                value
+                    .get("message")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("unknown")
+            )),
+            other => Err(anyhow!(
+                "unexpected helper response type: {:?}",
+                other.unwrap_or("")
+            )),
+        }
+    }
+
+    /// 向量化:与 generate 共用串行临界区,但走独立超时(本地小模型)。
+    pub async fn embed(&self, request_json: String) -> Result<EmbedResponse> {
+        let mut io = self.io.lock().await;
+        Self::ensure_locked(&mut io, &self.helper_path).await?;
+        Self::touch(&mut io);
+
+        let value = self
+            .request_raw(&mut io, &request_json, EMBED_TIMEOUT_SECS, "embedding")
+            .await?;
+        Self::touch(&mut io);
+
+        match value.get("type").and_then(|t| t.as_str()) {
+            Some("embeddings") => {
+                if let Some(err) = value.get("error").and_then(|e| e.as_str()) {
+                    if !err.is_empty() {
+                        return Err(anyhow!("llama-helper: {err}"));
+                    }
+                }
+                let dim = value.get("dim").and_then(|d| d.as_u64()).unwrap_or(0) as usize;
+                let truncated =
+                    value.get("truncated").and_then(|d| d.as_u64()).unwrap_or(0) as usize;
+                let vectors = value
+                    .get("vectors")
+                    .and_then(|v| v.as_array())
+                    .context("helper embeddings response missing vectors")?
+                    .iter()
+                    .map(|row| {
+                        row.as_array()
+                            .map(|cells| {
+                                cells
+                                    .iter()
+                                    .map(|c| c.as_f64().unwrap_or(0.0) as f32)
+                                    .collect::<Vec<f32>>()
+                            })
+                            .context("embedding row must be an array")
+                    })
+                    .collect::<Result<Vec<Vec<f32>>>>()?;
+                Ok(EmbedResponse { dim, vectors, truncated })
             }
             Some("error") => Err(anyhow!(
                 "llama-helper error: {}",

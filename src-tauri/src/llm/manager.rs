@@ -14,7 +14,10 @@ use futures_util::StreamExt;
 use serde::Serialize;
 use tokio::sync::RwLock;
 
-use super::models::{get_available_models, get_model_by_name, get_models_directory, ModelDef};
+use super::models::{
+    get_available_models, get_embedding_models, get_embedding_models_directory, get_model_by_name,
+    get_models_directory, ModelDef, ModelKind,
+};
 
 /// 下载进度(字节/百分比/MB/s),经回调上抛到命令层转发事件。
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -66,6 +69,30 @@ pub struct ModelInfo {
     pub min_ram_gb: u64,
     /// 当前设备是否支持下载/启用。
     pub supported: ModelSupport,
+    /// 用途:"llm" | "embedding"。
+    pub kind: String,
+    /// 向量维度(仅 embedding;LLM 为 null)。
+    pub dim: Option<u32>,
+}
+
+impl ModelInfo {
+    fn from_def(def: &ModelDef, status: ModelStatus, supported: ModelSupport) -> Self {
+        Self {
+            name: def.name.clone(),
+            display_name: def.display_name.clone(),
+            approx_bytes: def.approx_bytes,
+            context_size: def.context_size,
+            status,
+            description: def.description.clone(),
+            min_ram_gb: def.min_ram_gb,
+            supported,
+            kind: match def.kind {
+                ModelKind::Llm => "llm".to_string(),
+                ModelKind::Embedding => "embedding".to_string(),
+            },
+            dim: def.dim,
+        }
+    }
 }
 
 /// 采集当前设备信息。本地推理 sidecar 仅随 macOS(arm64)分发;
@@ -137,6 +164,8 @@ pub type ProgressCallback = Box<dyn Fn(DownloadProgress) + Send + Sync>;
 
 pub struct ModelManager {
     models_dir: PathBuf,
+    /// 构造时固化的清单:LLM 与 Embedding 各自只认自己的条目。
+    defs: Vec<ModelDef>,
     /// 正在下载的模型名(防并发重复下载)。
     active: Arc<RwLock<HashSet<String>>>,
     /// 取消标记:当前要取消下载的模型名。
@@ -145,12 +174,23 @@ pub struct ModelManager {
 
 impl ModelManager {
     /// 以 app_data_dir 为根创建管理器(目录不存在则创建)。
-    pub fn new(app_data_dir: &Path) -> Result<Self> {
-        let models_dir = get_models_directory(app_data_dir);
+    ///
+    /// `kind` 同时决定 **目录**(`models/llm` / `models/embedding`)与
+    /// **可见清单**;两类模型各由一个实例管理,互不串档。
+    pub fn new(app_data_dir: &Path, kind: ModelKind) -> Result<Self> {
+        let models_dir = match kind {
+            ModelKind::Llm => get_models_directory(app_data_dir),
+            ModelKind::Embedding => get_embedding_models_directory(app_data_dir),
+        };
         std::fs::create_dir_all(&models_dir)
             .with_context(|| format!("create models dir {}", models_dir.display()))?;
+        let defs = match kind {
+            ModelKind::Llm => get_available_models(),
+            ModelKind::Embedding => get_embedding_models(),
+        };
         Ok(Self {
             models_dir,
+            defs,
             active: Arc::new(RwLock::new(HashSet::new())),
             cancel: Arc::new(RwLock::new(None)),
         })
@@ -162,12 +202,17 @@ impl ModelManager {
         let dir = dirs::data_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("personal-learning-os");
-        Self::new(&dir)
+        Self::new(&dir, ModelKind::Llm)
     }
 
     #[allow(dead_code)]
     pub fn models_dir(&self) -> &Path {
         &self.models_dir
+    }
+
+    /// 只在本实例可见的清单内查找(避免 LLM 管理器误操作 embedding 模型)。
+    fn def_of(&self, name: &str) -> Option<&ModelDef> {
+        self.defs.iter().find(|d| d.name == name)
     }
 
     fn file_path(&self, model: &ModelDef) -> PathBuf {
@@ -183,8 +228,8 @@ impl ModelManager {
         let active = self.active.read().await;
         let device = current_device();
         let mut out = Vec::new();
-        for def in get_available_models() {
-            let path = self.file_path(&def);
+        for def in &self.defs {
+            let path = self.file_path(def);
             let status = if active.contains(&def.name) {
                 ModelStatus::Downloading { percent: 0 }
             } else if let Ok(meta) = std::fs::metadata(&path) {
@@ -197,35 +242,26 @@ impl ModelManager {
             } else {
                 ModelStatus::NotFound
             };
-            let supported = model_support(&def, &device);
-            out.push(ModelInfo {
-                name: def.name,
-                display_name: def.display_name,
-                approx_bytes: def.approx_bytes,
-                context_size: def.context_size,
-                status,
-                description: def.description,
-                min_ram_gb: def.min_ram_gb,
-                supported,
-            });
+            let supported = model_support(def, &device);
+            out.push(ModelInfo::from_def(def, status, supported));
         }
         out
     }
 
     /// 是否已就绪(命令层生成前校验)。
     pub async fn is_model_ready(&self, name: &str) -> bool {
-        let Some(def) = get_model_by_name(name) else {
+        let Some(def) = self.def_of(name) else {
             return false;
         };
-        std::fs::metadata(self.file_path(&def))
+        std::fs::metadata(self.file_path(def))
             .map(|m| m.len() >= def.approx_bytes * 8 / 10)
             .unwrap_or(false)
     }
 
-    /// 模型 GGUF 的绝对路径(供 generate 请求携带给 helper)。
+    /// 模型 GGUF 的绝对路径(供 generate / embed 请求携带给 helper)。
     pub fn path_of(&self, name: &str) -> Option<PathBuf> {
-        let def = get_model_by_name(name)?;
-        Some(self.file_path(&def))
+        let def = self.def_of(name)?;
+        Some(self.file_path(def))
     }
 
     /// 流式下载模型。`on_progress` 每块上报进度;双镜像 404/失败自动切换。
@@ -235,8 +271,10 @@ impl ModelManager {
         model_name: &str,
         on_progress: ProgressCallback,
     ) -> Result<()> {
-        let def = get_model_by_name(model_name)
-            .ok_or_else(|| anyhow!("unknown model: {model_name}"))?;
+        let def = self
+            .def_of(model_name)
+            .ok_or_else(|| anyhow!("unknown model: {model_name}"))?
+            .clone();
 
         {
             let mut active = self.active.write().await;
@@ -363,7 +401,8 @@ impl ModelManager {
 
     /// 删除模型文件(含 .part 残片)。
     pub async fn delete(&self, model_name: &str) -> Result<()> {
-        let def = get_model_by_name(model_name)
+        let def = self
+            .def_of(model_name)
             .ok_or_else(|| anyhow!("unknown model: {model_name}"))?;
         let mut removed = false;
         for p in [self.file_path(&def), self.part_path(&def)] {
@@ -409,6 +448,22 @@ mod tests {
         assert_eq!(d.arch, "aarch64");
         assert!(d.metal, "Metal is enabled for mac arm64");
         assert!(d.ram_gb > 0, "sysctl hw.memsize should be readable on macOS");
+    }
+
+    /// 两类模型各管一个目录与清单(TC-R4):LLM 管理器看不到向量档,反之亦然。
+    #[test]
+    fn manager_scopes_directory_and_catalog_by_kind() {
+        let root = std::env::temp_dir().join("plos-test-embed-manager");
+        let embed = ModelManager::new(&root, ModelKind::Embedding).expect("embedding manager");
+        let llm = ModelManager::new(&root, ModelKind::Llm).expect("llm manager");
+
+        assert_eq!(embed.models_dir(), root.join("models").join("embedding"));
+        assert_eq!(llm.models_dir(), root.join("models").join("llm"));
+
+        assert!(embed.path_of("qwen3-embed:0.6b").is_some());
+        assert_eq!(embed.path_of("qwen3.5:4b"), None, "向量管理器看不到聊天模型");
+        assert!(llm.path_of("qwen3.5:4b").is_some());
+        assert_eq!(llm.path_of("qwen3-embed:0.6b"), None, "聊天管理器看不到向量模型");
     }
 
     /// 不依赖具体机型的内在一致性:支持判定与 min_ram/ram 大小关系一致。

@@ -22,6 +22,7 @@ mod vault;
 use db::init_db;
 use llm::commands::LlmState;
 use llm::manager::ModelManager;
+use llm::models::ModelKind;
 use llm::sidecar::Sidecar;
 
 /// Minimal health probe the webview can invoke via `invoke("app_status")`.
@@ -35,17 +36,22 @@ fn app_status() -> serde_json::Value {
 }
 
 /// 初始化本地 LLM 状态(model manager + helper sidecar + 空闲回收线程)。
+///
+/// 两个进程:聊天模型一个、向量模型一个。共用同一个 helper 二进制,但进程
+/// 隔离 —— 否则 `load_model_if_needed` 会因模型路径交替而反复重载 2.5GB 与
+/// 639MB 的两个模型(D4)。
 fn init_llm(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let app_data_dir = app.path().app_data_dir()?;
     let resource_dir = app.path().resource_dir().ok();
 
-    let manager = Arc::new(ModelManager::new(&app_data_dir)?);
+    let manager = Arc::new(ModelManager::new(&app_data_dir, ModelKind::Llm)?);
+    let embed_manager = Arc::new(ModelManager::new(&app_data_dir, ModelKind::Embedding)?);
     let helper_path = Sidecar::resolve_helper_binary(resource_dir.as_deref())?;
-    let sidecar = Arc::new(Sidecar::new(helper_path));
+    let sidecar = Arc::new(Sidecar::new(helper_path.clone()));
+    let embed_sidecar = Arc::new(Sidecar::new(helper_path));
 
-    // 空闲回收:helper 无请求超过阈值则优雅退出(下次请求自动重启)。
-    {
-        let sidecar = sidecar.clone();
+    // 空闲回收:两个进程都要回收,否则向量进程会常驻到自身超时。
+    for sidecar in [sidecar.clone(), embed_sidecar.clone()] {
         tauri::async_runtime::spawn(async move {
             loop {
                 tokio::time::sleep(Duration::from_secs(15)).await;
@@ -56,7 +62,12 @@ fn init_llm(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
-    app.manage(LlmState { manager, sidecar });
+    app.manage(LlmState {
+        manager,
+        sidecar,
+        embed_manager,
+        embed_sidecar,
+    });
     Ok(())
 }
 
@@ -98,6 +109,13 @@ pub fn run() {
             llm::commands::llm_generate,
             llm::commands::llm_default_model,
             llm::commands::llm_status,
+            // 本地向量化（docs/embedding-default-config-design-2026-09.md）
+            llm::commands::embed_list_models,
+            llm::commands::embed_download,
+            llm::commands::embed_cancel_download,
+            llm::commands::embed_delete,
+            llm::commands::embed_default_model,
+            llm::commands::embed_texts,
             // 文件日志（docs/tauri-log-config-design-2026-09.md）
             logging::log_get_config,
             logging::log_set_config,
