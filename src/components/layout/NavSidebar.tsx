@@ -24,7 +24,7 @@ export default function NavSidebar() {
     <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-surface">
       <div className="border-b border-line px-5 py-3.5">
         <p className="text-sm font-semibold tracking-tight text-ink-1">{m.nav.brand}</p>
-        <p className="mt-0.5 text-xs text-ink-3">{m.nav.brandSub}</p>
+        {/* <p className="mt-0.5 text-xs text-ink-3">{m.nav.brandSub}</p> */}
       </div>
       <nav className="flex-1 space-y-0.5 p-3">
         {NAV_ITEMS.map((item) => {
