@@ -35,19 +35,12 @@ export default function AIModelsSection() {
   const [tab, setTab] = useState<Tab>(
     saved.active?.source === "api" ? "api" : "local",
   );
-  const [savedFlash, setSavedFlash] = useState(false);
-
   const { active, providerReady } = saved;
   const apiSaved = apiActiveOf(active);
 
-  const flash = () => {
-    setSavedFlash(true);
-    window.setTimeout(() => setSavedFlash(false), 2500);
-  };
 
   const onLocalActivate = (model: string) => {
     saveActive({ source: "local", model }, { testedOk: true });
-    flash();
   };
 
   const onUseApi = (
@@ -76,42 +69,9 @@ export default function AIModelsSection() {
     bannerTone = "empty";
   }
 
-  const bannerStyle =
-    bannerTone === "ok"
-      ? "border-state-mastered/25 bg-state-mastered/10"
-      : bannerTone === "empty"
-        ? "border-line bg-subtle"
-        : "border-state-weak/30 bg-state-weak/10";
 
   return (
-    <div>
-      <p className="text-sm text-ink-2">{s.pageSubtitle}</p>
-
-      {/* Active Banner */}
-      <div className={`mt-4 rounded-xl border px-4 py-3 ${bannerStyle}`}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-ink-1">
-              {active ? s.banner.activePrefix : ""}
-              <span
-                className={
-                  bannerTone === "ok"
-                    ? "text-state-mastered"
-                    : bannerTone === "empty"
-                      ? "text-ink-3"
-                      : "text-state-weak"
-                }
-              >
-                {" "}
-                {bannerTitle}
-              </span>
-            </p>
-            <p className="mt-0.5 text-xs leading-relaxed text-ink-2">{bannerDesc}</p>
-          </div>
-          {savedFlash ? <span className="shrink-0 text-sm text-state-mastered">{s.savedOk}</span> : null}
-        </div>
-      </div>
-
+    <div className="space-y-4">
       <div className="w-full">
         <Card className="lg:col-span-2">
           {/* Tabs */}
@@ -144,7 +104,6 @@ export default function AIModelsSection() {
                 onActivate={onLocalActivate}
                 onClearActive={() => {
                   clearActive();
-                  flash();
                 }}
               />
             </div>
