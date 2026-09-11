@@ -21,11 +21,6 @@ interface ChatCompletionResponse {
   choices?: { message?: { content?: string } }[];
 }
 
-/** `/embeddings` 返回体（OpenAI 兼容协议）。 */
-interface EmbeddingsResponse {
-  data?: { index?: number; embedding?: number[] }[];
-}
-
 const LOCAL_KINDS: ReadonlySet<ProviderKind> = new Set([
   "ollama",
   "llama.cpp",
@@ -89,17 +84,6 @@ export class OpenAICompatibleProvider implements AIProvider {
   private readonly baseUrl: string;
   private readonly model: string;
   private readonly apiKey?: string;
-  private readonly embeddingModel: string;
-
-  /**
-   * 向量化能力（可选方法，见 AIProvider 契约）。
-   *
-   * **按配置决定是否挂载**：未配 `embeddingModel` 时保持 `undefined`，
-   * 调用方的 `typeof provider.embed === "function"` 检查自然判定为「无此能力」，
-   * 从而降级为纯 FTS 检索——而不是等到真调用时抛错（B2 那类「静默失效」的教训：
-   * 能力判定必须是可提前查询的，不能靠异常兜底）。
-   */
-  embed?: (texts: readonly string[]) => Promise<number[][]>;
 
   constructor(config: ProviderConfig) {
     this.kind = config.kind;
@@ -108,11 +92,7 @@ export class OpenAICompatibleProvider implements AIProvider {
       normalizeOpenAiBaseUrl(config.kind);
     this.model = config.model || defaultModelOf(config.kind);
     this.apiKey = config.apiKey;
-    this.embeddingModel = config.embeddingModel?.trim() ?? "";
-
-    if (this.embeddingModel) {
-      this.embed = (texts) => this.requestEmbeddings(texts);
-    }
+    // 向量化不在此处挂载:恒定走本地 Embedder(决策 D1/D5,见 ai/embedding.ts)。
   }
 
   isConfigured(): boolean {
@@ -175,88 +155,6 @@ export class OpenAICompatibleProvider implements AIProvider {
       outChars: content.length,
     });
     return { content };
-  }
-
-  /**
-   * `POST {baseUrl}/embeddings`（OpenAI 兼容协议）。
-   *
-   * 仅当 `embeddingModel` 已配置时才会被挂到实例上（见构造函数），
-   * 因此本方法内的模型名校验属于「二次防线」。
-   *
-   * 校验策略（宁可整批失败也不写脏向量）：
-   * - 返回条数必须与入参一致；
-   * - 每条的维度必须一致；
-   * - 任一不满足 → 抛 `request-failed`，由 index-service 计入该批失败。
-   */
-  private async requestEmbeddings(texts: readonly string[]): Promise<number[][]> {
-    if (!this.isConfigured()) {
-      throw new AiProviderError(
-        "not-configured",
-        `${this.kind} is not configured. Set a base URL${LOCAL_KINDS.has(this.kind) ? "" : " and API key"} in Settings.`,
-      );
-    }
-    if (!this.embeddingModel) {
-      throw new AiProviderError(
-        "not-configured",
-        `${this.kind} 未配置 Embedding 模型，请在「设置 → AI 模型中心 → 向量索引」填写。`,
-      );
-    }
-    if (texts.length === 0) return [];
-
-    const headers: Record<string, string> = { "content-type": "application/json" };
-    if (this.apiKey) headers.authorization = `Bearer ${this.apiKey}`;
-
-    const res = await fetch(`${this.baseUrl}/embeddings`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ model: this.embeddingModel, input: [...texts] }),
-    });
-    if (!res.ok) {
-      throw new AiProviderError(
-        "request-failed",
-        `${this.kind} embeddings request failed: HTTP ${res.status} ${await res.text()}`,
-      );
-    }
-
-    const data = (await res.json()) as EmbeddingsResponse;
-    const rows = data.data ?? [];
-    if (rows.length !== texts.length) {
-      throw new AiProviderError(
-        "request-failed",
-        `${this.kind} embeddings 条数不匹配：请求 ${texts.length}，返回 ${rows.length}`,
-      );
-    }
-
-    // 协议只保证「按 index 可还原顺序」，不保证数组顺序 → 显式按 index 落位。
-    const ordered: number[][] = new Array(texts.length);
-    for (let i = 0; i < rows.length; i += 1) {
-      const row = rows[i];
-      const at = typeof row.index === "number" ? row.index : i;
-      if (!Array.isArray(row.embedding) || row.embedding.length === 0) {
-        throw new AiProviderError(
-          "request-failed",
-          `${this.kind} embeddings 第 ${at} 条为空`,
-        );
-      }
-      if (at < 0 || at >= texts.length) {
-        throw new AiProviderError(
-          "request-failed",
-          `${this.kind} embeddings 返回越界 index：${at}`,
-        );
-      }
-      ordered[at] = row.embedding;
-    }
-
-    const dim = ordered[0].length;
-    for (const v of ordered) {
-      if (!v || v.length !== dim) {
-        throw new AiProviderError(
-          "request-failed",
-          `${this.kind} embeddings 维度不一致（期望 ${dim}）`,
-        );
-      }
-    }
-    return ordered;
   }
 
   // 测评两项能力属于 AI schema（模式）层面的工作，而非传输格式层面的工作。

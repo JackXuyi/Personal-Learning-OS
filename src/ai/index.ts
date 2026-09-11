@@ -6,6 +6,8 @@
  */
 
 export * from "./types";
+// 本地向量化(Embedder):与 chat provider 解耦的唯一入口
+export * from "./embedding";
 export { OpenAICompatibleProvider } from "./openai-compatible";
 export { createProvider } from "./registry";
 export * from "./pipelines";

@@ -12,7 +12,7 @@
  * 说明：阶段标签为 UX 反馈文案，与实际流水线（save → split → refine →
  * saveChapters）映射，不新造引擎能力（方案约束：不绑架 Domain）。
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { DocumentFormat, SourceDocument } from "../../domain";
 import { newId } from "../../domain";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
@@ -22,7 +22,8 @@ import LocalFilePanel from "./import/LocalFilePanel";
 import GithubPanel from "./import/GithubPanel";
 import type { ImportTab, ImportUnit, ImportSummary } from "./import/types";
 import { runUnitImport, runBatchImport } from "./import/pipeline";
-import { autoIndexAfterImport, isAutoIndexCapable } from "./index-service";
+import { autoIndexAfterImport, autoIndexBlockedReason } from "./index-service";
+import { refreshEmbeddingStatus } from "../../ai/embedding";
 import { githubErrorText, localErrorText } from "./import/error-text";
 import { useIndexStore } from "../../stores/useIndexStore";
 import { Select } from "../../components/ui/select";
@@ -70,9 +71,20 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
   const { m } = useI18n();
   const fmt = m.learn.import;
   const phasesI18n = fmt.phaseLabel;
-  /** 向量索引态（G7）：结果卡展示「已入队 / 进行中 i/n / 未配置」。 */
+  /** 向量索引态（G7）：结果卡展示「已入队 / 进行中 i/n / 未入队(细分原因)」。 */
   const indexRunning = useIndexStore((s) => s.running);
   const indexProgress = useIndexStore((s) => s.progress);
+  /** 本地向量模型就绪态（异步拉一次，避免结果卡谎报「已入队」）。 */
+  const [embedStatusLoaded, setEmbedStatusLoaded] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void refreshEmbeddingStatus().finally(() => {
+      if (alive) setEmbedStatusLoaded(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const [tab, setTab] = useState<ImportTab>("paste");
   /** 当前运行模式：single（五阶段 + 单份卡）| batch（文件级进度 + 汇总卡）。 */
@@ -389,13 +401,21 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
               : fmt.structureLocal
           : undefined;
       const ex = single.extract;
-      // 索引态（G7）：进行中优先展示进度，否则按「是否具备向量化能力」二选一。
+      // 索引态（G7）：进行中优先展示进度；未入队时按原因细分（未下载 / 已关闭 /
+      // 浏览器预览），让用户一眼知道该怎么处理，而不是一句笼统的「未配置」。
+      const offReason = autoIndexBlockedReason();
       const indexStatus =
         indexRunning && indexProgress.total > 0
           ? m.learn.search.indexing(indexProgress.done, indexProgress.total)
-          : isAutoIndexCapable()
-            ? fmt.indexQueued
-            : fmt.indexOff;
+          : !embedStatusLoaded
+            ? "…" // 模型状态还没拉回来：不猜，避免谎报「已入队」
+            : offReason === undefined
+              ? fmt.indexQueued
+              : offReason === "disabled"
+                ? fmt.indexOffDisabled
+                : offReason === "preview"
+                  ? fmt.indexOffPreview
+                  : fmt.indexOffNoModel;
       return (
         <div className="rounded-xl border border-line bg-subtle/60 px-4 py-3">
           <p className="flex items-center gap-2 text-sm font-semibold text-ink-1">

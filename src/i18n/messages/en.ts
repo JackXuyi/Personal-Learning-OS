@@ -359,31 +359,49 @@ export const en: Messages = {
     },
     /** Settings · vector index (needed by semantic retrieval). */
     embedding: {
-      title: "Vector index",
+      title: "Vector index (local)",
       desc:
-        "Build a vector index over document bodies so search can hit passages that mean the same thing in different words. Vectors stay in your local SQLite and are never uploaded.",
+        "A small on-device model indexes document bodies so search can hit passages that mean the same thing in different words. Nothing ever leaves your machine.",
+      localNote:
+        "Embedding is independent of the current chat model — using a cloud API for chat does not affect it.",
       model: "Embedding model",
-      modelPlaceholder: "e.g. text-embedding-v3",
-      modelHint:
-        "Model name only; base URL and API key are inherited from the current model above.",
-      suggestion: (name: string) => `Try ${name}`,
-      endpoint: "Endpoint",
-      endpointInherit: "Inherited from current model",
-      endpointMissing: "No current model selected yet",
+      spec: (dim: number, ctx: number) =>
+        `${dim}-dim · ${Math.round(ctx / 1024)}k context · CPU inference`,
+      sizeMb: (bytes: number) => `${Math.round(bytes / 1_000_000)} MB`,
+      status: {
+        ready: "Ready",
+        notDownloaded: "Not downloaded",
+        downloading: (p: number) => `Downloading ${p}%`,
+        corrupted: "Incomplete file",
+      },
+      download: (size: string) => `Download and enable (${size})`,
+      redownload: "Download again",
+      cancel: "Cancel",
+      delete: "Delete model",
+      deleteTitle: "Delete embedding model",
+      deleteBody: (name: string) =>
+        `You will need to download it again before embedding works: ${name}`,
+      autoIndex: "Embed automatically after import",
+      autoIndexHint:
+        "When off, the local model is never called; you can still rebuild the index manually.",
       coverage: "Index coverage",
       coverageValue: (indexed: number, total: number) => `${indexed} / ${total} blocks`,
       coverageEmpty: "Nothing to index yet (import and split a document first)",
       rebuild: "Rebuild index",
       onlyMissing: "Fill missing only",
-      desktopOnly: "Desktop app required",
-      notSupported:
-        "The current model cannot embed (the built-in local model has no embedding support; configure an API model)",
-      noModel: "Enter an embedding model name first",
+      notReady: "Download and enable the local embedding model first",
+      noModel: "No local embedding model found — please update the desktop app",
       running: (done: number, total: number) => `Indexing ${done}/${total}…`,
       failedPartial: (n: number) => `${n} blocks failed; use “Fill missing only” to retry`,
       doneAll: "Index complete",
-      previewHint:
-        "In browser preview vectors are not persisted (storage quota), so retrieval falls back to full-text matching.",
+      desktopOnly: "Desktop app required",
+      previewDisabled:
+        "The local embedding model needs the desktop app (npm run tauri dev or the packaged build); it is unavailable in browser preview.",
+      unsupportedPlatform: (os: string, arch: string) =>
+        `Local inference is unsupported on this platform (${os} · ${arch}; macOS Apple Silicon only)`,
+      ramBelowMin: (ram: string, min: string) =>
+        `Device memory ${ram}GB is below the ${min}GB required by this model`,
+      unsupportedGeneric: "This device does not support the model",
     },
   },
   chapter: {
@@ -999,7 +1017,10 @@ export const en: Messages = {
       scannedHint: "Some pages had no extractable text — may contain scanned pages",
       /** Result card index status (G7). */
       indexQueued: "Vector indexing queued",
-      indexOff: "No embedding model · full-text search only",
+      indexOffNoModel: "Local embedding model not downloaded · full-text index only",
+      indexOffDisabled: "Auto-embed after import is off · full-text index only",
+      indexOffPreview:
+        "Browser preview has no local embedding model · full-text index only",
       mergedN: (n: number) => `${n} over-fragmented section(s) auto-merged`,
       structureRefined: "AI refined titles & key points",
       structureLocal: "Local heuristic split · no AI configured",

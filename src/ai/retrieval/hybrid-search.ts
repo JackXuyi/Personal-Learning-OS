@@ -5,15 +5,19 @@
  * 在 `/learn` 搜索框里，元信息匹配（标题 / 来源 / 章标题 / 要点）继续由页面本地
  * 过滤承担，本模块负责**正文内容**这一层——此前完全缺失的能力。
  *
- * 降级策略（贯穿全流程，任何一步失败都不抛错，只退回 FTS）：
- * - provider 未配置 / 无 `embed` 能力 → 只跑 FTS，`mode = "fulltext"`；
- * - 库里尚无向量（浏览器预览 / 尚未建索引）→ 只跑 FTS；
+ * 降级策略(贯穿全流程,任何一步失败都不抛错,只退回 FTS):
+ * - 无本地 Embedder(浏览器预览 / 未配置模型)→ 只跑 FTS,`mode = "fulltext"`;
+ * - 库里尚无向量(尚未建索引)→ 只跑 FTS;
  * - embedding 请求失败 → 只跑 FTS。
  *
- * 约束：依赖 `StorageAdapter` 与 `AIProvider` 契约，不依赖 React。
+ * 注意:查询向量走的是**本地 Embedder**(`ai/embedding.ts`),不是
+ * `AIProvider`——向量化与「当前使用模型」无关(D5),因此入参是 embedder
+ * 而非 provider。
+ *
+ * 约束:依赖 `StorageAdapter` 与 `Embedder` 契约,不依赖 React。
  */
 import type { Chunk, EmbeddingTargetType } from "../../domain";
-import type { AIProvider } from "../types";
+import type { Embedder } from "../embedding";
 import type { RetrievalScope, StorageAdapter } from "../../storage";
 import { cosineTopK } from "./vector-search";
 import { fuseRankings } from "./rrf";
@@ -33,8 +37,8 @@ export interface SearchHit {
 
 export interface HybridSearchOptions {
   storage: StorageAdapter;
-  /** 不传 / 未配置 / 无 embed 能力 → 仅全文检索。 */
-  provider?: AIProvider;
+  /** 不传(浏览器预览 / 未配置本地向量模型)→ 仅全文检索。 */
+  embedder?: Embedder;
   scope?: RetrievalScope;
   /** 最终返回条数（默认 8）。 */
   limit?: number;
@@ -65,7 +69,7 @@ export async function hybridSearch(
   const q = query.trim();
   if (q.length === 0) return { hits: [], mode: "fulltext" };
 
-  const { storage, provider } = opts;
+  const { storage, embedder } = opts;
   const byId = new Map<string, Chunk>();
 
   // ---- 路 1：FTS（全量库检索，含 trigram 中文能力）----
@@ -73,11 +77,11 @@ export async function hybridSearch(
   for (const c of fts) byId.set(c.id, c);
   const ftsIds = fts.map((c) => c.id);
 
-  // ---- 路 2：向量（能力不存在即跳过）----
+  // ---- 路 2:向量(本地 Embedder 不存在即跳过)----
   let vecIds: string[] = [];
-  if (provider?.isConfigured() && typeof provider.embed === "function") {
+  if (embedder) {
     try {
-      const vectors = await provider.embed([q]);
+      const vectors = await embedder.embed([q]);
       const queryVec = vectors[0];
       if (queryVec && queryVec.length > 0) {
         const candidates = await storage.listEmbeddingVectors(TARGET_TYPE);

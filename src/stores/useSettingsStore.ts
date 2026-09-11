@@ -3,6 +3,10 @@ import { persist } from "zustand/middleware";
 import type { PersistOptions } from "zustand/middleware";
 import type { AIProvider, ProviderKind } from "../ai";
 import { createProvider } from "../ai";
+import {
+  DEFAULT_EMBEDDING_MODEL,
+  LOCAL_EMBEDDING_MODELS,
+} from "../ai/embedding";
 import { activeToProviderConfig, providerFromActive, type SavedActive } from "../ai/active";
 import {
   hasKeyring,
@@ -47,10 +51,18 @@ export interface SavedSettings {
   /** 当前激活模型是否已就绪(本地=文件在;API=通过连接测试)。 */
   providerReady: boolean;
   /**
-   * 向量化模型配置(D3-A:端点/Key 继承 active,模型名单独配置)。
-   * null / undefined = 未配置 → provider 不挂载 `embed` 能力 → 检索降级纯 FTS。
+   * 本地向量模型配置。
+   * - `model`:本地向量模型名(唯一档 `qwen3-embed:0.6b`,需先下载);
+   * - `custom`:true = 用户手填过,换模型时不跟随默认。
+   *
+   * 云端 /embeddings 已按决策 D1 移除:向量恒定走本地 llama-helper,
+   * 与「当前使用模型」(可能是云端 API)无关。
    */
-  embedding?: { model: string } | null;
+  embedding?: { model: string; custom?: boolean } | null;
+  /**
+   * 导入后自动向量化(默认开)。关闭后不再调用本地模型,仍可手动「重建索引」。
+   */
+  autoIndexOnImport?: boolean;
   /** 该配置最后一次通过连接测试的时间戳(通过才记录)。 */
   testedAt?: number;
   /** 最近一次通过测试的往返耗时(毫秒)。 */
@@ -67,14 +79,20 @@ interface SettingsState extends SavedSettings {
   ) => void;
   /** 回到「未选择模型」(删除当前本地模型等场景)。 */
   clearActive: () => void;
-  /** 设置 Embedding 模型名(空串 = 清除,恢复「无向量能力」)。 */
+  /** 设置本地向量模型名(空串 = 清除,恢复「无向量能力」)。 */
   setEmbeddingModel: (model: string) => void;
+  /** 恢复默认向量模型(清除手填标记)。 */
+  resetEmbeddingToDefault: () => void;
+  /** 开关「导入后自动向量化」。 */
+  setAutoIndexOnImport: (on: boolean) => void;
 }
 
 const DEFAULTS: SavedSettings = {
   active: null,
   providerReady: false,
-  embedding: null,
+  // 默认即启用本地向量模型(未下载时由 UI 提示下载,能力门闩另判)。
+  embedding: { model: DEFAULT_EMBEDDING_MODEL, custom: false },
+  autoIndexOnImport: true,
 };
 
 function legacyToActive(p: LegacyFlatSettings): NonNullable<SavedActive> {
@@ -103,6 +121,7 @@ function normalizePersisted(persisted: unknown): SavedSettings | null {
       lastLatencyMs:
         typeof p.lastLatencyMs === "number" ? p.lastLatencyMs : undefined,
       savedAt: typeof p.savedAt === "number" ? p.savedAt : undefined,
+      autoIndexOnImport: p.autoIndexOnImport !== false,
     };
   }
   if ("kind" in p) {
@@ -110,22 +129,32 @@ function normalizePersisted(persisted: unknown): SavedSettings | null {
     return {
       active: legacyToActive(flat),
       providerReady: Boolean(flat.providerReady),
-      embedding: null, // 旧结构无向量化配置
+      embedding: defaultEmbedding(), // 旧结构无向量化配置 → 直接给本地默认档
       testedAt: flat.testedAt,
       lastLatencyMs: flat.lastLatencyMs,
       savedAt: flat.savedAt,
+      autoIndexOnImport: true,
     };
   }
   return null;
 }
 
-/** 归一化持久化的 embedding 字段：只接受形如 `{ model: string }` 的非空模型名。 */
-function normalizeEmbedding(raw: unknown): { model: string } | null {
-  if (!raw || typeof raw !== "object") return null;
-  const model = (raw as { model?: unknown }).model;
-  if (typeof model !== "string") return null;
-  const trimmed = model.trim();
-  return trimmed ? { model: trimmed } : null;
+function defaultEmbedding(): { model: string; custom: boolean } {
+  return { model: DEFAULT_EMBEDDING_MODEL, custom: false };
+}
+
+/**
+ * 归一化持久化的 embedding 字段。
+ *
+ * 只接受**本地清单内**的模型名:v1 方案遗留的云端名(如 `text-embedding-v3`)
+ * 一律重置为默认本地档 —— 云端能力已移除,留着只会让向量化永远不可用。
+ */
+function normalizeEmbedding(raw: unknown): { model: string; custom: boolean } {
+  if (!raw || typeof raw !== "object") return defaultEmbedding();
+  const o = raw as { model?: unknown; custom?: unknown };
+  const model = typeof o.model === "string" ? o.model.trim() : "";
+  if (!model || !LOCAL_EMBEDDING_MODELS.has(model)) return defaultEmbedding();
+  return { model, custom: o.custom === true };
 }
 
 // 自定义 merge:无论存储里是 v2 形状、旧扁平结构还是空数据,都归一到 v2。
@@ -182,7 +211,18 @@ export const useSettingsStore = create<SettingsState>()(
 
       setEmbeddingModel: (model) => {
         const trimmed = model.trim();
-        set({ embedding: trimmed ? { model: trimmed } : null, savedAt: Date.now() });
+        set({
+          embedding: trimmed ? { model: trimmed, custom: true } : null,
+          savedAt: Date.now(),
+        });
+      },
+
+      resetEmbeddingToDefault: () => {
+        set({ embedding: defaultEmbedding(), savedAt: Date.now() });
+      },
+
+      setAutoIndexOnImport: (on) => {
+        set({ autoIndexOnImport: on, savedAt: Date.now() });
       },
     }),
     {
@@ -196,6 +236,7 @@ export const useSettingsStore = create<SettingsState>()(
             : s.active,
         providerReady: s.providerReady,
         embedding: s.embedding ?? null,
+        autoIndexOnImport: s.autoIndexOnImport !== false,
         testedAt: s.testedAt,
         lastLatencyMs: s.lastLatencyMs,
         savedAt: s.savedAt,
@@ -241,15 +282,13 @@ export async function restoreVaultApiKey(): Promise<void> {
 /**
  * 根据「当前使用模型」构建活跃的 Provider(未选择时为离线兜底 provider)。
  *
- * 顺带注入向量化模型名(D3-A):端点/Key 复用 active,模型名来自 `embedding`。
- * 只有配置了 embedding 模型的 API provider 才会挂上 `embed` 能力,
- * builtin(本地模型)与未选择模型时能力不存在 → 检索层自然降级为纯 FTS。
+ * 注意:**向量化不在这里** —— 它恒定走本地 Embedder(决策 D5,见
+ * `ai/embedding.ts`),与 provider 是云端还是本地无关。
  */
 export function buildActiveProvider(): AIProvider {
-  const { active, embedding } = useSettingsStore.getState();
+  const { active } = useSettingsStore.getState();
   const cfg = activeToProviderConfig(active);
   // 未选择模型 → 复用 providerFromActive 的离线兜底（NoActiveProvider：无任何能力）
   if (!cfg) return providerFromActive(null);
-  const model = embedding?.model?.trim();
-  return createProvider(model ? { ...cfg, embeddingModel: model } : cfg);
+  return createProvider(cfg);
 }

@@ -23,15 +23,15 @@ import { sortChaptersByOrder } from "../../domain";
 import { applyForgetting } from "../../engine";
 import { hybridSearch } from "../../ai/retrieval/hybrid-search";
 import type { SearchHit } from "../../ai/retrieval/hybrid-search";
+import { createEmbedder } from "../../ai/embedding";
 import { storage } from "../../stores/useLoopStore";
-import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { useIndexStore } from "../../stores/useIndexStore";
 import { useI18n } from "../../i18n";
 import { SegmentedTabs } from "../../components/primitives";
 import DocumentCard from "./library/DocumentCard";
 import type { DocActionKind } from "./library/DocActionsMenu";
 import { SplitServiceError, splitDocumentNow } from "./split-service";
-import { autoIndexAfterImport } from "./index-service";
+import { activeEmbeddingModel, autoIndexAfterImport } from "./index-service";
 import {
   AppendDocModal,
   DeleteDocDialog,
@@ -116,7 +116,12 @@ export default function LibraryPage() {
     let cancelled = false;
     setSearching(true);
     const timer = window.setTimeout(() => {
-      void hybridSearch(q, { storage, provider: buildActiveProvider(), limit: 8 })
+      void hybridSearch(q, {
+        storage,
+        // 查询向量走本地 Embedder(与「当前使用模型」无关,D5)
+        embedder: createEmbedder(activeEmbeddingModel()),
+        limit: 8,
+      })
         .then((r) => {
           if (cancelled) return;
           setContentHits(r.hits);

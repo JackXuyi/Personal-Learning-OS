@@ -57,14 +57,8 @@ export interface ProviderConfig {
   model?: string;
   /** API key. Local providers usually don't need one. */
   apiKey?: string;
-  /**
-   * 向量化模型名（可选，D3-A）。
-   *
-   * chat 与 embedding 模型天然不同（如 `deepseek-chat` vs `text-embedding-v3`），
-   * 但**端点与 Key 复用同一份 `active` 配置**，避免配置面翻倍。
-   * 未配置 → 该 provider 不挂载 `embed` 方法（无向量能力，检索自动降级 FTS）。
-   */
-  embeddingModel?: string;
+  // 注:曾有过 `embeddingModel`(云端 /embeddings),已按决策 D1 移除——
+  // 向量化恒定走本地模型,见 `ai/embedding.ts` 的 Embedder。
 }
 
 /** Question-generation context from the Assessment Engine. */
@@ -96,19 +90,10 @@ export interface AIProvider {
 
   chat(input: ChatInput): Promise<ChatOutput>;
 
-  /**
-   * 文本向量化（**可选能力**）。
-   *
-   * - 配置了 `embeddingModel` 的 HTTP provider 才挂载本方法；
-   * - builtin 本地模型（Rust 侧 llm 只有生成、无 embedding）与
-   *   `NoActiveProvider` 都不实现 → 属性为 `undefined`；
-   * - 调用方（index-service / hybrid-search）**必须先做能力检查**
-   *   `typeof provider.embed === "function"` 再调用，不可直接 await，
-   *   否则会拿到 `undefined is not a function` 而不是可降级的语义。
-   *
-   * @returns 与入参等长、顺序一致的向量数组（实现负责按 index 还原顺序）
-   */
-  embed?(texts: readonly string[]): Promise<number[][]>;
+  // 注:**向量化不在本接口**(决策 D1/D5)。
+  // 它恒定走本机模型(与「当前使用模型」无关),唯一入口是
+  // `ai/embedding.ts` 的 `createEmbedder()` —— 若挂在 provider 上,
+  // 聊天切到云端 API 时向量化就会跟着消失,属设计缺陷。
 
   /**
    * 概念抽取**不在此接口**（G8 修复）：真实实现是

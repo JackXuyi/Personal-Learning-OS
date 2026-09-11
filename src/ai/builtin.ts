@@ -54,6 +54,10 @@ export interface LlmModelInfo {
   min_ram_gb?: number;
   /** 设备匹配(M1):当前设备是否支持下载/启用。 */
   supported?: { ok: boolean; reason?: string };
+  /** 用途:"llm" | "embedding"(embed_list_models 恒为 "embedding")。 */
+  kind?: "llm" | "embedding";
+  /** 向量维度(仅 embedding)。 */
+  dim?: number | null;
 }
 
 /** 当前设备能力(llm_status 返回;Rust 扩展前可能缺省)。 */
@@ -79,6 +83,8 @@ export function isBuiltinAvailable(): boolean {
 }
 
 export const DOWNLOAD_PROGRESS_EVENT = "llm://download-progress";
+/** 向量模型下载进度事件名(独立通道,与聊天模型下载互不干扰)。 */
+export const EMBED_DOWNLOAD_PROGRESS_EVENT = "embed://download-progress";
 
 // ---- Tauri 命令封装(仅桌面端可调用)----
 
@@ -105,6 +111,43 @@ export function llmStatus(): Promise<{
   device?: LlmDeviceInfo;
 }> {
   return invoke("llm_status");
+}
+
+// ---- 向量化命令(embed_*)----
+//
+// 与 llm_* 完全独立:独立模型清单(models/embedding)、独立 sidecar 进程。
+// 只走本机推理,不发任何 HTTP 请求(决策 D1:云端 /embeddings 已移除)。
+
+export function embedListModels(): Promise<LlmModelInfo[]> {
+  return invoke<LlmModelInfo[]>("embed_list_models");
+}
+
+export function embedDownload(model: string): Promise<void> {
+  return invoke("embed_download", { model });
+}
+
+export function embedCancelDownload(model: string): Promise<void> {
+  return invoke("embed_cancel_download", { model });
+}
+
+export function embedDelete(model: string): Promise<void> {
+  return invoke("embed_delete", { model });
+}
+
+export function embedDefaultModel(): Promise<string> {
+  return invoke<string>("embed_default_model");
+}
+
+/** Rust `EmbedResponse`(camelCase 已在此处对齐为 TS 命名)。 */
+export interface EmbedTextsResult {
+  dim: number;
+  vectors: number[][];
+  /** 因超过 context_size 被截断的条数。 */
+  truncated: number;
+}
+
+export function embedTexts(model: string, texts: string[]): Promise<EmbedTextsResult> {
+  return invoke<EmbedTextsResult>("embed_texts", { request: { model, texts } });
 }
 
 export class BuiltinProvider implements AIProvider {
