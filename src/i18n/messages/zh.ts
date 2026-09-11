@@ -34,6 +34,16 @@ export const zh = {
       nextReview: (d: number) => `下次复习：约 ${d} 天后`,
       heuristic: "启发式估计",
     },
+    /** Mermaid 图表块（docs/library-mermaid-render-design-2026-09.md §8.5）。 */
+    mermaid: {
+      label: "图表",
+      rendering: "图表渲染中…",
+      viewSource: "查看源码",
+      hideSource: "收起源码",
+      errorTitle: "图表语法有误，已按源码显示",
+      tooLarge: (n: number) => `图表源码超过 ${n} 字符，已按源码显示`,
+      loadFailed: "图表渲染组件加载失败，已按源码显示",
+    },
   },
 
   nav: {

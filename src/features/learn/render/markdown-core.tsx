@@ -20,6 +20,9 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
+import { MERMAID_LANGS, normalizeMermaidSource, readCodeFence } from "./mermaid-source";
+import type { HastNode } from "./mermaid-source";
+import MermaidBlock from "./MermaidBlock";
 
 /** 只放行安全协议；其余（javascript: / data: / vbscript:）一律置空。 */
 export function safeUrl(url: string): string {
@@ -28,6 +31,18 @@ export function safeUrl(url: string): string {
 
 /** GFM 插件清单（导出以便两条渲染路径共用同一份配置）。 */
 export const remarkPlugins = [remarkGfm];
+
+/**
+ * 普通代码块。类名与改动前的 `pre` 完全一致 → 视觉零变化。
+ * 同时被块级 `pre` 分支与**行内**组件表复用（行内必须禁止出图，见下）。
+ */
+function PlainPre({ children }: { children?: ReactNode }) {
+  return (
+    <pre className="my-3 overflow-x-auto rounded-lg border border-line bg-subtle p-3 font-mono text-[13px] leading-6 text-ink-1">
+      {children}
+    </pre>
+  );
+}
 
 /** 块级组件表：段落 / 列表 / 表格 / 代码块按 GFM 正常排版。 */
 export const markdownComponents: Components = {
@@ -82,11 +97,21 @@ export const markdownComponents: Components = {
       {children}
     </code>
   ),
-  pre: ({ children }) => (
-    <pre className="my-3 overflow-x-auto rounded-lg border border-line bg-subtle p-3 font-mono text-[13px] leading-6 text-ink-1">
-      {children}
-    </pre>
-  ),
+  // 围栏分派：读 hast 的 `pre > code` 语言，命中 mermaid 别名则交图表块渲染，
+  // 其余语言（ts / json / 无语言）维持原代码块。
+
+  // `docs/library-mermaid-render-design-2026-09.md` §4.1：这是本方案**唯一**的接入点。
+  // node 的类型来自 hast（react-markdown 的 ExtraProps），与本模块的最小结构定义
+  // 只有形状上的兼容关系，故显式窄化一次（避免直接依赖 @types/hast 的传递类型）。
+  pre: ({ children, node }) => {
+    const fence = readCodeFence(node as unknown as HastNode | undefined);
+    if (fence && MERMAID_LANGS.has(fence.lang)) {
+      const source = normalizeMermaidSource(fence.value);
+      // 空围栏（```` ```mermaid ```` 后立即闭合）→ 源码为空 → 不入图，退化为空代码块
+      if (source.length > 0) return <MermaidBlock source={source} />;
+    }
+    return <PlainPre>{children}</PlainPre>;
+  },
   table: ({ children }) => (
     <div className="my-3 overflow-x-auto rounded-lg border border-line">
       <table className="w-full border-collapse text-[14px]">{children}</table>
@@ -118,6 +143,9 @@ function InlineStrong({ children }: { children?: ReactNode }) {
  * - `p` 不再包 `<p>`（否则 12px 引用块里塞进 15px 段落 + 额外外边距）；
  * - 列表退化为块级 span + 圆点，避免在行内出现缩进层级；
  * - 标题降级为加粗。
+ *
+ * **必须显式覆写 `pre`**：上面是 `...markdownComponents` 展开，会把块级的新 `pre`
+ * （带 mermaid 分派）一并继承过来 → 不覆写的话，12px 的行内要点里可能蹦出一张图。
  */
 export const inlineMarkdownComponents: Components = {
   ...markdownComponents,
@@ -135,6 +163,7 @@ export const inlineMarkdownComponents: Components = {
     <span className="block border-l-2 border-line pl-2 text-ink-3">{children}</span>
   ),
   hr: () => <span className="block" />,
+  pre: PlainPre,
 };
 
 export interface MarkdownBlockProps {

@@ -30,6 +30,16 @@ export const en: Messages = {
       nextReview: (d: number) => `Next review: ~${d} days`,
       heuristic: "Heuristic estimate",
     },
+    /** Mermaid diagram block (docs/library-mermaid-render-design-2026-09.md §8.5). */
+    mermaid: {
+      label: "Diagram",
+      rendering: "Rendering diagram…",
+      viewSource: "View source",
+      hideSource: "Hide source",
+      errorTitle: "Diagram has a syntax error — showing source",
+      tooLarge: (n: number) => `Diagram source exceeds ${n} characters — showing source`,
+      loadFailed: "Failed to load the diagram renderer — showing source",
+    },
   },
 
   nav: {
