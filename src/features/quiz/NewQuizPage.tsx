@@ -19,21 +19,16 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, SectionTitle } from "../../components/primitives";
 import { PageContainer, openImportModal } from "../../components/layout/AppShell";
-import type { Chapter, LearnerState, PaperMode, PaperScope, SourceDocument } from "../../domain";
+import type { Chapter, LearnerState, PaperMode, SourceDocument } from "../../domain";
 import { PAPER_MODE_DURATION_MIN } from "../../domain";
-import { createPaper } from "../../engine";
-import { generateQuizQuestionsWithAi } from "../../ai";
+import { availablePaperModes, NEW_PAPER_MODES } from "../../engine";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { storage } from "../../stores/useLoopStore";
 import { sortChaptersByOrder } from "../../domain";
 import { useI18n } from "../../i18n";
-import { MODE_MIN_CHAPTERS, modeHint } from "./meta";
+import { modeHint } from "./meta";
+import { createPaperAndSave } from "./paper-flow";
 
-const NEW_MODES: Exclude<PaperMode, "retake">[] = [
-  "unit-test",
-  "stage-test",
-  "final-test",
-];
 
 export default function NewQuizPage() {
   const { m } = useI18n();
@@ -98,7 +93,7 @@ export default function NewQuizPage() {
         setSelected(new Set(ids));
         const wantMode = searchParams.get("mode");
         // 只接受向导支持的卷型（补考卷 / 未知值一律忽略，避免非法 mode 流入 createPaper）。
-        if (wantMode && (NEW_MODES as string[]).includes(wantMode)) {
+        if (wantMode && (NEW_PAPER_MODES as readonly string[]).includes(wantMode)) {
           setMode(wantMode as Exclude<PaperMode, "retake">);
         }
       }
@@ -117,25 +112,11 @@ export default function NewQuizPage() {
     [chapters, selected],
   );
 
-  const selectableModes = useMemo(() => {
-    const n = selected.size;
-    const total = chapters.length;
-    const ok = (mm: PaperMode) => {
-      if (n === 0) return false;
-      switch (mm) {
-        case "unit-test":
-          return n === 1;
-        case "stage-test":
-          // ≥2 章；全本(2 章以下小文档)也允许，避免无模式可选。
-          return n >= 2 && (n < total || total <= 2);
-        case "final-test":
-          return n === total && total >= MODE_MIN_CHAPTERS["final-test"];
-        default:
-          return false;
-      }
-    };
-    return NEW_MODES.filter(ok);
-  }, [selected, chapters]);
+  // 可选卷型：规则下沉到引擎（详情页「一键出卷」同源校验），此处只取结果。
+  const selectableModes = useMemo(
+    () => availablePaperModes({ selected: selected.size, total: chapters.length }),
+    [selected, chapters],
+  );
 
   // 自动路径：仅 URL 预填的 unit-test（「去测本章」等入口）→ 直接生成进入答题。
   // 手动在向导里选单章+单元测不触发（autoRequested=false）。
@@ -148,41 +129,26 @@ export default function NewQuizPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docId, sortedSelected, mode, autoDone, autoRequested]);
 
+  /**
+   * 建卷 → 落库 → 进答题页。
+   *
+   * 出卷细节（本地确定性卷 / AI 就绪门 / 题面 AI 生成与静默回退 / 卷型校验）
+   * 全部收敛到 `paper-flow`，本页只负责「取去哪」。
+   */
   const createAndStart = async () => {
     if (!docId || sortedSelected.length === 0 || !mode) return;
-    const scope: PaperScope = { chapterIds: sortedSelected.map((c) => c.id), mode };
-    // T12：allowSubjective 门按 Provider 实时就绪动态开（有 AI 批改才出主观题）。
-    const provider = buildActiveProvider();
-    const aiReadyNow = provider.isConfigured();
-    const local = createPaper({
-      scope,
-      chapters: sortedSelected,
-      allChapters: chapters,
-      learnerState: learner,
-      allowSubjective: aiReadyNow,
-    });
-    let paper = local;
-    if (aiReadyNow && local.questions.length > 0) {
-      try {
-        const text = docs.find((d) => d.id === docId)?.textPreview ?? "";
-        if (text) {
-          // 题面 AI 即时生成（题型/配额与本地卷一致）；失败静默回退本地确定性卷。
-          paper = {
-            ...local,
-            questions: await generateQuizQuestionsWithAi({
-              provider,
-              paper: local,
-              chapters: sortedSelected,
-              text,
-            }),
-          };
-        }
-      } catch (err) {
-        console.warn("AI 出题失败，回退本地题库：", err);
-      }
+    try {
+      const { paper } = await createPaperAndSave({
+        chapters: sortedSelected,
+        allChapters: chapters,
+        mode,
+        learnerState: learner,
+        text: docs.find((d) => d.id === docId)?.textPreview,
+      });
+      navigate(`/quiz/${paper.id}`, { replace: autoRequested });
+    } catch (err) {
+      console.error("[NewQuizPage] 出卷失败：", err);
     }
-    await storage.savePaper(paper);
-    navigate(`/quiz/${paper.id}`, { replace: autoRequested });
   };
 
   // —— 渲染 ——
@@ -320,7 +286,7 @@ export default function NewQuizPage() {
           <p className="mt-2 text-xs text-slate-400">{np.pickChapterFirst}</p>
         ) : (
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            {NEW_MODES.map((mm) => {
+            {NEW_PAPER_MODES.map((mm) => {
               const enabled = selectableModes.includes(mm);
               const on = mode === mm;
               const label = m.quiz.mode[mm];

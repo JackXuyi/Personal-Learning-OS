@@ -335,6 +335,60 @@ function assemble(scope: PaperScope, questions: PaperQuestion[], now: number): P
 }
 
 /* ------------------------------------------------------------------ */
+/* 卷型候选（向导与详情页「一键出卷」共用的单一真源）                  */
+/* ------------------------------------------------------------------ */
+
+/** 新建卷可选的三种卷型（补考卷由报告页触发，不在其列）。 */
+export const NEW_PAPER_MODES = ["unit-test", "stage-test", "final-test"] as const;
+
+/** 卷型 → 所需最小章数。 */
+export const PAPER_MODE_MIN_CHAPTERS: Record<Exclude<PaperMode, "retake">, number> = {
+  "unit-test": 1,
+  "stage-test": 2,
+  "final-test": 3,
+};
+
+/**
+ * 给定「已选章数 / 总章数」，返回可出的卷型（纯函数）。
+ *
+ * 规则原在 /quiz/new 向导内部，资料详情页「一键出卷」需要同源校验
+ * （否则推荐出的 retake / 不合法 final-test 会绕过向导校验直接落库），
+ * 故下沉到引擎层，两边共用一份规则。
+ */
+export function availablePaperModes(args: {
+  /** 已选章数。 */
+  selected: number;
+  /** 该资料的总章数。 */
+  total: number;
+}): Exclude<PaperMode, "retake">[] {
+  const { selected: n, total } = args;
+  const ok = (mm: Exclude<PaperMode, "retake">): boolean => {
+    if (n === 0) return false;
+    switch (mm) {
+      case "unit-test":
+        return n === 1;
+      case "stage-test":
+        // ≥2 章；全本（2 章以下小资料）也允许，避免无模式可选。
+        return n >= 2 && (n < total || total <= 2);
+      case "final-test":
+        return n === total && total >= PAPER_MODE_MIN_CHAPTERS["final-test"];
+    }
+  };
+  return NEW_PAPER_MODES.filter(ok);
+}
+
+/**
+ * 判断某卷型当前是否可出（纯函数，GUI 禁用态与落库前校验共用）。
+ */
+export function canCreatePaperMode(
+  mode: PaperMode,
+  args: { selected: number; total: number },
+): boolean {
+  if (mode === "retake") return false; // 补考卷只能由报告页触发
+  return availablePaperModes(args).includes(mode);
+}
+
+/* ------------------------------------------------------------------ */
 /* 补考卷聚合出卷（T10 · 仅错题章范围）                                */
 /* ------------------------------------------------------------------ */
 

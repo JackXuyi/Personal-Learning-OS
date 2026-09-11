@@ -10,12 +10,13 @@ import { isSubjectiveType, PAPER_MODE_DURATION_MIN } from "../../domain";
 import type { PaperQuestion } from "../../domain";
 import { zh, type Messages } from "../../i18n";
 
-/** 模式 → 支持的最小章数（向导中决定哪些模式可选）。 */
-export const MODE_MIN_CHAPTERS: Record<Exclude<PaperMode, "retake">, number> = {
-  "unit-test": 1,
-  "stage-test": 2,
-  "final-test": 3,
-};
+/**
+ * 模式 → 支持的最小章数（向导中决定哪些模式可选）。
+ *
+ * 真源已下沉到引擎 `PAPER_MODE_MIN_CHAPTERS`（资料详情页「一键出卷」与向导
+ * 共用同一份校验规则），此处仅转出，避免两处常量漂移。
+ */
+export { PAPER_MODE_MIN_CHAPTERS as MODE_MIN_CHAPTERS } from "../../engine/quiz-engine";
 
 /** 模式 → 一行可读说明（配比 + 时长），供模式卡片副标题。 */
 export function modeHint(
