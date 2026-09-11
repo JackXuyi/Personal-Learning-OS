@@ -21,7 +21,13 @@ import { generateOverviewNow } from '../analyze-service';
 import { MarkdownBlock, MarkdownInline } from '../render/markdown-core';
 import { MASTERY_THRESHOLD } from '../../../domain';
 import type { OverviewPhase } from '../../../ai/overview-pipeline';
-import type { Chapter, LearnerState, Paper, SourceDocument } from '../../../domain';
+import type {
+  Chapter,
+  DocumentOverview,
+  LearnerState,
+  Paper,
+  SourceDocument,
+} from '../../../domain';
 
 interface OverviewTabProps {
   doc: SourceDocument;
@@ -45,6 +51,20 @@ export default function OverviewTab({ doc, chapters, learner, onChanged }: Overv
   const [error, setError] = useState<string>();
   const [skipped, setSkipped] = useState(0);
   const [papers, setPapers] = useState<Paper[]>([]);
+  /**
+   * 生成成功的「本地兜底」概览（与 docId 绑在一起存）。
+   *
+   * 为什么需要它：原先视图**只**依赖 `onChanged()`（父组件回读 storage）拿新
+   * `doc`，而那一跳是**静默失败**的——`DocumentDetailPage.handleRefresh` 里
+   * `if (d) setDoc(d)`（d 为假直接跳过）且整段包在 try/catch 中只
+   * `console.error`。于是会出现「日志显示生成完成、页面仍是空态、且无任何报错」。
+   * 概览已经成功落库，展示就不该再赌一次回读：这里直接用管道返回值渲染，
+   * `onChanged()` 退化为后台同步（失败只影响列表，不影响已生成内容）。
+   *
+   * 带 `docId` 一起存：本组件切资料时不卸载，用它判定归属，避免把上一份
+   * 资料的概览显示到这一份上。
+   */
+  const [fresh, setFresh] = useState<{ docId: string; overview: DocumentOverview }>();
 
   // mount 只读：与 PapersTab 同源。失败不影响概览（只是统计少一项）。
   useEffect(() => {
@@ -62,7 +82,8 @@ export default function OverviewTab({ doc, chapters, learner, onChanged }: Overv
     };
   }, []);
 
-  const overview = doc.overview;
+  // 单一真源：优先父组件回读的最新 doc；回读未生效时退回本次生成的产物（同 docId 才认）。
+  const overview = doc.overview ?? (fresh?.docId === doc.id ? fresh.overview : undefined);
   const stale = overview ? overview.sourceChars !== (doc.textPreview?.length ?? 0) : false;
   const hasBody = (doc.textPreview ?? '').trim().length > 0;
 
@@ -106,8 +127,10 @@ export default function OverviewTab({ doc, chapters, learner, onChanged }: Overv
         onProgress: (i, n, label, phase) => setProgress({ i, n, label, phase }),
       });
       setSkipped(r.skipped);
+      // 先落本地兜底：视图不再等父组件回读，回读失败也照常展示已生成的概览。
+      setFresh({ docId: doc.id, overview: r.overview });
       notifyDocsChanged();
-      await onChanged(); // 刷新详情页 props（doc.overview 更新）
+      await onChanged(); // 后台同步详情页 props（doc.overview）与列表
     } catch (e) {
       // 分析恒由 AI 执行：失败如实展示，不静默降级（E2）
       setError(e instanceof Error ? e.message : String(e));
