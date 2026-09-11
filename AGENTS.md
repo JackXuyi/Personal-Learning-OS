@@ -76,6 +76,7 @@ Cursor / Claude 系工具会按 frontmatter 自动注入：`alwaysApply: true` �
 | **诊断** | | |
 | root-cause-fix-workflow | Bug/回归/异常调查 | 先证根因（具体代码证据）再改；给最小正确修复与备选 |
 | **UI** | | |
+| plos-ui-system | 同一模式跨文件重复 / 抽取公共组件 / 改动壳层 / 一致性自查 | 以侧栏为基准样件统一组件规范；**同一模式跨 ≥3 个文件必抽取**；判据由 `node scripts/ui-consistency-scan.mjs` 产出 |
 | ui-impl-tokens | 在 `src/` 新增/改动 React UI | token-first + Tailwind 4 + UI Kit/primitives 复用（含 ui/ 新建规范）；默认不加 useCallback |
 | style-optimization-workflow | 样式优化/一致性审计/设计语言提炼 | 读 token 与 UI 方案 → 短方案 → 实现 → 对抗性自审 → 按需持久化审计 |
 | **桌面/Rust** | | |
@@ -97,6 +98,7 @@ Cursor / Claude 系工具会按 frontmatter 自动注入：`alwaysApply: true` �
 - **文案**：一律 `useI18n` + `messages/zh.ts`/`en.ts` 成对；不硬编码
 - **样式**：Tailwind 4 utility + token（`--color-surface` `ink-1..3` `line` `primary` `state-*`，加 shadcn 角色 `background/card/muted/accent/border/ring`）；新 hex 只允许进 `main.css`
 - **UI 原语**：优先 `components/ui`（Button/Dialog…）与 `primitives.tsx`（Section/KnowledgeRow/EvidenceRow/ActionCard/Card/Stat/DeltaBadge）及 `AppShell.PageContainer`
+- **一致性**：同一视觉模式跨 ≥3 个文件重复 → 必须抽取公共组件（第 2 处须在 PR 声明「待抽」）；判据 `node scripts/ui-consistency-scan.mjs`，详见 `skills/plos-ui-system`
 - **数据流**：组件 → `src/stores` → `src/storage`；桌面能力（Keychain/本地模型）→ `invoke("vault_*"|"llm_*")`，纯浏览器预览用 `isTauri()` 守卫
 - **Rust**：新命令在属主模块实现 → `lib.rs` `generate_handler!` 注册 → 前端封装进 `src/ai/*`
 - **测试**：`npm run typecheck`；纯逻辑单测写 `tests/*.test.ts`（`npm run test:i18n|goal|scope|eta`）；dev 端口 1420

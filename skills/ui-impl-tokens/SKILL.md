@@ -71,6 +71,7 @@ description: PLOS UI 实现规范——先读语义 token（src/styles/main.css 
 
 ## Cross-references
 
+- **跨文件一致性与抽取（≥3 处必抽、扫描器）**：[plos-ui-system](../plos-ui-system/SKILL.md) ← 同一模式写到第 3 个文件时去这里
 - 组件体系方案（三层架构 / token 桥接 / 采购清单）：[docs/ui-component-system-shadcn-design-2026-09.md](../../docs/ui-component-system-shadcn-design-2026-09.md)
 - 样式整体优化 / 一致性审计流程：[style-optimization-workflow](../style-optimization-workflow/SKILL.md)
 - 约束（always apply）：[rules/engineering-code-style.mdc](../../rules/engineering-code-style.mdc)、[rules/react.mdc](../../rules/react.mdc)

@@ -531,4 +531,8 @@ M3 盘点发现 token 化前的老页面仍大面积使用原始色（`slate-*`/
 
 > 建议：作为独立小里程碑（M4-tokenize）按页逐文件迁移：`slate-900→ink-1`、`slate-700→ink-2`、`slate-600→ink-2`、`slate-500/400→ink-3`、`slate-200/border→line`、`slate-50/bg-white→surface/subtle`、`indigo-600 主行动→Button`、`indigo-50/200 强调 tint→primary/5+primary/20`、`text-indigo-600 链接→text-primary`。每页 typecheck + 目测。
 
+> **2026-09-11 更新**：D9 现由 `skills/plos-ui-system` 接管，上述估算规模已被实测数据取代 ——
+> `node scripts/ui-consistency-scan.mjs` 扫得 **454 处 / 74 种 / 16 文件**，跨 ≥3 文件重复的类串 **84 条**，
+> focus 环透明度 **4 种**（应收敛到唯一值 `/50`）。完整搬迁映射表见 `skills/plos-ui-system/references/tokens.md` §3（其中 `slate-700` / `slate-500` 两档已修正为 `ink-1` / `ink-2`，与上文建议略有差异，以该表为准），抽取台账见 `skills/plos-ui-system/references/component-catalog.md`。
+
 *本文件为**已落地**方案（v1.0）。M0–M3 执行记录见 §9；偏差与后续见 §12。*
