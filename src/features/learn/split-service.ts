@@ -29,10 +29,11 @@ export class SplitServiceError extends Error {
 
 export interface SplitRunOptions {
   storage: StorageAdapter;
-  /** 切分参数（缺省沿用引擎默认：1600 字符 / 3 段 / 2 级标题）。 */
+  /** 切分参数（缺省沿用引擎默认：1600 字符 / 3 段 / 2 级标题 / 短章兜底 200 字符）。 */
   split?: {
     targetCharsPerChapter?: number;
     mdHeadingMaxLevel?: number;
+    minBodyCharsPerChapter?: number;
     minParagraphsPerChapter?: number;
   };
   /** 注入当前时间便于测试断言。 */

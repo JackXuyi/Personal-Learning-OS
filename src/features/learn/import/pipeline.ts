@@ -42,7 +42,7 @@ export interface RunUnitOptions extends PipelineHooks {
   /** AI 精修 provider；不传或未配置 → 启发式切分直出。 */
   provider?: AIProvider;
   /** 切分参数（与现状 ImportModal 一致；测试可覆盖）。 */
-  split?: { targetCharsPerChapter?: number; minParagraphsPerChapter?: number };
+  split?: { targetCharsPerChapter?: number; minBodyCharsPerChapter?: number; minParagraphsPerChapter?: number };
 }
 
 const DEFAULT_SPLIT = { targetCharsPerChapter: 1_600, minParagraphsPerChapter: 3 };

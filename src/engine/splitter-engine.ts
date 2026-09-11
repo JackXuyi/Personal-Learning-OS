@@ -25,6 +25,12 @@ export interface SplitOptions {
   targetCharsPerChapter?: number;
   /** Markdown 标题切分识别的最大层级（默认 2：# 与 ##）。 */
   mdHeadingMaxLevel?: number;
+  /**
+   * 标题切分后，章正文（剔除标题行后计字符）低于该值的短章并入相邻章
+   * （默认 200；0 = 关闭兜底）。非首章并入上一章，首章并入下一章；
+   * 防吞保护见 mergeShortChapters。仅作用于标题切分路径。
+   */
+  minBodyCharsPerChapter?: number;
   /** 单段也可独立成章的最小段落数（段落聚类用，默认 3）。 */
   minParagraphsPerChapter?: number;
 }
@@ -170,7 +176,77 @@ function splitByHeadings(
     };
   }
 
-  return { chapters, strategy: "headings", documentHeading };
+  // 短章合并兜底：吸收「文件边界空壳章」（如 `# README.md` 后紧跟正文标题）与
+  // 过碎的尾部小节（贡献 / 许可之类），见 mergeShortChapters。
+  const minBody = options.minBodyCharsPerChapter ?? 200;
+  const merged = mergeShortChapters(text, chapters, minBody);
+
+  return { chapters: merged, strategy: "headings", documentHeading };
+}
+
+// ------------------------------------------------- 短章合并兜底（标题切分专用）
+
+/**
+ * 允许把整份资料收敛成单章的正文总量上限：超过该值时，合并到「只剩 2 章」为止，
+ * 保留最少 2 章维持目录导航意义（防止「全篇皆短章」的超长文档被吞成一个巨章）。
+ * 取约 6 倍段落聚类目标体量（1600），对小文档无感。
+ */
+const MERGE_SINGLE_CHAPTER_MAX_BODY = 10_000;
+
+/** 章正文体量：contentRef 切片剔除标题行后的字符数（与摘要口径一致）。 */
+function chapterBodyCharCount(text: string, chapter: Chapter): number {
+  return firstBodyLines(text.slice(chapter.contentRef.start, chapter.contentRef.end)).trim().length;
+}
+
+/**
+ * 短章合并兜底（纯函数，确定性）：正文体量低于 minBody 的章并入相邻章，迭代至稳定。
+ *
+ * 规则：
+ * - 非首章并入上一章（上一章 end 扩到本章 end，标题留上一章）；
+ *   首章并入下一章（下一章 start 扩到本章 start，吸收本章标题行，不丢内容）；
+ * - keyPoints 合并截断至 6 条；每次合并后重写 order 为连续 1..n；
+ * - contentRef 一律取并集，原文零丢失；
+ * - 防吞保护：本次合并会把章节收敛到只剩 1 章且整份正文总量 > 上限时，停止合并
+ *   保留现状（已知代价：两章结构且正文超长时尾部短章保留——防吞优先于消碎）；
+ * - minBody ≤ 0 视为关闭。
+ */
+function mergeShortChapters(text: string, chapters: readonly Chapter[], minBody: number): Chapter[] {
+  if (minBody <= 0 || chapters.length < 2) return [...chapters];
+
+  const totalBody = chapters.reduce((sum, c) => sum + chapterBodyCharCount(text, c), 0);
+  const out = [...chapters];
+
+  for (;;) {
+    if (out.length < 2) break;
+    const idx = out.findIndex((c) => chapterBodyCharCount(text, c) < minBody);
+    if (idx === -1) break;
+    // 防吞保护：此次合并将收敛为单章，且整份正文超过单章体量上限 → 保留现状。
+    if (out.length === 2 && totalBody > MERGE_SINGLE_CHAPTER_MAX_BODY) break;
+
+    if (idx > 0) {
+      // 并入上一章：上一章区间扩到本章末尾。
+      const prev = out[idx - 1];
+      const cur = out[idx];
+      out[idx - 1] = {
+        ...prev,
+        contentRef: { start: prev.contentRef.start, end: cur.contentRef.end },
+        keyPoints: [...prev.keyPoints, ...cur.keyPoints].slice(0, 6),
+      };
+    } else {
+      // 首章并入下一章：下一章起点扩到首章起点（含首章标题行）。
+      const cur = out[0];
+      const next = out[1];
+      out[1] = {
+        ...next,
+        contentRef: { start: cur.contentRef.start, end: next.contentRef.end },
+        keyPoints: [...cur.keyPoints, ...next.keyPoints].slice(0, 6),
+      };
+    }
+    out.splice(idx, 1);
+    for (let i = 0; i < out.length; i++) out[i] = { ...out[i], order: i + 1 };
+  }
+
+  return out;
 }
 
 // ------------------------------------------------- 段落聚类（TXT / 无标题文本）
