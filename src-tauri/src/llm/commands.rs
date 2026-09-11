@@ -169,10 +169,12 @@ pub async fn llm_generate(
 
     // 3. 组装 generate 请求(采样按请求解析:preset/温度覆盖 → 模型预设)
     let sampling = resolve_sampling(&def, &request);
+    let max_tokens = request.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS);
+    let prompt_chars = prompt.chars().count();
     let request_json = json!({
         "type": "generate",
         "prompt": prompt,
-        "max_tokens": request.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS),
+        "max_tokens": max_tokens,
         "context_size": def.context_size,
         "model_path": model_path_str,
         "temperature": sampling.temperature,
@@ -186,8 +188,33 @@ pub async fn llm_generate(
     })
     .to_string();
 
-    // 4. helper 推理
-    state.sidecar.generate(request_json).await.map_err(|e| e.to_string())
+    // 4. helper 推理。排查日志走 eprintln → `tauri dev` 终端可见
+    //    (与前端 `[ai:*]` 控制台日志配对:采样是否生效 / 是否截断在此对账)。
+    let started = std::time::Instant::now();
+    eprintln!(
+        "[llm] generate model={} prompt_chars={} max_tokens={} temp={:.2} preset={}",
+        request.model,
+        prompt_chars,
+        max_tokens,
+        sampling.temperature,
+        request.sampling_preset.as_deref().unwrap_or("-"),
+    );
+    let result = state.sidecar.generate(request_json).await;
+    match &result {
+        Ok(out) => eprintln!(
+            "[llm] generate done model={} ms={} out_chars={}",
+            request.model,
+            started.elapsed().as_millis(),
+            out.chars().count()
+        ),
+        Err(e) => eprintln!(
+            "[llm] generate failed model={} ms={} err={}",
+            request.model,
+            started.elapsed().as_millis(),
+            e
+        ),
+    }
+    result.map_err(|e| e.to_string())
 }
 
 /// 供设置页展示默认模型名。

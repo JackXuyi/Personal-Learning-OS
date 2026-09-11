@@ -15,6 +15,7 @@ import type {
   ProviderKind,
 } from "./types";
 import { AiProviderError } from "./types";
+import { aiErrPreview, aiLog } from "./log";
 
 interface ChatCompletionResponse {
   choices?: { message?: { content?: string } }[];
@@ -133,26 +134,46 @@ export class OpenAICompatibleProvider implements AIProvider {
     const headers: Record<string, string> = { "content-type": "application/json" };
     if (this.apiKey) headers.authorization = `Bearer ${this.apiKey}`;
 
+    const startedAt = Date.now();
+    const temperature = input.temperature ?? 0.2;
+    const inChars = input.messages.reduce((n, m) => n + m.content.length, 0);
+    aiLog("info", this.kind, "chat 请求", {
+      model: this.model,
+      temperature,
+      msgs: input.messages.length,
+      inChars,
+    });
     const res = await fetch(`${this.baseUrl}/chat/completions`, {
       method: "POST",
       headers,
       body: JSON.stringify({
         model: this.model,
         messages: input.messages,
-        temperature: input.temperature ?? 0.2,
+        temperature,
       }),
     });
     if (!res.ok) {
+      const detail = await res.text();
+      aiLog("error", this.kind, "chat HTTP 失败", {
+        ms: Date.now() - startedAt,
+        status: res.status,
+        err: aiErrPreview(detail),
+      });
       throw new AiProviderError(
         "request-failed",
-        `${this.kind} request failed: HTTP ${res.status} ${await res.text()}`,
+        `${this.kind} request failed: HTTP ${res.status} ${detail}`,
       );
     }
     const data = (await res.json()) as ChatCompletionResponse;
     const content = data.choices?.[0]?.message?.content;
     if (!content) {
+      aiLog("error", this.kind, "chat 返回空内容", { ms: Date.now() - startedAt });
       throw new AiProviderError("request-failed", `${this.kind} returned an empty completion.`);
     }
+    aiLog("info", this.kind, "chat 完成", {
+      ms: Date.now() - startedAt,
+      outChars: content.length,
+    });
     return { content };
   }
 

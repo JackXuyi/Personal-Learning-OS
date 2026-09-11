@@ -23,6 +23,7 @@ import type {
   ProviderKind,
 } from "./types";
 import { AiProviderError } from "./types";
+import { aiErrPreview, aiLog } from "./log";
 
 /**
  * 本地模型结构化调用的默认输出上限。
@@ -140,10 +141,29 @@ export class BuiltinProvider implements AIProvider {
       // 结构化意图 → 近贪心采样预设（抑制 JSON 键名漂移）。
       ...(input.jsonMode ? { samplingPreset: "tight" as const } : {}),
     };
+    // 排查日志：请求参数全量可见（此前温度/上限丢失只能靠读代码归因）。
+    const startedAt = Date.now();
+    const inChars = request.messages.reduce((n, m) => n + m.content.length, 0);
+    aiLog("info", "builtin", "生成请求", {
+      model: request.model,
+      temperature: input.temperature,
+      preset: request.samplingPreset,
+      maxTokens: request.maxTokens,
+      msgs: request.messages.length,
+      inChars,
+    });
     try {
       const content = await invoke<string>("llm_generate", { request });
+      aiLog("info", "builtin", "生成完成", {
+        ms: Date.now() - startedAt,
+        outChars: content.length,
+      });
       return { content };
     } catch (err) {
+      aiLog("error", "builtin", "生成失败", {
+        ms: Date.now() - startedAt,
+        err: aiErrPreview(err),
+      });
       const message = err instanceof Error ? err.message : String(err);
       throw new AiProviderError("request-failed", message);
     }

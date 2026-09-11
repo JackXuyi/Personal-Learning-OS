@@ -32,6 +32,7 @@ import { applyChapterRefine } from "../engine/splitter-engine";
 import type { AIProvider, ChatMessage } from "./types";
 import { AiProviderError } from "./types";
 import { repairTruncatedJson } from "./json-repair";
+import { aiLog } from "./log";
 
 /* ------------------------------------------------------------------ */
 /* 共享工具                                                            */
@@ -82,6 +83,9 @@ export function extractJson(content: string): unknown {
   const open = stripped.search(/[\[{]/);
   const close = Math.max(stripped.lastIndexOf("}"), stripped.lastIndexOf("]"));
   if (open === -1) {
+    aiLog("error", "parse", "AI 返回内容中未找到 JSON", {
+      head: stripped.slice(0, 120) || "(空)",
+    });
     throw new AiProviderError(
       "request-failed",
       `AI 返回内容中未找到 JSON：${stripped.slice(0, 120) || "(空)"}`,
@@ -98,12 +102,19 @@ export function extractJson(content: string): unknown {
     // 不可修复再走统一抛错。
     const repaired = repairTruncatedJson(slice);
     if (repaired !== undefined) {
+      aiLog("warn", "parse", "截断 JSON 已抢救（只保留完整元素）", {
+        rawChars: slice.length,
+        repairedChars: repaired.length,
+      });
       try {
         return JSON.parse(repaired) as unknown;
       } catch {
         // 理论不可达（repair 内部已验证过），落到统一抛错
       }
     }
+    aiLog("error", "parse", "JSON 解析失败（可能是输出被长度截断）", {
+      head: stripped.slice(open, Math.min(open + 120, stripped.length)),
+    });
     throw new AiProviderError(
       "request-failed",
       `AI 返回的 JSON 无法解析（可能是输出被长度截断）：${stripped.slice(open, Math.min(close + 1, open + 160))}…`,
@@ -125,10 +136,18 @@ export async function chatJson(
   }
   // 关键修复：temperature 此前对 builtin 档被静默丢弃（builtin.chat 只组
   // model+messages）；jsonMode 声明结构化意图 → builtin 映射为近贪心采样预设。
+  const startedAt = Date.now();
   const { content } = await provider.chat({ messages, temperature, jsonMode: true });
   if (!content) {
+    aiLog("error", "chatJson", "AI 返回了空内容", { provider: provider.kind });
     throw new AiProviderError("request-failed", "AI 返回了空内容。");
   }
+  aiLog("info", "chatJson", "调用完成", {
+    provider: provider.kind,
+    temperature,
+    outChars: content.length,
+    ms: Date.now() - startedAt,
+  });
   return extractJson(content);
 }
 

@@ -70,3 +70,17 @@
 - **R3**：`conceptMaxTextChars=40_000`（中文约 3 万+ token）+ 4096 输出逼近 `context_size=32768`；若超长章仍失败，按 `context_size` 推导正文上限；
 - **R6**：Tauri 档 `saveGraph` 只落 localStorage，SQLite `knowledge_units` 空表（双写统一，独立方案）；
 - 概念分析失败时「总体原因」与逐章 reason 的 i18n（总体原因 `e.message` 为诊断直出，未套 i18n，与既有先例一致）。
+
+## 排查日志（2026-09-11 追加）
+
+修复落地后补可观测性：AI 分析链路在**双端**输出结构化日志，失败可归因到层。
+
+| 层 | scope / 前缀 | 输出到 | 内容 |
+|----|-------------|--------|------|
+| 共用 helper | `src/ai/log.ts`（新增）`[ai:<scope>]` | 应用控制台 | 单行键值对；错误摘要截 200 字符；**不含 Key 与正文** |
+| 传输层 | `[ai:builtin]` / `[ai:<kind>]` | 应用控制台 | 模型、温度、preset、maxTokens、输入/输出字符数、耗时 |
+| 管道层 | `[ai:chatJson]` / `[ai:parse]` | 应用控制台 | 调用耗时与输出长度；截断抢救命中 → warn；解析失败 → error（含 head 片段） |
+| 编排层 | `[ai:analyze]` | 应用控制台 | 逐章失败 warn（章名+reason）；四条分析（章节/概念/要点/概览）完成汇总 |
+| Rust | `[llm] generate …` | **dev 终端**（eprintln） | prompt 字符数、max_tokens、实际采样温度、preset、耗时、输出字符数；不引 log 依赖 |
+
+配对用法：应用控制台 `[ai:builtin]` 与终端 `[llm] generate` 同请求两行对照——`temp=0.10 preset=tight` 即证明采样透传生效；`out_chars` 顶满 4096 且 `[ai:parse]` 出现「已抢救」即输出仍被截断（R3 信号）。

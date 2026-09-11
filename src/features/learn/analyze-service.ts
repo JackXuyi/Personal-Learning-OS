@@ -27,6 +27,7 @@ import { summarizeDocumentWithAi } from "../../ai/overview-pipeline";
 import { applyChapterRefine } from "../../engine/splitter-engine";
 import { replaceChapterConcepts } from "../../engine/graph-engine";
 import { anchorToDocument } from "./evidence-anchor";
+import { aiErrPreview, aiLog } from "../../ai/log";
 
 export type AnalyzeErrorKind =
   | "not-configured"
@@ -117,6 +118,7 @@ export async function analyzeChaptersNow(
     throw new AnalyzeServiceError("no-body", "这份资料没有正文。");
   }
 
+  const startedAt = Date.now();
   // 直接消费「抛错版」管道：失败向上抛，绝不静默回退成代码结果（诚实降级）。
   // 尺寸超限时管道返回 []（视作「无建议」），不视为失败。
   const refines = await refineChaptersWithAi(provider, chapters, text);
@@ -137,6 +139,13 @@ export async function analyzeChaptersNow(
     ...doc,
     analysis: { ...doc.analysis, ...(model ? { model } : {}), chaptersAt: now },
   });
+  aiLog("info", "analyze", "章节分析完成", {
+    doc: doc.id,
+    chapters: next.length,
+    changed,
+    merged,
+    ms: Date.now() - startedAt,
+  });
   return { chapters: next, changed, merged, analyzedAt: now };
 }
 
@@ -156,6 +165,7 @@ export async function analyzeConceptsNow(
     : chapters;
   const text = doc.textPreview ?? "";
   let graph = await storage.getGraph();
+  const startedAt = Date.now();
   const failed: AnalyzeConceptsResult["failed"] = [];
   const touched = new Map<string, Chapter>(); // chapterId → 更新 unitIds 后的章
   let units = 0;
@@ -194,6 +204,12 @@ export async function analyzeConceptsNow(
       units += out.units.length;
       relations += out.relations.length;
     } catch (err) {
+      // 排查日志：每章失败都可见（UI 只显示汇总，控制台保留逐章原因）。
+      aiLog("warn", "analyze", "章概念分析失败", {
+        doc: doc.id,
+        chapter: c.title,
+        reason: aiErrPreview(err),
+      });
       failed.push({
         chapterId: c.id,
         title: c.title,
@@ -208,6 +224,14 @@ export async function analyzeConceptsNow(
   await storage.saveDocument({
     ...doc,
     analysis: { ...doc.analysis, ...(model ? { model } : {}), conceptsAt: now },
+  });
+  aiLog("info", "analyze", "概念分析完成", {
+    doc: doc.id,
+    ok: targets.length - failed.length,
+    failed: failed.length,
+    units,
+    relations,
+    ms: Date.now() - startedAt,
   });
   return { ok: targets.length - failed.length, failed, units, relations, analyzedAt: now };
 }
@@ -243,6 +267,7 @@ export async function analyzeKeyPointsNow(
 
   const failed: AnalyzeKeyPointsResult["failed"] = [];
   const touched = new Map<string, Chapter>();
+  const startedAt = Date.now();
   let refs = 0;
   let unanchored = 0;
 
@@ -281,6 +306,12 @@ export async function analyzeKeyPointsNow(
       });
       refs += chapterRefs.length;
     } catch (err) {
+      // 排查日志：每章失败都可见（UI 只显示汇总，控制台保留逐章原因）。
+      aiLog("warn", "analyze", "章要点分析失败", {
+        doc: doc.id,
+        chapter: c.title,
+        reason: aiErrPreview(err),
+      });
       failed.push({
         chapterId: c.id,
         title: c.title,
@@ -293,6 +324,14 @@ export async function analyzeKeyPointsNow(
   await storage.saveDocument({
     ...doc,
     analysis: { ...doc.analysis, ...(model ? { model } : {}), keyPointsAt: now },
+  });
+  aiLog("info", "analyze", "要点分析完成", {
+    doc: doc.id,
+    ok: chapters.length - failed.length,
+    failed: failed.length,
+    refs,
+    unanchored,
+    ms: Date.now() - startedAt,
   });
   return {
     ok: chapters.length - failed.length,
@@ -346,6 +385,7 @@ export async function generateOverviewNow(
     throw new AnalyzeServiceError("no-body", "这份资料没有正文。");
   }
 
+  const startedAt = Date.now();
   // 直接消费「抛错版」管道：长度超限 / 解析不合规都由它抛类型化错误。
   const { draft, mode, chunks, skipped } = await summarizeDocumentWithAi(provider, {
     title: doc.title,
@@ -363,5 +403,12 @@ export async function generateOverviewNow(
     ...(model ? { model } : {}),
   };
   await storage.saveDocument({ ...doc, overview });
+  aiLog("info", "analyze", "概览生成完成", {
+    doc: doc.id,
+    mode,
+    skipped,
+    chunks,
+    ms: Date.now() - startedAt,
+  });
   return { overview, skipped };
 }
