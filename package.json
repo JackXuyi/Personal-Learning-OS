@@ -25,6 +25,7 @@
     "test:chunk": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/chunk-engine.test.ts",
     "test:retrieval": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/retrieval.test.ts",
     "test:rag": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/rag-wiring.test.ts",
+    "test:ai": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/ai-pipeline.test.ts",
     "tauri": "tauri"
   },
   "engines": {
