@@ -91,7 +91,7 @@ T12 之前用的是 `grid grid-cols-4` 填充式选中态；T12 改成下划线�
 | Base UI | `Tabs.Panel` 的 `keepMounted` **默认 `false`** → 隐藏面板会卸载（源码 `TabsPanel.d.ts:33-36`）。因此「知识点 → 原文」跳转后 ContentTab 是**重新挂载**，高亮 effect 必定在可见状态下执行 ✅ |
 | Tailwind | 4（CSS-first，无 config 文件）；颜色值唯一出处 `src/styles/main.css`；可用任意值语法 `left-[var(--x)]` |
 | Tauri 窗口 | `minWidth: 960` / `minHeight: 640` / 默认 1280×800（`src-tauri/tauri.conf.json`）→ 自适应需覆盖 960 起 |
-| 新增依赖 | **无** |
+| 新增依赖 | ⚠️ **已被后续方案打破**：`mermaid@^12.0.0`（markdown 正文的 Mermaid 围栏渲染，见 `docs/library-mermaid-render-design-2026-09.md`）。本方案自身仍无新增依赖 |
 | 数据迁移 | **无**（不碰 domain 类型） |
 
 **风险 R3（本方案不处理，仅登记）**：`GraphView.tsx` 硬编码 `slate-*`/`indigo-*` 与 `#xxxxxx` 色值，违反「颜色只在 `main.css`」约定。属独立样式审计议题，建议后续单开任务处理，本轮不顺手改（避免 diff 膨胀）。
@@ -144,7 +144,7 @@ flowchart TB
 | 模块 | 职责 | 技术选型 |
 |------|------|----------|
 | `ui/tabs.tsx` | 下划线式 Tab 的**唯一定义处**：等分铺满 + Indicator 定位 | Base UI 1.8 + Tailwind 4 任意值 |
-| `render/markdown-core.tsx` | markdown → React 的唯一映射：安全 URL、块级/行内两套组件表 | `react-markdown` + `remark-gfm` |
+| `render/markdown-core.tsx` | markdown → React 的唯一映射：安全 URL、块级/行内两套组件表；`pre` 分支按围栏语言分派（`mermaid`/`mmd` → 图表块，其余 → 普通代码块），行内表显式覆写 `pre` 禁止出图（见 `docs/library-mermaid-render-design-2026-09.md` §4.1） | `react-markdown` + `remark-gfm` |
 | `render/renderer-registry.ts` | `DocumentFormat` → 渲染器的纯函数分派 | 纯函数（无 React 依赖，可被单测覆盖） |
 | `learn/chapter-preview.ts` | 章正文切片 + 上限截断的**纯函数**（可单测） | 纯 TS |
 | `AppShell.PageContainer` | 页面容器宽度策略（默认 / wide 两档） | Tailwind 4 utility |
