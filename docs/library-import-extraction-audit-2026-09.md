@@ -184,3 +184,20 @@ GitHub ───┘                                  → [refine] AI 精修(可�
 - G9 的覆盖率文案提示（「浏览器预览不支持向量检索」）未落地；
 - `SourceDocument.source` 里的 `本地文件 · <文件名>` 属**写入态数据标签**（非错误文案），
   英文界面下仍显中文；要本地化需改为存「来源类型 + 文件名」再在 UI 拼装（数据模型改动，未做）。
+
+## 7. 关联缺陷：AI 分析（概念/要点/概览）在 builtin 本地模型上全失败（2026-09-11 补）
+
+> 审计后用户报障「AI 分析资料提取 summary 不成功」，排查确认与导入链路无关，
+> 根因在 **builtin 本地模型的生成参数于 JS→Rust 边界整段丢失**。完整方案见
+> `docs/ai-analysis-summary-fix-design-2026-09.md`，实施记录见
+> `docs/ai-analysis-summary-fix-runbook.md`。
+
+| # | 断点 | 位置 | 事实 |
+|---|------|------|------|
+| 1 | 温度丢弃 | `src/ai/builtin.ts`（`chat()`） | request 只组 `{model, messages}`，`input.temperature` 从未进入；管道设的 0.1/0.2/0.3 全部作废 |
+| 2 | 输出上限写死 | `src-tauri/src/llm/commands.rs` | `max_tokens.unwrap_or(2048)`；TS 侧 `LlmGenerateRequest.maxTokens` 零调用方 → 恒 2048，概念抽取长 JSON（单章 6~14 条 × 150~250 token）恰好在此被截断 |
+| 3 | 采样恒用问答预设 | `commands.rs` + `llm/models.rs` | 恒取 `qwen35_summary()`（temp 0.5 / presence 0.3），而 JSON 适用的 `tight_structured()`（temp 0.1 / presence 0）标着 `#[allow(dead_code)]` 零调用 |
+| 4 | 解析零容错 | `src/ai/pipelines.ts` `extractJson` | 截断的不闭合 JSON 直接抛错，无补救 |
+| 5 | UI 不报原因 | `detail/KnowledgeTab.tsx` | 概念分析 catch 只 `console.error`；`analyze-service` 已逐章采集的 `failed[].reason` 被 UI 丢弃 |
+
+**修复（2026-09-11 落地，见 runbook）**：① Rust `resolve_sampling()` 纯函数统一采样优先级（tight 预设 → 显式温度覆盖）+ `GenerateRequest` 增 `temperature`/`samplingPreset`；② 输出上限兜底 2048→4096（`DEFAULT_MAX_TOKENS` / `BUILTIN_MAX_TOKENS`）；③ 新增 `src/ai/json-repair.ts` 截断抢救（只保留完整元素、绝不伪造半条），`extractJson` 在 parse 失败后接入；④ `KnowledgeTab` 失败列表渲染 `标题：原因` + 总体原因，i18n 双语键 `failedItem`/`failedUnknown`。API 档（openai-compatible）零改动。
