@@ -35,11 +35,8 @@ export const en: Messages = {
   nav: {
     brand: "Personal Learning OS",
     brandSub: "Local-first · Learning loop",
-    groupToday: "Today",
-    groupLearn: "Learn",
-    groupKnowledge: "Knowledge",
-    groupGoals: "Goals",
-    groupSystem: "System",
+    /* Group keys removed: nav is now a flat icon list, hints moved to hover tooltip
+       (docs/nav-sidebar-redesign-design-2026-09.md). */
     home: { label: "Home", hint: "What to do today" },
     plan: { label: "Plan", hint: "Your learning queue" },
     learn: { label: "Learn", hint: "Chapters & reading" },

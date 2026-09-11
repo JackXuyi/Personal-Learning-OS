@@ -38,12 +38,9 @@ export const zh = {
 
   nav: {
     brand: "个人学习 OS",
+    /* 分组键（groupToday/groupLearn/groupKnowledge/groupGoals/groupSystem）已删除：
+       导航改为平铺单列 + 图标，hint 由 hover 浮层承载（docs/nav-sidebar-redesign-design-2026-09.md）。 */
     brandSub: "本地优先 · 学习闭环",
-    groupToday: "今日",
-    groupLearn: "学习",
-    groupKnowledge: "知识",
-    groupGoals: "目标",
-    groupSystem: "系统",
     home: { label: "首页", hint: "今天最值得做什么" },
     plan: { label: "计划", hint: "下一步怎么学" },
     learn: { label: "学习", hint: "章节目录与阅读" },
