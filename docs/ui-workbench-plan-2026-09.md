@@ -149,6 +149,11 @@ PLOS                                    ⌘K Search everything      ● Local Qw
 - 新增 `/goals`、`/goals/:goalId`、`/goals/new`（多目标 CRUD，U6）、`/learner`；`/evidence` 待 evidence log 落地后再开。
 - `/knowledge` 维持现状重定向 `/learn`，Graph 占位由导航 disabled 项表达，不建死路由。
 
+> **2026-09-11 变更**：上述**五分组结构已被取代**。侧栏改为「平铺单列 + 图标 + hover 浮层承载 hint」，
+> 分组字典键（`nav.groupToday` 等 5 个）已删除。新的单一事实源：
+> `src/components/layout/nav-items.ts`（清单）+ `src/components/layout/NavSidebar.tsx`（渲染），
+> 方案见 `docs/nav-sidebar-redesign-design-2026-09.md`。路由表与本节的兼容原则不变。
+
 ### 4.2 Header 终态（U0）
 
 ```
