@@ -191,6 +191,33 @@
 
 ---
 
+## 6. 本轮已落地：资料卡样式优化（2026-09-11，S1–S6）
+
+落地范围：`src/features/learn/library/DocumentCard.tsx`（卡面重排）、`DocActionsMenu.tsx`（菜单常显）、
+`shared.ts`（新增 `docStatus` / `nextReviewOf` 纯函数）、i18n 双语字典、`tests/library-card-status.test.ts`。
+设计稿见画布 Board C「卡片样式优化」（方案一 · 语义点体系，已确认）。
+
+| # | 要点 | 实现 | 数据来源 |
+|---|------|------|---------|
+| S1 | 标题升级为视觉锚点 | 标题 15→16px SemiBold；类型徽标去描边框/底色，退为 10px 弱化小字 | — |
+| S2 | 状态点语义化 | 卡头左侧色点：未切分=灰 / 到期待复习=红 / 已达标=绿 / 进行中=主色（仅点，不染块） | `docStatus()`（chapters + learner.nextReviewAt） |
+| S3 | 主行动条分级 | 「继续学习 · 第 N 章 <章名>」整行按钮（实底 primary）；全达标 → 描边「复习 · 第 N 章」；未切分 → 实底「立即切分」 | `nextStudyChapter` / `isDocMastered` |
+| S4 | 统计与进度合并 | 来源 + 导入时间合并单行截断；进度条右侧补百分比 | `cardMeta` / `Bar` |
+| S5 | 复习提醒固定锚位 | 统计行右端徽标「下次复习 M/D」：未到期=琥珀（`state-weak`），已到期=红（`state-failed`）；无排期不显示 | `nextReviewOf()` |
+| S6 | 菜单常显 | ⋯ 触发去 `opacity-0` hover 显隐，改为常显 + hover/展开换底色 | — |
+
+**本轮未做（避免越界）**：
+
+- **目标 chip**（画布上的「目标 · xxx」）：需 `SourceDocument.goalIds` 与目标页反哺（原评审 M1-1/M1-2），属 domain 改动，不在本轮；
+- **每份资料的索引态**（已索引 / 待索引）：`useIndexStore` 只暴露**全局**覆盖率，按资料维度的索引态需新增存储查询，留待后续。
+
+**验证**：`npm run typecheck`（本改动 0 error）、`npm run test:card`（8/8）、`npm run test:library`（七组串联全通过）。
+按 `rules/no-headless-browser-validation`，未做浏览器级校验。
+
+> 已知（非本轮引入）：`src/features/settings/AIModelsSection.tsx:55-57` 有 3 条 `TS6133` 未使用变量报错，属其他在途改动。
+
+---
+
 ## 附：核查方法
 
 - 区分「已接线」与「仅定义」：对每个能力 grep 其**调用方**，只命中 `src/storage/*` 即判定为无消费方。

@@ -1260,6 +1260,9 @@ export default function LibraryPage() {
 
 ### 8.12 `src/features/learn/library/DocumentCard.tsx`（新增）
 
+> 2026-09-11 卡面升级（状态点 / 整行主行动条 / 百分比与复习徽标 / 菜单常显）见
+> [library-module-review-2026-09.md §6](./library-module-review-2026-09.md)；下方代码为初版快照。
+
 ```tsx
 export type DocActionKind = "rename" | "meta" | "replace" | "append" | "split" | "resplit" | "delete";
 

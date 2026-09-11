@@ -1,6 +1,7 @@
 /**
  * 资料卡操作菜单（卡片右上「⋯」；docs/library-module-design-2026-09.md §8.12）。
  * 与列表页/详情页共用：动作种类由 DocActionKind 统一，弹窗编排归页面。
+ * 2026-09-11：触发器改为**常显**（原 hover 才现，发现性差），hover/展开仅换底色。
  */
 import { MoreHorizontal } from "lucide-react";
 import {
@@ -41,7 +42,7 @@ export default function DocActionsMenu({
       <DropdownMenuTrigger
         aria-label={m.common.more}
         data-testid={`doc-menu-${docId}`}
-        className="absolute right-3 top-3 rounded-md p-1 text-ink-3 opacity-0 transition group-hover:opacity-100 data-open:opacity-100 hover:bg-subtle hover:text-ink-1 focus-visible:opacity-100 focus-visible:outline-none"
+        className="absolute right-3 top-3 rounded-md p-1 text-ink-3 transition hover:bg-subtle hover:text-ink-1 data-open:bg-subtle data-open:text-ink-1 focus-visible:outline-none"
       >
         <MoreHorizontal className="size-4" aria-hidden />
       </DropdownMenuTrigger>
