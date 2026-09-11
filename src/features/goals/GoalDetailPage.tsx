@@ -14,7 +14,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Bar, Card, EvidenceRow, KnowledgeRow, Section } from "../../components/primitives";
 import { PageContainer } from "../../components/layout/AppShell";
 import { MASTERY_FLOOR, MASTERY_THRESHOLD } from "../../domain";
-import type { Chapter, EvidenceEntry, LearningGoal } from "../../domain";
+import type { Chapter, EvidenceEntry, LearningGoal, SourceDocument } from "../../domain";
 import { runChapterLoop, type ChapterLoopSnapshot } from "../../engine";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { useI18n, type Messages } from "../../i18n";
@@ -26,6 +26,8 @@ interface Loaded {
   plan: ChapterLoopSnapshot;
   evidence: EvidenceEntry[];
   isActive: boolean;
+  /** 反查关联资料（SourceDocument.goalIds 含本目标；评审 M1-2）。 */
+  linkedDocs: SourceDocument[];
 }
 
 /** 掌握度 → 状态点语义（与 bandOf 同源简化：0 / <0.6 / <0.8 / ≥0.8）。 */
@@ -53,10 +55,11 @@ export default function GoalDetailPage() {
   const load = useCallback(async () => {
     setError(undefined);
     try {
-      const [goals, activeGoal, evidence] = await Promise.all([
+      const [goals, activeGoal, evidence, docs] = await Promise.all([
         storage.listGoals(),
         storage.getActiveGoal(),
         storage.listEvidence(),
+        storage.listDocuments(),
       ]);
       const goal = goals.find((x) => x.id === goalId);
       if (!goal) {
@@ -65,7 +68,8 @@ export default function GoalDetailPage() {
       }
       // 章级闭环快照按该目标 scope 重算（作用域与就绪度同源：runChapterLoop §7.3）。
       const plan = await runChapterLoop(storage, m, goal.id);
-      setLoaded({ goal, plan, evidence, isActive: activeGoal?.id === goal.id });
+      const linkedDocs = docs.filter((d) => (d.goalIds ?? []).includes(goal.id));
+      setLoaded({ goal, plan, evidence, isActive: activeGoal?.id === goal.id, linkedDocs });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -260,6 +264,23 @@ export default function GoalDetailPage() {
         ) : (
           <p className="mt-2 text-xs text-ink-3">{g.scopeEmptyHint}</p>
         )}
+      </div>
+
+      {/* 关联资料：SourceDocument.goalIds 反查（目标页反哺，评审 M1-2） */}
+      <div className="mt-6">
+        <Section title={g.detail.linkedDocs} className="mt-6" />
+        {loaded.linkedDocs.length === 0 ? (
+          <p className="mt-2 text-sm text-ink-2">{g.detail.linkedDocsEmpty}</p>
+        ) : (
+          <div className="mt-1">
+            {loaded.linkedDocs.map((d) => (
+              <Link key={d.id} to={`/learn/doc/${d.id}`} data-testid={`goal-doc-${d.id}`}>
+                <KnowledgeRow title={d.title} tone="idle" />
+              </Link>
+            ))}
+          </div>
+        )}
+        <p className="mt-1 text-[11px] text-ink-3">{g.detail.linkedDocsHint}</p>
       </div>
 
       {scopeChapters.length === 0 ? (

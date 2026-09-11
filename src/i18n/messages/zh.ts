@@ -491,6 +491,11 @@ export const zh = {
       editScope: "编辑范围 →",
       noScope: "尚未勾选章节——编辑目标添加范围。",
       knowledge: "章进度",
+      /** 目标页反哺（评审 M1-2）：goalIds 反查关联资料。 */
+      linkedDocs: "关联资料",
+      linkedDocsHint: "在资料详情页点「关联目标」建立关联。",
+      linkedDocsEmpty: "还没有资料关联到这个目标。",
+      docChapters: (n: number) => `${n} 章`,
       gapSection: "缺口（低于及格线）",
       gapEmpty: "🎉 范围内没有低于及格线的章。",
       gapHint: "缺口章会出现在学习计划的最前面。",
@@ -661,6 +666,20 @@ export const zh = {
       splitNow: "立即切分",
       continue: "继续学习",
       review: "去复习",
+      /** 整行主行动条文案（带章号与章名，S3）。 */
+      continueAt: (no: number, title: string) => `继续学习 · 第 ${no} 章 ${title}`,
+      reviewAt: (no: number, title: string) => `复习 · 第 ${no} 章 ${title}`,
+      /** 卡片复习徽标（S5）；日期由 shortDate 生成。 */
+      nextReviewOn: (when: string) => `下次复习 ${when}`,
+      /** 卡片状态点语义（S2）：未切分 / 到期待复习 / 已达标 / 进行中。 */
+      status: {
+        unsplit: "未切分",
+        reviewDue: "到期待复习",
+        mastered: "已达标",
+        learning: "进行中",
+      },
+      goalFilterLabel: "目标",
+      goalFilterAll: "全部目标",
       resplit: "重新切分",
       emptyTitle: "还没有资料",
       emptyDesc: "导入第一份资料（Markdown / 笔记 / PDF），系统会按标题自动切分成章节。",
@@ -727,6 +746,14 @@ export const zh = {
       missingDesc: "它可能已被删除。",
       loading: "加载中…",
       tabs: { overview: "概览", content: "资料内容", split: "章节列表", knowledge: "关键知识点", papers: "章节测评试卷" },
+      /** 资料 ⇄ 目标双向接线（评审 M1-1）。 */
+      linkGoals: "关联目标",
+      linkGoalsWithCount: (n: number) => `关联目标（${n}）`,
+      linkGoalsTitle: "关联到学习目标",
+      linkGoalsDesc: "勾选后，该资料会出现在目标详情页的「关联资料」里。",
+      linkGoalsEmpty: "还没有学习目标。",
+      linkGoalsCreate: "新建目标 →",
+      linkGoalsSaved: "已更新关联目标",
       /** 概览（AI 整篇总结 + 本地统计）。 */
       overview: {
         head: "AI 概览",

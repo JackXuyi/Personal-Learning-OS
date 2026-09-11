@@ -503,6 +503,11 @@ export const en: Messages = {
       editScope: "Edit scope →",
       noScope: "No chapters selected — edit the goal to add a scope.",
       knowledge: "Chapter progress",
+      /* Goal-side feedback (review M1-2): reverse lookup of linked documents. */
+      linkedDocs: "Linked documents",
+      linkedDocsHint: "Use “Link goals” on a document's detail page to create the link.",
+      linkedDocsEmpty: "No documents linked to this goal yet.",
+      docChapters: (n: number) => `${n} chapter(s)`,
       gapSection: "Gaps (below floor)",
       gapEmpty: "🎉 No chapters in scope below the floor.",
       gapHint: "Gap chapters rise to the top of your learning plan.",
@@ -679,6 +684,20 @@ export const en: Messages = {
       splitNow: "Split now",
       continue: "Continue",
       review: "Review",
+      /** Full-width primary action label (with chapter no. + title, S3). */
+      continueAt: (no: number, title: string) => `Continue · Ch. ${no} ${title}`,
+      reviewAt: (no: number, title: string) => `Review · Ch. ${no} ${title}`,
+      /** Card review badge (S5); date comes from shortDate. */
+      nextReviewOn: (when: string) => `Review ${when}`,
+      /** Card status dot semantics (S2). */
+      status: {
+        unsplit: "Unsplit",
+        reviewDue: "Review due",
+        mastered: "Mastered",
+        learning: "In progress",
+      },
+      goalFilterLabel: "Goal",
+      goalFilterAll: "All goals",
       resplit: "Re-split",
       emptyTitle: "No documents yet",
       emptyDesc:
@@ -747,6 +766,14 @@ export const en: Messages = {
       missingDesc: "It may have been deleted.",
       loading: "Loading…",
       tabs: { overview: "Overview", content: "Content", split: "Chapters", knowledge: "Key points", papers: "Papers" },
+      /* Document ⇄ goal wiring (review M1-1). */
+      linkGoals: "Link goals",
+      linkGoalsWithCount: (n: number) => `Link goals (${n})`,
+      linkGoalsTitle: "Link to learning goals",
+      linkGoalsDesc: "Linked documents appear in the goal page's “Linked documents” section.",
+      linkGoalsEmpty: "No learning goals yet.",
+      linkGoalsCreate: "Create a goal →",
+      linkGoalsSaved: "Linked goals updated",
       /** Overview tab (AI whole-document summary + local stats). */
       overview: {
         head: "AI overview",

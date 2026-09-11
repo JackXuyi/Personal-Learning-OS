@@ -13,6 +13,7 @@ import SplitTab from './detail/SplitTab';
 import KnowledgeTab from './detail/KnowledgeTab';
 import PapersTab from './detail/PapersTab';
 import OverviewTab from './detail/OverviewTab';
+import GoalLinkDialog from './library/GoalLinkDialog';
 
 /**
  * Tab 取值白名单。
@@ -42,6 +43,8 @@ export default function DocumentDetailPage() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [graph, setGraph] = useState<KnowledgeGraph | null>(null);
   const [learner, setLearner] = useState<LearnerState | null>(null);
+  /** 关联目标弹窗开关（资料 ⇄ 目标双向接线）。 */
+  const [linkOpen, setLinkOpen] = useState(false);
   const { m: t } = useI18n();
 
   // 加载数据
@@ -135,7 +138,25 @@ export default function DocumentDetailPage() {
             </p>
           </div>
         </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setLinkOpen(true)}
+            data-testid="link-goals-open"
+          >
+            {(doc.goalIds?.length ?? 0) > 0
+              ? t.learn.detail.linkGoalsWithCount(doc.goalIds!.length)
+              : t.learn.detail.linkGoals}
+          </Button>
+        </div>
       </header>
+
+      <GoalLinkDialog
+        doc={linkOpen ? doc : undefined}
+        onClose={() => setLinkOpen(false)}
+        onSaved={(next) => setDoc(next)}
+      />
 
       {/* Tab 导航：TabsList/Tab/Panel 必须包裹在 Tabs(Root) 内，否则 Base UI 抛 TabsRootContext is missing */}
       <Tabs value={tab} onValueChange={selectTab} className="mt-6">

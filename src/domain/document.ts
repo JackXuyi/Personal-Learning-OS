@@ -30,6 +30,11 @@ export interface SourceDocument {
   source?: string;
   importedAt: number;
   status: DocumentStatus;
+  /**
+   * 关联的学习目标（资料 ⇄ 目标双向接线；评审 M1-1）。
+   * 可选：老数据无此字段 → 视为未关联，零迁移。
+   */
+  goalIds?: string[];
   rawSizeBytes?: number;
   /** 可选的纯文本快照，在解析尚未支持时由 Knowledge Engine 使用。 */
   textPreview?: string;

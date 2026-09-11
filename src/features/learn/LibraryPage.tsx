@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, SectionTitle } from "../../components/primitives";
 import { Button } from "../../components/ui/button";
 import { ConfirmDialog } from "../../components/ui/confirm-dialog";
+import { Select } from "../../components/ui/select";
 import {
   DOCS_CHANGED_EVENT,
   PageContainer,
@@ -18,7 +19,7 @@ import {
   openImportModal,
 } from "../../components/layout/AppShell";
 import { MASTERY_THRESHOLD } from "../../domain";
-import type { Chapter, LearnerState, SourceDocument } from "../../domain";
+import type { Chapter, LearnerState, LearningGoal, SourceDocument } from "../../domain";
 import { sortChaptersByOrder } from "../../domain";
 import { applyForgetting } from "../../engine";
 import { hybridSearch } from "../../ai/retrieval/hybrid-search";
@@ -51,6 +52,9 @@ type Filter = "all" | "unsplit" | "active";
 type Sort = "newest" | "oldest" | "title";
 type DialogState = { kind: DocActionKind; doc: SourceDocument };
 
+/** 目标过滤的「全部」哨兵值（Select 需要字符串值）。 */
+const GOAL_FILTER_ALL = "__all__";
+
 export default function LibraryPage() {
   const { m } = useI18n();
   const lib = m.learn.library;
@@ -59,6 +63,9 @@ export default function LibraryPage() {
   const [docs, setDocs] = useState<SourceDocument[]>([]);
   const [chaptersByDoc, setChaptersByDoc] = useState<Record<string, Chapter[]>>({});
   const [learner, setLearner] = useState<LearnerState | undefined>();
+  /** 目标过滤候选（仅「已被至少一份资料关联」的目标），titles 供下拉显示。 */
+  const [goals, setGoals] = useState<LearningGoal[]>([]);
+  const [goalFilter, setGoalFilter] = useState(GOAL_FILTER_ALL);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort>("newest");
@@ -80,7 +87,12 @@ export default function LibraryPage() {
   const indexProgress = useIndexStore((s) => s.progress);
 
   const load = async () => {
-    const [ds, ls] = await Promise.all([storage.listDocuments(), storage.getLearnerState()]);
+    const [ds, ls, gs] = await Promise.all([
+      storage.listDocuments(),
+      storage.getLearnerState(),
+      storage.listGoals(),
+    ]);
+    setGoals(gs);
     // 读时遗忘衰减（与首页/计划同口径；衰减视图，幂等不写回）。
     const learner = applyForgetting(ls, Date.now());
     const withChapters = await Promise.all(
@@ -145,6 +157,9 @@ export default function LibraryPage() {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     const rows = docs.filter((d) => {
+      if (goalFilter !== GOAL_FILTER_ALL && !(d.goalIds ?? []).includes(goalFilter)) {
+        return false;
+      }
       if (q) {
         const hit =
           d.title.toLowerCase().includes(q) ||
@@ -171,7 +186,14 @@ export default function LibraryPage() {
     if (sort === "oldest") sorted.sort((a, b) => a.importedAt - b.importedAt);
     if (sort === "title") sorted.sort((a, b) => a.title.localeCompare(b.title));
     return sorted;
-  }, [docs, chaptersByDoc, learner, query, filter, sort]);
+  }, [docs, chaptersByDoc, learner, query, filter, sort, goalFilter]);
+
+  /** 有资料关联的目标（过滤下拉候选；无关联资料时下拉整体隐藏）。 */
+  const linkedGoals = useMemo(() => {
+    const used = new Set<string>();
+    for (const d of docs) for (const id of d.goalIds ?? []) used.add(id);
+    return goals.filter((g) => used.has(g.id));
+  }, [docs, goals]);
 
   const stats = useMemo(() => {
     const chapters = docs.reduce((n, d) => n + (chaptersByDoc[d.id] ?? []).length, 0);
@@ -269,6 +291,18 @@ export default function LibraryPage() {
             ]}
           />
           <div className="flex items-center gap-2">
+            {linkedGoals.length > 0 ? (
+              <Select
+                ariaLabel={lib.goalFilterLabel}
+                value={goalFilter}
+                onValueChange={setGoalFilter}
+                options={[
+                  { value: GOAL_FILTER_ALL, label: lib.goalFilterAll },
+                  ...linkedGoals.map((g) => ({ value: g.id, label: g.title })),
+                ]}
+                className="h-8 w-36 bg-surface text-xs"
+              />
+            ) : null}
             <SegmentedTabs<Sort>
               value={sort}
               onChange={setSort}
