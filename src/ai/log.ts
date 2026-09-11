@@ -7,7 +7,8 @@
  *
  * 硬约束：
  * - 只输出元数据（字符数 / 耗时 / 参数 / 错误摘要），**绝不输出 API Key 与完整正文**；
- * - 单行键值对，肉眼可扫；错误 message 截断到 200 字符防刷屏。
+ * - 单行键值对，肉眼可扫；错误 message 截断到 200 字符防刷屏；
+ * - 桌面端额外转发到文件日志（logWriteForward，见 lib/desktop-log.ts）。
  */
 export type AiLogLevel = "info" | "warn" | "error";
 
@@ -16,12 +17,13 @@ const WRITE: Record<AiLogLevel, (msg: string) => void> = {
   warn: (m) => console.warn(m),
   error: (m) => console.error(m),
 };
-
 /** 错误 message 收进日志前截断（长 JSON 报错可能带 160+ 字符片段）。 */
 export function aiErrPreview(err: unknown, max = 200): string {
   const message = err instanceof Error ? err.message : String(err);
   return message.length <= max ? message : `${message.slice(0, max)}…`;
 }
+
+import { logWriteForward } from "../lib/desktop-log";
 
 /** 单行结构化日志：`[ai:<scope>] <message> k1=v1 k2=v2`。 */
 export function aiLog(
@@ -33,5 +35,9 @@ export function aiLog(
   const fields = Object.entries(kv ?? {})
     .map(([k, v]) => `${k}=${v === undefined ? "-" : String(v)}`)
     .join(" ");
-  WRITE[level](`[ai:${scope}] ${message}${fields ? ` ${fields}` : ""}`);
+  const text = `${message}${fields ? ` ${fields}` : ""}`;
+  WRITE[level](`[ai:${scope}] ${text}`);
+  // 文件日志转发（决策 D1：双端同写一文件）：fire-and-forget、失败静默，
+  // scope 带 ai: 前缀与 Rust 侧 [llm]/[app] 行共用同一份日志文件。
+  logWriteForward(level, `ai:${scope}`, text);
 }

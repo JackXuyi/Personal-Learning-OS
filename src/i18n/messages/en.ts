@@ -166,7 +166,23 @@ export const en: Messages = {
       learning: "Learning behavior",
       appearance: "Appearance & language",
       shortcuts: "Shortcuts",
+      logs: "Logs",
       about: "About",
+    },
+    /** Logs section (desktop only, docs/tauri-log-config-design-2026-09.md). */
+    logs: {
+      title: "Logs",
+      desc: "File logs (desktop only): written to daily files under the log directory, kept for 7 days, for offline troubleshooting.",
+      enabledLabel: "Write to file",
+      enabledHint: "Turn off to stop writing; existing files are kept. The setting is remembered.",
+      levelLabel: "Level",
+      dirLabel: "Log directory",
+      openDir: "Open directory",
+      resetDir: "Reset to default",
+      refresh: "Refresh",
+      previewTitle: "Recent logs",
+      previewEmpty: "No logs today.",
+      writeError: "Write error",
     },
     /** Storage section. */
     storage: {

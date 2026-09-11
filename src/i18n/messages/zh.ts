@@ -172,7 +172,23 @@ export const zh = {
       learning: "学习行为",
       appearance: "外观与语言",
       shortcuts: "快捷键",
+      logs: "日志",
       about: "关于",
+    },
+    /** 日志分区（桌面端专属，docs/tauri-log-config-design-2026-09.md）。 */
+    logs: {
+      title: "日志",
+      desc: "文件日志（仅桌面端）：写入目录按天分文件，自动保留 7 天，用于离线排查问题。",
+      enabledLabel: "写入文件",
+      enabledHint: "关闭后停止写入，已有文件保留；配置会记住。",
+      levelLabel: "级别",
+      dirLabel: "写入目录",
+      openDir: "打开目录",
+      resetDir: "恢复默认",
+      refresh: "刷新",
+      previewTitle: "最近日志",
+      previewEmpty: "今日暂无日志。",
+      writeError: "写入异常",
     },
     /** Storage 分区。 */
     storage: {

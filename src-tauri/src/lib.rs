@@ -16,6 +16,7 @@ use tauri::Manager;
 
 mod db;
 mod llm;
+mod logging;
 mod vault;
 
 use db::init_db;
@@ -63,15 +64,28 @@ fn init_llm(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            // 日志最先初始化：后续 init_db/init_llm 的失败也进文件（TC-01）。
+            match app.path().app_data_dir() {
+                Ok(dir) => logging::init(&dir),
+                Err(err) => eprintln!("logging init skipped: {err}"),
+            }
             // SQLite 初始化失败不阻塞启动：UI 侧 isTauri() 守卫会回退到
             // localStorage 后端（db_status 可用于排障）。
             if let Err(err) = init_db(app) {
-                eprintln!("sqlite init skipped: {err}");
+                logging::log_line(
+                    logging::LogLevel::Warn,
+                    "app",
+                    &format!("sqlite init skipped: {err}"),
+                );
             }
             if let Err(err) = init_llm(app) {
                 // 本地模型栈初始化失败不阻塞启动:仅记录,UI 侧 llm_status
                 // 会给出可读的 not-configured 提示。
-                eprintln!("local LLM init skipped: {err}");
+                logging::log_line(
+                    logging::LogLevel::Warn,
+                    "app",
+                    &format!("local LLM init skipped: {err}"),
+                );
             }
             Ok(())
         })
@@ -84,6 +98,12 @@ pub fn run() {
             llm::commands::llm_generate,
             llm::commands::llm_default_model,
             llm::commands::llm_status,
+            // 文件日志（docs/tauri-log-config-design-2026-09.md）
+            logging::log_get_config,
+            logging::log_set_config,
+            logging::log_open_dir,
+            logging::log_read_recent,
+            logging::log_write,
             vault::vault_set_secret,
             vault::vault_get_secret,
             vault::vault_delete_secret,

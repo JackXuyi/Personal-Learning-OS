@@ -188,30 +188,42 @@ pub async fn llm_generate(
     })
     .to_string();
 
-    // 4. helper 推理。排查日志走 eprintln → `tauri dev` 终端可见
-    //    (与前端 `[ai:*]` 控制台日志配对:采样是否生效 / 是否截断在此对账)。
+    // 4. helper 推理。排查日志走 log_line → 终端 + 文件双写
+    //    （与前端 `[ai:*]` 日志同文件对照:采样是否生效 / 是否截断在此对账,
+    //    打包版可经「设置 → 日志」查看,见 docs/tauri-log-config-design-2026-09.md）。
     let started = std::time::Instant::now();
-    eprintln!(
-        "[llm] generate model={} prompt_chars={} max_tokens={} temp={:.2} preset={}",
-        request.model,
-        prompt_chars,
-        max_tokens,
-        sampling.temperature,
-        request.sampling_preset.as_deref().unwrap_or("-"),
+    crate::logging::log_line(
+        crate::logging::LogLevel::Info,
+        "llm",
+        &format!(
+            "generate model={} prompt_chars={} max_tokens={} temp={:.2} preset={}",
+            request.model,
+            prompt_chars,
+            max_tokens,
+            sampling.temperature,
+            request.sampling_preset.as_deref().unwrap_or("-"),
+        ),
     );
     let result = state.sidecar.generate(request_json).await;
     match &result {
-        Ok(out) => eprintln!(
-            "[llm] generate done model={} ms={} out_chars={}",
-            request.model,
-            started.elapsed().as_millis(),
-            out.chars().count()
+        Ok(out) => crate::logging::log_line(
+            crate::logging::LogLevel::Info,
+            "llm",
+            &format!(
+                "generate done model={} ms={} out_chars={}",
+                request.model,
+                started.elapsed().as_millis(),
+                out.chars().count()
+            ),
         ),
-        Err(e) => eprintln!(
-            "[llm] generate failed model={} ms={} err={}",
-            request.model,
-            started.elapsed().as_millis(),
-            e
+        Err(e) => crate::logging::log_line(
+            crate::logging::LogLevel::Error,
+            "llm",
+            &format!(
+                "generate failed model={} ms={} err={e}",
+                request.model,
+                started.elapsed().as_millis(),
+            ),
         ),
     }
     result.map_err(|e| e.to_string())
