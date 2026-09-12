@@ -80,7 +80,7 @@ Cursor / Claude 系工具会按 frontmatter 自动注入：`alwaysApply: true` �
 | ui-impl-tokens | 在 `src/` 新增/改动 React UI | token-first + Tailwind 4 + UI Kit/primitives 复用（含 ui/ 新建规范）；默认不加 useCallback |
 | style-optimization-workflow | 样式优化/一致性审计/设计语言提炼 | 读 token 与 UI 方案 → 短方案 → 实现 → 对抗性自审 → 按需持久化审计 |
 | **桌面/Rust** | | |
-| tauri-ipc | 涉及 `invoke`/命令注册/事件 | vault/llm 命令契约、lib.rs 注册、serde 镜像、isTauri 守卫 |
+| tauri-ipc | 涉及 `invoke`/命令注册/事件/`db_*` | vault/llm/db 命令契约、lib.rs 注册、serde 镜像、isTauri 守卫、`trySqlite` 降级与迁移自等待陷阱 |
 | **文档与变更配套** | | |
 | package-docs-driven-change | 功能/重构按文档驱动 | 按 area 读 docs → 对齐实现 → 产出测试（node tests/manual；浏览器级需用户显式要求） |
 | **测试** | | |
