@@ -30,6 +30,8 @@
     "test:rag": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/rag-wiring.test.ts",
     "test:render": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/render-mermaid.test.ts",
     "test:ai": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/ai-pipeline.test.ts",
+    "test:graph": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/graph-split.test.ts",
+    "test:prereq": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/planner-prereq.test.ts",
     "tauri": "tauri"
   },
   "engines": {
