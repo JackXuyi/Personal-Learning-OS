@@ -58,7 +58,8 @@ pub async fn init_pool(path: &Path) -> Result<SqlitePool, Box<dyn std::error::Er
     // 逐条执行 DDL。sqlx 的 execute 单次只接受一条语句，故按分号切分；
     // 用 raw_sql 亦可，但切分后单条失败能给出更明确的错误位置。
     apply_schema(&pool).await?;
-    // 版本迁移（v1 → v2：chunks_fts 改 trigram；v2 → v3：embeddings 加 vector）。
+    // 版本迁移（v1 → v2：chunks_fts 改 trigram；v2 → v3：embeddings 加 vector；
+    // v3 → v4：knowledge_units 加 evidence 四列）。
     migrate(&pool).await?;
 
     Ok(pool)
@@ -75,12 +76,13 @@ async fn apply_schema(pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error
 
 /// 版本迁移入口（幂等）。按版本号顺序执行，每一步自行判断是否需要跑。
 ///
-/// 注意：两步的版本判定互相独立，因此 v1 存量库会连跑 v2 与 v3 一次到位。
-/// 新库在 `apply_schema` 阶段就已带全部列，两步都会走「无需变更」分支。
+/// 注意：各步的版本判定互相独立，因此 v1 存量库会连跑 v2 / v3 / v4 一次到位。
+/// 新库在 `apply_schema` 阶段就已带全部列，各步都会走「无需变更」分支。
 async fn migrate(pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
     let mut conn = pool.acquire().await?;
     migrate_v2(&mut conn).await?;
     migrate_v3(&mut conn).await?;
+    migrate_v4(&mut conn).await?;
     Ok(())
 }
 
@@ -142,6 +144,44 @@ async fn migrate_v3(
             .await?;
     }
     sqlx::query("INSERT INTO _schema_version (version, applied_at) VALUES (3, ?)")
+        .bind(now_ms())
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}
+
+/// v3 → v4：`knowledge_units` 增加 evidence 四列（概念原文出处）。
+///
+/// 背景：`KnowledgeUnit.evidence` 在领域类型里一直存在（KnowledgeTab 的「原文引用」
+/// 依赖它），但表与 DTO 都没有对应列——概念图一旦改由 SQLite 承载，往返就会把它丢掉。
+///
+/// 幂等做法同 v3：逐列 `PRAGMA` 探测，缺哪列补哪列；新库在 `apply_schema` 阶段已带
+/// 四列，此步只写版本号。
+async fn migrate_v4(
+    conn: &mut sqlx::SqliteConnection,
+) -> Result<(), Box<dyn std::error::Error>> {
+    const COLUMNS: [(&str, &str); 4] = [
+        ("evidence_document_id", "TEXT"),
+        ("evidence_start", "INTEGER"),
+        ("evidence_end", "INTEGER"),
+        ("evidence_quote", "TEXT"),
+    ];
+    let cur: i64 = sqlx::query_scalar("SELECT COALESCE(MAX(version), 0) FROM _schema_version")
+        .fetch_one(&mut *conn)
+        .await?;
+    if cur >= 4 {
+        return Ok(()); // 已是目标版本，跳过
+    }
+    for (name, ty) in COLUMNS {
+        if !has_column(conn, "knowledge_units", name).await? {
+            sqlx::query(&format!(
+                "ALTER TABLE knowledge_units ADD COLUMN {name} {ty}"
+            ))
+            .execute(&mut *conn)
+            .await?;
+        }
+    }
+    sqlx::query("INSERT INTO _schema_version (version, applied_at) VALUES (4, ?)")
         .bind(now_ms())
         .execute(&mut *conn)
         .await?;

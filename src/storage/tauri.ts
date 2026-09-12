@@ -22,10 +22,21 @@ import type {
   Embedding,
   EmbeddingTargetType,
   EmbeddingVector,
+  KnowledgeGraph,
   KnowledgeRelation,
   KnowledgeUnit,
   Section,
 } from "../domain";
+import {
+  diffIds,
+  fromRelationDto,
+  fromUnitDto,
+  mergeGraph,
+  splitGraph,
+  toRelationDto,
+  toUnitDto,
+} from "./graph-split";
+import type { KnowledgeRelationDto, KnowledgeUnitDto } from "./graph-split";
 import { LocalStorageAdapter } from "./local";
 import type { RetrievalScope, StorageAdapter } from "./types";
 
@@ -55,25 +66,6 @@ interface ChunkDto {
   metadataPage?: number;
   metadataSourceLocation?: string;
   knowledgeIds: string[];
-  createdAt: number;
-}
-
-interface KnowledgeUnitDto {
-  id: string;
-  title: string;
-  kind: string;
-  summary?: string;
-  sourceDocumentId?: string;
-  tags: string[];
-  createdAt: number;
-}
-
-interface KnowledgeRelationDto {
-  id: string;
-  fromId: string;
-  toId: string;
-  relType: string;
-  strength?: number;
   createdAt: number;
 }
 
@@ -171,52 +163,6 @@ function fromChunkDto(d: ChunkDto): Chunk {
   };
 }
 
-function toUnitDto(u: KnowledgeUnit): KnowledgeUnitDto {
-  return {
-    id: u.id,
-    title: u.title,
-    kind: u.kind,
-    summary: u.summary,
-    sourceDocumentId: u.sourceDocumentId,
-    tags: u.tags ?? [],
-    createdAt: u.createdAt,
-  };
-}
-
-function fromUnitDto(d: KnowledgeUnitDto): KnowledgeUnit {
-  return {
-    id: d.id,
-    title: d.title,
-    kind: d.kind as KnowledgeUnit["kind"],
-    summary: d.summary,
-    sourceDocumentId: d.sourceDocumentId,
-    tags: d.tags ?? [],
-    createdAt: d.createdAt,
-  };
-}
-
-function toRelationDto(r: KnowledgeRelation): KnowledgeRelationDto {
-  return {
-    id: r.id,
-    fromId: r.fromId,
-    toId: r.toId,
-    relType: r.type,
-    strength: r.strength,
-    // 领域类型无 createdAt：以写入时刻补齐（SQLite 列非空）。
-    createdAt: Date.now(),
-  };
-}
-
-function fromRelationDto(d: KnowledgeRelationDto): KnowledgeRelation {
-  return {
-    id: d.id,
-    fromId: d.fromId,
-    toId: d.toId,
-    type: d.relType as KnowledgeRelation["type"],
-    strength: d.strength,
-  };
-}
-
 function toEmbeddingDto(e: Embedding): EmbeddingDto {
   return {
     id: e.id,
@@ -246,6 +192,14 @@ function fromEmbeddingDto(d: EmbeddingDto): Embedding {
  * 换版本号即可让下一次启动重新搬一次（例如修了迁移逻辑之后）。
  */
 const RAG_MIGRATION_FLAG = "plos.rag.migrated.v1";
+
+/**
+ * 概念图（`plos.graph` blob → knowledge_units / knowledge_relations 两表）迁移标记。
+ *
+ * 为什么新开 v2 号而不复用上面那个：存量用户升级前 RAG 迁移已把 v1 置位，
+ * 重用 v1 会让图迁移被「已迁移」短路掉，图永远进不了 SQLite。
+ */
+const GRAPH_MIGRATION_FLAG = "plos.graph.migrated.v2";
 
 /** `db_status` 返回体（健康探针）。 */
 export interface DbStatus {
@@ -362,10 +316,55 @@ export class TauriStorage extends LocalStorageAdapter implements StorageAdapter 
     }
   }
 
-  /** 首次确认 SQLite 可用后触发一次性迁移（并发安全）。 */
+  /**
+   * 首次确认 SQLite 可用后触发一次性迁移（并发安全）。
+   *
+   * 两段迁移串行且各自幂等：RAG 五类实体（v1 flag）→ 概念图 blob（v2 flag）。
+   * 前一段失败不影响后一段尝试（反之亦然）。
+   */
   private ensureMigration(): Promise<number> {
-    this.migration ??= this.migrateLegacyRagData();
+    this.migration ??= (async () => {
+      const rag = await this.migrateLegacyRagData();
+      const graph = await this.migrateLegacyGraph();
+      return Math.max(rag, 0) + Math.max(graph, 0);
+    })();
     return this.migration;
+  }
+
+  /**
+   * 把父类 blob（`plos.graph`）里的概念图搬进 SQLite 两表（D3）。
+   *
+   * 只增不删、**不清源**：blob 保留为灾备 + 浏览器预览数据源。
+   *
+   * 注意：这里必须用**裸 `invoke`** 而非 `trySqlite` —— 本方法由 `ensureMigration`
+   * 调用，而 `trySqlite` 首次成功时会回头 await `ensureMigration()`，形成自等待死锁。
+   *
+   * @returns 搬移的实体总数；-1 = 失败（不写标记，下次启动重试）。
+   */
+  async migrateLegacyGraph(): Promise<number> {
+    if (this.readGraphFlag()) return 0;
+    try {
+      // 直接读父类内存镜像 `this.graph`：构造时已从 localStorage 载入。
+      const { units, relations } = splitGraph(this.graph);
+      if (units.length + relations.length === 0) {
+        this.writeGraphFlag();
+        return 0;
+      }
+      if (units.length > 0) {
+        await invoke("db_save_knowledge_units", { units });
+      }
+      if (relations.length > 0) {
+        await invoke("db_save_relations", { relations });
+      }
+      this.writeGraphFlag();
+      console.info(
+        `[storage] 遗留概念图已迁入 SQLite：${units.length} units / ${relations.length} relations`,
+      );
+      return units.length + relations.length;
+    } catch (err) {
+      console.warn("[storage] 遗留概念图迁移失败，下次启动重试", err);
+      return -1;
+    }
   }
 
   private readMigrationFlag(): boolean {
@@ -381,6 +380,22 @@ export class TauriStorage extends LocalStorageAdapter implements StorageAdapter 
       localStorage.setItem(RAG_MIGRATION_FLAG, "1");
     } catch {
       // 写不进去（配额 / 隐私模式）只影响效率：写入本身幂等，下次启动重来一遍。
+    }
+  }
+
+  private readGraphFlag(): boolean {
+    try {
+      return localStorage.getItem(GRAPH_MIGRATION_FLAG) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  private writeGraphFlag(): void {
+    try {
+      localStorage.setItem(GRAPH_MIGRATION_FLAG, "1");
+    } catch {
+      // 同 writeMigrationFlag：写入幂等，写失败只是下次重来。
     }
   }
 
@@ -580,6 +595,56 @@ export class TauriStorage extends LocalStorageAdapter implements StorageAdapter 
   override async deleteRelation(id: string): Promise<void> {
     const r = await this.trySqlite("db_delete_relation", { id });
     if (!r.ok) await super.deleteRelation(id);
+  }
+
+  // ===== 知识图谱（getGraph / saveGraph ↔ 两表聚合）=====
+
+  /**
+   * 读图：SQLite 两表聚合成 `KnowledgeGraph`。
+   *
+   * 先 `ensureMigration()` 再查表，消除「首次读取早于迁移」的竞态——否则升级后
+   * 第一次 getGraph 会拿到空图，界面闪一下「无概念」。
+   * 两表任一失败 → 整体回退父类 blob（不做半份聚合：units 有 relations 无的图会
+   * 让 GraphView 全丢边）。
+   */
+  override async getGraph(): Promise<KnowledgeGraph> {
+    await this.ensureMigration();
+    const units = await this.trySqlite<KnowledgeUnitDto[]>("db_list_knowledge_units", {});
+    const relations = await this.trySqlite<KnowledgeRelationDto[]>("db_list_relations", {});
+    if (!units.ok || !relations.ok) return super.getGraph();
+    return mergeGraph(units.value, relations.value);
+  }
+
+  /**
+   * 写图：拆行 upsert + diff-delete + blob 双写。
+   *
+   * diff-delete 是必需的：概念抽取是「整图替换」语义（analyze-service 重抽一章会
+   * 换掉该章概念），只 upsert 会把被替换的旧概念永久留在表里（级联删除同理）。
+   * 表规模为个人学习资料量级（百级 units / 千级 relations），逐条删可接受。
+   *
+   * 任一步失败 → 整体回退父类（仅 localStorage），行为与现状一致；成功路径也仍写
+   * blob（D3 不清源：灾备 + 浏览器预览读得到）。
+   */
+  override async saveGraph(graph: KnowledgeGraph): Promise<void> {
+    await this.ensureMigration();
+    const { units, relations } = splitGraph(graph);
+    const savedUnits = await this.trySqlite("db_save_knowledge_units", { units });
+    const savedRelations = await this.trySqlite("db_save_relations", { relations });
+    if (!savedUnits.ok || !savedRelations.ok) {
+      await super.saveGraph(graph);
+      return;
+    }
+    const currentUnits = await this.trySqlite<KnowledgeUnitDto[]>("db_list_knowledge_units", {});
+    const currentRelations = await this.trySqlite<KnowledgeRelationDto[]>("db_list_relations", {});
+    if (currentUnits.ok && currentRelations.ok) {
+      for (const id of diffIds(currentUnits.value, units)) {
+        await this.trySqlite("db_delete_knowledge_unit", { id });
+      }
+      for (const id of diffIds(currentRelations.value, relations)) {
+        await this.trySqlite("db_delete_relation", { id });
+      }
+    }
+    await super.saveGraph(graph);
   }
 
   // ===== Embedding =====

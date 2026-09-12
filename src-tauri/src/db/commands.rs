@@ -429,12 +429,17 @@ pub async fn db_save_knowledge_units(
         let tags = serde_json::to_string(&u.tags).unwrap_or_else(|_| "[]".to_string());
         sqlx::query(
             "INSERT INTO knowledge_units
-               (id, title, kind, summary, source_document_id, tags, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
+               (id, title, kind, summary, source_document_id, tags, created_at,
+                evidence_document_id, evidence_start, evidence_end, evidence_quote)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                title = excluded.title, kind = excluded.kind, summary = excluded.summary,
                source_document_id = excluded.source_document_id, tags = excluded.tags,
-               created_at = excluded.created_at",
+               created_at = excluded.created_at,
+               evidence_document_id = excluded.evidence_document_id,
+               evidence_start = excluded.evidence_start,
+               evidence_end = excluded.evidence_end,
+               evidence_quote = excluded.evidence_quote",
         )
         .bind(&u.id)
         .bind(&u.title)
@@ -443,6 +448,10 @@ pub async fn db_save_knowledge_units(
         .bind(&u.source_document_id)
         .bind(tags)
         .bind(u.created_at)
+        .bind(&u.evidence_document_id)
+        .bind(u.evidence_start)
+        .bind(u.evidence_end)
+        .bind(&u.evidence_quote)
         .execute(&mut *tx)
         .await
         .map_err(|err| db_err("写入知识单元", err))?;

@@ -57,14 +57,24 @@ CREATE TABLE IF NOT EXISTS chunk_knowledge (
 CREATE INDEX IF NOT EXISTS idx_chunk_knowledge_kid ON chunk_knowledge(knowledge_id);
 
 -- ===== 知识单元（概念 / 技能原子语义）=====
+--
+-- v4 变更：新增 evidence 四列（`ConceptEvidence` 拆平：文档 + 字符区间 + 原文）。
+-- 四列同空 = 无 evidence（evidence 是原子三元组 + quote，不做部分存储）。
+-- 新库在此直接拿到；存量库由 db/mod.rs::migrate 的 v3→v4 步骤 PRAGMA 探测后
+-- ALTER 补齐（ALTER 不能写进本脚本：apply_schema 每次启动都执行，第二次必报
+-- duplicate column name）。
 CREATE TABLE IF NOT EXISTS knowledge_units (
-  id                 TEXT PRIMARY KEY,  -- ULID / nanoid
-  title              TEXT NOT NULL,     -- 概念名
-  kind               TEXT NOT NULL,     -- concept | skill | fact | procedure | principle
-  summary            TEXT,              -- 通俗释义
-  source_document_id TEXT,              -- 抽取来源文档（Evidence 链溯源）
-  tags               TEXT,              -- JSON array 文本，如 ["NLP","深度学习"]
-  created_at         INTEGER NOT NULL   -- epoch ms
+  id                   TEXT PRIMARY KEY,  -- ULID / nanoid
+  title                TEXT NOT NULL,     -- 概念名
+  kind                 TEXT NOT NULL,     -- concept | skill | fact | procedure | principle
+  summary              TEXT,              -- 通俗释义
+  source_document_id   TEXT,              -- 抽取来源文档（Evidence 链溯源）
+  tags                 TEXT,              -- JSON array 文本，如 ["NLP","深度学习"]
+  created_at           INTEGER NOT NULL,  -- epoch ms
+  evidence_document_id TEXT,              -- ConceptEvidence.documentId（v4）
+  evidence_start       INTEGER,           -- 原文切片起点，含（v4）
+  evidence_end         INTEGER,           -- 原文切片终点，不含（v4）
+  evidence_quote       TEXT               -- 原文引用（v4）
 );
 CREATE INDEX IF NOT EXISTS idx_knowledge_document ON knowledge_units(source_document_id);
 
@@ -133,8 +143,9 @@ CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
 -- 对应实现见 src-tauri/src/db/commands.rs。
 
 -- ===== schema 版本 =====
--- 结构变更时 +1，并在 Rust 侧补对应的迁移步骤；当前版本 = 3。
--- v1 = 初版（embeddings 仅元数据）；v2 = chunks_fts 改 trigram；v3 = embeddings 加 vector。
+-- 结构变更时 +1，并在 Rust 侧补对应的迁移步骤；当前版本 = 4。
+-- v1 = 初版（embeddings 仅元数据）；v2 = chunks_fts 改 trigram；v3 = embeddings 加 vector；
+-- v4 = knowledge_units 加 evidence 四列（概念原文出处不再在往返中丢失）。
 CREATE TABLE IF NOT EXISTS _schema_version (
   version    INTEGER PRIMARY KEY,
   applied_at INTEGER NOT NULL   -- epoch ms；初始占位的 0 表示「建表时刻未知」

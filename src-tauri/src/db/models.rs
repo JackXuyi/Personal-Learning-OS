@@ -129,6 +129,7 @@ impl From<ChunkRow> for ChunkOut {
 
 // ========== KnowledgeUnit ==========
 
+/// 概念原文出处（v4）：四列同空 = 无 evidence，不做部分存储。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KnowledgeUnitInput {
@@ -140,6 +141,14 @@ pub struct KnowledgeUnitInput {
     #[serde(default)]
     pub tags: Vec<String>,
     pub created_at: i64,
+    #[serde(default)]
+    pub evidence_document_id: Option<String>,
+    #[serde(default)]
+    pub evidence_start: Option<i64>,
+    #[serde(default)]
+    pub evidence_end: Option<i64>,
+    #[serde(default)]
+    pub evidence_quote: Option<String>,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -151,6 +160,10 @@ pub struct KnowledgeUnitRow {
     pub source_document_id: Option<String>,
     pub tags: Option<String>,
     pub created_at: i64,
+    pub evidence_document_id: Option<String>,
+    pub evidence_start: Option<i64>,
+    pub evidence_end: Option<i64>,
+    pub evidence_quote: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -163,6 +176,10 @@ pub struct KnowledgeUnitOut {
     pub source_document_id: Option<String>,
     pub tags: Vec<String>,
     pub created_at: i64,
+    pub evidence_document_id: Option<String>,
+    pub evidence_start: Option<i64>,
+    pub evidence_end: Option<i64>,
+    pub evidence_quote: Option<String>,
 }
 
 impl From<KnowledgeUnitRow> for KnowledgeUnitOut {
@@ -179,6 +196,10 @@ impl From<KnowledgeUnitRow> for KnowledgeUnitOut {
             source_document_id: row.source_document_id,
             tags,
             created_at: row.created_at,
+            evidence_document_id: row.evidence_document_id,
+            evidence_start: row.evidence_start,
+            evidence_end: row.evidence_end,
+            evidence_quote: row.evidence_quote,
         }
     }
 }
@@ -376,6 +397,62 @@ mod tests {
         assert!(v.get("targetId").is_some(), "缺少 camelCase targetId：{v}");
         assert!(v.get("dim").is_some());
         assert!(v.get("target_id").is_none(), "不应出现 snake_case：{v}");
+    }
+
+    #[test]
+    fn knowledge_unit_input_accepts_camel_case_with_evidence() {
+        // v4：evidence 拆平四列，字段名必须与 TS KnowledgeUnitDto 的 camelCase 对齐。
+        let json = serde_json::json!({
+            "id": "u1", "title": "向量检索", "kind": "concept", "summary": "用向量做语义召回",
+            "sourceDocumentId": "d1", "tags": ["NLP"], "createdAt": 5,
+            "evidenceDocumentId": "d1", "evidenceStart": 10, "evidenceEnd": 42,
+            "evidenceQuote": "向量检索先编码再近邻搜索"
+        });
+        let u: KnowledgeUnitInput =
+            serde_json::from_value(json).expect("camelCase KnowledgeUnitInput");
+        assert_eq!(u.evidence_document_id.as_deref(), Some("d1"));
+        assert_eq!(u.evidence_start, Some(10));
+        assert_eq!(u.evidence_end, Some(42));
+        assert_eq!(
+            u.evidence_quote.as_deref(),
+            Some("向量检索先编码再近邻搜索")
+        );
+
+        // 无 evidence 的概念（老数据）也必须能反序列化。
+        let bare = serde_json::json!({
+            "id": "u2", "title": "切分", "kind": "concept", "tags": [], "createdAt": 6
+        });
+        let u2: KnowledgeUnitInput =
+            serde_json::from_value(bare).expect("evidence 可整体缺省");
+        assert!(u2.evidence_document_id.is_none());
+        assert!(u2.evidence_quote.is_none());
+    }
+
+    #[test]
+    fn knowledge_unit_out_serializes_evidence_to_camel_case() {
+        let out = KnowledgeUnitOut {
+            id: "u1".into(),
+            title: "向量检索".into(),
+            kind: "concept".into(),
+            summary: None,
+            source_document_id: Some("d1".into()),
+            tags: vec!["NLP".into()],
+            created_at: 5,
+            evidence_document_id: Some("d1".into()),
+            evidence_start: Some(10),
+            evidence_end: Some(42),
+            evidence_quote: Some("q".into()),
+        };
+        let v = serde_json::to_value(&out).expect("serialize KnowledgeUnitOut");
+        for key in [
+            "evidenceDocumentId",
+            "evidenceStart",
+            "evidenceEnd",
+            "evidenceQuote",
+        ] {
+            assert!(v.get(key).is_some(), "缺少 camelCase 字段 {key}：{v}");
+        }
+        assert!(v.get("evidence_start").is_none(), "不应出现 snake_case：{v}");
     }
 
     #[test]
