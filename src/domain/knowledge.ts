@@ -5,6 +5,7 @@
  * 单元之间的关系：prerequisite / related / parent / child / example /
  * contrast / application / source（八种关系类型）。
  */
+import type { Chapter } from "./chapter";
 
 export type KnowledgeKind = "concept" | "skill" | "fact" | "procedure" | "principle";
 
@@ -76,4 +77,39 @@ export function prerequisitesOf(graph: KnowledgeGraph, unitId: string): Knowledg
     .filter((r) => r.toId === unitId && r.type === "prerequisite")
     .map((r) => r.fromId);
   return graph.units.filter((u) => prereqIds.includes(u.id));
+}
+
+/**
+ * 章级前置推导：把概念层的 prerequisite 边「抬升」成章与章的先后关系。
+ *
+ * 判定：若概念 x 是概念 y 的 prerequisite，且 x 属于章 A、y 属于章 B（A ≠ B），
+ * 则 A 是 B 的前置章。同章内部的概念依赖不构成章级前置（组不了序，也没意义）。
+ *
+ * 只映射 `chapters` 参数范围内的单元：范围外的章（如另一份文档）不参与判定，
+ * 否则章级计划会为看不见的章反复标注「前置未掌握」。
+ *
+ * @returns Map<toChapterId, fromChapterId[]>；无前置的章不出现在 Map 里。
+ */
+export function chapterPrerequisiteIds(
+  graph: KnowledgeGraph,
+  chapters: readonly Pick<Chapter, "id" | "unitIds">[],
+): Map<string, string[]> {
+  const chapterOfUnit = new Map<string, string>();
+  for (const chapter of chapters) {
+    for (const unitId of chapter.unitIds ?? []) chapterOfUnit.set(unitId, chapter.id);
+  }
+
+  const out = new Map<string, string[]>();
+  for (const relation of graph.relations) {
+    if (relation.type !== "prerequisite") continue;
+    const fromChapter = chapterOfUnit.get(relation.fromId);
+    const toChapter = chapterOfUnit.get(relation.toId);
+    // 自环（同章内依赖）与范围外单元一并剔除。
+    if (fromChapter === undefined || toChapter === undefined) continue;
+    if (fromChapter === toChapter) continue;
+    const list = out.get(toChapter);
+    if (list === undefined) out.set(toChapter, [fromChapter]);
+    else if (!list.includes(fromChapter)) list.push(fromChapter);
+  }
+  return out;
 }

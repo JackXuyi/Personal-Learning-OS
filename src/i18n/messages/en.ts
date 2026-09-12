@@ -1537,6 +1537,8 @@ export const en: Messages = {
       `“${title}” is marked as studied — take the unit test to verify mastery.`,
     chapterNotStarted: (title: string) =>
       `“${title}” hasn't been studied yet — proceed through chapters in order.`,
+    prereqPending: (names: string) =>
+      `Prerequisite chapter(s) “${names}” not mastered yet — clearing them first pays off.`,
     // —— assessment-engine feedback ——
     notAnswered: "No answer.",
     pendingSubjective:

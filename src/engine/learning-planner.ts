@@ -19,7 +19,12 @@ import type {
   UnitMastery,
 } from "../domain";
 import { MASTERY_FLOOR, MASTERY_THRESHOLD, newId } from "../domain";
-import { isDueReview, prerequisitesOf, sortChaptersByOrder } from "../domain";
+import {
+  chapterPrerequisiteIds,
+  isDueReview,
+  prerequisitesOf,
+  sortChaptersByOrder,
+} from "../domain";
 import { bandOf, masteryOfUnit } from "./mastery-engine";
 import type { Messages } from "../i18n/messages/zh";
 import { zh } from "../i18n/messages/zh";
@@ -136,6 +141,12 @@ export interface ChapterPlanInput {
   /** 计划范围的章（按 order 升序；调用方可先用 goal.requiredChapterIds 过滤）。 */
   chapters: Chapter[];
   learnerState: LearnerState;
+  /**
+   * 可选：概念图。传入后启用「章级前置软排序」（D2）——由概念 prerequisite 边
+   * 推导章与章的先后，前置未掌握的章在同类内后移并在 reasons 里标注。
+   * 缺省 = 现状行为（向后兼容：无图/空图与不传等价）。
+   */
+  graph?: KnowledgeGraph;
   /** 测试注入时间戳。 */
   now?: number;
 }
@@ -151,6 +162,8 @@ type ChapterActionSpec = {
   reasons: string[];
   /** 到期复习专属：下次复习时间（越早到期越先复习）。非到期动作缺省。 */
   dueAt?: number;
+  /** 前置未掌握的章标题（软排序用；仅未达标章标注，到期复习不参与）。 */
+  blocked?: string[];
 };
 
 const pct = (v: number): number => Math.round(v * 100);
@@ -250,8 +263,9 @@ function specForChapter(
  * 章级计划：为每章产出「下一步」动作并排序。
  *
  * 队列顺序（cls）：重学弱章(0) > 补考(1) > 复习要点(2) > 测已学章(3) >
- * 到期复习(4) > 推进未学章(5)；同类内掌握度低者在前（更弱先补），到期复习按
- * 到期先后（最久未复习的先复习），同掌握度按章 order。
+ * 到期复习(4) > 推进未学章(5)；同类内**前置未掌握者后移**（D2 软排序，不跨类、
+ * 不丢弃），再按掌握度低者在前（更弱先补），到期复习按到期先后（最久未复习的
+ * 先复习），同掌握度按章 order。
  * 已达标章（mastery ≥ MASTERY_THRESHOLD 且非 retake 态）：到期（nextReviewAt
  * 已过，T9 防遗忘）才以低优先级复习动作入队，否则不产生动作。
  * 每个动作携带可解释理由（P7 计划页直接展示 reasons）。
@@ -260,13 +274,33 @@ export function buildChapterPlan(
   input: ChapterPlanInput,
   m: Messages = zh,
 ): NextAction[] {
-  const { learnerState, now = Date.now() } = input;
+  const { learnerState, now = Date.now(), graph } = input;
+  // D2：概念 prerequisite 边 → 章级前置（未传图则为 undefined，全程不参与）。
+  const prereqMap = graph ? chapterPrerequisiteIds(graph, input.chapters) : undefined;
+  const chapterById = new Map(input.chapters.map((c) => [c.id, c]));
+  const masteryOfChapter = (id: string): number => learnerState.byUnit[id]?.mastery ?? 0;
+
   const specs = sortChaptersByOrder(input.chapters)
-    .map((chapter) => specForChapter(chapter, learnerState.byUnit[chapter.id], now, m))
+    .map((chapter) => {
+      const spec = specForChapter(chapter, learnerState.byUnit[chapter.id], now, m);
+      if (spec === undefined || prereqMap === undefined) return spec;
+      // 到期复习（cls=4）已是达标章的低优先级补漏，不参与前置软排序。
+      if (spec.cls === 4) return spec;
+      const blocked = (prereqMap.get(chapter.id) ?? [])
+        .filter((pid) => chapterById.has(pid) && masteryOfChapter(pid) < MASTERY_THRESHOLD)
+        .map((pid) => chapterById.get(pid)?.title ?? pid);
+      if (blocked.length > 0) {
+        spec.blocked = blocked;
+        spec.reasons.push(m.engine.prereqPending(blocked.join("》《")));
+      }
+      return spec;
+    })
     .filter((s): s is ChapterActionSpec => s !== undefined)
     .sort(
       (a, b) =>
         a.cls - b.cls ||
+        // 软排序：同类内前置未掌握者后移（不跨类、不丢弃——用户仍可手动执行）。
+        (a.blocked ? 1 : 0) - (b.blocked ? 1 : 0) ||
         (a.dueAt ?? Number.POSITIVE_INFINITY) - (b.dueAt ?? Number.POSITIVE_INFINITY) ||
         a.mastery - b.mastery ||
         a.order - b.order,

@@ -167,11 +167,19 @@ export default function QuizReportPage() {
     })();
   }, [paperId]);
 
-  /** 打开/切换「生成学习计划」；首次打开时由 buildChapterPlan 计算（数据已就绪，同步）。 */
-  const togglePlan = () => {
+  /**
+   * 打开/切换「生成学习计划」；首次打开时由 buildChapterPlan 计算。
+   *
+   * 需先取概念图（章级前置软排序 D2）——因此由同步改为异步；图取失败会回退
+   * 存储层的 blob 副本，故无需额外错误分支。
+   */
+  const togglePlan = async () => {
     setPlanOpen((open) => !open);
     if (!planOpen && !plan && data) {
-      setPlan(buildChapterPlan({ chapters: data.scopeChapters, learnerState: data.learner }, m));
+      const graph = await storage.getGraph();
+      setPlan(
+        buildChapterPlan({ chapters: data.scopeChapters, learnerState: data.learner, graph }, m),
+      );
     }
   };
 

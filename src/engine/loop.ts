@@ -233,10 +233,12 @@ export async function runChapterLoop(
   m: Messages = zh,
   goalId?: string,
 ): Promise<ChapterLoopSnapshot> {
-  const [goals, docs, rawLearner] = await Promise.all([
+  const [goals, docs, rawLearner, graph] = await Promise.all([
     storage.listGoals(),
     storage.listDocuments(),
     storage.getLearnerState(),
+    // 概念图：章级前置软排序的输入（D2）；SQLite 不可用时自动回退 localStorage blob。
+    storage.getGraph(),
   ]);
   // 读时遗忘衰减（V2 T9）：章级规划与就绪度基于衰减视图（幂等，不写回）。
   const learner = applyForgetting(rawLearner, Date.now());
@@ -273,7 +275,7 @@ export async function runChapterLoop(
   const mastered = allChapters.filter(
     (c) => (learner.byUnit[c.id]?.mastery ?? 0) >= MASTERY_THRESHOLD,
   ).length;
-  const actions = buildChapterPlan({ chapters: allChapters, learnerState: learner }, m);
+  const actions = buildChapterPlan({ chapters: allChapters, learnerState: learner, graph }, m);
 
   return {
     goal,

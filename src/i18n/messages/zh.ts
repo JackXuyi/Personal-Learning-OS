@@ -1481,6 +1481,8 @@ export const zh = {
       `《${title}》已标记学完，出单元测验证掌握度。`,
     chapterNotStarted: (title: string) =>
       `《${title}》尚未学习——按顺序推进本章。`,
+    prereqPending: (names: string) =>
+      `前置章节《${names}》尚未掌握，先补前置更省力。`,
     // —— assessment-engine feedback ——
     notAnswered: "未作答。",
     pendingSubjective:
