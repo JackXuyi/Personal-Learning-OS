@@ -4,7 +4,7 @@
 |------|------|
 | 作者 | WorkBuddy / 许一 |
 | 日期 | 2026-09-11 |
-| 状态 | 待确认 |
+| 状态 | 已实施（见 `docs/knowledge-sqlite-prereq-plan-task-runbook.md`） |
 | 关联需求 | `docs/library-module-review-2026-09.md` 🟡 M3 前两项；已确认决策点 D1/D2/D3（见 §2） |
 
 ## 1. 背景
@@ -476,3 +476,4 @@ prereqPending: (names: string) => `前置章节《${names}》尚未掌握，先�
 | 日期 | 变更 | 作者 |
 |------|------|------|
 | 2026-09-11 | 初稿（D1/D2/D3 已确认） | WorkBuddy |
+| 2026-09-12 | T1–T8 全部实施并验证（schema v4 / TauriStorage 图读写 override / 章级前置软排序 / 新增两组单测）；执行记录见 `knowledge-sqlite-prereq-plan-task-runbook.md` | WorkBuddy |

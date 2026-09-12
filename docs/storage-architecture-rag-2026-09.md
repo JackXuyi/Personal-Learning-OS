@@ -428,6 +428,8 @@ CREATE TABLE IF NOT EXISTS chunk_knowledge (
 );
 
 -- 知识单元
+-- 注：v4 起补 evidence 四列（概念原文出处），见 knowledge-sqlite-prereq-plan-design-2026-09.md；
+-- 唯一的落地 DDL 是 src-tauri/src/db/schema.sql（本段为架构草图，字段以那边为准）。
 CREATE TABLE IF NOT EXISTS knowledge_units (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -436,6 +438,10 @@ CREATE TABLE IF NOT EXISTS knowledge_units (
   source_document_id TEXT,
   tags TEXT,  -- JSON array 序列化
   created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000),
+  evidence_document_id TEXT,  -- v4：ConceptEvidence 拆平，四列同空 = 无出处
+  evidence_start INTEGER,
+  evidence_end INTEGER,
+  evidence_quote TEXT,
   FOREIGN KEY(source_document_id) REFERENCES documents(id) ON DELETE SET NULL
 );
 
