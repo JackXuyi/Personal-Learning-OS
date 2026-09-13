@@ -27,7 +27,20 @@ export const LIMITS = {
   githubFileBytes: 1 * 1024 * 1024,
   /** 仓库合并正文总字符护栏（≈localStorage 安全线）。 */
   githubTotalChars: 1_500_000,
+  /**
+   * 粘贴正文护栏（O3，2026-09-13）：粘贴是唯一此前无体积护栏的入口——
+   * 超大粘贴会撑爆 localStorage 配额，且失败发生在管道中段（read 已写入）。
+   * 口径与 githubTotalChars 对齐，超限在表单层前置拦截（按钮禁用 + 提示）。
+   */
+  pasteMaxChars: 1_500_000,
 } as const;
+
+/**
+ * 重复导入处理动作（O2/D1，2026-09-13）。
+ * 命中同 `source` 已有资料时：skip = 跳过不写入；overwrite = 级联删除旧资料后重建；
+ * create = 照常新建（缺省 = 既有行为）。
+ */
+export type DuplicateAction = "skip" | "overwrite" | "create";
 
 /** 统一中间产物：来源归一化后进入共享管道的「一份资料」。 */
 export interface ImportUnit {
@@ -67,12 +80,19 @@ export interface UnitResult {
   refined: boolean;
   /** AI 自动合并的过碎小节数（结构修正）。 */
   merged: number;
+  /**
+   * D1（O2）：命中同 source 旧资料且 onDuplicate="skip" 时为 true——
+   * 未写入任何数据，docId 指向**已存在的旧资料**（UI 可据此跳转）。
+   */
+  skippedAsDuplicate?: boolean;
 }
 
 /** 批量导入汇总。 */
 export interface ImportSummary {
   ok: UnitResult[];
   failed: { title: string; reason: string }[];
+  /** D1：命中同 source 旧资料且被跳过的份（未写入，仅记录）。 */
+  skipped: { title: string; source?: string }[];
 }
 
 /** 本地文件类型判定（纯文本类 .md / .txt + .pdf）。 */

@@ -540,6 +540,21 @@ await check("质量门：hasMeaningfulText 边界（CJK / 数字 / 混合符号�
   assert.equal(hasMeaningfulText(""), false);
 });
 
+await check("质量门：导入精修路径同样过滤纯符号 keyPoints（O1，engine.applyChapterRefine）", () => {
+  const chapter = ch("c1", "第一章", 0, 100);
+  const out = applyChapterRefine([chapter], [
+    {
+      index: 0,
+      keyPoints: ["!", "•", "本章讲解 RAG 的混合检索机制", "1."],
+    },
+  ]);
+  assert.deepEqual(
+    out[0]?.keyPoints,
+    ["本章讲解 RAG 的混合检索机制"],
+    "纯符号要点应被过滤，有效要点保留",
+  );
+});
+
 console.log(results.join("\n"));
 if (failures > 0) {
   console.error(`\n[ai-map-reduce] ${results.length - failures}/${results.length} 通过`);

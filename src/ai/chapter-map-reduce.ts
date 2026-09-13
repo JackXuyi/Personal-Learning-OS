@@ -27,6 +27,10 @@ import { AiProviderError } from "./types";
 import { PIPELINE_LIMITS, TEMPERATURE, chatJson, isRecord, str } from "./pipeline-core";
 import { adaptiveChunkChars, planTextBlocks, type TextBlock } from "./text-blocks";
 import { aiErrPreview, aiLog } from "./log";
+import { hasMeaningfulText } from "../lib/text-quality";
+
+/** 质量门原语已下沉 `lib/text-quality.ts`（engine 侧也要用）；此处 re-export 保持兼容。 */
+export { hasMeaningfulText };
 
 /* ------------------------------------------------------------------ */
 /* 1) 章内分块（纯函数）                                               */
@@ -78,19 +82,6 @@ export interface AnchorFn {
 export interface AiKeyPointDraft {
   point: string;
   quote: string;
-}
-
-/**
- * 「是不是人话」质量门：剔除符号后有效字符（Unicode 字母/数字，含 CJK）
- * 少于 2 个即判为无意义内容，丢弃该条。
- *
- * 动机（2026-09-13 线上案例）：GitHub README 图片语法残留的 `!` 被本地小模型
- * 硬凑成要点 `{point:"!", quote:"!"}` —— 非空 ✓、≤60 字 ✓、quote 可锚定 ✓，
- * 格式校验全绿放行。格式门之外必须补质量门，对所有来源（含云端模型抽风）生效。
- */
-export function hasMeaningfulText(s: string): boolean {
-  const m = s.match(/[\p{L}\p{N}]/gu);
-  return m !== null && m.length >= 2;
 }
 
 /** 要点候选：分块 map 后、已由代码锚定的条目（归并阶段只能引用它）。 */

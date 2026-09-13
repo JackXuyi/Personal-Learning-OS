@@ -1020,6 +1020,20 @@ export const en: Messages = {
         allFailed: "All imports failed — check the files and retry",
         summaryTitle: (ok: number, failed: number) =>
           failed > 0 ? `Import done: ${ok} ok · ${failed} failed` : `Import done: ${ok} imported`,
+        skippedN: (n: number) => `${n} skipped as duplicates`,
+      },
+      /** O3: paste size guard (the only entry without a guard before). */
+      pasteTooLong: (max: number) =>
+        `Pasted content exceeds the ${max}-character limit — trim it and retry`,
+      /** O2/D1: duplicate-import conflict panel. */
+      duplicate: {
+        head: "Some sources already exist — choose how to handle each:",
+        row: (title: string, existing: string) => `${title} (existing: ${existing})`,
+        skip: "Skip",
+        overwrite: "Overwrite (replace old)",
+        create: "Create anyway",
+        confirm: "Continue import",
+        skippedNotice: (title: string) => `${title} already exists — skipped this time`,
       },
       formatNote: "Notes",
       formatWeb: "Web",

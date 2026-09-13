@@ -997,6 +997,19 @@ export const zh = {
         allFailed: "全部导入失败，请检查文件后重试",
         summaryTitle: (ok: number, failed: number) =>
           failed > 0 ? `导入完成：${ok} 份成功 · ${failed} 份失败` : `导入完成：${ok} 份成功`,
+        skippedN: (n: number) => `${n} 份已存在跳过`,
+      },
+      /** O3：粘贴体积护栏（唯一此前无护栏的入口）。 */
+      pasteTooLong: (max: number) => `粘贴正文超出 ${max} 字上限，请精简后重试`,
+      /** O2/D1：重复导入冲突面板。 */
+      duplicate: {
+        head: "以下资料已存在同源记录，请选择处理方式：",
+        row: (title: string, existing: string) => `${title}（已存在：${existing}）`,
+        skip: "跳过",
+        overwrite: "覆盖（删旧重建）",
+        create: "仍新建",
+        confirm: "继续导入",
+        skippedNotice: (title: string) => `${title} 已存在同源资料，本次已跳过`,
       },
       formatNote: "笔记",
       formatWeb: "网页",

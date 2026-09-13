@@ -20,7 +20,8 @@ import { storage } from "../../stores/useLoopStore";
 import { useI18n } from "../../i18n";
 import LocalFilePanel from "./import/LocalFilePanel";
 import GithubPanel from "./import/GithubPanel";
-import type { ImportTab, ImportUnit, ImportSummary } from "./import/types";
+import type { ImportTab, ImportUnit, ImportSummary, DuplicateAction } from "./import/types";
+import { LIMITS } from "./import/types";
 import { runUnitImport, runBatchImport } from "./import/pipeline";
 import { autoIndexAfterImport, autoIndexBlockedReason } from "./index-service";
 import { refreshEmbeddingStatus } from "../../ai/embedding";
@@ -105,6 +106,19 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
   /** 批量汇总（多份导入后置；failed 含预转换失败与管道失败）。 */
   const [summary, setSummary] = useState<ImportSummary>();
 
+  // --- O2/D1 重复导入冲突面板状态 ---
+  /** 一行冲突 = 待导入 unit + 已存在的同源旧资料标题。 */
+  type ConflictRow = { unit: ImportUnit; existingTitle: string };
+  const [conflicts, setConflicts] = useState<ConflictRow[]>();
+  /** 每份冲突的处理选择（按 source 索引；缺省 skip）。 */
+  const [conflictChoices, setConflictChoices] = useState<Record<string, DuplicateAction>>({});
+  /** 冲突确认后待执行的原意图（单份 / 批量 + 预转换失败清单）。 */
+  const [pendingRun, setPendingRun] = useState<{
+    units: ImportUnit[];
+    preFailed: { title: string; reason: string }[];
+    single: boolean;
+  }>();
+
   // --- 粘贴 Tab 表单状态（回归基线，现状字段） ---
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -130,10 +144,12 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
     setBatchTick(undefined);
     setSingle(undefined);
     setSummary(undefined);
+    setConflicts(undefined);
+    setPendingRun(undefined);
   };
 
-  /** 单份导入：U5 五阶段 + 单份结果卡。 */
-  async function runSingleImport(unit: ImportUnit) {
+  /** 单份导入：U5 五阶段 + 单份结果卡（onDuplicate：D1 冲突处理动作）。 */
+  async function runSingleImport(unit: ImportUnit, onDuplicate?: DuplicateAction) {
     setRunMode("single");
     setBusy(true);
     resetRun();
@@ -144,7 +160,12 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
           provider: buildActiveProvider(),
           minPhaseMs: MIN_PHASE_MS,
           onPhase: (key, status) => setPhase(key, status),
+          ...(onDuplicate ? { onDuplicate } : {}),
         });
+        if (result.skippedAsDuplicate) {
+          setNotice(fmt.duplicate.skippedNotice(unit.title));
+          return;
+        }
         setSingle({
           docId: result.docId,
           docTitle: result.unit.title,
@@ -166,8 +187,12 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
     setBusy(false);
   }
 
-  /** 批量导入：文件级进度 + 汇总卡（单份失败不阻断队列）。 */
-  async function runBatch(units: readonly ImportUnit[], preFailed: { title: string; reason: string }[]) {
+  /** 批量导入：文件级进度 + 汇总卡（单份失败不阻断队列；onDuplicate 按 D1 逐份决策）。 */
+  async function runBatch(
+    units: readonly ImportUnit[],
+    preFailed: { title: string; reason: string }[],
+    onDuplicate?: (unit: ImportUnit) => DuplicateAction,
+  ) {
     setRunMode("batch");
     setBusy(true);
     resetRun();
@@ -178,10 +203,12 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
           provider: buildActiveProvider(),
           minPhaseMs: 0,
           onUnitStart: (i, total, unit) => setBatchTick({ i, total, title: unit.title }),
+          ...(onDuplicate ? { onDuplicate } : {}),
         });
         setSummary({
           ok: out.ok,
           failed: [...preFailed, ...out.failed],
+          skipped: out.skipped,
         });
         // 批量导入同样后台入队（只补缺失，重复导入不会重复算）。
         if (out.ok.length > 0) autoIndexAfterImport();
@@ -192,12 +219,44 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
     setBusy(false);
   }
 
+  /** O2/D1 预检：按 source 查已存在资料（粘贴无 source，天然跳过）。 */
+  async function findConflicts(units: readonly ImportUnit[]): Promise<ConflictRow[]> {
+    const docs = await storage.listDocuments();
+    const bySource = new Map<string, SourceDocument>();
+    for (const d of docs) if (d.source) bySource.set(d.source, d);
+    return units
+      .filter((u) => u.source && bySource.has(u.source))
+      .map((u) => ({ unit: u, existingTitle: bySource.get(u.source as string)!.title }));
+  }
+
+  /** 冲突确认：按每份的选择继续原意图（缺省 skip）。 */
+  const confirmConflicts = async () => {
+    if (!pendingRun) return;
+    const { units, preFailed, single: isSingle } = pendingRun;
+    setConflicts(undefined);
+    setPendingRun(undefined);
+    const resolve = (unit: ImportUnit): DuplicateAction =>
+      conflictChoices[unit.source ?? ""] ?? "skip";
+    if (isSingle) await runSingleImport(units[0], resolve(units[0]));
+    else await runBatch(units, preFailed, resolve);
+  };
+
+  const cancelConflicts = () => {
+    setConflicts(undefined);
+    setPendingRun(undefined);
+  };
+
   // --- 主按钮动作：按 Tab 组装 ImportUnit 后交给共享执行器 ---
   async function runTabAction() {
     if (busy) return;
     if (tab === "paste") {
       const body = content.trim();
       if (!body) return;
+      // O3：粘贴护栏双保险（主按钮已禁用，此处防程序化调用）。
+      if (body.length > LIMITS.pasteMaxChars) {
+        setNotice(fmt.pasteTooLong(LIMITS.pasteMaxChars));
+        return;
+      }
       await runSingleImport({
         title: title.trim() || fmt.unnamedDoc,
         format,
@@ -220,6 +279,14 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
         setNotice(fmt.batch.allFailed);
         return;
       }
+      // O2/D1：先查重，命中则弹冲突面板（确认后继续原意图）。
+      const conflicts = await findConflicts(units);
+      if (conflicts.length > 0) {
+        setConflicts(conflicts);
+        setConflictChoices({});
+        setPendingRun({ units, preFailed: failed, single: units.length === 1 && failed.length === 0 });
+        return;
+      }
       // 1 份成功且无失败 → 单份体验（结果卡可直达首章）；否则批量汇总。
       if (units.length === 1 && failed.length === 0) await runSingleImport(units[0]);
       else await runBatch(units, failed);
@@ -230,6 +297,13 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
       setNotice(undefined);
       try {
         const unit = await buildGithubUnit((input, init) => fetch(input, init), ghPreview);
+        const conflicts = await findConflicts([unit]);
+        if (conflicts.length > 0) {
+          setConflicts(conflicts);
+          setConflictChoices({});
+          setPendingRun({ units: [unit], preFailed: [], single: true });
+          return;
+        }
         await runSingleImport(unit);
       } catch (err) {
         // 文案由 kind 决定（G2）：不再直接展示错误对象的 message。
@@ -242,6 +316,10 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
   const saveDocOnly = async () => {
     const body = content.trim();
     if (!body) return;
+    if (body.length > LIMITS.pasteMaxChars) {
+      setNotice(fmt.pasteTooLong(LIMITS.pasteMaxChars));
+      return;
+    }
     setBusy(true);
     setNotice(undefined);
     try {
@@ -266,9 +344,12 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
     : tab === "local"
       ? fmt.local.import(localFiles.length)
       : fmt.saveSplit;
+  // O3：粘贴正文超护栏 → 前置拦截（不进管道，避免 read 已写入后才失败）。
+  const pasteOverLimit = tab === "paste" && content.trim().length > LIMITS.pasteMaxChars;
   const primaryDisabled =
     busy ||
     (tab === "paste" && !content.trim()) ||
+    pasteOverLimit ||
     (tab === "local" && localFiles.length === 0) ||
     (tab === "github" && !ghPreview);
 
@@ -322,6 +403,9 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
           disabled={busy}
           className="w-full resize-y rounded-lg border border-line bg-app-bg px-3 py-2 font-mono text-xs leading-relaxed text-ink-1 outline-none transition-colors placeholder:text-ink-3 focus:border-primary disabled:opacity-50"
         />
+        {content.trim().length > LIMITS.pasteMaxChars ? (
+          <p className="text-xs text-state-failed">{fmt.pasteTooLong(LIMITS.pasteMaxChars)}</p>
+        ) : null}
         <div className="flex items-center gap-2">
           <span className="text-xs text-ink-3">{fmt.format}</span>
           <Select
@@ -398,6 +482,52 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
 
   const renderResult = () => {
     if (busy) return null;
+    // O2/D1 冲突面板（确认前替代进度/结果区展示）。
+    if (conflicts && conflicts.length > 0) {
+      return (
+        <div className="rounded-xl border border-line bg-subtle/60 px-4 py-3" data-testid="import-conflicts">
+          <p className="text-sm font-semibold text-ink-1">{fmt.duplicate.head}</p>
+          <ul className="mt-2 space-y-2">
+            {conflicts.map(({ unit, existingTitle }) => {
+              const key = unit.source ?? "";
+              const action = conflictChoices[key] ?? "skip";
+              return (
+                <li key={key} className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 flex-1 text-xs text-ink-2">
+                    <span className="block truncate">{fmt.duplicate.row(unit.title, existingTitle)}</span>
+                    <span className="block truncate text-ink-3">{unit.source}</span>
+                  </span>
+                  <Select
+                    value={action}
+                    onValueChange={(v) =>
+                      setConflictChoices((prev) => ({ ...prev, [key]: v as DuplicateAction }))
+                    }
+                    disabled={busy}
+                    options={[
+                      { value: "skip", label: fmt.duplicate.skip },
+                      { value: "overwrite", label: fmt.duplicate.overwrite },
+                      { value: "create", label: fmt.duplicate.create },
+                    ]}
+                    className="h-8 w-auto shrink-0"
+                  />
+                </li>
+              );
+            })}
+          </ul>
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <button
+              onClick={cancelConflicts}
+              className="rounded-lg border border-line px-3 py-1.5 text-xs text-ink-2 transition-colors hover:bg-subtle hover:text-ink-1"
+            >
+              {m.common.cancel}
+            </button>
+            <Button onClick={confirmConflicts} className="rounded-lg">
+              {fmt.duplicate.confirm}
+            </Button>
+          </div>
+        </div>
+      );
+    }
     // 单份结果卡
     if (single) {
       const structureNote =
@@ -493,6 +623,12 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
                 </span>
               </li>
             ))}
+            {summary.skipped.map((s, i) => (
+              <li key={`${s.title}-skip-${i}`} className="flex items-center gap-2 text-xs text-ink-3">
+                <span>⏭</span>
+                <span className="min-w-0 flex-1 truncate">{s.title}</span>
+              </li>
+            ))}
             {summary.failed.map((f, i) => (
               <li key={`${f.title}-${i}`} className="flex items-start gap-2 text-xs text-state-weak">
                 <span>✗</span>
@@ -503,6 +639,9 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
               </li>
             ))}
           </ul>
+          {summary.skipped.length > 0 ? (
+            <p className="mt-1.5 text-xs text-ink-3">{fmt.batch.skippedN(summary.skipped.length)}</p>
+          ) : null}
           {summary.failed.length > 0 ? (
             <p className="mt-1.5 text-xs text-state-weak">
               {fmt.batch.failedN(summary.failed.length)}
@@ -620,7 +759,7 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
                 </Button>
               ) : null}
             </>
-          ) : (
+          ) : conflicts && conflicts.length > 0 ? null : (
             <Button
               onClick={runTabAction}
               disabled={primaryDisabled}

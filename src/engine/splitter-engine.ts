@@ -16,6 +16,7 @@
  */
 import type { Chapter } from "../domain";
 import { newId } from "../domain";
+import { hasMeaningfulText } from "../lib/text-quality";
 
 export type SplitFormat = "markdown" | "txt" | "auto";
 export type SplitStrategy = "headings" | "paragraphs";
@@ -425,7 +426,9 @@ export function applyChapterRefine(
         out[out.length - 1] = {
           ...prev,
           contentRef: { start: prev.contentRef.start, end: cur.contentRef.end },
-          keyPoints: [...prev.keyPoints, ...cur.keyPoints].slice(0, 6),
+          keyPoints: [...prev.keyPoints, ...cur.keyPoints]
+            .filter(hasMeaningfulText)
+            .slice(0, 6),
         };
         continue;
       }
@@ -443,12 +446,12 @@ function cleanRefinedTitle(title: string | undefined): string | undefined {
   return t.length === 0 ? undefined : t.slice(0, 40);
 }
 
-/** 清洗 AI 要点：每条去空白截断至 80 字、剔空、至多 5 条；无有效条目返回 undefined。 */
+/** 清洗 AI 要点：每条去空白截断至 80 字、剔空与纯符号（质量门，见 lib/text-quality）、至多 5 条；无有效条目返回 undefined。 */
 function cleanRefinedKeyPoints(keyPoints: string[] | undefined): string[] | undefined {
   if (!keyPoints || keyPoints.length === 0) return undefined;
   const cleaned = keyPoints
     .map((k) => k.replace(/\s+/g, " ").trim())
-    .filter((k) => k.length > 0)
+    .filter((k) => k.length > 0 && hasMeaningfulText(k))
     .map((k) => (k.length <= 80 ? k : `${k.slice(0, 80)}…`));
   return cleaned.length === 0 ? undefined : cleaned.slice(0, 5);
 }

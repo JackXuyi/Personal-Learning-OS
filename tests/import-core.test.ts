@@ -321,6 +321,70 @@ const run = async () => {
     assert.ok(doc.textPreview.includes("正文一段"), "正常正文不受影响");
   });
 
+  await check("stripMarkdownNoise：badge 行整行删除、引用式图片保 alt、定义行与 HTML 注释删除（T3）", () => {
+    const md = [
+      "<!-- 协作说明注释 -->",
+      "[![Build](https://img.shields.io/x.svg)](https://ci.example.com) [![Cov](https://img.shields.io/y.svg)](https://cov.example.com)",
+      "正文开始。",
+      "![徽标][logo-ref]",
+      "",
+      "[logo-ref]: https://example.com/logo.png",
+    ].join("\n");
+    const out = stripMarkdownNoise(md);
+    assert.ok(!out.includes("shields.io"), "纯 badge 行应整行删除");
+    assert.ok(!out.includes("<!--"), "HTML 注释应删除");
+    assert.ok(!out.includes("logo-ref"), "引用式定义行应删除");
+    assert.ok(out.includes("徽标"), "引用式图片保留 alt 文字");
+    assert.ok(out.includes("正文开始"), "普通文本不受影响");
+  });
+
+  await check("runUnitImport onDuplicate=skip：同 source 已存在 → 不写入并标记（T4/D1）", async () => {
+    const s = new InMemoryStorage();
+    const first = await runUnitImport(mdUnit({ source: "github://demo" }), { storage: s });
+    assert.ok(!first.skippedAsDuplicate);
+    const second = await runUnitImport(mdUnit({ source: "github://demo" }), {
+      storage: s,
+      onDuplicate: "skip",
+    });
+    assert.equal(second.skippedAsDuplicate, true);
+    assert.equal(second.docId, first.docId, "docId 应指向已存在的旧资料");
+    assert.equal((await s.listDocuments()).length, 1, "不应产生新资料");
+  });
+
+  await check("runUnitImport onDuplicate=overwrite：级联删旧后重建（T4/D1）", async () => {
+    const s = new InMemoryStorage();
+    await runUnitImport(mdUnit({ source: "github://demo" }), { storage: s });
+    const again = await runUnitImport(mdUnit({ source: "github://demo", title: "覆盖版" }), {
+      storage: s,
+      onDuplicate: "overwrite",
+    });
+    assert.ok(!again.skippedAsDuplicate);
+    const docs = await s.listDocuments();
+    assert.equal(docs.length, 1, "旧资料应被级联删除");
+    assert.equal(docs[0]?.title, "覆盖版");
+    assert.ok((await s.listChapters(again.docId)).length >= 1, "新章节应写入");
+  });
+
+  await check("runUnitImport 缺省（create）：同 source 仍新建，现状行为不回归（T4/D1）", async () => {
+    const s = new InMemoryStorage();
+    await runUnitImport(mdUnit({ source: "github://demo" }), { storage: s });
+    await runUnitImport(mdUnit({ source: "github://demo" }), { storage: s });
+    assert.equal((await s.listDocuments()).length, 2);
+  });
+
+  await check("runBatchImport：skip 的份进 summary.skipped，不进 ok（T4/D1）", async () => {
+    const s = new InMemoryStorage();
+    await runUnitImport(mdUnit({ source: "s1" }), { storage: s });
+    const out = await runBatchImport(
+      [mdUnit({ source: "s1", title: "dup" }), mdUnit({ source: "s2", title: "fresh" })],
+      { storage: s, onDuplicate: "skip" },
+    );
+    assert.equal(out.ok.length, 1);
+    assert.equal(out.skipped.length, 1);
+    assert.equal(out.skipped[0]?.title, "dup");
+    assert.equal((await s.listDocuments()).length, 2);
+  });
+
   console.log(results.join("\n"));
   console.log(`\nimport-core: ${results.length - failures}/${results.length} passed`);
   if (failures > 0) process.exit(1);

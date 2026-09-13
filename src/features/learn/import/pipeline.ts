@@ -24,8 +24,9 @@ import type { AIProvider } from "../../../ai";
 import { refineSplitResult } from "../../../ai";
 import { splitDocument } from "../../../engine";
 import { rebuildChunks } from "../index-chunks";
+import { deleteDocumentCascade } from "../document-cascade";
 import { stripMarkdownNoise } from "./normalize-text";
-import type { ImportUnit, UnitResult, ImportSummary } from "./types";
+import type { ImportUnit, UnitResult, ImportSummary, DuplicateAction } from "./types";
 
 /** 与 ImportModal 现状 PHASE_ORDER 一致。 */
 export type ImportPhaseKey = "read" | "detect" | "refine" | "create" | "link";
@@ -44,6 +45,11 @@ export interface RunUnitOptions extends PipelineHooks {
   provider?: AIProvider;
   /** 切分参数（与现状 ImportModal 一致；测试可覆盖）。 */
   split?: { targetCharsPerChapter?: number; minBodyCharsPerChapter?: number; minParagraphsPerChapter?: number };
+  /**
+   * D1（O2，2026-09-13）：命中同 `source` 已有资料时的处理动作（缺省 create = 既有行为）。
+   * 支持按份决策的函数形态（批量导入逐份弹窗询问时由调用方闭合查询表）。
+   */
+  onDuplicate?: DuplicateAction | ((unit: ImportUnit) => DuplicateAction);
 }
 
 const DEFAULT_SPLIT = { targetCharsPerChapter: 1_600, minParagraphsPerChapter: 3 };
@@ -65,6 +71,31 @@ export async function runUnitImport(unit: ImportUnit, opts: RunUnitOptions): Pro
     onPhase(key, "done");
     return out;
   };
+
+  // D1（O2）：带 source 的资料先查重。skip → 不写任何数据直接返回；
+  // overwrite → 走与「删除资料」同一条级联链路（chunk/向量/试卷/概念）后照常导入。
+  const action: DuplicateAction =
+    typeof opts.onDuplicate === "function" ? opts.onDuplicate(unit) : (opts.onDuplicate ?? "create");
+  let existing: Awaited<ReturnType<StorageAdapter["listDocuments"]>>[number] | undefined;
+  if (unit.source) {
+    const docs = await storage.listDocuments();
+    existing = docs.find((d) => d.source === unit.source);
+  }
+  if (existing && action === "skip") {
+    return {
+      unit,
+      docId: existing.id,
+      chapterIds: [],
+      chapterTitles: [],
+      totalPoints: 0,
+      refined: false,
+      merged: 0,
+      skippedAsDuplicate: true,
+    };
+  }
+  if (existing && action === "overwrite") {
+    await deleteDocumentCascade(existing.id, storage);
+  }
 
   // markdown 来源先做一次噪音清洗（图片语法 / URL 残留）——清洗后的文本
   // 全程一致（入库 / 切分 / 章偏移 / RAG chunk 均基于同一份），不破坏可溯源。
@@ -129,13 +160,17 @@ export async function runBatchImport(
     onUnitStart?: (index: number, total: number, unit: ImportUnit) => void;
   },
 ): Promise<ImportSummary> {
-  const summary: ImportSummary = { ok: [], failed: [] };
+  const summary: ImportSummary = { ok: [], failed: [], skipped: [] };
   for (let i = 0; i < units.length; i += 1) {
     const unit = units[i];
     opts.onUnitStart?.(i + 1, units.length, unit);
     try {
       const result = await runUnitImport(unit, opts);
-      summary.ok.push(result);
+      if (result.skippedAsDuplicate) {
+        summary.skipped.push({ title: unit.title, ...(unit.source ? { source: unit.source } : {}) });
+      } else {
+        summary.ok.push(result);
+      }
     } catch (err) {
       summary.failed.push({
         title: unit.title,
