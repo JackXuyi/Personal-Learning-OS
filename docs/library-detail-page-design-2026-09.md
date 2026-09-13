@@ -917,6 +917,7 @@ learn.detail.papers.{docAdvice,advice,goNew,generated,score,duration,difficulty,
 | 2026-09-10 | 用户确认方案；实施顺序定为 5 批：T5/T12/T1/T2/T9 → T3/T4 → T6/T7 → T8/T10/T11 → T13/T14；配套 runbook 创建 | 用户 |
 | 2026-09-10 | T1–T14 全部实施完成。B1/B2 两个 P0 已修（工具条常显 + 全局 AI 配置）；B3/B4/B5 已修（按格式分派渲染器 / 试卷读库+推荐 / Tab 下划线式）。实施记录与两处偏差见 runbook §实施记录 | Agent |
 | 2026-09-13 | **行为变更：长章 / 长文档改走章内 map-reduce**（见下方 §13）—— 逐章管道的 40k 字硬上限、整篇精修的 6 万字 / 24 章静默跳过均被移除；单章要点上限 5 → 8。§4/§8/§11 中「超限抛错 / 静默跳过」的旧描述以 §13 为准 | Agent |
+| 2026-09-13 | **实现变更：概念 Tab 内嵌图谱换用 React Flow 绘制**（见下方 §14）—— 获得画布平移能力与适配视图；交互语义 / props 契约不变 | Agent |
 
 ## 13. 后续变更（2026-09-13）：长章 / 长文档改走章内 map-reduce
 
@@ -932,3 +933,15 @@ learn.detail.papers.{docAdvice,advice,goNew,generated,score,duration,difficulty,
 | 出处字段来源 | AI 给 `quote` → `locateQuote` 锚定 | 分块候选**先由代码锚定**；AI 归并在只输出候选编号（`sourceIndex` / `mergeOf`），产出条目的 `quote` / `start` / `end` 与候选**逐字节一致**，AI 给的引文文本一律丢弃 |
 
 **对 §11 测试方案的影响**：新增 `tests/ai-map-reduce.test.ts`（`npm run test:aimap`，23 项）并挂入 `test:library` 串联链；`tests/library-keypoint.test.ts` 的「截断到 5」断言同步改为 8。
+
+## 14. 后续变更（2026-09-13）：概念 Tab 内嵌图谱换用 React Flow 绘制
+
+> 本节记录实现层变更，§4 描述的 Tab 结构与交互不受影响。
+> 完整方案与执行记录：`docs/knowledge-graph-react-flow-design-2026-09.md`、`docs/knowledge-graph-react-flow-task-runbook.md`。
+
+概念 Tab（§4）内嵌的概念图谱 `<GraphView>` 绘制层由自研 SVG 换为 `@xyflow/react` v12：
+
+- **新增能力**：画布拖拽平移（改造前仅有滚轮缩放）、Controls 的适配视图按钮。
+- **不变**：三态语义（Overview / Focus / Detail）、单击聚焦一跳邻域、空图谱兜底、props 契约（`KnowledgeTab` 调用代码零改动）、力导向布局（`layout.ts` 一行未动）。
+- **视觉**：节点 / 边颜色从硬编码 hex 迁到 PLOS 语义 token（颜色值只在 `main.css`）；状态色统一后个别颜色略深（如已掌握边框 `#34d399` → `#059669`）。
+- **测试**：新增 `tests/graph-flow-model.test.ts`（`npm run test:flow`，18 项），映射逻辑为纯函数可 node 直跑。
