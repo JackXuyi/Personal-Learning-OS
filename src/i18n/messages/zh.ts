@@ -1363,6 +1363,9 @@ export const zh = {
       drUnitNotOne: "单元测只测单章",
       drStageFew: "阶段测需 ≥2 章",
       drFinalAll: "综合测需选全本（≥3 章）",
+      localFallback: "AI 未就绪，已生成本地练习卷。",
+      errInvalidMode: "该卷型与所选章数不匹配，请调整后重试。",
+      errNoChapters: "所选章节为空或已失效，请重新选择。",
     },
     grading: {
       missingTitle: "试卷不存在",
@@ -1459,6 +1462,13 @@ export const zh = {
   },
 
   /** 引擎运行时文案（learning-planner / assessment-engine / loop 注入，默认 zh）。 */
+  aiTask: {
+    // —— AI 任务注册表通用文案（docs/ai-loading-unify-design-2026-09.md §8.16）——
+    running: "处理中…",
+    fallbackDone: "AI 未就绪，已生成本地结果。",
+    failed: "任务失败",
+    alreadyRunning: "相同任务正在进行中，请稍候。",
+  },
   engine: {
     // —— learning-planner 概念层（buildPlan reasons）——
     goalRequired: (g: { title: string; importance: string }) =>

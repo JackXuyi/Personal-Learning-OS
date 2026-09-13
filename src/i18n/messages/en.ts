@@ -1412,6 +1412,9 @@ export const en: Messages = {
       drUnitNotOne: "Unit tests cover a single chapter",
       drStageFew: "Stage tests need ≥2 chapters",
       drFinalAll: "Final tests need the whole book (≥3 chapters)",
+      localFallback: "AI not ready — generated a local practice paper.",
+      errInvalidMode: "This paper type doesn't match the selected chapters — adjust and retry.",
+      errNoChapters: "No chapters selected (or they no longer exist) — pick again.",
     },
     grading: {
       missingTitle: "Paper not found",
@@ -1514,6 +1517,13 @@ export const en: Messages = {
   },
 
   /** Engine runtime copy (learning-planner / assessment-engine / loop; defaults to zh). */
+  aiTask: {
+    // —— AI task registry generic copy (docs/ai-loading-unify-design-2026-09.md §8.16) ——
+    running: "Working…",
+    fallbackDone: "AI not ready — generated a local fallback result.",
+    failed: "Task failed",
+    alreadyRunning: "The same task is already running — please wait.",
+  },
   engine: {
     // —— learning-planner concept layer (buildPlan reasons) ——
     goalRequired: (g: { title: string; importance: string }) =>
