@@ -32,6 +32,8 @@ import { gradeSubjectiveWithAi } from "../../ai";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { makeRetakePaper } from "../plan/chapter-action";
 import { storage } from "../../stores/useLoopStore";
+import { useAiTask } from "../../stores/useAiTaskStore";
+import { Spinner } from "../../components/ui/spinner";
 import { useI18n, type Messages } from "../../i18n";
 import { ago, orderRange, typeBadgeText } from "./meta";
 
@@ -123,9 +125,10 @@ export default function QuizReportPage() {
   const [planOpen, setPlanOpen] = useState(false);
   const [plan, setPlan] = useState<NextAction[] | undefined>();
   const [retaking, setRetaking] = useState<string | undefined>();
-  /** 主观题 AI 重试批改中（N3b）。 */
-  const [aiRetrying, setAiRetrying] = useState(false);
-  /** 主观题批改状态行文案（N3b）。 */
+  // 主观题 AI 重试批改（N3b）走全局任务注册表 grade:{paperId}：
+  // 与判卷页自动批改同 id 共享互斥；running 态与终态消息切页重挂后可恢复。
+  const gradeTask = useAiTask(`grade:${paperId}`);
+  /** 重试批改状态行文案（本次会话即时反馈；重挂后从任务记录恢复终态）。 */
   const [aiMsg, setAiMsg] = useState("");
 
   useEffect(() => {
@@ -220,8 +223,8 @@ export default function QuizReportPage() {
    * 幂等：mergeSubjectiveGrades 重算 totalScore / 追加错题去重；掌握度不二次回写
    * （双证据——回写只发生在判卷时的客观证据路径）。
    */
-  const retrySubjectiveGrading = async () => {
-    if (!data || aiRetrying) return;
+  const retrySubjectiveGrading = () => {
+    if (!data || gradeTask.running) return;
     const { result, paper, index } = data;
     const subAnswers = result.subjectiveAnswers ?? {};
     const subScores = result.subjectiveScores ?? {};
@@ -237,36 +240,37 @@ export default function QuizReportPage() {
       setAiMsg(r.aiNotConfig);
       return;
     }
-    setAiRetrying(true);
     setAiMsg("");
-    try {
-      const items = pending.map((q, i) => {
-        const c = index.get(q.chapterId)?.chapter;
-        return {
-          questionId: q.id,
-          label: `q${i + 1}`,
-          chapterTitle: c?.title ?? "",
-          keyPoints: c?.keyPoints ?? [],
-          prompt: q.prompt,
-          referenceAnswer: q.referenceAnswer,
-          answerText: subAnswers[q.id] ?? "",
-        };
+    const items = pending.map((q, i) => {
+      const c = index.get(q.chapterId)?.chapter;
+      return {
+        questionId: q.id,
+        label: `q${i + 1}`,
+        chapterTitle: c?.title ?? "",
+        keyPoints: c?.keyPoints ?? [],
+        prompt: q.prompt,
+        referenceAnswer: q.referenceAnswer,
+        answerText: subAnswers[q.id] ?? "",
+      };
+    });
+    void gradeTask
+      .run(async (_report, done) => {
+        const grades = await gradeSubjectiveWithAi(provider, items);
+        if (grades.length === 0) {
+          done(r.aiNoResult);
+          setAiMsg(r.aiNoResult);
+          return;
+        }
+        const merged = mergeSubjectiveGrades({ result, paper, answers: subAnswers, aiGrades: grades });
+        await storage.savePaperResult(merged);
+        setData({ ...data, result: merged });
+        done(r.aiGraded(grades.length));
+        setAiMsg(r.aiGraded(grades.length));
+      })
+      .catch(() => {
+        console.warn("主观题重试批改失败（错误终态已进任务记录）");
+        setAiMsg(r.aiFailed);
       });
-      const grades = await gradeSubjectiveWithAi(provider, items);
-      if (grades.length === 0) {
-        setAiMsg(r.aiNoResult);
-        return;
-      }
-      const merged = mergeSubjectiveGrades({ result, paper, answers: subAnswers, aiGrades: grades });
-      await storage.savePaperResult(merged);
-      setData({ ...data, result: merged });
-      setAiMsg(r.aiGraded(grades.length));
-    } catch (err) {
-      console.warn("主观题重试批改失败：", err);
-      setAiMsg(r.aiFailed);
-    } finally {
-      setAiRetrying(false);
-    }
   };
 
   /** 计划动作 → 可执行入口（重读/复习 → 阅读页；测验 → 出卷直达；补考 → 生成卷）。 */
@@ -412,11 +416,13 @@ export default function QuizReportPage() {
                 {retryable ? (
                   buildActiveProvider().isConfigured() ? (
                     <button
-                      onClick={() => void retrySubjectiveGrading()}
-                      disabled={aiRetrying}
-                      className="rounded-full border border-primary/30 bg-primary/5 px-3 py-1 font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
+                      onClick={retrySubjectiveGrading}
+                      disabled={gradeTask.running}
+                      aria-busy={gradeTask.running || undefined}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1 font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
                     >
-                      {aiRetrying ? r.aiRetrying : r.retryAI}
+                      {gradeTask.running && <Spinner className="size-3" />}
+                      {gradeTask.running ? r.aiRetrying : r.retryAI}
                     </button>
                   ) : (
                     <Link to="/settings" className="text-primary hover:underline">
@@ -434,7 +440,14 @@ export default function QuizReportPage() {
             )}
           </div>
         ) : null}
-        {aiMsg ? <p className="mt-2 text-xs text-ink-2">{aiMsg}</p> : null}
+        {/* 状态行：本次会话即时文案优先；切页重挂后从任务记录恢复终态 */}
+        {aiMsg ? (
+          <p aria-live="polite" className="mt-2 text-xs text-ink-2">{aiMsg}</p>
+        ) : gradeTask.status === "error" && gradeTask.message ? (
+          <p aria-live="polite" className="mt-2 text-xs text-ink-2">{r.aiFailed}</p>
+        ) : gradeTask.status === "done" && gradeTask.message ? (
+          <p aria-live="polite" className="mt-2 text-xs text-ink-2">{gradeTask.message}</p>
+        ) : null}
 
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
           <Button

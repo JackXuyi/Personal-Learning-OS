@@ -37,15 +37,13 @@ import { gradeSubjectiveWithAi } from "../../ai";
 import type { SubjectiveGradeItem } from "../../ai";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { storage } from "../../stores/useLoopStore";
+import { useAiTask } from "../../stores/useAiTaskStore";
 import { useI18n } from "../../i18n";
 
 /** 撤销窗口（毫秒；与 useLoopStore.UNDO_WINDOW_MS 语义一致）。 */
 const UNDO_MS = 5_000;
 
 type Phase = "loading" | "summary" | "error";
-
-/** 主观题 AI 批改阶段（T12）。 */
-type AiPhase = "idle" | "grading" | "done" | "failed";
 
 export default function QuizGradingPage() {
   const { m } = useI18n();
@@ -60,10 +58,14 @@ export default function QuizGradingPage() {
   const [message, setMessage] = useState("");
   const [missing, setMissing] = useState(false);
   const [left, setLeft] = useState(5); // 撤销倒计时（秒）
-  /** 主观题 AI 批改阶段（T12；only meaningful when paper has subjective）。 */
-  const [aiPhase, setAiPhase] = useState<AiPhase>("idle");
+
+  // 主观题 AI 批改走全局任务注册表 grade:{paperId}（与报告页「重试批改」同 id
+  // 共享互斥；running/done 幂等跳过重跑；切页重挂后 loading 态可恢复）。
+  const gradeTask = useAiTask(`grade:${paperId}`);
 
   // 判分只执行一次（React StrictMode 双调 effect 防护 + 换卷重置）。
+  // 注：不能换成 store 守卫 —— grade:{paperId} 的 done 终态会持久保留，
+  // 会把「回访判卷页需要重定向/重判」的正常流程也拦掉；ref 的组件级生命周期正合适。
   const gradedFor = useRef<string | undefined>(undefined);
   /** 判分前快照（撤销回滚用）。 */
   const snapshotRef = useRef<{ learner: LearnerState } | undefined>(undefined);
@@ -133,23 +135,24 @@ export default function QuizGradingPage() {
     const subjectiveQs = found.questions.filter((q) => isSubjectiveType(q.type));
     if (subjectiveQs.length > 0 && provider.isConfigured()) {
       const attempts = subjectiveQs.filter((q) => (answers[q.id] ?? "").trim().length > 0);
-      if (attempts.length > 0) {
-        setAiPhase("grading");
-        try {
-          const items = await buildGradeItems(attempts, answers);
-          const grades = await gradeSubjectiveWithAi(provider, items);
-          finalResult = mergeSubjectiveGrades({ result: r, paper: found, answers, aiGrades: grades });
-          setAiPhase(grades.length > 0 ? "done" : "failed");
-        } catch (err) {
-          console.warn("主观题 AI 批改失败，暂按客观计分（报告页可重试）：", err);
-          // 失败也落主观作答快照 + 未作答 0 分，供报告页「重试 AI 批改」补齐。
-          finalResult = mergeSubjectiveGrades({ result: r, paper: found, answers, aiGrades: [] });
-          setAiPhase("failed");
-        }
-      } else {
+      if (attempts.length > 0 && !gradeTask.skipIfFinished) {
+        // 经任务注册表承载（running 期间报告页同 id 重试也被互斥拦截）。
+        await gradeTask
+          .run(async (report) => {
+            report(g.aiLoading);
+            const items = await buildGradeItems(attempts, answers);
+            const grades = await gradeSubjectiveWithAi(provider, items);
+            finalResult = mergeSubjectiveGrades({ result: r, paper: found, answers, aiGrades: grades });
+          })
+          .catch((err) => {
+            console.warn("主观题 AI 批改失败，暂按客观计分（报告页可重试）：", err);
+            // 失败也落主观作答快照 + 未作答 0 分，供报告页「重试 AI 批改」补齐。
+            // 错误终态保留在 grade:{paperId}，报告页可读回展示。
+            finalResult = mergeSubjectiveGrades({ result: r, paper: found, answers, aiGrades: [] });
+          });
+      } else if (attempts.length === 0) {
         // 卷含主观但全部未作答：确定性 0 分并入（无需 AI，进分母惩罚）。
         finalResult = mergeSubjectiveGrades({ result: r, paper: found, answers, aiGrades: [] });
-        setAiPhase("done");
       }
     }
 
@@ -182,6 +185,7 @@ export default function QuizGradingPage() {
     await storage.saveLearnerState(snap.learner);
     await storage.deletePaperResult(paper.id);
     await storage.savePaper(original);
+    gradeTask.clear(); // 清掉批改终态，重新交卷后允许再次 AI 批改
     navigate(`/quiz/${paper.id}`, { replace: true });
   }
 
@@ -209,7 +213,7 @@ export default function QuizGradingPage() {
   }
 
   if (phase === "loading" || !paper || !graded || !result) {
-    const aiGrading = aiPhase === "grading";
+    const aiGrading = gradeTask.running; // loading 态由全局任务记录派生（切页重挂可恢复）
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
         <p className="text-sm text-slate-500">
@@ -305,7 +309,7 @@ export default function QuizGradingPage() {
           {g.objInstant}
           {subjectiveCount > 0
             ? pendingSubjective > 0
-              ? aiPhase === "failed"
+              ? gradeTask.status === "error"
                 ? g.aiFailedTail(pendingSubjective)
                 : g.aiPendingTail(pendingSubjective)
               : scoredCount > 0

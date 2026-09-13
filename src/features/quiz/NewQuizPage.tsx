@@ -24,6 +24,8 @@ import { PAPER_MODE_DURATION_MIN } from "../../domain";
 import { availablePaperModes, NEW_PAPER_MODES } from "../../engine";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { storage } from "../../stores/useLoopStore";
+import { useAiTask } from "../../stores/useAiTaskStore";
+import { Button } from "../../components/ui/button";
 import { sortChaptersByOrder } from "../../domain";
 import { useI18n } from "../../i18n";
 import { modeHint } from "./meta";
@@ -48,6 +50,10 @@ export default function NewQuizPage() {
   const autoRequested = searchParams.get("mode") !== null;
   /** T12：AI 判分/出题就绪门（allowSubjective 与题面 AI 生成共用）。 */
   const aiReady = buildActiveProvider().isConfigured();
+
+  // 出卷任务走全局注册表（paper:{docId}；文档未定时退 paper:all）。
+  // 原实现没有任何 busy state：按钮可重复点击并发建卷、失败仅 console.error（UC-04）。
+  const task = useAiTask(`paper:${docId ?? "all"}`);
 
   /** 模式不可选原因（与 selectableModes 规则同源，供 UI 提示）。 */
   function disabledReason(mm: PaperMode, n: number, total: number): string {
@@ -120,35 +126,47 @@ export default function NewQuizPage() {
 
   // 自动路径：仅 URL 预填的 unit-test（「去测本章」等入口）→ 直接生成进入答题。
   // 手动在向导里选单章+单元测不触发（autoRequested=false）。
+  // 幂等：同任务已 running/done 时跳过（防重复入卷；替代旧 autoDone 单守卫）。
   useEffect(() => {
     if (autoDone || !autoRequested || !docId || sortedSelected.length === 0) return;
+    if (task.skipIfFinished) return;
     if (mode === "unit-test" && sortedSelected.length === 1) {
       setAutoDone(true);
-      void createAndStart();
+      createAndStart();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docId, sortedSelected, mode, autoDone, autoRequested]);
 
   /**
-   * 建卷 → 落库 → 进答题页。
+   * 建卷 → 落库 → 进答题页（经全局任务注册表：loading 期间按钮 disabled，
+   * 失败终态与本地回退说明落页面，不再只 console.error）。
    *
    * 出卷细节（本地确定性卷 / AI 就绪门 / 题面 AI 生成与静默回退 / 卷型校验）
    * 全部收敛到 `paper-flow`，本页只负责「取去哪」。
    */
-  const createAndStart = async () => {
-    if (!docId || sortedSelected.length === 0 || !mode) return;
-    try {
-      const { paper } = await createPaperAndSave({
+  const createAndStart = () => {
+    if (!docId || sortedSelected.length === 0 || !mode || task.running) return;
+    void task.run(async (_report, done) => {
+      const { paper, ai } = await createPaperAndSave({
         chapters: sortedSelected,
         allChapters: chapters,
         mode,
         learnerState: learner,
         text: docs.find((d) => d.id === docId)?.textPreview,
       });
+      // 静默回退（AI 未就绪/失败 → 本地卷）不再是黑洞：说明文案进任务终态
+      if (!ai) done(np.localFallback);
       navigate(`/quiz/${paper.id}`, { replace: autoRequested });
-    } catch (err) {
-      console.error("[NewQuizPage] 出卷失败：", err);
-    }
+    }).catch(() => {
+      // 失败终态经 task.message 渲染到下方错误位（PaperFlowError kind → 页面文案）
+    });
+  };
+
+  /** PaperFlowError.message 是错误 kind（invalid-mode / no-chapters）→ 页面可读文案。 */
+  const taskErrorText = (raw: string): string => {
+    if (raw.includes("invalid-mode")) return np.errInvalidMode;
+    if (raw.includes("no-chapters")) return np.errNoChapters;
+    return raw;
   };
 
   // —— 渲染 ——
@@ -170,7 +188,12 @@ export default function NewQuizPage() {
   }
 
   // 自动路径进行中（createAndStart 异步，先给短暂 loading）。
-  if (autoRequested && mode === "unit-test" && sortedSelected.length === 1 && !autoDone) {
+  if (
+    autoRequested &&
+    mode === "unit-test" &&
+    sortedSelected.length === 1 &&
+    (!autoDone || task.running)
+  ) {
     return (
       <PageContainer>
         <p className="text-sm text-slate-400">{np.generating}</p>
@@ -328,14 +351,29 @@ export default function NewQuizPage() {
             ? np.footerSummary(m.quiz.mode[mode], sortedSelected.length, PAPER_MODE_DURATION_MIN[mode])
             : np.footerDefault}
         </p>
-        <button
+        <Button
+          loading={task.running}
           disabled={!canNext || !mode || !selectableModes.includes(mode)}
-          onClick={() => void createAndStart()}
-          className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-40"
+          onClick={createAndStart}
         >
-          {np.start}
-        </button>
+          {task.running ? np.generating : np.start}
+        </Button>
       </div>
+
+      {/* 失败 / 本地回退终态（来自全局任务记录；失败后停留本页，用户可调整重试） */}
+      {task.status === "error" && task.message && (
+        <p
+          aria-live="polite"
+          className="mt-3 rounded-lg border border-line bg-surface p-3 text-xs text-ink-2"
+        >
+          {m.aiTask.failed}：{taskErrorText(task.message)}
+        </p>
+      )}
+      {task.status === "done" && task.message && (
+        <p className="mt-3 rounded-lg border border-line bg-surface p-3 text-xs text-ink-2">
+          {task.message}
+        </p>
+      )}
     </PageContainer>
   );
 }
