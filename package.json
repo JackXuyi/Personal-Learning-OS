@@ -34,6 +34,7 @@
     "test:graph": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/graph-split.test.ts",
     "test:flow": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/graph-flow-model.test.ts",
     "test:prereq": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/planner-prereq.test.ts",
+    "test:aitask": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/ai-task.test.ts",
     "tauri": "tauri"
   },
   "engines": {
