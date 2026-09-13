@@ -57,8 +57,8 @@ const ARROW_MARKER: Edge["markerEnd"] = {
   color: "var(--plos-ink-3)",
 };
 
-/** 画布高度：最小 500px（用户指定），宽屏维持 560px。 */
-const CANVAS_HEIGHT = "h-[500px] lg:h-[560px]";
+/** 画布高度：所有断点统一最小 500px（用户指定）。 */
+const CANVAS_HEIGHT = "h-[500px]";
 
 interface GraphViewProps {
   graph: KnowledgeGraph;
