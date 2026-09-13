@@ -19,6 +19,7 @@ import {
   extractKeyPointsMapped,
   parseKeyPointDrafts,
   parseKeyPointMerge,
+  hasMeaningfulText,
 } from "../src/ai/chapter-map-reduce.ts";
 import { extractConceptsMapped, parseConceptMerge } from "../src/ai/concept-map-reduce.ts";
 import type { ConceptCandidate } from "../src/ai/concept-map-reduce.ts";
@@ -230,15 +231,16 @@ await check("TC-EDGE-08 锚定失败 → 该条当场丢弃并计入 unanchored"
 
 await check("TC-EDGE-06 归并输出重复 sourceIndex → 去重后不产生重复 ref", () => {
   const candidates = [
-    { index: 0, point: "甲", quote: "q0", start: 0, end: 2 },
-    { index: 1, point: "乙", quote: "q1", start: 2, end: 4 },
+    // 占位用两字起（质量门要求有效字符 ≥2，单字会被当作符号丢弃）。
+    { index: 0, point: "甲点", quote: "q0", start: 0, end: 2 },
+    { index: 1, point: "乙点", quote: "q1", start: 2, end: 4 },
   ];
   const out = parseKeyPointMerge(
     [
-      { point: "甲", sourceIndex: 0 },
-      { point: "甲", sourceIndex: 0 },
-      { point: "甲的另一种说法", sourceIndex: 0 },
-      { point: "乙", sourceIndex: 1 },
+      { point: "甲点", sourceIndex: 0 },
+      { point: "甲点", sourceIndex: 0 },
+      { point: "甲点的另一种说法", sourceIndex: 0 },
+      { point: "乙点", sourceIndex: 1 },
     ],
     candidates,
   );
@@ -488,6 +490,54 @@ await check("D4：单块要点条数上限为 8（由 5 放宽）", () => {
     points: Array.from({ length: 12 }, (_, i) => ({ point: `要点 ${i}`, quote: `原文 ${i}` })),
   });
   assert.equal(out.length, 8, "应截断到 8 条");
+});
+
+/* ---------- 6. 要点质量门（纯符号 point，2026-09-13 README 图片残留案例） ---------- */
+
+await check("质量门：纯符号/单字符 point 被丢弃，有效条目保留", () => {
+  const out = parseKeyPointDrafts({
+    points: [
+      { point: "!", quote: "![](https://example.com/banner.png)" }, // README 图片残留案例
+      { point: "•", quote: "•" },
+      { point: "1.", quote: "1." },
+      { point: "a", quote: "a" }, // 单个有效字符也算无意义
+      { point: "RAG 采用混合检索", quote: "RAG 采用混合检索提升召回" },
+    ],
+  });
+  assert.equal(out.length, 1, "只应保留有效要点");
+  assert.equal(out[0]?.point, "RAG 采用混合检索");
+});
+
+await check("质量门：全部为纯符号时抛 request-failed（与空响应同口径）", () => {
+  assert.throws(
+    () => parseKeyPointDrafts({ points: [{ point: "!", quote: "!" }, { point: "？", quote: "？" }] }),
+    /未返回任何带原文出处的要点/,
+  );
+});
+
+await check("质量门：归并阶段同样丢弃纯符号 point（候选继承不受影响）", () => {
+  const candidates = [
+    { index: 0, point: "!", quote: "!", start: 0, end: 1 },
+    { index: 1, point: "混合检索结合 FTS 与向量", quote: "混合检索结合 FTS 与向量", start: 10, end: 24 },
+  ];
+  const out = parseKeyPointMerge(
+    [
+      { point: "!", sourceIndex: 0 },
+      { point: "混合检索要点", sourceIndex: 1 },
+    ],
+    candidates,
+  );
+  assert.equal(out.length, 1, "符号条应被丢弃");
+  assert.equal(out[0]?.quote, "混合检索结合 FTS 与向量", "有效条目的 quote 整体继承候选");
+});
+
+await check("质量门：hasMeaningfulText 边界（CJK / 数字 / 混合符号）", () => {
+  assert.equal(hasMeaningfulText("要点"), true, "CJK 计有效字符");
+  assert.equal(hasMeaningfulText("RAG v2"), true);
+  assert.equal(hasMeaningfulText("！？。……"), false, "全角标点不算有效字符");
+  assert.equal(hasMeaningfulText("-•·"), false);
+  assert.equal(hasMeaningfulText("9"), false, "单个数字不算");
+  assert.equal(hasMeaningfulText(""), false);
 });
 
 console.log(results.join("\n"));

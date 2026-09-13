@@ -852,3 +852,4 @@ refine:  { noSuggestion: "本次未产生精修建议，可稍后重试" }
 | 日期 | 变更 | 作者 |
 |------|------|------|
 | 2026-09-13 | 初稿；范围（概念+要点+精修）、归并策略（代码合并 + AI 归并）、分块粒度（自适应 3k–12k / ≤8 块）已确认 | Agent |
+| 2026-09-13 | 要点解析补「质量门」（`hasMeaningfulText`）：纯符号 point（如 README 图片残留的 `!`）在 parseKeyPointDrafts / parseKeyPointMerge 一律丢弃；同时在导入管道入口对 markdown 来源剥离图片语法与链接 URL（`import/normalize-text.ts`） | Agent |

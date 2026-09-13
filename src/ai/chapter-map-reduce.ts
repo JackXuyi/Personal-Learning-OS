@@ -80,6 +80,19 @@ export interface AiKeyPointDraft {
   quote: string;
 }
 
+/**
+ * 「是不是人话」质量门：剔除符号后有效字符（Unicode 字母/数字，含 CJK）
+ * 少于 2 个即判为无意义内容，丢弃该条。
+ *
+ * 动机（2026-09-13 线上案例）：GitHub README 图片语法残留的 `!` 被本地小模型
+ * 硬凑成要点 `{point:"!", quote:"!"}` —— 非空 ✓、≤60 字 ✓、quote 可锚定 ✓，
+ * 格式校验全绿放行。格式门之外必须补质量门，对所有来源（含云端模型抽风）生效。
+ */
+export function hasMeaningfulText(s: string): boolean {
+  const m = s.match(/[\p{L}\p{N}]/gu);
+  return m !== null && m.length >= 2;
+}
+
 /** 要点候选：分块 map 后、已由代码锚定的条目（归并阶段只能引用它）。 */
 export interface KeyPointCandidate {
   /** 候选全局下标（AI 用 `sourceIndex` 引用它）。 */
@@ -199,6 +212,7 @@ export function buildKeyPointMergeMessages(input: {
  *
  * - `point` 裁剪到 60 字，`quote` 裁剪到 200 字；
  * - 空 point 丢弃；空 quote 丢弃（无原文出处的要点不入库，诚实降级）；
+ * - 纯符号 point 丢弃（`hasMeaningfulText` 质量门，见函数注释）；
  * - 按 point 去重；最多留 `keyPointMergeMax`（8）条；
  * - 全部不合规 → 抛 `request-failed`（由调用方决定是否提示重试）。
  */
@@ -217,6 +231,7 @@ export function parseKeyPointDrafts(raw: unknown): AiKeyPointDraft[] {
     const quote = str(item.quote)?.trim();
     // 无原文摘录 → 该条不可溯源，直接丢弃（E3 诚实降级）。
     if (!quote) continue;
+    if (!hasMeaningfulText(point)) continue;
     const p = point.slice(0, PIPELINE_LIMITS.keyPointMaxChars);
     if (seen.has(p)) continue;
     seen.add(p);
@@ -249,7 +264,7 @@ export function parseKeyPointBlockDrafts(raw: unknown): AiKeyPointDraft[] {
  *
  * 丢弃规则（宁少不编）：
  * - `sourceIndex` 非整数 / 越界 → 丢弃该条；
- * - `point` 为空 → 丢弃；
+ * - `point` 为空或纯符号（质量门）→ 丢弃；
  * - 与已保留条目 **point 相同** → 丢弃（重复表述）；
  * - 与已保留条目 **start/end 相同** → 丢弃（同一处原文不该产两条引用）。
  *
@@ -273,6 +288,7 @@ export function parseKeyPointMerge(
     }
     const point = str(item.point)?.trim();
     if (!point) continue;
+    if (!hasMeaningfulText(point)) continue;
     const p = point.slice(0, PIPELINE_LIMITS.keyPointMaxChars);
     const c = candidates[src];
     const span = `${c.start}\u0001${c.end}`;

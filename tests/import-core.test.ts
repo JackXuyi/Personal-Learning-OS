@@ -12,6 +12,7 @@
  *  5) pickMarkdownEntries：前缀过滤 + 噪声目录排除 + 超限跳过
  *  6) resolveGithubUrl / buildGithubUnit：mock fetch（repo / blob 两态）
  *  7) pipeline.runUnitImport：md 有结构切章；过短仅保存；批量失败不阻断
+ *  8) stripMarkdownNoise：图片/链接噪音清洗 + 管道接线（入库正文无图片语法）
  */
 import assert from "node:assert/strict";
 import { classifyLocalFile, stripExtension, formatBytes, LIMITS } from "../src/features/learn/import/types.ts";
@@ -24,6 +25,7 @@ import {
   GithubImportError,
 } from "../src/features/learn/import/github.ts";
 import { runUnitImport, runBatchImport } from "../src/features/learn/import/pipeline.ts";
+import { stripMarkdownNoise } from "../src/features/learn/import/normalize-text.ts";
 import { InMemoryStorage } from "../src/storage/memory.ts";
 import type { ImportUnit } from "../src/features/learn/import/types.ts";
 
@@ -275,6 +277,48 @@ const run = async () => {
     assert.equal(summary.failed.length, 1);
     assert.equal(summary.failed[0].title, "fail-2");
     assert.equal((await s.listDocuments()).length, 2);
+  });
+
+  // ---- 8) stripMarkdownNoise：markdown 噪音清洗（README 图片残留案例） ----
+  await check("stripMarkdownNoise：图片保留 alt 文字，纯装饰图清空", () => {
+    assert.equal(
+      stripMarkdownNoise("看 ![架构图](https://example.com/a.png) 这张图"),
+      "看 架构图 这张图",
+    );
+    assert.equal(stripMarkdownNoise("- ![](https://x.y/b.png)"), "");
+    assert.equal(stripMarkdownNoise("![覆盖说明](local/path.png)"), "覆盖说明");
+  });
+
+  await check("stripMarkdownNoise：链接保文字去 URL，HTML img 删除", () => {
+    assert.equal(
+      stripMarkdownNoise("参见 [官方文档](https://docs.example.com) 与 <img src=\"x.gif\" /> 结束"),
+      "参见 官方文档 与  结束",
+    );
+  });
+
+  await check("stripMarkdownNoise：纯装饰图残留的空 bullet 行删除（带 alt 的保留文字）", () => {
+    assert.equal(
+      stripMarkdownNoise("- ![](https://x.y/b.png)\n- 保留项\n- ![logo](x)\n"),
+      "- 保留项\n- logo\n",
+    );
+  });
+
+  await check("stripMarkdownNoise：普通文本 / 代码块不误伤", () => {
+    const plain = "# 标题\n\n正文段落，含 [a](b) 吗？";
+    assert.equal(stripMarkdownNoise(plain), "# 标题\n\n正文段落，含 a 吗？");
+    assert.equal(stripMarkdownNoise(""), "");
+  });
+
+  await check("runUnitImport：markdown 来源入库正文不含图片语法（管道接线）", async () => {
+    const s = new InMemoryStorage();
+    const r = await runUnitImport(
+      mdUnit({ title: "img-noise", text: "# 章\n\n- ![banner](https://x.y/b.png)\n\n正文一段。\n\n正文两段。\n\n正文三段。" }),
+      { storage: s },
+    );
+    const doc = (await s.listDocuments()).find((d) => d.id === r.docId);
+    assert.ok(doc?.textPreview);
+    assert.ok(!doc.textPreview.includes("![banner]"), "图片语法不应残留在入库正文");
+    assert.ok(doc.textPreview.includes("正文一段"), "正常正文不受影响");
   });
 
   console.log(results.join("\n"));

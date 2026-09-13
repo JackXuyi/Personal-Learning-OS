@@ -24,6 +24,7 @@ import type { AIProvider } from "../../../ai";
 import { refineSplitResult } from "../../../ai";
 import { splitDocument } from "../../../engine";
 import { rebuildChunks } from "../index-chunks";
+import { stripMarkdownNoise } from "./normalize-text";
 import type { ImportUnit, UnitResult, ImportSummary } from "./types";
 
 /** 与 ImportModal 现状 PHASE_ORDER 一致。 */
@@ -65,6 +66,10 @@ export async function runUnitImport(unit: ImportUnit, opts: RunUnitOptions): Pro
     return out;
   };
 
+  // markdown 来源先做一次噪音清洗（图片语法 / URL 残留）——清洗后的文本
+  // 全程一致（入库 / 切分 / 章偏移 / RAG chunk 均基于同一份），不破坏可溯源。
+  const text = unit.splitFormat === "markdown" ? stripMarkdownNoise(unit.text) : unit.text;
+
   const doc: SourceDocument = {
     id: newId("doc"),
     title: unit.title.trim() || "Untitled",
@@ -72,14 +77,14 @@ export async function runUnitImport(unit: ImportUnit, opts: RunUnitOptions): Pro
     ...(unit.source ? { source: unit.source } : {}),
     importedAt: Date.now(),
     status: "ready",
-    textPreview: unit.text,
+    textPreview: text,
   };
 
   await phase("read", () => storage.saveDocument(doc));
 
   const heuristic = await phase("detect", async () => {
     const out = splitDocument(
-      { documentId: doc.id, text: unit.text, format: unit.splitFormat },
+      { documentId: doc.id, text, format: unit.splitFormat },
       { ...DEFAULT_SPLIT, ...opts.split },
     );
     return out.chapters;
@@ -94,7 +99,7 @@ export async function runUnitImport(unit: ImportUnit, opts: RunUnitOptions): Pro
 
   // refine 仅在 provider 就绪时尝试（refineSplitResult 内部对失败/未配置静默回退）。
   const out = await phase("refine", () =>
-    provider ? refineSplitResult(provider, heuristic, unit.text) : Promise.resolve({ chapters: heuristic, refined: false }),
+    provider ? refineSplitResult(provider, heuristic, text) : Promise.resolve({ chapters: heuristic, refined: false }),
   );
   const chapters = out.chapters;
   const merged = Math.max(0, heuristic.length - chapters.length);
