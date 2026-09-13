@@ -18,6 +18,7 @@ import type { Chapter, OverviewMode } from "../domain";
 import type { AIProvider, ChatMessage } from "./types";
 import { AiProviderError } from "./types";
 import { chatJson, isRecord, str } from "./pipelines";
+import { planTextBlocks } from "./text-blocks";
 
 /* ------------------------------------------------------------------ */
 /* 1) 尺寸常量 + 分块规划（纯函数）                                    */
@@ -59,76 +60,6 @@ export interface OverviewBlock {
 }
 
 /**
- * 收集「允许切开」的位置（升序、去重、去端点）。
- *
- * 两类候选：
- * - **章起点**：章是切分器算好的语义单元，用章起点断块保证**不跨章切**
- *   （跨章切会把两章中段拼一起，归并阶段容易串味）；
- * - **段落空行**：`\n\n` 之后。用于两种情况：无章节时退化为按段落分块；
- *   单章本身超限时在章内二次切分（避免把 markdown 围栏或表格行切一半）。
- */
-function collectBoundaries(text: string, chapters?: readonly Chapter[]): number[] {
-  const len = text.length;
-  const set = new Set<number>();
-  for (const c of chapters ?? []) {
-    const s = Math.max(0, Math.min(c.contentRef.start, len));
-    if (s > 0 && s < len) set.add(s);
-  }
-  const re = /\n\n/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    const at = m.index + m[0].length;
-    if (at > 0 && at < len) set.add(at);
-  }
-  return [...set].sort((a, b) => a - b);
-}
-
-/**
- * 按候选边界顺序积累成块：块从 `start` 起，切点取「≤ start + chunkChars 的最靠右
- * 候选边界」；该范围内没有候选边界就硬切在 `start + chunkChars`（保证有进展）。
- */
-function cutByBoundaries(
-  text: string,
-  boundaries: number[],
-  chunkChars: number,
-): { start: number; end: number }[] {
-  const len = text.length;
-  const out: { start: number; end: number }[] = [];
-  let start = 0;
-  while (start < len) {
-    const target = start + chunkChars;
-    if (target >= len) {
-      out.push({ start, end: len });
-      break;
-    }
-    let cut = -1;
-    for (let i = boundaries.length - 1; i >= 0; i--) {
-      const b = boundaries[i];
-      if (b <= start) break;
-      if (b <= target) {
-        cut = b;
-        break;
-      }
-    }
-    // 范围内没有语义边界（超长章节 / 无空行）→ 硬切，避免零进展死循环。
-    if (cut <= start) cut = target;
-    out.push({ start, end: cut });
-    start = cut;
-  }
-  return out.length > 0 ? out : [{ start: 0, end: len }];
-}
-
-/** 兜底：忽略语义边界，按 maxChunks 算术均分（保证块数 ≤ maxChunks）。 */
-function splitEvenly(len: number, maxChunks: number): { start: number; end: number }[] {
-  const size = Math.max(1, Math.ceil(len / maxChunks));
-  const out: { start: number; end: number }[] = [];
-  for (let start = 0; start < len; start += size) {
-    out.push({ start, end: Math.min(start + size, len) });
-  }
-  return out;
-}
-
-/**
  * 块的显示标识：起点落在某章区间内 → 该章标题；否则**空串**。
  *
  * 为什么无章时不给「第 N 段」：这个 label 会经 `onProgress` 直接进 UI 进度行，
@@ -165,31 +96,15 @@ export function planOverviewBlocks(input: {
   const chunkChars = input.chunkChars ?? OVERVIEW_LIMITS.chunkChars;
   const maxChunks = input.maxChunks ?? OVERVIEW_LIMITS.maxChunks;
 
-  if (text.trim().length === 0) return [];
-  // 与「单次成稿」同门槛：只要装得下就只出一块。
-  if (text.length <= chunkChars) {
-    return [{ index: 0, start: 0, end: text.length, label: "" }];
-  }
-
-  const boundaries = collectBoundaries(text, chapters);
-  let ranges = cutByBoundaries(text, boundaries, chunkChars);
-
-  if (ranges.length > maxChunks) {
-    // 放大块尺寸重跑：chunk = ceil(len / maxChunks) 时块数上界即 maxChunks。
-    ranges = cutByBoundaries(text, boundaries, Math.ceil(text.length / maxChunks));
-  }
-  if (ranges.length > maxChunks) {
-    // 极端边界分布（如每章都比目标块略小）仍超限 → 兜底算术均分。
-    // 这一步会放弃「不跨章」的语义约束，换取块数硬保证。
-    ranges = splitEvenly(text.length, maxChunks);
-  }
-
-  return ranges.map((r, i) => ({
-    index: i,
-    start: r.start,
-    end: r.end,
-    label: labelOf(r.start, chapters),
-  }));
+  // 分块内核已下沉到 `text-blocks`（概览与章内 map-reduce 共用同一套
+  // 「语义边界优先」切块逻辑）；这里只负责补上概览特有的块标识（label）。
+  const blocks = planTextBlocks({
+    text,
+    anchorOffsets: (chapters ?? []).map((c) => c.contentRef.start),
+    chunkChars,
+    maxChunks,
+  });
+  return blocks.map((b) => ({ ...b, label: labelOf(b.start, chapters) }));
 }
 
 /* ------------------------------------------------------------------ */
