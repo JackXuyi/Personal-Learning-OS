@@ -26,6 +26,7 @@ import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { storage } from "../../stores/useLoopStore";
 import { useAiTask } from "../../stores/useAiTaskStore";
 import { Button } from "../../components/ui/button";
+import { AiTaskStatusLine } from "../../components/ai-task-status-line";
 import { sortChaptersByOrder } from "../../domain";
 import { useI18n } from "../../i18n";
 import { modeHint } from "./meta";
@@ -126,10 +127,12 @@ export default function NewQuizPage() {
 
   // 自动路径：仅 URL 预填的 unit-test（「去测本章」等入口）→ 直接生成进入答题。
   // 手动在向导里选单章+单元测不触发（autoRequested=false）。
-  // 幂等：同任务已 running/done 时跳过（防重复入卷；替代旧 autoDone 单守卫）。
+  // 幂等：只挡 running——done 终态保留至下次 start，若在此处也拦截，PapersTab
+  // 出过卷后（共享 paper:{docId} 的 done 记录）会静默吞掉自动建卷（R1 回归）。
+  // 「只建一次」由 autoDone flag 保证。
   useEffect(() => {
     if (autoDone || !autoRequested || !docId || sortedSelected.length === 0) return;
-    if (task.skipIfFinished) return;
+    if (task.running) return;
     if (mode === "unit-test" && sortedSelected.length === 1) {
       setAutoDone(true);
       createAndStart();
@@ -356,24 +359,18 @@ export default function NewQuizPage() {
           disabled={!canNext || !mode || !selectableModes.includes(mode)}
           onClick={createAndStart}
         >
-          {task.running ? np.generating : np.start}
+          {np.start}
         </Button>
       </div>
 
-      {/* 失败 / 本地回退终态（来自全局任务记录；失败后停留本页，用户可调整重试） */}
-      {task.status === "error" && task.message && (
-        <p
-          aria-live="polite"
-          className="mt-3 rounded-lg border border-line bg-surface p-3 text-xs text-ink-2"
-        >
-          {m.aiTask.failed}：{taskErrorText(task.message)}
-        </p>
-      )}
-      {task.status === "done" && task.message && (
-        <p className="mt-3 rounded-lg border border-line bg-surface p-3 text-xs text-ink-2">
-          {task.message}
-        </p>
-      )}
+      {/* 失败 / 本地回退终态 + running 进度（统一状态行：新鲜度门防跨页面串台；可 dismiss） */}
+      <AiTaskStatusLine
+        task={task}
+        runningFallback={np.generating}
+        formatError={taskErrorText}
+        onDismiss={task.clear}
+        className="mt-3"
+      />
     </PageContainer>
   );
 }
