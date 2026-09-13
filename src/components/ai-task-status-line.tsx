@@ -20,6 +20,7 @@ export interface AiTaskView {
   running: boolean;
   status?: AiTaskStatus;
   phase?: string;
+  progress?: number;
   message?: string;
   endedAt?: number;
 }
@@ -45,12 +46,28 @@ export function AiTaskStatusLine({
   const { m } = useI18n();
   const t = m.aiTask;
 
-  // running 行：进度文案实时来自全局任务记录（切页重挂后可恢复）。
+  // running 行：进度文案实时来自全局任务记录（切页重挂后可恢复）；
+  // progress（0..1）存在时追加微进度条（F7：map-reduce 长任务的数值进度）。
   if (task.running) {
+    const pct =
+      typeof task.progress === "number"
+        ? Math.min(100, Math.max(0, Math.round(task.progress * 100)))
+        : undefined;
     return (
-      <p aria-live="polite" className={cn("text-xs text-ink-2", className)}>
-        {task.phase ?? runningFallback}
-      </p>
+      <div className={className}>
+        <p aria-live="polite" className="text-xs text-ink-2">
+          {task.phase ?? runningFallback}
+          {pct !== undefined ? ` ${pct}%` : ""}
+        </p>
+        {pct !== undefined && (
+          <div className="mt-1.5 h-1 w-full max-w-xs overflow-hidden rounded-full bg-subtle">
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-300"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        )}
+      </div>
     );
   }
 

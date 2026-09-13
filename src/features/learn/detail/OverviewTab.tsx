@@ -123,7 +123,12 @@ export default function OverviewTab({ doc, chapters, learner, onChanged }: Overv
         storage,
         provider: buildActiveProvider(),
         ...(doc.analysis?.model ? { model: doc.analysis.model } : {}),
-        onProgress: (i, n, label, phase) => report(phaseText(i, n, label, phase)),
+        onProgress: (i, n, label, phase) =>
+          // map 阶段才有分母语义 → 携带 0..1 数值进度（F7）；single/merge 无比率
+          report(
+            phaseText(i, n, label, phase),
+            phase === 'map' && n > 0 ? i / n : undefined,
+          ),
       });
       setSkipped(r.skipped);
       // 先落本地兜底：视图不再等父组件回读，回读失败也照常展示已生成的概览。

@@ -96,7 +96,9 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
       const result = await analyzeKeyPointsNow(doc, chapters, {
         storage,
         provider,
-        onProgress: (i, n, ch, blk) => report(progressText(i, n, ch, blk)),
+        onProgress: (i, n, ch, blk) =>
+          // 数值进度随文案一并进任务记录（F7），重挂后微进度条可恢复
+          report(progressText(i, n, ch, blk), n > 0 ? i / n : undefined),
       });
       const extra =
         [
@@ -140,7 +142,8 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
       const result = await analyzeConceptsNow(doc, chapters, {
         storage,
         provider,
-        onProgress: (i, n, ch, blk) => report(progressText(i, n, ch, blk)),
+        onProgress: (i, n, ch, blk) =>
+          report(progressText(i, n, ch, blk), n > 0 ? i / n : undefined),
       });
       const extra =
         result.skippedBlocks > 0
