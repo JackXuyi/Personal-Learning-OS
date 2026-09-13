@@ -1523,6 +1523,7 @@ export const en: Messages = {
     fallbackDone: "AI not ready — generated a local fallback result.",
     failed: "Task failed",
     alreadyRunning: "The same task is already running — please wait.",
+    dismiss: "Dismiss",
   },
   engine: {
     // —— learning-planner concept layer (buildPlan reasons) ——

@@ -1468,6 +1468,7 @@ export const zh = {
     fallbackDone: "AI 未就绪，已生成本地结果。",
     failed: "任务失败",
     alreadyRunning: "相同任务正在进行中，请稍候。",
+    dismiss: "知道了",
   },
   engine: {
     // —— learning-planner 概念层（buildPlan reasons）——
