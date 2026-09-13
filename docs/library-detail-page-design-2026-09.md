@@ -943,5 +943,5 @@ learn.detail.papers.{docAdvice,advice,goNew,generated,score,duration,difficulty,
 
 - **新增能力**：画布拖拽平移（改造前仅有滚轮缩放）、Controls 的适配视图按钮。
 - **不变**：三态语义（Overview / Focus / Detail）、单击聚焦一跳邻域、空图谱兜底、props 契约（`KnowledgeTab` 调用代码零改动）、力导向布局（`layout.ts` 一行未动）。
-- **视觉**：节点 / 边颜色从硬编码 hex 迁到 PLOS 语义 token（颜色值只在 `main.css`）；状态色统一后个别颜色略深（如已掌握边框 `#34d399` → `#059669`）。
+- **视觉**：节点 / 边颜色从硬编码 hex 迁到 PLOS 语义 token（颜色值只在 `main.css`）；状态色统一后个别颜色略深（如已掌握边框 `#34d399` → `#059669`）。画布高度由三档（320/440/560px）改为**最小 500px、宽屏 560px**。
 - **测试**：新增 `tests/graph-flow-model.test.ts`（`npm run test:flow`，18 项），映射逻辑为纯函数可 node 直跑。
