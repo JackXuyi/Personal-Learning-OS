@@ -14,6 +14,7 @@ import { storage } from '../../../stores/useLoopStore';
 import { useAiTask } from '../../../stores/useAiTaskStore';
 import { Button } from '../../../components/ui/button';
 import { Section } from '../../../components/primitives';
+import { AiTaskStatusLine } from '../../../components/ai-task-status-line';
 import { notifyDocsChanged } from '../../../components/layout/AppShell';
 import { buildActiveProvider } from '../../../stores/useSettingsStore';
 import { useAiReady } from '../../../hooks/useAiReady';
@@ -167,6 +168,16 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
     });
   };
 
+  // 状态行任务择一：优先 running 中的；否则取结束更近的（终态由新鲜度门过滤）。
+  const statusTask =
+    pointsTask.running || conceptsTask.running
+      ? pointsTask.running
+        ? pointsTask
+        : conceptsTask
+      : (pointsTask.endedAt ?? 0) >= (conceptsTask.endedAt ?? 0)
+        ? pointsTask
+        : conceptsTask;
+
   return (
     <div className="space-y-6">
       {/* 章要点 */}
@@ -305,13 +316,13 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
         </div>
       )}
 
-      {/* 进行中：进度文案来自全局任务记录（切页重挂后恢复） */}
-      {(pointsTask.running || conceptsTask.running) && (
-        <div className="rounded-lg border border-line bg-surface p-3">
-          <p aria-live="polite" className="text-xs text-ink-2">
-            {(pointsTask.running ? pointsTask.phase : conceptsTask.phase) ?? t.aiTask.running}
-          </p>
-        </div>
+      {/* 进行中 / 重挂后的简化终态：统一状态行（新鲜度门 + dismiss） */}
+      {!summary && (
+        <AiTaskStatusLine
+          task={statusTask}
+          runningFallback={t.aiTask.running}
+          onDismiss={statusTask.clear}
+        />
       )}
 
       {/* 完成汇总（本次会话富结构渲染） */}
@@ -330,27 +341,6 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
           )}
         </div>
       )}
-
-      {/* 重挂后的简化终态（summary 富结构已随卸载丢失，从任务记录恢复提示） */}
-      {!summary && (pointsTask.status === 'done' || conceptsTask.status === 'done') && (
-        <div className="rounded-lg border border-line bg-surface p-3">
-          <p aria-live="polite" className="text-xs text-ink-2">
-            {(pointsTask.status === 'done' ? pointsTask.message : conceptsTask.message) ??
-              t.learn.detail.knowledge.extractDone(0, 0)}
-          </p>
-        </div>
-      )}
-      {!summary &&
-        (pointsTask.status === 'error' || conceptsTask.status === 'error') && (
-          <div className="rounded-lg border border-line bg-surface p-3">
-            <p aria-live="polite" className="text-xs text-ink-2">
-              {t.aiTask.failed}：
-              {pointsTask.status === 'error'
-                ? pointsTask.message
-                : conceptsTask.message}
-            </p>
-          </div>
-        )}
     </div>
   );
 }

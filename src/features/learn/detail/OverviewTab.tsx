@@ -14,6 +14,7 @@ import { useI18n } from '../../../i18n';
 import { storage } from '../../../stores/useLoopStore';
 import { useAiTask } from '../../../stores/useAiTaskStore';
 import { Button } from '../../../components/ui/button';
+import { AiTaskStatusLine } from '../../../components/ai-task-status-line';
 import { Bar, Section, Stat } from '../../../components/primitives';
 import { notifyDocsChanged } from '../../../components/layout/AppShell';
 import { buildActiveProvider } from '../../../stores/useSettingsStore';
@@ -160,7 +161,7 @@ export default function OverviewTab({ doc, chapters, learner, onChanged }: Overv
               loading={task.running}
               disabled={!aiReady || !hasBody}
             >
-              {task.running ? o.generating : overview ? o.regenerate : o.generate}
+              {overview ? o.regenerate : o.generate}
             </Button>
           }
         />
@@ -182,21 +183,13 @@ export default function OverviewTab({ doc, chapters, learner, onChanged }: Overv
         {stale && <p className="mt-1 text-xs text-state-weak">{o.stale}</p>}
       </div>
 
-      {/* 进行中 / 错误：aria-live 让读屏用户感知长任务与失败。
-          数据源为全局任务记录：切页再回来 running/进度/终态均可恢复。 */}
-      {task.running && (
-        <p aria-live="polite" className="text-xs text-ink-2">
-          {task.phase ?? o.generating}
-        </p>
-      )}
-      {task.status === 'error' && task.message && (
-        <p
-          aria-live="polite"
-          className="rounded-lg border border-line bg-surface p-3 text-xs text-ink-2"
-        >
-          {o.failed(task.message)}
-        </p>
-      )}
+      {/* 进行中 / 终态：统一状态行（freshness 门 + dismiss；切页重挂可恢复）。 */}
+      <AiTaskStatusLine
+        task={task}
+        runningFallback={o.generating}
+        formatError={(raw) => o.failed(raw)}
+        onDismiss={task.clear}
+      />
 
       {/* 主体：已生成 → 内容；未生成 → 空态卡。重新生成时保留旧内容，避免闪屏。 */}
       {overview ? (

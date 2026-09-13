@@ -17,6 +17,7 @@ import { buildActiveProvider } from '../../../stores/useSettingsStore';
 import { useAiReady } from '../../../hooks/useAiReady';
 import { Button } from '../../../components/ui/button';
 import { ConfirmDialog } from '../../../components/ui/confirm-dialog';
+import { AiTaskStatusLine } from '../../../components/ai-task-status-line';
 import { notifyDocsChanged } from '../../../components/layout/AppShell';
 import { splitDocumentNow, SplitServiceError } from '../split-service';
 import { autoIndexAfterImport } from '../index-service';
@@ -121,13 +122,7 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
     else void runSplit();
   };
 
-  // 精修结果/失败终态来自全局任务记录（切页重挂后仍可见）
-  const analyzeNotice =
-    refineTask.status === 'done' && refineTask.message
-      ? refineTask.message
-      : refineTask.status === 'error'
-        ? t.learn.detail.analyze.failed(refineTask.message ?? '')
-        : undefined;
+  // 精修 running / 终态统一交 AiTaskStatusLine（freshness 门 + dismiss），组件内不再派生。
 
   return (
     <div className="space-y-4">
@@ -178,20 +173,20 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
         </div>
       </div>
 
-      {/* 通知条：切分结果为组件内 state（本地操作）；精修终态来自全局任务记录 */}
-      {(notice || analyzeNotice || refineTask.running) && (
+      {/* 通知条：切分结果为组件内 state（本地操作，恒新鲜） */}
+      {notice && (
         <div className="rounded-lg border border-line bg-surface p-3">
-          {refineTask.running && (
-            <p aria-live="polite" className="text-xs text-ink-2">
-              {refineTask.phase ?? t.aiTask.running}
-            </p>
-          )}
-          {notice && <p className="text-xs text-ink-2">{notice}</p>}
-          {analyzeNotice && !refineTask.running && (
-            <p aria-live="polite" className="text-xs text-ink-2">{analyzeNotice}</p>
-          )}
+          <p className="text-xs text-ink-2">{notice}</p>
         </div>
       )}
+
+      {/* 精修任务：running 进度 / done·error 终态（统一状态行） */}
+      <AiTaskStatusLine
+        task={refineTask}
+        runningFallback={t.aiTask.running}
+        formatError={(raw) => t.learn.detail.analyze.failed(raw)}
+        onDismiss={refineTask.clear}
+      />
 
       {/* 章行列表或空态（空态内置切分入口，双重保险） */}
       {!hasChapters ? (
