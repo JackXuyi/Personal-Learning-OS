@@ -916,3 +916,19 @@ learn.detail.papers.{docAdvice,advice,goNew,generated,score,duration,difficulty,
 | 2026-09-10 | 初稿（基于用户 5 项优化要求 + 现状勘察；已确认 4 项决策：要点与概念都带原文引用 / 引入 react-markdown + remark-gfm / 试卷展示已生成卷 + 推荐卷型 / Tab 下划线式） | Agent |
 | 2026-09-10 | 用户确认方案；实施顺序定为 5 批：T5/T12/T1/T2/T9 → T3/T4 → T6/T7 → T8/T10/T11 → T13/T14；配套 runbook 创建 | 用户 |
 | 2026-09-10 | T1–T14 全部实施完成。B1/B2 两个 P0 已修（工具条常显 + 全局 AI 配置）；B3/B4/B5 已修（按格式分派渲染器 / 试卷读库+推荐 / Tab 下划线式）。实施记录与两处偏差见 runbook §实施记录 | Agent |
+| 2026-09-13 | **行为变更：长章 / 长文档改走章内 map-reduce**（见下方 §13）—— 逐章管道的 40k 字硬上限、整篇精修的 6 万字 / 24 章静默跳过均被移除；单章要点上限 5 → 8。§4/§8/§11 中「超限抛错 / 静默跳过」的旧描述以 §13 为准 | Agent |
+
+## 13. 后续变更（2026-09-13）：长章 / 长文档改走章内 map-reduce
+
+> 本节记录本设计交付后的行为变更，避免上文 §4 / §8 / §11 的旧描述被误读为现状。
+> 完整方案与执行记录：`docs/ai-chapter-mapreduce-design-2026-09.md`、`docs/ai-chapter-mapreduce-task-runbook.md`。
+
+| 能力 | 变更前 | 变更后 |
+|------|--------|--------|
+| ③ 要点分析 | 单章 > 40,000 字**直接抛错**，该章进 `failed[]` | 章内自适应分块（3k–12k 字 / ≤8 块）→ 逐块 map（单块失败跳过并计数）→ 代码级去重 → **引用式 AI 归并**；任意长度章都能跑完 |
+| ② 概念分析 | 同上 | 同上；另需把块内关系下标抬升到全局候选空间，归并后按「候选 → 最终槽位」重建关系 |
+| ① 章节精修 | 全文 > 60,000 字或章数 > 24 时**静默 `return []`**（界面显示「已分析」但无任何变化） | 按 12 章/批分批执行；单批失败只丢该批（`failedBatches`）；无建议时 UI 明确提示，不再静默 |
+| 单章要点条数上限 | 5 条 | **8 条**（`PIPELINE_LIMITS.keyPointMergeMax`，决策 D4） |
+| 出处字段来源 | AI 给 `quote` → `locateQuote` 锚定 | 分块候选**先由代码锚定**；AI 归并在只输出候选编号（`sourceIndex` / `mergeOf`），产出条目的 `quote` / `start` / `end` 与候选**逐字节一致**，AI 给的引文文本一律丢弃 |
+
+**对 §11 测试方案的影响**：新增 `tests/ai-map-reduce.test.ts`（`npm run test:aimap`，23 项）并挂入 `test:library` 串联链；`tests/library-keypoint.test.ts` 的「截断到 5」断言同步改为 8。
