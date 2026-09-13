@@ -43,7 +43,14 @@ const toFailedItems = (failed: readonly { title: string; reason: string }[]): Fa
 export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged }: KnowledgeTabProps) {
   const { m: t } = useI18n();
   const navigate = useNavigate();
-  const [busyTick, setBusyTick] = useState<{ i: number; n: number; title: string }>();
+  const [busyTick, setBusyTick] = useState<{
+    i: number;
+    n: number;
+    title: string;
+    /** 块级进度：长章分块时才有值（短章不传 → 文案与改造前一致）。 */
+    block?: number;
+    blocks?: number;
+  }>();
   const [summary, setSummary] = useState<{ ok: number; failed: FailedItem[]; extra?: string }>();
   const [pointsBusy, setPointsBusy] = useState(false);
 
@@ -83,15 +90,21 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
       const result = await analyzeKeyPointsNow(doc, chapters, {
         storage,
         provider,
-        onProgress: (i, n, ch) => setBusyTick({ i, n, title: ch.title }),
+        onProgress: (i, n, ch, blk) => setBusyTick({ i, n, title: ch.title, ...(blk ?? {}) }),
       });
       setSummary({
         ok: result.ok,
         failed: toFailedItems(result.failed),
-        extra:
+        extra: [
+          result.skippedBlocks > 0
+            ? t.learn.detail.analyze.skippedBlocks(result.skippedBlocks)
+            : "",
           result.unanchored > 0
             ? t.learn.detail.knowledge.pointsUnanchored(result.unanchored)
-            : undefined,
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ") || undefined,
       });
       notifyDocsChanged();
       await onChanged();
@@ -118,11 +131,15 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
       const result = await analyzeConceptsNow(doc, chapters, {
         storage,
         provider,
-        onProgress: (i, n, ch) => setBusyTick({ i, n, title: ch.title }),
+        onProgress: (i, n, ch, blk) => setBusyTick({ i, n, title: ch.title, ...(blk ?? {}) }),
       });
       setSummary({
         ok: result.ok,
         failed: toFailedItems(result.failed),
+        extra:
+          result.skippedBlocks > 0
+            ? t.learn.detail.analyze.skippedBlocks(result.skippedBlocks)
+            : undefined,
       });
       notifyDocsChanged();
       await onChanged();
@@ -275,11 +292,18 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
         </div>
       )}
 
-      {/* 进度提示 */}
+      {/* 进度提示：长章分块时追加「第 k/K 块」，短章与改造前文案一致 */}
       {busyTick && (
         <div className="rounded-lg border border-line bg-surface p-3">
           <p className="text-xs text-ink-2">
-            {t.learn.detail.knowledge.extracting(busyTick.i, busyTick.n, busyTick.title)}
+            {busyTick.block !== undefined && (busyTick.blocks ?? 1) > 1
+              ? t.learn.detail.analyze.busyBlock(
+                  busyTick.i,
+                  busyTick.n,
+                  busyTick.block,
+                  busyTick.blocks ?? 1,
+                )
+              : t.learn.detail.knowledge.extracting(busyTick.i, busyTick.n, busyTick.title)}
           </p>
         </div>
       )}

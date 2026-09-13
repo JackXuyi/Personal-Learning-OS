@@ -95,9 +95,17 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
     setNotice(undefined);
     try {
       const result = await analyzeChaptersNow(doc, chapters, { storage, provider });
-      setNotice(
-        t.learn.detail.analyze.result(result.changed, result.merged),
-      );
+      // 三类结果分开提示（不再静默）：
+      // - 有批失败 → 明确「N 批未精修」（这些章保持原样）；
+      // - 无变更（含全部批失败）→ 「本次未产生精修建议」；
+      // - 否则 → 既有结果文案。
+      if (result.failedBatches > 0) {
+        setNotice(t.learn.detail.analyze.failedBatches(result.failedBatches));
+      } else if (result.changed === 0) {
+        setNotice(t.learn.detail.analyze.noSuggestion);
+      } else {
+        setNotice(t.learn.detail.analyze.result(result.changed, result.merged));
+      }
       notifyDocsChanged();
       await onChanged();
     } catch (e) {
