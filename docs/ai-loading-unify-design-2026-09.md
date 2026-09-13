@@ -478,8 +478,66 @@ const generate = () => task.run(async (report) => {
 
 ---
 
+## 13. 实施后修订（第二轮修复 + 第三批，2026-09-13）
+
+> 第一轮按本方案 T1–T9 落地后经交互审查发现 2 个 bug（R1/R2）与一批体验问题，
+> 修复与收敛见 `docs/ai-loading-interaction-fix-runbook-2026-09.md`（F1–F9）。本节
+> 记录对前文设计点的**行为级修订**，冲突处以本节为准。
+
+### 13.1 终态新鲜度门（修订 §4.4「终态保留」语义）
+
+- 终态仍保留至下次 start / clear（D3 不变），但**展示**受 TTL 约束：
+  `ai-task-types.ts` 新增 `AI_TASK_TERMINAL_TTL_MS = 90_000` 与纯函数
+  `isTerminalFresh(rec, now?, ttl?)`（running 恒 fresh；终态按 `endedAt` 判窗口）。
+- 动机：同 id 记录会被多个页面写入（`paper:{docId}` 由 PapersTab / 出卷向导 /
+  AssessmentPage 共享），无条件渲染终态消息会跨页面串台；且「隔天回来仍看到
+  昨天的结果摘要」违背提示语义。
+- **R1 回归修复**：依赖此语义的守卫必须区分 running 与 done——
+  `NewQuizPage` 自动路径改回仅挡 `task.running`（done 拦截交给 `autoDone`）；
+  `useAiTask.skipIfFinished`（running‖done）仅保留给判卷页这类
+  「done 即本任务已消费」的场景，**禁止用于自动触发型 effect + 共享 id**。
+
+### 13.2 AiTaskStatusLine（收敛件，新增 §8.17）
+
+- `src/components/ai-task-status-line.tsx`：统一此前 ≥4 处重复的
+  「running 进度行 + 终态消息卡」模式。职责：
+  running → `phase ?? runningFallback`（aria-live）；
+  终态 → 新鲜度门内渲染消息卡 + dismiss（「知道了」→ `task.clear()`）；
+  error → `aiTask.failed` 前缀，`formatError?` 留页面级 kind 映射扩展点。
+- 已接入 OverviewTab / SplitTab / KnowledgeTab（双任务择一：running 优先 →
+  `endedAt` 更近者；`summary` 富结构存在时不渲染）/ NewQuizPage /
+  QuizReportPage（派生 + freshness 门）；ChapterGraphPage 为工具栏 pill 形态，
+  仅内联 freshness 门。
+
+### 13.3 数值进度（补充 §4.3 `progress` 字段的消费路径）
+
+- `progress`（0..1）由长任务写入：OverviewTab（仅 map 阶段 i/n；single/merge
+  无分母语义不传）与 KnowledgeTab 要点/概念任务（i/n）。
+- `AiTaskStatusLine` 在 running 且有 progress 时渲染微进度条 + 百分比；
+  切页重挂后随任务记录恢复。
+
+### 13.4 其它行为统一
+
+- Button loading 统一**保留原标签**（spinner 表达状态，长任务信息由状态行承载）；
+  OverviewTab / NewQuizPage / ChapterGraphPage 原有的 running 换字已移除。
+- AssessmentPage：busy 指示双源（组件 `busyChapter` ∥ store `isPaperRunning`）；
+  出卷失败原因透出（`scopeError` boolean → 错误消息）。
+- QuizReportPage：`aiMsg` 去重，仅保留「未配置 AI」预检；任务终态统一从
+  `grade:{paperId}` 派生。
+
+### 13.5 明确不做（修订后复核）
+
+- **AI 错误文案统一映射**：`import/error-text.ts` 模式依赖适配层产出类型化
+  `kind`，而 AI 层错误异构（provider fetch / 管道 / 解析），现阶段建 kind 体系
+  收益低于成本。沿用 `aiTask.failed` 前缀 + `formatError` 扩展点，待 AI 层
+  错误结构化后再收敛。
+- AbortSignal 取消、全局任务中心指示器、keep-alive 维持非目标（§2 D4）。
+
+---
+
 ## 变更记录
 
 | 日期 | 变更 | 作者 |
 |------|------|------|
 | 2026-09-13 | 初稿 | WorkBuddy |
+| 2026-09-13 | 实施后修订：终态新鲜度门 / AiTaskStatusLine / 数值进度 / 行为统一（§13） | WorkBuddy |
