@@ -1,6 +1,7 @@
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../../lib/utils";
+import { Spinner } from "./spinner";
 
 /**
  * Button（UI Kit 首件；docs/ui-component-system-shadcn-design-2026-09.md §4.3/M0.3）。
@@ -38,18 +39,36 @@ const buttonVariants = cva(
   },
 );
 
+interface ButtonProps
+  extends React.ComponentProps<"button">,
+    VariantProps<typeof buttonVariants> {
+  /**
+   * loading 态（docs/ai-loading-unify-design-2026-09.md §8.4）：
+   * 前置 Spinner + 强制 disabled + aria-busy；与 disabled prop 独立，二者取或。
+   */
+  loading?: boolean;
+}
+
 function Button({
   className,
   variant,
   size,
+  loading = false,
+  disabled,
+  children,
   ...props
-}: React.ComponentProps<"button"> & VariantProps<typeof buttonVariants>) {
+}: ButtonProps) {
   return (
     <button
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       {...props}
-    />
+    >
+      {loading && <Spinner className="size-3.5" />}
+      {children}
+    </button>
   );
 }
 
