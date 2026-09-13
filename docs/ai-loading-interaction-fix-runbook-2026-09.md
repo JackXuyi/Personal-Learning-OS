@@ -40,3 +40,18 @@
 ### F6 — 收尾：typecheck 0 error + test:aitask 扩展 + 回归 + 分组提交
 - **Status:** done
 - **Outcome:** typecheck 本任务 0 error（仅剩他人 a230655 遗留 AIModelsSection 3 个 TS6133）；test:aitask 14/14；test:i18n / test:library / test:ai / test:flow 零回归。
+
+## 第三批（F7–F9 · 会话追加）
+
+### F7 — progress 数值进度接入 + 状态行微进度条
+- **Status:** done
+- **Outcome:** AiTaskView 补 `progress?`；running 行有数值进度时渲染微进度条（bg-subtle/bg-primary token，附百分比）；OverviewTab（map 阶段 i/n）与 KnowledgeTab 两条任务（i/n）接入 report 第二参。single/merge 等无分母语义的阶段不传。
+- **Notes:** 重挂后进度条随任务记录恢复。
+
+### F8 — AssessmentPage 出卷失败原因透出
+- **Status:** done
+- **Outcome:** `scopeError` 从 boolean 改为错误消息 string，渲染 `docScopeFailed：{原因}`；此前 catch 吞掉全部细节。
+
+### F9 — QuizReportPage aiMsg 双写去重
+- **Status:** done
+- **Outcome:** `done()`/error 终态的 setAiMsg 双写删除，`aiMsg` 仅保留「未配置 AI」预检（无任务记录可派生）；任务派生行补 running 分支（r.aiRetrying）+ isTerminalFresh 新鲜度门。
