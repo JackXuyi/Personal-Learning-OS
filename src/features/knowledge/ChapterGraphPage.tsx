@@ -26,6 +26,7 @@ import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { replaceChapterConcepts, subgraphOf } from "../../engine/graph-engine";
 import { storage } from "../../stores/useLoopStore";
 import { useAiTask } from "../../stores/useAiTaskStore";
+import { isTerminalFresh } from "../../stores/ai-task-types";
 import { Button } from "../../components/ui/button";
 import { useI18n } from "../../i18n";
 import GraphView from "./GraphView";
@@ -156,18 +157,19 @@ export default function ChapterGraphPage() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {task.status === "done" && task.message ? (
+          {/* 终态 pill 带新鲜度门（R2）：同 id 记录跨页面残留的陈旧终态不再展示 */}
+          {task.status === "done" && task.message && isTerminalFresh(task) ? (
             <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
               {task.message}
             </span>
           ) : null}
-          {(error || (task.status === "error" && task.message)) ? (
+          {(error || (task.status === "error" && task.message && isTerminalFresh(task))) ? (
             <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
               {error ?? task.message}
             </span>
           ) : null}
           <Button onClick={extractConcepts} loading={task.running}>
-            {task.running ? t.extractBusy : hasConcepts ? t.reExtract : t.extract}
+            {hasConcepts ? t.reExtract : t.extract}
           </Button>
         </div>
       </div>
