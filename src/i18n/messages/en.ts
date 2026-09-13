@@ -879,7 +879,16 @@ export const en: Messages = {
         aiOff: "AI is not configured — analysis unavailable.",
         goConfigure: "Configure AI model →",
         failed: (reason: string) => `Analysis failed: ${reason} (click to retry)`,
-        tooManyChapters: "Too many chapters (>24); whole-document analysis unsupported.",
+        // Block-level progress for long chapters (hidden when K = 1, matching the old copy)
+        busyBlock: (i: number, n: number, k: number, K: number) =>
+          `Analyzing chapter ${i}/${n} · block ${k}/${K}`,
+        // Number of blocks that failed during map (content may be incomplete)
+        skippedBlocks: (n: number) => `${n} block(s) failed (content may be incomplete)`,
+        // Number of refinement batches that failed
+        failedBatches: (n: number) =>
+          `${n} batch(es) not refined (those chapters kept as-is; retry later)`,
+        // No refinement suggestions produced (replaces the former silent no-op)
+        noSuggestion: "No refinement suggestions this time — try again later.",
       },
       knowledge: {
         pointsHead: "Chapter points",

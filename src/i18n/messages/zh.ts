@@ -857,7 +857,15 @@ export const zh = {
         aiOff: "AI 未配置，分析不可用。",
         goConfigure: "去配置 AI 模型 →",
         failed: (reason: string) => `分析失败：${reason}（可再次点击重试）`,
-        tooManyChapters: "章节过多（>24 章），暂不支持整篇分析。",
+        // 长章分块后的块级进度（短章 K=1 时不显示，文案与改造前一致）
+        busyBlock: (i: number, n: number, k: number, K: number) =>
+          `正在分析第 ${i}/${n} 章 · 第 ${k}/${K} 块`,
+        // 分块 map 中失败的块数（>0 时该章内容可能不完整）
+        skippedBlocks: (n: number) => `其中 ${n} 个分块失败（内容可能不完整）`,
+        // 精修分批执行中失败的批数
+        failedBatches: (n: number) => `有 ${n} 批未精修（这些章保持原样，可稍后重试）`,
+        // 精修未产生任何建议（替代改造前的静默）
+        noSuggestion: "本次未产生精修建议，可稍后重试。",
       },
       knowledge: {
         pointsHead: "章要点",
