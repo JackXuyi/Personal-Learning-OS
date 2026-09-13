@@ -14,13 +14,13 @@
  * - ④ 概览（整篇级）：AI 读正文出导读，写 `doc.overview`；**不依赖切分**
  *   （无章节时按段落分块），因此不像 ①②③ 那样要求已切分。
  */
-import type { Chapter, DocumentOverview, KeyPointRef, SourceDocument } from "../../domain";
+import type { Chapter, DocumentOverview, SourceDocument } from "../../domain";
 import type { StorageAdapter } from "../../storage";
 import type { AIProvider } from "../../ai";
 import {
-  refineChaptersWithAi,
-  extractChapterConceptsWithAi,
-  extractKeyPointsWithAi,
+  refineChaptersBatched,
+  extractKeyPointsMapped,
+  extractConceptsMapped,
 } from "../../ai/pipelines";
 import type { OverviewProgress } from "../../ai/overview-pipeline";
 import { summarizeDocumentWithAi } from "../../ai/overview-pipeline";
@@ -51,6 +51,10 @@ export interface AnalyzeChaptersResult {
   changed: number;
   /** AI 判定并合并的过碎小节数。 */
   merged: number;
+  /** 精修批次数（>1 表示长资料走了分批）。 */
+  batches: number;
+  /** 失败的批数（>0 时这些章的标题/要点保持原样，未精修）。 */
+  failedBatches: number;
   analyzedAt: number;
 }
 
@@ -60,6 +64,10 @@ export interface AnalyzeConceptsResult {
   failed: { chapterId: string; title: string; reason: string }[];
   units: number;
   relations: number;
+  /** 因单块失败而跳过的块数（>0 时该章概念可能不完整）。 */
+  skippedBlocks: number;
+  /** AI 归并失败、回退代码级合并的章数（D6）。 */
+  mergeFallbacks: number;
   analyzedAt: number;
 }
 
@@ -77,7 +85,16 @@ export interface AnalyzeConceptsOptions {
   model?: string;
   /** true = 只补未提炼的章；false（默认）= 全部重新分析（覆盖旧概念）。 */
   onlyMissing?: boolean;
-  onProgress?: (i: number, total: number, chapter: Chapter) => void;
+  /**
+   * 进度回调。第 4 参数为**块级进度**（长章分块时才有值；短章不传，
+   * 与改造前的 `(i, total, chapter)` 调用方式完全兼容）。
+   */
+  onProgress?: (
+    i: number,
+    total: number,
+    chapter: Chapter,
+    block?: { block: number; blocks: number },
+  ) => void;
   now?: number;
 }
 
@@ -89,6 +106,10 @@ export interface AnalyzeKeyPointsResult {
   refs: number;
   /** quote 未能在原文定位、因而被丢弃的条数（要点本身不写入）。 */
   unanchored: number;
+  /** 因单块失败而跳过的块数（>0 时该章要点可能不完整）。 */
+  skippedBlocks: number;
+  /** AI 归并失败、回退代码级合并的章数（D6）。 */
+  mergeFallbacks: number;
   analyzedAt: number;
 }
 
@@ -96,7 +117,13 @@ export interface AnalyzeKeyPointsOptions {
   storage: StorageAdapter;
   provider: AIProvider;
   model?: string;
-  onProgress?: (i: number, total: number, chapter: Chapter) => void;
+  /** 进度回调；第 4 参数为块级进度（同概念分析）。 */
+  onProgress?: (
+    i: number,
+    total: number,
+    chapter: Chapter,
+    block?: { block: number; blocks: number },
+  ) => void;
   now?: number;
 }
 
@@ -119,9 +146,10 @@ export async function analyzeChaptersNow(
   }
 
   const startedAt = Date.now();
-  // 直接消费「抛错版」管道：失败向上抛，绝不静默回退成代码结果（诚实降级）。
-  // 尺寸超限时管道返回 []（视作「无建议」），不视为失败。
-  const refines = await refineChaptersWithAi(provider, chapters, text);
+  // 分批精修：长资料不再因「整篇 >6 万字 / >24 章」被静默跳过；单批失败只丢该批
+  // （failedBatches），其余批照常生效。全部批失败 → refines 为空 → changed = 0，
+  // 由 UI 给出「无建议」提示（替代改造前的静默）。
+  const { refines, batches, failedBatches } = await refineChaptersBatched(provider, chapters, text);
   const next = applyChapterRefine([...chapters], refines);
 
   const merged = Math.max(0, chapters.length - next.length);
@@ -144,9 +172,11 @@ export async function analyzeChaptersNow(
     chapters: next.length,
     changed,
     merged,
+    batches,
+    failedBatches,
     ms: Date.now() - startedAt,
   });
-  return { chapters: next, changed, merged, analyzedAt: now };
+  return { chapters: next, changed, merged, batches, failedBatches, analyzedAt: now };
 }
 
 /** ② 概念分析执行序：逐章串行、单章失败不阻断；全部完成后一次性写库。 */
@@ -170,39 +200,35 @@ export async function analyzeConceptsNow(
   const touched = new Map<string, Chapter>(); // chapterId → 更新 unitIds 后的章
   let units = 0;
   let relations = 0;
+  let skippedBlocks = 0;
+  let mergeFallbacks = 0;
 
   for (let i = 0; i < targets.length; i++) {
     const c = targets[i];
     onProgress?.(i + 1, targets.length, c);
     try {
       const body = text.slice(c.contentRef.start, c.contentRef.end);
-      const out = await extractChapterConceptsWithAi(provider, {
+      // 章内 map-reduce：长章自动分块，不再因单章超长抛错。
+      // 原文锚定：锚定回调由本层注入（`ai/` 不得依赖 `features/`），产出的
+      // evidence 已是文档绝对区间；锚不上的条目不携带 evidence（概念照常入库，
+      // 诚实降级，不伪造出处）。
+      const out = await extractConceptsMapped(provider, {
         chapterTitle: c.title,
         text: body,
         documentId: doc.id,
-      });
-      // 原文锚定：AI 只给 quote，偏移由 locateQuote 算出来（不信 AI 的偏移量）。
-      // 定位失败 → 移除 evidence（概念照常入库，诚实降级，不伪造出处）。
-      const anchored = out.units.map((u) => {
-        const quote = u.evidence?.quote;
-        if (!quote) return u;
-        const hit = anchorToDocument(body, quote, c.contentRef.start);
-        if (!hit) {
-          const { evidence: _drop, ...rest } = u;
-          return rest;
-        }
-        return {
-          ...u,
-          evidence: { documentId: doc.id, start: hit.start, end: hit.end, quote },
-        };
+        anchor: (quote) => anchorToDocument(body, quote, c.contentRef.start),
+        onBlock: (k, K) =>
+          onProgress?.(i + 1, targets.length, c, K > 1 ? { block: k, blocks: K } : undefined),
       });
       graph = replaceChapterConcepts(graph, c.unitIds, {
-        units: anchored,
+        units: out.units,
         relations: out.relations,
       });
       touched.set(c.id, { ...c, unitIds: out.units.map((u) => u.id) });
       units += out.units.length;
       relations += out.relations.length;
+      skippedBlocks += out.skippedBlocks;
+      if (out.mergeFallback) mergeFallbacks++;
     } catch (err) {
       // 排查日志：每章失败都可见（UI 只显示汇总，控制台保留逐章原因）。
       aiLog("warn", "analyze", "章概念分析失败", {
@@ -231,9 +257,19 @@ export async function analyzeConceptsNow(
     failed: failed.length,
     units,
     relations,
+    skippedBlocks,
+    mergeFallbacks,
     ms: Date.now() - startedAt,
   });
-  return { ok: targets.length - failed.length, failed, units, relations, analyzedAt: now };
+  return {
+    ok: targets.length - failed.length,
+    failed,
+    units,
+    relations,
+    skippedBlocks,
+    mergeFallbacks,
+    analyzedAt: now,
+  };
 }
 
 /**
@@ -270,41 +306,35 @@ export async function analyzeKeyPointsNow(
   const startedAt = Date.now();
   let refs = 0;
   let unanchored = 0;
+  let skippedBlocks = 0;
+  let mergeFallbacks = 0;
 
   for (let i = 0; i < chapters.length; i++) {
     const c = chapters[i];
     onProgress?.(i + 1, chapters.length, c);
     try {
       const body = text.slice(c.contentRef.start, c.contentRef.end);
-      const drafts = await extractKeyPointsWithAi(provider, {
+      // 章内 map-reduce：长章自动分块 → 逐块提炼 → 引用式归并。
+      // refs 的 quote/start/end 全部由代码侧候选产出（AI 只挑条目与措辞）。
+      const out = await extractKeyPointsMapped(provider, {
         chapterTitle: c.title,
         text: body,
+        // 锚定回调：纯 AI 层不依赖 features，由本层注入（闭包持有章的绝对偏移）。
+        anchor: (quote) => anchorToDocument(body, quote, c.contentRef.start),
+        onBlock: (k, K) =>
+          onProgress?.(i + 1, chapters.length, c, K > 1 ? { block: k, blocks: K } : undefined),
       });
-
-      const chapterRefs: KeyPointRef[] = [];
-      for (const d of drafts) {
-        const hit = anchorToDocument(body, d.quote, c.contentRef.start);
-        if (!hit) {
-          unanchored++;
-          continue;
-        }
-        chapterRefs.push({
-          point: d.point,
-          quote: d.quote,
-          start: hit.start,
-          end: hit.end,
-        });
-      }
 
       touched.set(c.id, {
         ...c,
-        keyPointRefs: chapterRefs,
+        keyPointRefs: out.refs,
         // 全军覆没时保留原要点，不把已有数据抹空。
-        ...(chapterRefs.length > 0
-          ? { keyPoints: chapterRefs.map((r) => r.point) }
-          : {}),
+        ...(out.refs.length > 0 ? { keyPoints: out.refs.map((r) => r.point) } : {}),
       });
-      refs += chapterRefs.length;
+      refs += out.refs.length;
+      unanchored += out.unanchored;
+      skippedBlocks += out.skippedBlocks;
+      if (out.mergeFallback) mergeFallbacks++;
     } catch (err) {
       // 排查日志：每章失败都可见（UI 只显示汇总，控制台保留逐章原因）。
       aiLog("warn", "analyze", "章要点分析失败", {
@@ -331,6 +361,8 @@ export async function analyzeKeyPointsNow(
     failed: failed.length,
     refs,
     unanchored,
+    skippedBlocks,
+    mergeFallbacks,
     ms: Date.now() - startedAt,
   });
   return {
@@ -338,6 +370,8 @@ export async function analyzeKeyPointsNow(
     failed,
     refs,
     unanchored,
+    skippedBlocks,
+    mergeFallbacks,
     analyzedAt: now,
   };
 }
