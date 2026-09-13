@@ -25,6 +25,8 @@ import { extractChapterConceptsWithAi } from "../../ai";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { replaceChapterConcepts, subgraphOf } from "../../engine/graph-engine";
 import { storage } from "../../stores/useLoopStore";
+import { useAiTask } from "../../stores/useAiTaskStore";
+import { Button } from "../../components/ui/button";
 import { useI18n } from "../../i18n";
 import GraphView from "./GraphView";
 
@@ -39,8 +41,9 @@ export default function ChapterGraphPage() {
   const [graph, setGraph] = useState<KnowledgeGraph | undefined>();
   const [learner, setLearner] = useState<LearnerState | undefined>();
   const [missing, setMissing] = useState(false);
-  const [extracting, setExtracting] = useState(false);
-  const [message, setMessage] = useState<string | undefined>();
+  // 概念抽取走全局任务注册表（graph-extract:{docId}:{chapterId}，切页重挂可恢复）；
+  // 终态消息（成功/失败）从任务记录读回。本地 error 仅存「未配置/无正文」预检失败。
+  const task = useAiTask(`graph-extract:${doc?.id ?? "?"}:${chapterId}`);
   const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
@@ -79,9 +82,8 @@ export default function ChapterGraphPage() {
   }, [graph, chapter]);
 
   /** AI 提炼本章概念：替换写 Chapter.unitIds + 全局 graph（幂等 replace）。 */
-  const extractConcepts = async () => {
-    if (!chapter || !doc) return;
-    setMessage(undefined);
+  const extractConcepts = () => {
+    if (!chapter || !doc || task.running) return;
     setError(undefined);
     const provider = buildActiveProvider();
     if (!provider.isConfigured()) {
@@ -93,31 +95,30 @@ export default function ChapterGraphPage() {
       setError(t.noBody);
       return;
     }
-    setExtracting(true);
-    try {
-      const next = await extractChapterConceptsWithAi(provider, {
-        chapterTitle: chapter.title || m.chapter.ordinal(chapter.order),
-        text: body,
+    void task
+      .run(async (_report, done) => {
+        const next = await extractChapterConceptsWithAi(provider, {
+          chapterTitle: chapter.title || m.chapter.ordinal(chapter.order),
+          text: body,
+        });
+        // 落库：以最新 storage 为准做 replace（图）→ 更新章 unitIds。
+        const g = await storage.getGraph();
+        const ng = replaceChapterConcepts(g, chapter.unitIds, next);
+        await storage.saveGraph(ng);
+        const chapters = await storage.listChapters(doc.id);
+        const updated = chapters.map((c) =>
+          c.id === chapter.id
+            ? { ...c, unitIds: next.units.map((u) => u.id) }
+            : c,
+        );
+        await storage.saveChapters(doc.id, updated);
+        setGraph(ng);
+        setChapter(updated.find((c) => c.id === chapter.id));
+        done(t.doneMsg(next.units.length, next.relations.length));
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : String(err));
       });
-      // 落库：以最新 storage 为准做 replace（图）→ 更新章 unitIds。
-      const g = await storage.getGraph();
-      const ng = replaceChapterConcepts(g, chapter.unitIds, next);
-      await storage.saveGraph(ng);
-      const chapters = await storage.listChapters(doc.id);
-      const updated = chapters.map((c) =>
-        c.id === chapter.id
-          ? { ...c, unitIds: next.units.map((u) => u.id) }
-          : c,
-      );
-      await storage.saveChapters(doc.id, updated);
-      setGraph(ng);
-      setChapter(updated.find((c) => c.id === chapter.id));
-      setMessage(t.doneMsg(next.units.length, next.relations.length));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setExtracting(false);
-    }
   };
 
   if (missing) {
@@ -155,23 +156,19 @@ export default function ChapterGraphPage() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {message ? (
+          {task.status === "done" && task.message ? (
             <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-              {message}
+              {task.message}
             </span>
           ) : null}
-          {error ? (
+          {(error || (task.status === "error" && task.message)) ? (
             <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
-              {error}
+              {error ?? task.message}
             </span>
           ) : null}
-          <button
-            onClick={() => void extractConcepts()}
-            disabled={extracting}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {extracting ? t.extractBusy : hasConcepts ? t.reExtract : t.extract}
-          </button>
+          <Button onClick={extractConcepts} loading={task.running}>
+            {task.running ? t.extractBusy : hasConcepts ? t.reExtract : t.extract}
+          </Button>
         </div>
       </div>
 
