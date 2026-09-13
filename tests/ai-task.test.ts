@@ -19,6 +19,7 @@
  */
 import assert from "node:assert/strict";
 import { useAiTaskStore, runAiTask } from "../src/stores/useAiTaskStore.ts";
+import { isTerminalFresh, AI_TASK_TERMINAL_TTL_MS } from "../src/stores/ai-task-types.ts";
 import type { AiTaskId } from "../src/stores/ai-task-types.ts";
 
 const results: string[] = [];
@@ -152,6 +153,33 @@ await check("clear 显式清除记录", () => {
   useAiTaskStore.getState().start(A);
   useAiTaskStore.getState().clear(A);
   assert.equal(useAiTaskStore.getState().tasks[A], undefined);
+});
+
+await check("F2-01 isTerminalFresh：无记录 → false", () => {
+  assert.equal(isTerminalFresh(undefined), false);
+});
+
+await check("F2-02 isTerminalFresh：running 恒 fresh（无论 endedAt）", () => {
+  assert.equal(isTerminalFresh({ status: "running" }), true);
+  assert.equal(isTerminalFresh({ status: "running", endedAt: 0 }), true);
+});
+
+await check("F2-03 isTerminalFresh：终态在 TTL 窗口内 → fresh", () => {
+  const now = 1_000_000;
+  assert.equal(isTerminalFresh({ status: "done", endedAt: now - 1 }, now), true);
+  assert.equal(
+    isTerminalFresh({ status: "error", endedAt: now - AI_TASK_TERMINAL_TTL_MS }, now),
+    true, // 恰好等于 TTL 边界 → 仍在窗口内
+  );
+});
+
+await check("F2-04 isTerminalFresh：终态超过 TTL / 无 endedAt → 过期", () => {
+  const now = 1_000_000;
+  assert.equal(
+    isTerminalFresh({ status: "done", endedAt: now - AI_TASK_TERMINAL_TTL_MS - 1 }, now),
+    false,
+  );
+  assert.equal(isTerminalFresh({ status: "done" }, now), false);
 });
 
 console.log(results.join("\n"));

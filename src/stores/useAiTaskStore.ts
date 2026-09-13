@@ -114,6 +114,8 @@ export function useAiTask(id: AiTaskId) {
     phase: record?.phase,
     progress: record?.progress,
     message: record?.message,
+    /** 终态时间戳（isTerminalFresh 新鲜度门的直接数据源）。 */
+    endedAt: record?.endedAt,
     /** 编程式幂等判断（判卷页自动批改等 effect 入口用）：已 running 或已 done 时跳过重跑。 */
     skipIfFinished: record?.status === "running" || record?.status === "done",
     run,

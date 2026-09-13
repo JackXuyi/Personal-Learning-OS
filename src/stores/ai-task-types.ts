@@ -39,3 +39,24 @@ export type AiTaskId =
   | `keypoints:${string}`
   | `concepts:${string}`
   | `graph-extract:${string}`;
+
+/**
+ * 终态新鲜度窗口（毫秒）。
+ *
+ * 终态保留至下次 start / clear（D3），但「保留」≠「永远展示」：同 id 记录会被
+ * 其它页面/其它任务写入（如 paper:{docId} 由 PapersTab 与出卷向导共享），跨
+ * 页面渲染陈旧终态会串台。渲染侧用本窗口判定：结束超过 TTL 的终态视为过期，
+ * 不再作为提示展示（记录本身仍在，直到下次 start / clear）。
+ */
+export const AI_TASK_TERMINAL_TTL_MS = 90_000;
+
+/** 终态新鲜度判定（纯函数，UI 与单测共用）。running 恒为 fresh；终态看 endedAt 窗口。 */
+export function isTerminalFresh(
+  rec: { status?: AiTaskStatus; endedAt?: number } | undefined,
+  now: number = Date.now(),
+  ttl: number = AI_TASK_TERMINAL_TTL_MS,
+): boolean {
+  if (!rec) return false;
+  if (rec.status === "running") return true;
+  return rec.endedAt !== undefined && now - rec.endedAt <= ttl;
+}
