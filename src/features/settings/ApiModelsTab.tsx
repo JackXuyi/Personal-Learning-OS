@@ -20,6 +20,7 @@ import { testConnection } from "../../ai/connection";
 import { hasKeyring } from "../../ai/vault";
 import { useI18n } from "../../i18n";
 import { Select } from "../../components/ui/select";
+import { Spinner } from "../../components/ui/spinner";
 
 /** API 侧草稿(provider 必选,其余为表单值)。 */
 export interface ApiDraft {
@@ -262,7 +263,7 @@ function TestResultArea({ test }: { test: TestStatus }) {
   if (test.state === "testing") {
     return (
       <p className="flex items-center gap-2 text-sm text-slate-500">
-        <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+        <Spinner className="size-3.5" />
         {s.testRunning}
       </p>
     );
