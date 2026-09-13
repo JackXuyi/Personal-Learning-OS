@@ -17,6 +17,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '../../../components/ui/button';
 import { useI18n } from '../../../i18n';
 import { storage } from '../../../stores/useLoopStore';
+import { useAiTask } from '../../../stores/useAiTaskStore';
 import { PAPER_MODE_DURATION_MIN, sortChaptersByOrder } from '../../../domain';
 import { availablePaperModes, canCreatePaperMode } from '../../../engine';
 import { createPaperAndSave, PaperFlowError } from '../../quiz/paper-flow';
@@ -36,7 +37,7 @@ interface PapersTabProps {
   learner: LearnerState | null;
 }
 
-/** 资料级一键出卷的 busy 键（章级用章 id）。 */
+/** 资料级一键出卷的按钮键（章级用章 id）——仅指示「点了哪个按钮」。 */
 const DOC_KEY = '__doc__';
 
 export default function PapersTab({ doc, chapters, learner }: PapersTabProps) {
@@ -45,7 +46,9 @@ export default function PapersTab({ doc, chapters, learner }: PapersTabProps) {
 
   const [papers, setPapers] = useState<Paper[]>([]);
   const [results, setResults] = useState<PaperResult[]>([]);
-  /** 正在出卷的键（章 id 或 DOC_KEY）；非空时全部按钮禁用，避免并发建卷。 */
+  // 出卷 busy 全局化：paper:{docId}（与 NewQuizPage/AssessmentPage 共享互斥语义）。
+  const task = useAiTask(`paper:${doc.id}`);
+  /** 本轮点击的按钮键（loading 展示在哪个按钮上；纯 UI 指示）。 */
   const [busyKey, setBusyKey] = useState<string>();
   /** 出卷结果提示（带新卷 id 时给「去答题」直达）。 */
   const [notice, setNotice] = useState<{ text: string; paperId?: string }>();
@@ -104,50 +107,52 @@ export default function PapersTab({ doc, chapters, learner }: PapersTabProps) {
   );
 
   /**
-   * 一键出卷：落库后**留在本页**刷新列表（不跳走）。
+   * 一键出卷：落库后**留在本页**刷新列表（不跳走）。经全局任务注册表承载 loading。
    *
    * 卷型处理：推荐卷型先过 `canCreatePaperMode`；不可出（例：单章推荐阶段测）
    * 则退到当前范围下第一个可出卷型，并在提示里说明改用了什么。
    */
-  const createNow = async (key: string, picked: Chapter[], want: PaperMode) => {
+  const createNow = (key: string, picked: Chapter[], want: PaperMode) => {
+    if (task.running) return;
     setBusyKey(key);
     setNotice(undefined);
-    try {
-      const ordered = sortChaptersByOrder(picked);
-      const shape = { selected: ordered.length, total: chapters.length };
-      const usable = canCreatePaperMode(want, shape);
-      const mode = (usable ? want : availablePaperModes(shape)[0]) as
-        | Exclude<PaperMode, 'retake'>
-        | undefined;
-      if (!mode) {
-        setNotice({ text: t.papers.errNoMode });
-        return;
-      }
-      const { paper, ai } = await createPaperAndSave({
-        chapters: ordered,
-        allChapters: chapters,
-        mode,
-        learnerState: learner,
-        text: doc.textPreview,
-      });
-      setPapers((prev) => [paper, ...prev]);
-      setNotice({
-        text:
+    void task
+      .run(async (_report, done) => {
+        const ordered = sortChaptersByOrder(picked);
+        const shape = { selected: ordered.length, total: chapters.length };
+        const usable = canCreatePaperMode(want, shape);
+        const mode = (usable ? want : availablePaperModes(shape)[0]) as
+          | Exclude<PaperMode, 'retake'>
+          | undefined;
+        if (!mode) {
+          done(t.papers.errNoMode);
+          setNotice({ text: t.papers.errNoMode });
+          return;
+        }
+        const { paper, ai } = await createPaperAndSave({
+          chapters: ordered,
+          allChapters: chapters,
+          mode,
+          learnerState: learner,
+          text: doc.textPreview,
+        });
+        setPapers((prev) => [paper, ...prev]);
+        const text =
           t.papers.created(paper.questions.length) +
           (ai ? t.papers.createdAi : t.papers.createdLocal) +
-          (usable ? '' : t.papers.createdFallback(m.quiz.mode[mode])),
-        paperId: paper.id,
-      });
-    } catch (e) {
-      setNotice({
-        text:
-          e instanceof PaperFlowError && e.kind === 'invalid-mode'
-            ? t.papers.errNoMode
-            : t.papers.createFailed(e instanceof Error ? e.message : ''),
-      });
-    } finally {
-      setBusyKey(undefined);
-    }
+          (usable ? '' : t.papers.createdFallback(m.quiz.mode[mode]));
+        setNotice({ text, paperId: paper.id });
+        done(text); // 终态摘要进任务记录（切页重挂后仍可见）
+      })
+      .catch((e: unknown) => {
+        setNotice({
+          text:
+            e instanceof PaperFlowError && e.kind === 'invalid-mode'
+              ? t.papers.errNoMode
+              : t.papers.createFailed(e instanceof Error ? e.message : ''),
+        });
+      })
+      .finally(() => setBusyKey(undefined));
   };
 
   /** 跳向导的链接：补考卷向导不支持，此时不带 mode，避免误导。 */
@@ -183,6 +188,19 @@ export default function PapersTab({ doc, chapters, learner }: PapersTabProps) {
           )}
         </div>
       )}
+      {/* 切页重挂后的终态恢复：notice 富提示已丢，从任务记录读回摘要 */}
+      {!notice && task.status === 'done' && task.message && (
+        <div className="rounded-lg border border-line bg-surface p-3">
+          <p aria-live="polite" className="text-xs text-ink-2">{task.message}</p>
+        </div>
+      )}
+      {!notice && task.status === 'error' && task.message && (
+        <div className="rounded-lg border border-line bg-surface p-3">
+          <p aria-live="polite" className="text-xs text-ink-2">
+            {t.papers.createFailed(task.message)}
+          </p>
+        </div>
+      )}
 
       {/* 资料级推荐：全部章达标 → 建议综合测 */}
       {docAdvice && (
@@ -197,10 +215,11 @@ export default function PapersTab({ doc, chapters, learner }: PapersTabProps) {
           <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
             <Button
               size="sm"
-              onClick={() => void createNow(DOC_KEY, chapters, docAdvice.mode)}
-              disabled={!!busyKey}
+              onClick={() => createNow(DOC_KEY, chapters, docAdvice.mode)}
+              loading={task.running && busyKey === DOC_KEY}
+              disabled={task.running}
             >
-              {busyKey === DOC_KEY ? t.papers.creating : t.papers.createNow}
+              {task.running && busyKey === DOC_KEY ? t.papers.creating : t.papers.createNow}
             </Button>
             <Link
               to={wizardLink(chapters.map((c) => c.id), docAdvice.mode)}
@@ -252,10 +271,11 @@ export default function PapersTab({ doc, chapters, learner }: PapersTabProps) {
                 <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
                   <Button
                     size="sm"
-                    onClick={() => void createNow(ch.id, [ch], advice.mode)}
-                    disabled={!!busyKey}
+                    onClick={() => createNow(ch.id, [ch], advice.mode)}
+                    loading={task.running && busyKey === ch.id}
+                    disabled={task.running}
                   >
-                    {busyKey === ch.id ? t.papers.creating : t.papers.createNow}
+                    {task.running && busyKey === ch.id ? t.papers.creating : t.papers.createNow}
                   </Button>
                   <Link
                     to={wizardLink([ch.id], advice.mode)}
@@ -305,10 +325,11 @@ export default function PapersTab({ doc, chapters, learner }: PapersTabProps) {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => void createNow(ch.id, [ch], advice.mode)}
-                    disabled={!!busyKey}
+                    onClick={() => createNow(ch.id, [ch], advice.mode)}
+                    loading={task.running && busyKey === ch.id}
+                    disabled={task.running}
                   >
-                    {busyKey === ch.id ? t.papers.creating : t.papers.createAgain}
+                    {task.running && busyKey === ch.id ? t.papers.creating : t.papers.createAgain}
                   </Button>
                   <Link
                     to={wizardLink([ch.id], advice.mode)}

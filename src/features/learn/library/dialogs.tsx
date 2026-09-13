@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import type { DocumentFormat, SourceDocument } from "../../../domain";
 import { Button } from "../../../components/ui/button";
 import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
+import { Spinner } from "../../../components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -374,7 +375,7 @@ export function UpdateDocModal({
                 return (
                   <li key={key} className="flex items-center gap-2.5 text-sm">
                     {status === "active" ? (
-                      <span className="h-3 w-3 shrink-0 animate-spin rounded-full border border-primary/30 border-t-primary" />
+                      <Spinner className="size-3" />
                     ) : status === "done" ? (
                       <span className="text-xs font-bold text-state-mastered">✓</span>
                     ) : (

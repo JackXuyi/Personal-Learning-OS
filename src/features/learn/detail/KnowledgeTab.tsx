@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useI18n } from '../../../i18n';
 import { storage } from '../../../stores/useLoopStore';
+import { useAiTask } from '../../../stores/useAiTaskStore';
 import { Button } from '../../../components/ui/button';
 import { Section } from '../../../components/primitives';
 import { notifyDocsChanged } from '../../../components/layout/AppShell';
@@ -43,16 +44,11 @@ const toFailedItems = (failed: readonly { title: string; reason: string }[]): Fa
 export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged }: KnowledgeTabProps) {
   const { m: t } = useI18n();
   const navigate = useNavigate();
-  const [busyTick, setBusyTick] = useState<{
-    i: number;
-    n: number;
-    title: string;
-    /** 块级进度：长章分块时才有值（短章不传 → 文案与改造前一致）。 */
-    block?: number;
-    blocks?: number;
-  }>();
+  // 要点/概念两条 AI 任务走全局注册表（切页/切 Tab 重挂后按同 id 恢复 loading 与进度）。
+  const pointsTask = useAiTask(`keypoints:${doc.id}`);
+  const conceptsTask = useAiTask(`concepts:${doc.id}`);
+  /** 完成汇总（富结构，组件内渲染）；重挂后的简化终态经 task.message 展示。 */
   const [summary, setSummary] = useState<{ ok: number; failed: FailedItem[]; extra?: string }>();
-  const [pointsBusy, setPointsBusy] = useState(false);
 
   // 全局 AI 配置（响应式）：替代原 ai/active 的恒 null stub（B2 修复）
   const aiReady = useAiReady();
@@ -80,22 +76,29 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
     navigate(`/learn/doc/${doc.id}?tab=content&at=${start}`);
   };
 
-  const analyzePoints = async () => {
-    if (chapters.length === 0 || !aiReady) return;
+  /** onProgress(i, n, ch, blk) → 已翻译进度文案（存入 store，重挂后原样恢复）。 */
+  const progressText = (
+    i: number,
+    n: number,
+    ch: { title: string },
+    blk?: { block?: number; blocks?: number },
+  ): string =>
+    blk?.block !== undefined && (blk.blocks ?? 1) > 1
+      ? t.learn.detail.analyze.busyBlock(i, n, blk.block, blk.blocks ?? 1)
+      : t.learn.detail.knowledge.extracting(i, n, ch.title);
+
+  const analyzePoints = () => {
+    if (chapters.length === 0 || !aiReady || pointsTask.running || conceptsTask.running) return;
     const provider = buildActiveProvider();
-    setPointsBusy(true);
     setSummary(undefined);
-    setBusyTick({ i: 0, n: chapters.length, title: '' });
-    try {
+    void pointsTask.run(async (report, done) => {
       const result = await analyzeKeyPointsNow(doc, chapters, {
         storage,
         provider,
-        onProgress: (i, n, ch, blk) => setBusyTick({ i, n, title: ch.title, ...(blk ?? {}) }),
+        onProgress: (i, n, ch, blk) => report(progressText(i, n, ch, blk)),
       });
-      setSummary({
-        ok: result.ok,
-        failed: toFailedItems(result.failed),
-        extra: [
+      const extra =
+        [
           result.skippedBlocks > 0
             ? t.learn.detail.analyze.skippedBlocks(result.skippedBlocks)
             : "",
@@ -104,46 +107,56 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
             : "",
         ]
           .filter(Boolean)
-          .join(" ") || undefined,
-      });
+          .join(" ") || undefined;
+      setSummary({ ok: result.ok, failed: toFailedItems(result.failed), extra });
+      // 终态摘要同步进任务记录（重挂后仍可见简化版）
+      done(
+        [
+          t.learn.detail.knowledge.extractDone(result.ok, result.failed.length),
+          extra,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      );
       notifyDocsChanged();
       await onChanged();
-    } catch (e) {
+    }).catch((e) => {
       // 分析恒由 AI 执行：失败如实抛出，不静默降级（E2）
       setSummary({
         ok: 0,
         failed: chapters.map((c) => ({ title: c.title, reason: t.learn.detail.knowledge.failedUnknown })),
         extra: e instanceof Error ? e.message : String(e),
       });
-    } finally {
-      setPointsBusy(false);
-      setBusyTick(undefined);
-    }
+    });
   };
 
-  const extractAll = async () => {
-    if (chapters.length === 0 || !aiReady) return;
+  const extractAll = () => {
+    if (chapters.length === 0 || !aiReady || pointsTask.running || conceptsTask.running) return;
     const provider = buildActiveProvider();
-    setBusyTick({ i: 0, n: chapters.length, title: '' });
     setSummary(undefined);
 
-    try {
+    void conceptsTask.run(async (report, done) => {
       const result = await analyzeConceptsNow(doc, chapters, {
         storage,
         provider,
-        onProgress: (i, n, ch, blk) => setBusyTick({ i, n, title: ch.title, ...(blk ?? {}) }),
+        onProgress: (i, n, ch, blk) => report(progressText(i, n, ch, blk)),
       });
-      setSummary({
-        ok: result.ok,
-        failed: toFailedItems(result.failed),
-        extra:
-          result.skippedBlocks > 0
-            ? t.learn.detail.analyze.skippedBlocks(result.skippedBlocks)
-            : undefined,
-      });
+      const extra =
+        result.skippedBlocks > 0
+          ? t.learn.detail.analyze.skippedBlocks(result.skippedBlocks)
+          : undefined;
+      setSummary({ ok: result.ok, failed: toFailedItems(result.failed), extra });
+      done(
+        [
+          t.learn.detail.knowledge.extractDone(result.ok, result.failed.length),
+          extra,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      );
       notifyDocsChanged();
       await onChanged();
-    } catch (e) {
+    }).catch((e) => {
       // 原实现只 console.error → 用户只看到「失败 N 章」却不知为何；现补总体原因 + 逐章占位
       console.error('Failed to analyze concepts:', e);
       setSummary({
@@ -151,9 +164,7 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
         failed: chapters.map((c) => ({ title: c.title, reason: t.learn.detail.knowledge.failedUnknown })),
         extra: e instanceof Error ? e.message : String(e),
       });
-    } finally {
-      setBusyTick(undefined);
-    }
+    });
   };
 
   return (
@@ -163,16 +174,17 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
         <Section
           title={t.learn.detail.knowledge.pointsHead}
           action={
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={analyzePoints}
-              disabled={pointsBusy || !!busyTick || !aiReady || chapters.length === 0}
-            >
-              {withRefs > 0
-                ? t.learn.detail.knowledge.reExtractPoints
-                : t.learn.detail.knowledge.extractPoints}
-            </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={analyzePoints}
+            loading={pointsTask.running}
+            disabled={conceptsTask.running || !aiReady || chapters.length === 0}
+          >
+            {withRefs > 0
+              ? t.learn.detail.knowledge.reExtractPoints
+              : t.learn.detail.knowledge.extractPoints}
+          </Button>
           }
         />
         {!aiReady && (
@@ -254,7 +266,8 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
             size="sm"
             variant="outline"
             onClick={extractAll}
-            disabled={!!busyTick || !aiReady || chapters.length === 0}
+            loading={conceptsTask.running}
+            disabled={pointsTask.running || !aiReady || chapters.length === 0}
           >
             {extracted > 0
               ? t.learn.detail.knowledge.reExtract
@@ -292,23 +305,16 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
         </div>
       )}
 
-      {/* 进度提示：长章分块时追加「第 k/K 块」，短章与改造前文案一致 */}
-      {busyTick && (
+      {/* 进行中：进度文案来自全局任务记录（切页重挂后恢复） */}
+      {(pointsTask.running || conceptsTask.running) && (
         <div className="rounded-lg border border-line bg-surface p-3">
-          <p className="text-xs text-ink-2">
-            {busyTick.block !== undefined && (busyTick.blocks ?? 1) > 1
-              ? t.learn.detail.analyze.busyBlock(
-                  busyTick.i,
-                  busyTick.n,
-                  busyTick.block,
-                  busyTick.blocks ?? 1,
-                )
-              : t.learn.detail.knowledge.extracting(busyTick.i, busyTick.n, busyTick.title)}
+          <p aria-live="polite" className="text-xs text-ink-2">
+            {(pointsTask.running ? pointsTask.phase : conceptsTask.phase) ?? t.aiTask.running}
           </p>
         </div>
       )}
 
-      {/* 完成汇总 */}
+      {/* 完成汇总（本次会话富结构渲染） */}
       {summary && (
         <div className="rounded-lg border border-line bg-surface p-3">
           <p className="text-xs text-ink-2">
@@ -324,6 +330,27 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
           )}
         </div>
       )}
+
+      {/* 重挂后的简化终态（summary 富结构已随卸载丢失，从任务记录恢复提示） */}
+      {!summary && (pointsTask.status === 'done' || conceptsTask.status === 'done') && (
+        <div className="rounded-lg border border-line bg-surface p-3">
+          <p aria-live="polite" className="text-xs text-ink-2">
+            {(pointsTask.status === 'done' ? pointsTask.message : conceptsTask.message) ??
+              t.learn.detail.knowledge.extractDone(0, 0)}
+          </p>
+        </div>
+      )}
+      {!summary &&
+        (pointsTask.status === 'error' || conceptsTask.status === 'error') && (
+          <div className="rounded-lg border border-line bg-surface p-3">
+            <p aria-live="polite" className="text-xs text-ink-2">
+              {t.aiTask.failed}：
+              {pointsTask.status === 'error'
+                ? pointsTask.message
+                : conceptsTask.message}
+            </p>
+          </div>
+        )}
     </div>
   );
 }

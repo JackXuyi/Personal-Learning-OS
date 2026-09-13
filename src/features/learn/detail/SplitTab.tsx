@@ -12,6 +12,7 @@
 import { useMemo, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { storage } from '../../../stores/useLoopStore';
+import { useAiTask } from '../../../stores/useAiTaskStore';
 import { buildActiveProvider } from '../../../stores/useSettingsStore';
 import { useAiReady } from '../../../hooks/useAiReady';
 import { Button } from '../../../components/ui/button';
@@ -33,9 +34,12 @@ interface SplitTabProps {
 
 export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTabProps) {
   const { m: t } = useI18n();
-  const [busy, setBusy] = useState<'split' | 'analyze' | undefined>();
+  // 「重新切分」是纯本地操作（切分归代码、零 AI），保留组件内 busy；
+  // 「仅 AI 精修」走全局任务注册表（refine:{docId}，切页重挂可恢复 loading/终态）。
+  const [splitting, setSplitting] = useState(false);
   const [notice, setNotice] = useState<string>();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const refineTask = useAiTask(`refine:${doc.id}`);
 
   // 全局 AI 配置（响应式）：替代原 ai/active 的恒 null stub（B2 修复）
   const aiReady = useAiReady();
@@ -58,7 +62,8 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
   const refined = Boolean(doc.analysis?.chaptersAt);
 
   const runSplit = async () => {
-    setBusy('split');
+    if (splitting || refineTask.running) return;
+    setSplitting(true);
     setNotice(undefined);
     try {
       const result = await splitDocumentNow(doc, { storage });
@@ -84,43 +89,45 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
         setNotice(err.message || t.common.loading);
       }
     } finally {
-      setBusy(undefined);
+      setSplitting(false);
     }
   };
 
-  const runAnalyze = async () => {
-    if (!aiReady) return;
+  const runAnalyze = () => {
+    if (!aiReady || !hasChapters || refineTask.running || splitting) return;
     const provider = buildActiveProvider();
-    setBusy('analyze');
-    setNotice(undefined);
-    try {
+    void refineTask.run(async (_report, done) => {
       const result = await analyzeChaptersNow(doc, chapters, { storage, provider });
-      // 三类结果分开提示（不再静默）：
+      // 三类结果分开提示（不再静默），结果文案进任务终态（切页回来仍可见）：
       // - 有批失败 → 明确「N 批未精修」（这些章保持原样）；
       // - 无变更（含全部批失败）→ 「本次未产生精修建议」；
       // - 否则 → 既有结果文案。
       if (result.failedBatches > 0) {
-        setNotice(t.learn.detail.analyze.failedBatches(result.failedBatches));
+        done(t.learn.detail.analyze.failedBatches(result.failedBatches));
       } else if (result.changed === 0) {
-        setNotice(t.learn.detail.analyze.noSuggestion);
+        done(t.learn.detail.analyze.noSuggestion);
       } else {
-        setNotice(t.learn.detail.analyze.result(result.changed, result.merged));
+        done(t.learn.detail.analyze.result(result.changed, result.merged));
       }
       notifyDocsChanged();
       await onChanged();
-    } catch (e) {
-      setNotice(
-        t.learn.detail.analyze.failed(e instanceof Error ? e.message : String(e)),
-      );
-    } finally {
-      setBusy(undefined);
-    }
+    }).catch(() => {
+      // 失败终态经 refineTask.message 渲染到下方通知条。
+    });
   };
 
   const onSplitClick = () => {
     if (hasChapters) setConfirmOpen(true);
     else void runSplit();
   };
+
+  // 精修结果/失败终态来自全局任务记录（切页重挂后仍可见）
+  const analyzeNotice =
+    refineTask.status === 'done' && refineTask.message
+      ? refineTask.message
+      : refineTask.status === 'error'
+        ? t.learn.detail.analyze.failed(refineTask.message ?? '')
+        : undefined;
 
   return (
     <div className="space-y-4">
@@ -146,7 +153,8 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
             size="sm"
             variant={hasChapters ? 'outline' : 'default'}
             onClick={onSplitClick}
-            disabled={!!busy}
+            loading={splitting}
+            disabled={refineTask.running}
           >
             {hasChapters ? t.learn.detail.split.resplit : t.learn.detail.split.split}
           </Button>
@@ -154,7 +162,8 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
             size="sm"
             variant="outline"
             onClick={runAnalyze}
-            disabled={!!busy || !aiReady || !hasChapters}
+            loading={refineTask.running}
+            disabled={!aiReady || !hasChapters || splitting}
           >
             {t.learn.detail.split.analyzeOnly}
           </Button>
@@ -169,10 +178,18 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
         </div>
       </div>
 
-      {/* 通知条 */}
-      {notice && (
+      {/* 通知条：切分结果为组件内 state（本地操作）；精修终态来自全局任务记录 */}
+      {(notice || analyzeNotice || refineTask.running) && (
         <div className="rounded-lg border border-line bg-surface p-3">
-          <p className="text-xs text-ink-2">{notice}</p>
+          {refineTask.running && (
+            <p aria-live="polite" className="text-xs text-ink-2">
+              {refineTask.phase ?? t.aiTask.running}
+            </p>
+          )}
+          {notice && <p className="text-xs text-ink-2">{notice}</p>}
+          {analyzeNotice && !refineTask.running && (
+            <p aria-live="polite" className="text-xs text-ink-2">{analyzeNotice}</p>
+          )}
         </div>
       )}
 
@@ -186,7 +203,7 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
             variant="default"
             className="mt-3"
             onClick={() => void runSplit()}
-            disabled={!!busy}
+            disabled={splitting || refineTask.running}
           >
             {t.learn.detail.chapters.split}
           </Button>

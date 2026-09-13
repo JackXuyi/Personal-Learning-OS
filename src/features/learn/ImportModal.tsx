@@ -26,8 +26,10 @@ import { autoIndexAfterImport, autoIndexBlockedReason } from "./index-service";
 import { refreshEmbeddingStatus } from "../../ai/embedding";
 import { githubErrorText, localErrorText } from "./import/error-text";
 import { useIndexStore } from "../../stores/useIndexStore";
+import { useAiTask } from "../../stores/useAiTaskStore";
 import { Select } from "../../components/ui/select";
 import { Button } from "../../components/ui/button";
+import { Spinner } from "../../components/ui/spinner";
 import { fileToUnit } from "./import/local-files";
 import { buildGithubUnit } from "./import/github";
 import type { GithubPreview } from "./import/github";
@@ -90,6 +92,10 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
   /** 当前运行模式：single（五阶段 + 单份卡）| batch（文件级进度 + 汇总卡）。 */
   const [runMode, setRunMode] = useState<"single" | "batch">();
   const [busy, setBusy] = useState(false);
+  // 导入主流程 busy 保留组件内（Modal 常驻 AppShell 已天然跨路由）；
+  // 同时镜像注册为全局 `import` 任务：Modal 被关闭后重开可从任务记录读回
+  // 进行中状态，也为未来全局任务指示器预留数据源。
+  const importTask = useAiTask("import");
   const [notice, setNotice] = useState<string | undefined>();
   const [phases, setPhases] = useState<PhaseStatus[]>(() => PHASE_ORDER.map(() => "pending"));
   /** 批量文件级进度：i / total / title。 */
@@ -131,32 +137,33 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
     setRunMode("single");
     setBusy(true);
     resetRun();
-    try {
-      const result = await runUnitImport(unit, {
-        storage,
-        provider: buildActiveProvider(),
-        minPhaseMs: MIN_PHASE_MS,
-        onPhase: (key, status) => setPhase(key, status),
+    await importTask
+      .run(async () => {
+        const result = await runUnitImport(unit, {
+          storage,
+          provider: buildActiveProvider(),
+          minPhaseMs: MIN_PHASE_MS,
+          onPhase: (key, status) => setPhase(key, status),
+        });
+        setSingle({
+          docId: result.docId,
+          docTitle: result.unit.title,
+          chapterIds: result.chapterIds,
+          chapterTitles: result.chapterTitles,
+          refined: result.refined,
+          merged: result.merged,
+          totalPoints: result.totalPoints,
+          chars: result.unit.text.length,
+          ...(result.unit.extract ? { extract: result.unit.extract } : {}),
+        });
+        if (result.chapterIds.length === 0) setNotice(fmt.tooShort);
+        // 导入成功后后台入队向量化（D2-A）：不阻塞结果卡；能力不足时内部静默跳过。
+        autoIndexAfterImport();
+      })
+      .catch((err: unknown) => {
+        setNotice(fmt.splitFail(err instanceof Error ? err.message : String(err)));
       });
-      setSingle({
-        docId: result.docId,
-        docTitle: result.unit.title,
-        chapterIds: result.chapterIds,
-        chapterTitles: result.chapterTitles,
-        refined: result.refined,
-        merged: result.merged,
-        totalPoints: result.totalPoints,
-        chars: result.unit.text.length,
-        ...(result.unit.extract ? { extract: result.unit.extract } : {}),
-      });
-      if (result.chapterIds.length === 0) setNotice(fmt.tooShort);
-      // 导入成功后后台入队向量化（D2-A）：不阻塞结果卡；能力不足时内部静默跳过。
-      autoIndexAfterImport();
-    } catch (err) {
-      setNotice(fmt.splitFail(err instanceof Error ? err.message : String(err)));
-    } finally {
-      setBusy(false);
-    }
+    setBusy(false);
   }
 
   /** 批量导入：文件级进度 + 汇总卡（单份失败不阻断队列）。 */
@@ -164,24 +171,25 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
     setRunMode("batch");
     setBusy(true);
     resetRun();
-    try {
-      const out = await runBatchImport(units, {
-        storage,
-        provider: buildActiveProvider(),
-        minPhaseMs: 0,
-        onUnitStart: (i, total, unit) => setBatchTick({ i, total, title: unit.title }),
+    await importTask
+      .run(async () => {
+        const out = await runBatchImport(units, {
+          storage,
+          provider: buildActiveProvider(),
+          minPhaseMs: 0,
+          onUnitStart: (i, total, unit) => setBatchTick({ i, total, title: unit.title }),
+        });
+        setSummary({
+          ok: out.ok,
+          failed: [...preFailed, ...out.failed],
+        });
+        // 批量导入同样后台入队（只补缺失，重复导入不会重复算）。
+        if (out.ok.length > 0) autoIndexAfterImport();
+      })
+      .catch((err: unknown) => {
+        setNotice(fmt.splitFail(err instanceof Error ? err.message : String(err)));
       });
-      setSummary({
-        ok: out.ok,
-        failed: [...preFailed, ...out.failed],
-      });
-      // 批量导入同样后台入队（只补缺失，重复导入不会重复算）。
-      if (out.ok.length > 0) autoIndexAfterImport();
-    } catch (err) {
-      setNotice(fmt.splitFail(err instanceof Error ? err.message : String(err)));
-    } finally {
-      setBusy(false);
-    }
+    setBusy(false);
   }
 
   // --- 主按钮动作：按 Tab 组装 ImportUnit 后交给共享执行器 ---
@@ -348,7 +356,7 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
         <div className="rounded-xl border border-line bg-subtle/60 px-4 py-3">
           <p className="text-sm font-semibold text-ink-1">{fmt.progressTitle}</p>
           <p className="mt-1 flex items-center gap-2 text-sm text-ink-2">
-            <span className="mt-1 h-3 w-3 shrink-0 animate-spin rounded-full border border-primary/30 border-t-primary" />
+            <Spinner className="mt-1 size-3" />
             <span className="min-w-0 truncate">
               {fmt.batch.importing(batchTick.i, batchTick.total, batchTick.title)}
             </span>
@@ -631,9 +639,7 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
 /** 阶段状态图标：active 转圈 / done 对勾 / pending 空心圆。 */
 function PhaseIcon({ status }: { status: PhaseStatus }) {
   if (status === "active") {
-    return (
-      <span className="mt-1 h-3 w-3 shrink-0 animate-spin rounded-full border border-primary/30 border-t-primary" />
-    );
+    return <Spinner className="mt-1 size-3" />;
   }
   if (status === "done") {
     return <span className="mt-0.5 text-xs font-bold text-state-mastered">✓</span>;

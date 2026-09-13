@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useI18n } from '../../../i18n';
 import { storage } from '../../../stores/useLoopStore';
+import { useAiTask } from '../../../stores/useAiTaskStore';
 import { Button } from '../../../components/ui/button';
 import { Bar, Section, Stat } from '../../../components/primitives';
 import { notifyDocsChanged } from '../../../components/layout/AppShell';
@@ -41,14 +42,8 @@ export default function OverviewTab({ doc, chapters, learner, onChanged }: Overv
   const navigate = useNavigate();
   const aiReady = useAiReady();
 
-  const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState<{
-    i: number;
-    n: number;
-    label: string;
-    phase: OverviewPhase;
-  }>();
-  const [error, setError] = useState<string>();
+  // loading/进度/错误统一走全局 AI 任务注册表（切页/切 Tab 重挂后按同 id 恢复）。
+  const task = useAiTask(`overview:${doc.id}`);
   const [skipped, setSkipped] = useState(0);
   const [papers, setPapers] = useState<Paper[]>([]);
   /**
@@ -113,34 +108,32 @@ export default function OverviewTab({ doc, chapters, learner, onChanged }: Overv
     [lang],
   );
 
-  const generate = async () => {
-    if (busy || !aiReady || !hasBody) return;
-    setBusy(true);
-    setError(undefined);
+  const o = t.learn.detail.overview;
+
+  /** onProgress(i, n, label, phase) → 已翻译的进度文案（存入 store，重挂后原样恢复）。 */
+  const phaseText = (i: number, n: number, label: string, phase: OverviewPhase): string =>
+    phase === 'single' ? o.progressSingle : phase === 'merge' ? o.progressMerge : o.progressMap(i, n, label);
+
+  const generate = () => {
+    if (task.running || !aiReady || !hasBody) return;
     setSkipped(0);
-    setProgress(undefined);
-    try {
+    void task.run(async (report) => {
       const r = await generateOverviewNow(doc, chapters, {
         storage,
         provider: buildActiveProvider(),
         ...(doc.analysis?.model ? { model: doc.analysis.model } : {}),
-        onProgress: (i, n, label, phase) => setProgress({ i, n, label, phase }),
+        onProgress: (i, n, label, phase) => report(phaseText(i, n, label, phase)),
       });
       setSkipped(r.skipped);
       // 先落本地兜底：视图不再等父组件回读，回读失败也照常展示已生成的概览。
       setFresh({ docId: doc.id, overview: r.overview });
       notifyDocsChanged();
       await onChanged(); // 后台同步详情页 props（doc.overview）与列表
-    } catch (e) {
-      // 分析恒由 AI 执行：失败如实展示，不静默降级（E2）
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-      setProgress(undefined);
-    }
+    }).catch(() => {
+      // 失败终态（含原因）经 task.message 渲染到下方错误位，这里无需再处理。
+    });
   };
 
-  const o = t.learn.detail.overview;
   const dateText = overview
     ? new Intl.DateTimeFormat(lang === 'zh' ? 'zh-CN' : 'en-US', {
         month: 'short',
@@ -151,13 +144,6 @@ export default function OverviewTab({ doc, chapters, learner, onChanged }: Overv
     ? overview.mode === 'map-reduce'
       ? o.modeMapReduce(overview.chunks ?? 0)
       : o.modeSingle
-    : '';
-  const progressText = progress
-    ? progress.phase === 'single'
-      ? o.progressSingle
-      : progress.phase === 'merge'
-        ? o.progressMerge
-        : o.progressMap(progress.i, progress.n, progress.label)
     : '';
 
   return (
@@ -171,9 +157,10 @@ export default function OverviewTab({ doc, chapters, learner, onChanged }: Overv
               size="sm"
               variant={overview ? 'outline' : 'default'}
               onClick={generate}
-              disabled={busy || !aiReady || !hasBody}
+              loading={task.running}
+              disabled={!aiReady || !hasBody}
             >
-              {busy ? o.generating : overview ? o.regenerate : o.generate}
+              {task.running ? o.generating : overview ? o.regenerate : o.generate}
             </Button>
           }
         />
@@ -195,18 +182,19 @@ export default function OverviewTab({ doc, chapters, learner, onChanged }: Overv
         {stale && <p className="mt-1 text-xs text-state-weak">{o.stale}</p>}
       </div>
 
-      {/* 进行中 / 错误：aria-live 让读屏用户感知长任务与失败 */}
-      {progress && (
+      {/* 进行中 / 错误：aria-live 让读屏用户感知长任务与失败。
+          数据源为全局任务记录：切页再回来 running/进度/终态均可恢复。 */}
+      {task.running && (
         <p aria-live="polite" className="text-xs text-ink-2">
-          {progressText}
+          {task.phase ?? o.generating}
         </p>
       )}
-      {error && (
+      {task.status === 'error' && task.message && (
         <p
           aria-live="polite"
           className="rounded-lg border border-line bg-surface p-3 text-xs text-ink-2"
         >
-          {o.failed(error)}
+          {o.failed(task.message)}
         </p>
       )}
 
