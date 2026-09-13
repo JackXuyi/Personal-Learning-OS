@@ -145,7 +145,7 @@ export default function GraphView({
     // 窄屏：侧栏堆叠到画布下方（lg 起才并排）
     <div className="flex flex-col gap-4 lg:flex-row">
       {/* 图谱画布 */}
-      <div className="relative min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-surface">
+      <div className="relative min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-surface h-200">
         <ReactFlow
           nodes={nodes}
           edges={edges}
