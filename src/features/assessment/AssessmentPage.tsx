@@ -7,6 +7,7 @@ import { applyForgetting, bandOf } from "../../engine";
 import { sortChaptersByOrder } from "../../domain";
 import type { Chapter, KnowledgeGraph, KnowledgeUnit, LearnerState, SourceDocument } from "../../domain";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
+import { useAiTaskStore, runAiTask } from "../../stores/useAiTaskStore";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { useI18n } from "../../i18n";
 import AssessmentSession from "./AssessmentSession";
@@ -39,9 +40,16 @@ export default function AssessmentPage() {
   /** 资料作用域（有章的资料 + 章 + 衰减后学习态）。 */
   const [docRows, setDocRows] = useState<DocScopeRow[]>([]);
   const [learner, setLearner] = useState<LearnerState | undefined>();
-  /** 正在出卷的章 id（禁用并发点击）。 */
+  // 出卷 busy 全局化：paper:{docId}（与 PapersTab/NewQuizPage 同 id 共享互斥）。
+  // 行数动态，不能 per-row 挂 hook → 直接订阅 tasks map + runAiTask 执行器。
+  const tasks = useAiTaskStore((s) => s.tasks);
+  /** 本轮点击的章 id（loading 指示在哪个章按钮上；纯 UI）。 */
   const [busyChapter, setBusyChapter] = useState<string>();
   const [scopeError, setScopeError] = useState(false);
+
+  /** 该资料当前是否有出卷任务在跑（含从其它页面触发的）。 */
+  const isPaperRunning = (docId: string) =>
+    tasks[`paper:${docId}`]?.status === "running";
 
   useEffect(() => {
     void (async () => {
@@ -70,16 +78,19 @@ export default function AssessmentPage() {
 
   /** 单章测评：出一张单章单元测卷 → 跳答题页（掌握度写入与出卷向导同源）。 */
   const startChapterPaper = async (row: DocScopeRow, chapter: Chapter) => {
-    if (busyChapter) return;
+    if (busyChapter || isPaperRunning(row.doc.id)) return;
     setBusyChapter(chapter.id);
     setScopeError(false);
     try {
-      const { paper } = await createPaperAndSave({
-        chapters: [chapter],
-        allChapters: row.chapters,
-        mode: "unit-test",
-        learnerState: learner,
-        text: row.doc.textPreview,
+      const paper = await runAiTask(`paper:${row.doc.id}`, async () => {
+        const { paper } = await createPaperAndSave({
+          chapters: [chapter],
+          allChapters: row.chapters,
+          mode: "unit-test",
+          learnerState: learner,
+          text: row.doc.textPreview,
+        });
+        return paper;
       });
       navigate(`/quiz/${paper.id}`);
     } catch {
@@ -192,7 +203,7 @@ export default function AssessmentPage() {
                       <button
                         key={c.id}
                         type="button"
-                        disabled={!!busyChapter}
+                        disabled={!!busyChapter || isPaperRunning(doc.id)}
                         onClick={() => void startChapterPaper({ doc, chapters }, c)}
                         data-testid={`assess-chapter-${c.id}`}
                         className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs text-ink-2 transition hover:border-primary/50 hover:bg-primary/5 disabled:opacity-40"
