@@ -7,7 +7,7 @@
  *  1) 合规响应 → 原样返回；
  *  2) point 超 60 字 → 裁剪；quote 超 200 字 → 裁剪；
  *  3) 缺 quote 的条目 → 丢弃（无原文出处的要点不入库，E3 诚实降级）；
- *  4) 重复 point → 去重；超过 5 条 → 截断到 5；
+ *  4) 重复 point → 去重；超过 8 条 → 截断到 8（D4：与长章归并后的上限统一口径）；
  *  5) 全部不合规 / 非对象响应 → 抛类型化错误（不静默返回空）；
  *  6) 章正文为空 → 执行器抛错（不发起 AI 调用）。
  */
@@ -75,7 +75,7 @@ await check("缺 quote / 空 quote → 丢弃该条（无出处不入库）", ()
   assert.equal(out[0].point, "有出处的要点");
 });
 
-await check("重复 point → 去重；超过 5 条 → 截断到 5", () => {
+await check("重复 point → 去重；超过 8 条 → 截断到 8（D4）", () => {
   const dup = parseKeyPointDrafts({
     points: [
       { point: "同一条", quote: "a" },
@@ -85,12 +85,13 @@ await check("重复 point → 去重；超过 5 条 → 截断到 5", () => {
   assert.equal(dup.length, 1);
 
   const many = parseKeyPointDrafts({
-    points: Array.from({ length: 9 }, (_, i) => ({
+    points: Array.from({ length: 12 }, (_, i) => ({
       point: `要点 ${i}`,
       quote: `原文 ${i}`,
     })),
   });
-  assert.equal(many.length, 5);
+  assert.equal(many.length, PIPELINE_LIMITS.keyPointMergeMax, "应截断到 keyPointMergeMax");
+  assert.equal(many.length, 8);
 });
 
 await check("全部不合规 → 抛 AiProviderError（不静默返回空）", () => {
