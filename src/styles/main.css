@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@xyflow/react/dist/style.css";
 
 /* ── PLOS 语义值 · 单一事实源 ────────────────────────────────
  * 组件体系方案：docs/ui-component-system-shadcn-design-2026-09.md §5
@@ -69,4 +70,30 @@ html,
 body,
 #root {
   height: 100%;
+}
+
+/* ── React Flow 中性规则对齐 PLOS token ──────────────────────
+ * 概念图谱画布（src/features/knowledge/GraphView.tsx）消费。
+ * 颜色值仍只在此文件定义；此处只做「库默认外观 → PLOS 语义」的搬运。 */
+.react-flow__attribution {
+  background: transparent;
+  color: var(--plos-ink-3);
+}
+
+.react-flow__controls-button {
+  background: var(--plos-surface);
+  border-bottom: 1px solid var(--plos-line);
+  color: var(--plos-ink-2);
+}
+
+.react-flow__controls-button:hover {
+  background: var(--plos-subtle);
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+.react-flow__node {
+  font-family: inherit;
 }

@@ -7,47 +7,57 @@
  *
  * 边视觉：prerequisite 虚线箭头 / related 实线 / parent·child 细实线；
  * example·contrast·application·source 不画边，聚焦后进侧栏文本（保持图面克制）。
+ *
+ * 绘制层为 React Flow（`@xyflow/react` v12）：平移 / 缩放 / 适配视图由库提供，
+ * 布局仍用自研 `computeLayout`（确定性力导向）。图谱 → 元素的映射收在
+ * `graph-flow-model.ts`（纯函数，可 node 直跑单测）。
  */
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type {
-  KnowledgeGraph,
-  KnowledgeRelation,
-  KnowledgeUnit,
-  RelationType,
-} from "../../domain";
-import { MASTERY_THRESHOLD, relationsOf } from "../../domain";
+import {
+  Background,
+  BackgroundVariant,
+  Controls,
+  MarkerType,
+  ReactFlow,
+  type Edge,
+  type FitViewOptions,
+  type NodeTypes,
+  type ProOptions,
+} from "@xyflow/react";
+import type { KnowledgeGraph, KnowledgeRelation, KnowledgeUnit } from "../../domain";
+import { relationsOf } from "../../domain";
 import { BandBadge } from "../../components/primitives";
 import { useI18n } from "../../i18n";
 import { bandOf } from "../../engine";
 import { unitTitle } from "../units";
 import { MarkdownBlock } from "../learn/render/markdown-core";
+import { computeLayout, degreeOf, neighborsOf } from "./layout";
 import {
-  GRAPH_H,
-  GRAPH_W,
-  computeLayout,
-  degreeOf,
-  neighborsOf,
-} from "./layout";
+  GAP_THRESHOLD,
+  buildFlowEdges,
+  buildFlowNodes,
+  isVisibleLink,
+} from "./graph-flow-model";
+import UnitNode from "./UnitNode";
 
-/** 图谱中绘制为边的关系类型（其余类型仅在侧栏文本呈现）。 */
-const VISIBLE_LINK: ReadonlySet<RelationType> = new Set([
-  "prerequisite",
-  "related",
-  "parent",
-  "child",
-]);
+/** ⚠️ 必须定义在组件外：定义在组件内会导致每次 render 生成新对象 → 无限重渲染。 */
+const nodeTypes: NodeTypes = { unit: UnitNode };
 
-/** 掌握度四色（与 BandBadge 语义一致，供 SVG 节点使用）。 */
-const BAND_SVG: Record<string, { fill: string; stroke: string }> = {
-  "not-started": { fill: "#f8fafc", stroke: "#cbd5e1" },
-  learning: { fill: "#fef2f2", stroke: "#f87171" },
-  proficient: { fill: "#fffbeb", stroke: "#fbbf24" },
-  mastered: { fill: "#ecfdf5", stroke: "#34d399" },
+/** 常量对象同样定义在组件外，避免每次 render 产生新引用。 */
+const FIT_VIEW_OPTIONS: FitViewOptions = { padding: 0.15 };
+
+const PRO_OPTIONS: ProOptions = { hideAttribution: true };
+
+/** prerequisite 边的箭头（颜色 token 化；模型层只收值、不认识库类型）。 */
+const ARROW_MARKER: Edge["markerEnd"] = {
+  type: MarkerType.ArrowClosed,
+  width: 14,
+  height: 14,
+  color: "var(--plos-ink-3)",
 };
 
-/** 缺口高亮阈值：与领域达标线同源（P1 阈值收敛）。 */
-export const GAP_THRESHOLD = MASTERY_THRESHOLD;
+const CANVAS_HEIGHT = "h-[320px] sm:h-[440px] lg:h-[560px]";
 
 interface GraphViewProps {
   graph: KnowledgeGraph;
@@ -66,18 +76,6 @@ interface GraphViewProps {
   onReviewUnit?: (unitId: string) => void;
 }
 
-const TEXT_COLOR = "#334155";
-
-function nodeKindShape(unit: KnowledgeUnit): "diamond" | "round" {
-  return unit.kind === "skill" ? "diamond" : "round";
-}
-
-/** 中文/英文混合标题的粗略宽度估算。 */
-function nodeWidth(title: string): number {
-  const w = [...title].reduce((acc, ch) => acc + (ch.charCodeAt(0) > 255 ? 13 : 7.5), 0) + 22;
-  return Math.min(170, Math.max(64, w));
-}
-
 export default function GraphView({
   graph,
   masteryByUnit,
@@ -90,10 +88,9 @@ export default function GraphView({
   const { m } = useI18n();
   const k = m.knowledge;
   const [focusId, setFocusId] = useState<string | undefined>();
-  const [view, setView] = useState({ k: 1, tx: 0, ty: 0 });
 
   const visibleRelations = useMemo(
-    () => graph.relations.filter((r) => VISIBLE_LINK.has(r.type)),
+    () => graph.relations.filter((r) => isVisibleLink(r.type)),
     [graph.relations],
   );
 
@@ -103,203 +100,84 @@ export default function GraphView({
   );
 
   // Focus 态：裁剪到选中节点 + 一跳邻居，其余淡出。
+  // 防护：焦点单元在当前图谱内已不存在（如重新提炼概念后）→ 不聚焦，全图正常显示。
   const focusSet = useMemo(() => {
     if (!focusId) return undefined;
+    if (!graph.units.some((u) => u.id === focusId)) return undefined;
     const set = neighborsOf(visibleRelations, focusId);
     set.add(focusId);
     return set;
-  }, [focusId, visibleRelations]);
+  }, [focusId, graph.units, visibleRelations]);
+
+  const nodes = useMemo(
+    () =>
+      buildFlowNodes({
+        graph,
+        positions,
+        masteryByUnit,
+        requiredUnitIds,
+        highlightIds,
+        focusSet,
+      }),
+    [graph, positions, masteryByUnit, requiredUnitIds, highlightIds, focusSet],
+  );
+
+  const edges = useMemo(
+    () => buildFlowEdges(graph, focusSet, { arrowMarker: ARROW_MARKER }),
+    [graph, focusSet],
+  );
 
   const focusUnit = focusId ? graph.units.find((u) => u.id === focusId) : undefined;
   const focusRelations = focusId ? relationsOf(graph, focusId) : [];
 
-  /** 画布手势：滚轮缩放（以指针为锚，近似）。 */
-  const onWheel = (e: React.WheelEvent<SVGSVGElement>) => {
-    const factor = e.deltaY < 0 ? 1.12 : 0.9;
-    // ⚠️ 几何量必须在事件处理器内同步取出，不能挪进 setView 的 updater：
-    // updater 会被排队到 React render 阶段才执行，那时事件派发已结束，DOM 的
-    // Event.currentTarget 已被清空为 null（只读 currentTarget 的语义）。
-    // 首帧滚轮常因 React 的 eager state 优化在处理器内同步试算而侥幸不报错，
-    // 连续滚动使 update queue 非空、跳过 eager 路径后必然抛
-    // "null is not an object (evaluating 'e.currentTarget.getBoundingClientRect')"。
-    const rect = e.currentTarget.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    const py = e.clientY - rect.top;
-    setView((v) => {
-      const k = Math.min(2.4, Math.max(0.35, v.k * factor));
-      return {
-        k,
-        tx: px - ((px - v.tx) / v.k) * k,
-        ty: py - ((py - v.ty) / v.k) * k,
-      };
-    });
-  };
-
   const relationUnit = (r: KnowledgeRelation): KnowledgeUnit | undefined =>
     graph.units.find((u) => u.id === r.fromId || u.id === r.toId);
+
+  // 空图谱兜底：不挂载 React Flow（避免空画布带来的 fitView 异常与无谓渲染）。
+  if (graph.units.length === 0) {
+    return (
+      <div className={`${CANVAS_HEIGHT} rounded-xl border border-dashed border-line`} />
+    );
+  }
 
   return (
     // 窄屏：侧栏堆叠到画布下方（lg 起才并排）
     <div className="flex flex-col gap-4 lg:flex-row">
       {/* 图谱画布 */}
-      <div className="relative min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <svg
-          viewBox={`0 0 ${GRAPH_W} ${GRAPH_H}`}
-          className="h-[320px] w-full touch-none select-none sm:h-[440px] lg:h-[560px]"
-          onWheel={onWheel}
-          onClick={(e) => {
-            const target = e.target as Element;
-            const el = target.closest?.("[data-unit-id]") as SVGElement | null;
-            const uid = el?.getAttribute("data-unit-id");
-            if (uid) {
-              setFocusId((prev) => (prev === uid ? prev : uid));
-            } else {
-              setFocusId(undefined);
-            }
-          }}
-          onDoubleClick={(e) => {
-            const target = e.target as Element;
-            const el = target.closest?.("[data-unit-id]") as SVGElement | null;
-            const uid = el?.getAttribute("data-unit-id");
-            if (!uid) return;
-            const unit = graph.units.find((u) => u.id === uid);
+      <div className="relative min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-surface">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          fitView
+          fitViewOptions={FIT_VIEW_OPTIONS}
+          minZoom={0.35}
+          maxZoom={2.4}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
+          proOptions={PRO_OPTIONS}
+          onNodeClick={(_, node) => setFocusId((prev) => (prev === node.id ? prev : node.id))}
+          onNodeDoubleClick={(_, node) => {
+            const unit = graph.units.find((u) => u.id === node.id);
             if (unit?.sourceDocumentId && onOpenDocument) {
               onOpenDocument(unit.sourceDocumentId);
             }
           }}
+          onPaneClick={() => setFocusId(undefined)}
+          className={CANVAS_HEIGHT}
         >
-          <defs>
-            <marker
-              id="arrow"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="7"
-              markerHeight="7"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />
-            </marker>
-          </defs>
-
-          <g transform={`translate(${view.tx} ${view.ty}) scale(${view.k})`}>
-            {/* 边 */}
-            {visibleRelations.map((r) => {
-              const a = positions.get(r.fromId);
-              const b = positions.get(r.toId);
-              if (!a || !b) return null;
-              const dashed = r.type === "prerequisite";
-              const thin = r.type === "parent" || r.type === "child";
-              const dimmed =
-                focusSet && (!focusSet.has(r.fromId) || !focusSet.has(r.toId));
-              return (
-                <line
-                  key={r.id}
-                  x1={a.x}
-                  y1={a.y}
-                  x2={b.x}
-                  y2={b.y}
-                  stroke={dashed ? "#94a3b8" : thin ? "#cbd5e1" : "#a5b4fc"}
-                  strokeWidth={dashed ? 1.4 : thin ? 1 : 1.2}
-                  strokeDasharray={dashed ? "5 4" : undefined}
-                  markerEnd={dashed ? "url(#arrow)" : undefined}
-                  opacity={dimmed ? 0.08 : 0.7}
-                />
-              );
-            })}
-
-            {/* 节点 */}
-            {graph.units.map((unit) => {
-              const p = positions.get(unit.id);
-              if (!p) return null;
-              const mastery = masteryByUnit[unit.id] ?? 0;
-              const band = bandOf(mastery);
-              const color = BAND_SVG[band] ?? BAND_SVG["not-started"];
-              const isGap =
-                requiredUnitIds.includes(unit.id) && mastery < GAP_THRESHOLD;
-              const isHighlight = highlightIds.includes(unit.id);
-              const w = nodeWidth(unit.title);
-              const h = 32;
-              const r = 9;
-              const diamond = nodeKindShape(unit) === "diamond";
-              const dimmed = focusSet && !focusSet.has(unit.id);
-
-              let body: React.ReactNode;
-              if (diamond) {
-                body = (
-                  <polygon
-                    points={`${p.x},${p.y - h / 2} ${p.x + w / 2},${p.y} ${p.x},${p.y + h / 2} ${p.x - w / 2},${p.y}`}
-                    fill={color.fill}
-                    stroke={color.stroke}
-                    strokeWidth={1.4}
-                  />
-                );
-              } else {
-                body = (
-                  <rect
-                    x={p.x - w / 2}
-                    y={p.y - h / 2}
-                    width={w}
-                    height={h}
-                    rx={r}
-                    fill={color.fill}
-                    stroke={color.stroke}
-                    strokeWidth={1.4}
-                  />
-                );
-              }
-
-              return (
-                <g
-                  key={unit.id}
-                  data-unit-id={unit.id}
-                  className="cursor-pointer"
-                  opacity={dimmed ? 0.1 : 1}
-                  style={{ transition: "opacity 150ms ease" }}
-                >
-                  {body}
-                  {/* 缺口节点：indigo 外圈脉冲 */}
-                  {isGap ? (
-                    <circle
-                      cx={p.x}
-                      cy={p.y}
-                      r={h / 2 + 6}
-                      fill="none"
-                      stroke="#6366f1"
-                      strokeWidth={1.6}
-                      className="animate-pulse"
-                    />
-                  ) : null}
-                  {/* 导入新节点：琥珀虚线外圈 */}
-                  {isHighlight ? (
-                    <rect
-                      x={p.x - w / 2 - 7}
-                      y={p.y - h / 2 - 7}
-                      width={w + 14}
-                      height={h + 14}
-                      rx={r + 6}
-                      fill="none"
-                      stroke="#f59e0b"
-                      strokeWidth={1.6}
-                      strokeDasharray="5 4"
-                    />
-                  ) : null}
-                  <text
-                    x={p.x}
-                    y={diamond ? p.y + 4 : p.y + 4.5}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fontSize={12.5}
-                    fill={TEXT_COLOR}
-                    style={{ pointerEvents: "none", fontWeight: 500 }}
-                  >
-                    {unit.title}
-                  </text>
-                </g>
-              );
-            })}
-          </g>
-        </svg>
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={16}
+            size={1}
+            color="var(--plos-line)"
+          />
+          <Controls
+            showInteractive={false}
+            className="[&>button]:border-line [&>button]:bg-surface [&>button]:text-ink-2"
+          />
+        </ReactFlow>
 
         {/* 操作提示（顶部角标） */}
         <div className="pointer-events-none absolute right-3 top-3 rounded-full bg-white/90 px-3 py-1 text-[11px] text-slate-400 ring-1 ring-slate-200">
