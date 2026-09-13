@@ -113,15 +113,20 @@ export default function GraphView({
   const focusUnit = focusId ? graph.units.find((u) => u.id === focusId) : undefined;
   const focusRelations = focusId ? relationsOf(graph, focusId) : [];
 
-  /** 画布手势：拖拽平移 + 滚轮缩放。 */
-  const onWheel = (e: React.WheelEvent) => {
+  /** 画布手势：滚轮缩放（以指针为锚，近似）。 */
+  const onWheel = (e: React.WheelEvent<SVGSVGElement>) => {
     const factor = e.deltaY < 0 ? 1.12 : 0.9;
+    // ⚠️ 几何量必须在事件处理器内同步取出，不能挪进 setView 的 updater：
+    // updater 会被排队到 React render 阶段才执行，那时事件派发已结束，DOM 的
+    // Event.currentTarget 已被清空为 null（只读 currentTarget 的语义）。
+    // 首帧滚轮常因 React 的 eager state 优化在处理器内同步试算而侥幸不报错，
+    // 连续滚动使 update queue 非空、跳过 eager 路径后必然抛
+    // "null is not an object (evaluating 'e.currentTarget.getBoundingClientRect')"。
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
     setView((v) => {
       const k = Math.min(2.4, Math.max(0.35, v.k * factor));
-      // 以指针为锚缩放（近似）
-      const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
-      const px = e.clientX - rect.left;
-      const py = e.clientY - rect.top;
       return {
         k,
         tx: px - ((px - v.tx) / v.k) * k,
