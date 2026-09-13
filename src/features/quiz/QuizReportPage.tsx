@@ -33,6 +33,7 @@ import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { makeRetakePaper } from "../plan/chapter-action";
 import { storage } from "../../stores/useLoopStore";
 import { useAiTask } from "../../stores/useAiTaskStore";
+import { isTerminalFresh } from "../../stores/ai-task-types";
 import { Spinner } from "../../components/ui/spinner";
 import { useI18n, type Messages } from "../../i18n";
 import { ago, orderRange, typeBadgeText } from "./meta";
@@ -128,7 +129,7 @@ export default function QuizReportPage() {
   // 主观题 AI 重试批改（N3b）走全局任务注册表 grade:{paperId}：
   // 与判卷页自动批改同 id 共享互斥；running 态与终态消息切页重挂后可恢复。
   const gradeTask = useAiTask(`grade:${paperId}`);
-  /** 重试批改状态行文案（本次会话即时反馈；重挂后从任务记录恢复终态）。 */
+  /** 「未配置 AI」预检提示（无任务记录可派生，故保留组件内 state；F9 去重后唯一用途）。 */
   const [aiMsg, setAiMsg] = useState("");
 
   useEffect(() => {
@@ -257,19 +258,16 @@ export default function QuizReportPage() {
       .run(async (_report, done) => {
         const grades = await gradeSubjectiveWithAi(provider, items);
         if (grades.length === 0) {
-          done(r.aiNoResult);
-          setAiMsg(r.aiNoResult);
+          done(r.aiNoResult); // 终态文案进任务记录，渲染层统一从 task 派生（F9 去重）
           return;
         }
         const merged = mergeSubjectiveGrades({ result, paper, answers: subAnswers, aiGrades: grades });
         await storage.savePaperResult(merged);
         setData({ ...data, result: merged });
         done(r.aiGraded(grades.length));
-        setAiMsg(r.aiGraded(grades.length));
       })
       .catch(() => {
         console.warn("主观题重试批改失败（错误终态已进任务记录）");
-        setAiMsg(r.aiFailed);
       });
   };
 
@@ -440,12 +438,15 @@ export default function QuizReportPage() {
             )}
           </div>
         ) : null}
-        {/* 状态行：本次会话即时文案优先；切页重挂后从任务记录恢复终态 */}
+        {/* 状态行：aiMsg 仅承载「未配置 AI」预检（无任务记录）；任务结果/失败从
+            任务记录派生（F9 去重）+ 新鲜度门（R2：陈旧终态不跨页面残留） */}
         {aiMsg ? (
           <p aria-live="polite" className="mt-2 text-xs text-ink-2">{aiMsg}</p>
-        ) : gradeTask.status === "error" && gradeTask.message ? (
+        ) : gradeTask.running ? (
+          <p aria-live="polite" className="mt-2 text-xs text-ink-2">{r.aiRetrying}</p>
+        ) : gradeTask.status === "error" && gradeTask.message && isTerminalFresh(gradeTask) ? (
           <p aria-live="polite" className="mt-2 text-xs text-ink-2">{r.aiFailed}</p>
-        ) : gradeTask.status === "done" && gradeTask.message ? (
+        ) : gradeTask.status === "done" && gradeTask.message && isTerminalFresh(gradeTask) ? (
           <p aria-live="polite" className="mt-2 text-xs text-ink-2">{gradeTask.message}</p>
         ) : null}
 
