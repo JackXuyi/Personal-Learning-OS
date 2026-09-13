@@ -45,7 +45,8 @@ export default function AssessmentPage() {
   const tasks = useAiTaskStore((s) => s.tasks);
   /** 本轮点击的章 id（loading 指示在哪个章按钮上；纯 UI）。 */
   const [busyChapter, setBusyChapter] = useState<string>();
-  const [scopeError, setScopeError] = useState(false);
+  /** 出卷失败原因（空串 = 无错；F8：不再吞掉失败细节）。 */
+  const [scopeError, setScopeError] = useState("");
 
   /** 该资料当前是否有出卷任务在跑（含从其它页面触发的）。 */
   const isPaperRunning = (docId: string) =>
@@ -80,7 +81,7 @@ export default function AssessmentPage() {
   const startChapterPaper = async (row: DocScopeRow, chapter: Chapter) => {
     if (busyChapter || isPaperRunning(row.doc.id)) return;
     setBusyChapter(chapter.id);
-    setScopeError(false);
+    setScopeError("");
     try {
       const paper = await runAiTask(`paper:${row.doc.id}`, async () => {
         const { paper } = await createPaperAndSave({
@@ -93,8 +94,9 @@ export default function AssessmentPage() {
         return paper;
       });
       navigate(`/quiz/${paper.id}`);
-    } catch {
-      setScopeError(true);
+    } catch (e) {
+      // 失败原因透出（F8）：错误终态也已在 paper:{docId} 任务记录里
+      setScopeError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusyChapter(undefined);
     }
@@ -224,7 +226,9 @@ export default function AssessmentPage() {
             ))}
           </div>
           {scopeError ? (
-            <p className="mt-2 text-xs text-state-failed">{a.docScopeFailed}</p>
+            <p className="mt-2 text-xs text-state-failed">
+              {a.docScopeFailed}：{scopeError}
+            </p>
           ) : null}
         </Card>
       ) : null}
