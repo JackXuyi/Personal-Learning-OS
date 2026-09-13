@@ -213,7 +213,8 @@ export default function AssessmentPage() {
                         </span>
                         <BandBadge band={bandOf(mastery)} />
                         <span className="font-medium text-primary">
-                          {busyChapter === c.id ? a.testing : a.testChapter}
+                          {/* busy 指示双源：本轮点击（组件 state）+ 全局任务记录（重挂后仍可派生，F5） */}
+                          {busyChapter === c.id || isPaperRunning(doc.id) ? a.testing : a.testChapter}
                         </span>
                       </button>
                     );
