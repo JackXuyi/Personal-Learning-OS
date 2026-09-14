@@ -13,12 +13,10 @@ import { Button } from '../../../components/ui/button';
 import { pickRenderer } from '../render/renderer-registry';
 import PlainTextRenderer from '../render/PlainTextRenderer';
 import RenderErrorBoundary from '../render/RenderErrorBoundary';
-import { highlightRange } from '../highlight';
+import { highlightRange, HIGHLIGHT_WINDOW } from '../highlight';
 import type { SourceDocument } from '../../../domain';
 
 const PREVIEW_CHARS = 200000;
-/** 锚点高亮窗口：从 at 起高亮这么多个字符（够看清上下文，又不至于糊满屏）。 */
-const HIGHLIGHT_WINDOW = 120;
 
 interface ContentTabProps {
   doc: SourceDocument;

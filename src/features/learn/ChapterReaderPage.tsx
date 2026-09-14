@@ -1,19 +1,22 @@
 /**
  * P2 章节阅读（/learn/:chapterId）—— 三步闭环「步骤 1」的逐章学习页（T5，UI Workbench U3）。
  *
- * 布局：左 = 章正文（doc.textPreview 的 contentRef 切片）；右 = 四区（与 Learner Model 相连，
- * docs/ui-workbench-plan-2026-09.md §6-U3）：
+ * 布局：左 = 章正文（doc.textPreview 的 contentRef 切片）；右 = 五区（与 Learner Model 相连，
+ * docs/ui-workbench-plan-2026-09.md §6-U3 + docs/learn-chapter-qa-design-2026-09.md §7）：
  *   1) 章状态 —— 状态徽标 + 掌握度 Bar + 口径说明（我学到哪）；
  *   2) Why it matters —— 要点首条 / 正文首句兜底（它讲什么 / 为什么值得学）；
  *   3) Knowledge —— 要点生成可点选知识 chips（N5 unitIds 就绪后以概念为准）；
  *      底部保留「打开本章概念图谱」N5 入口；
- *   4) Evidence —— 溯源（《doc》第 x 章）+ 最近一次含本章的测评 Δ 掌握度（证据从哪来）。
+ *   4) 问这一章 —— 章内提问面板（答案只依据用户导入的原文，引用可点回正文高亮）；
+ *   5) Evidence —— 溯源（《doc》第 x 章）+ 最近一次含本章的测评 Δ 掌握度（证据从哪来）。
  * 状态机写回：打开阅读（not-started → learning）与「标记学完」（→ ready）
  * 直接整批写 storage（listChapters/saveChapters 契约，docs §5.1）。
+ * 原文档位：`?at=<文档绝对偏移>` 跳转 → 换算章内相对偏移后高亮并滚动
+ * （与「资料内容 Tab」同一套 `highlightRange` 口径）。
  * 底部主行动保留；「标记学完」后提示下一步并刷新章级计划（plan 头项联动）。
  */
-import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Bar, Card, EvidenceRow, Section } from "../../components/primitives";
 import { Button } from "../../components/ui/button";
 import { MASTERY_THRESHOLD, isDueReview } from "../../domain";
@@ -22,6 +25,8 @@ import { applyKeyPointRating } from "../../engine";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { useI18n } from "../../i18n";
 import { chapterBadge } from "./chapter-badge";
+import { highlightRange, HIGHLIGHT_WINDOW } from "./highlight";
+import ChapterQaPanel from "./reader/ChapterQaPanel";
 import { pickRenderer } from "./render/renderer-registry";
 import PlainTextRenderer from "./render/PlainTextRenderer";
 import RenderErrorBoundary from "./render/RenderErrorBoundary";
@@ -44,6 +49,15 @@ export default function ChapterReaderPage() {
   const [evidence, setEvidence] = useState<ChapterEvidence>({ state: "loading" });
   /** Knowledge 区点选高亮的知识块（-1 = 无）。 */
   const [activeChip, setActiveChip] = useState(-1);
+
+  const [searchParams] = useSearchParams();
+  /** 原文锚点（文档绝对偏移）；非法值一律当未提供（与 ContentTab 同口径）。 */
+  const atRaw = Number(searchParams.get("at") ?? NaN);
+  const at = Number.isFinite(atRaw) && atRaw >= 0 ? atRaw : undefined;
+  /** 正文容器 —— 高亮副作用的作用域。 */
+  const bodyRef = useRef<HTMLDivElement>(null);
+  /** 章内引用高亮（章内相对偏移）；优先级高于 `?at=`。 */
+  const [highlight, setHighlight] = useState<{ start: number; end: number } | undefined>();
 
   useEffect(() => {
     void (async () => {
@@ -94,6 +108,33 @@ export default function ChapterReaderPage() {
       alive = false;
     };
   }, [chapter?.id]);
+
+  /** 章切换 / `?at=` 变化 → 清掉上一次的章内高亮（避免旧高亮抢占新的锚点）。 */
+  useEffect(() => {
+    setHighlight(undefined);
+  }, [chapter?.id, at]);
+
+  /**
+   * 渲染完成后再高亮：Markdown 子树异步提交 DOM，两帧时机与 `ContentTab` 一致。
+   * `highlight`（章内引用，章内相对偏移）优先；否则用 `?at=`（文档绝对偏移）换算。
+   * 越界 / 非法值 → `highlightRange` 返回 false 且不做改动（静默，不报错）。
+   */
+  useEffect(() => {
+    if (!chapter) return;
+    const root = bodyRef.current;
+    if (!root) return;
+    const start = highlight
+      ? highlight.start
+      : at !== undefined
+        ? at - chapter.contentRef.start
+        : undefined;
+    if (start === undefined) return;
+    const end = highlight ? highlight.end : start + HIGHLIGHT_WINDOW;
+    const id = requestAnimationFrame(() => {
+      highlightRange(root, start, end);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [highlight, at, chapter?.id, chapter?.contentRef.start]);
 
   const mastery = chapter ? (learner?.byUnit[chapter.id]?.mastery ?? 0) : 0;
   const badge = chapter ? chapterBadge(chapter.status, mastery, m) : undefined;
@@ -184,7 +225,7 @@ export default function ChapterReaderPage() {
           <h1 className="text-xl font-semibold tracking-tight text-ink-1">
             {chapter.title || m.chapter.ordinal(chapter.order)}
           </h1>
-          <div className="mt-4 break-words border-t border-line pt-5">
+          <div ref={bodyRef} className="mt-4 break-words border-t border-line pt-5">
             {body.length > 0 ? (
               <RenderErrorBoundary
                 resetKey={`${doc.id}:${chapter.id}:${doc.format}`}
@@ -198,7 +239,7 @@ export default function ChapterReaderPage() {
           </div>
         </Card>
 
-        {/* 右：章状态 / Why it matters / Knowledge / Evidence 四区 */}
+        {/* 右：章状态 / Why it matters / Knowledge / 问这一章 / Evidence 五区 */}
         <div className="min-w-0 space-y-6">
           {/* 1 · 章状态（我学到哪） */}
           <section className="space-y-2">
@@ -267,7 +308,17 @@ export default function ChapterReaderPage() {
             )}
           </section>
 
-          {/* 4 · Evidence（证据从哪来：溯源 + 最近测评 Δ） */}
+          {/* 4 · 问这一章（章内提问；答案只依据本资料原文，引用可点回正文） */}
+          <ChapterQaPanel
+            doc={doc}
+            chapter={chapter}
+            onHighlight={(start, end) => setHighlight({ start, end })}
+            onJumpChapter={(targetId, atAbs) =>
+              navigate(`/learn/chapter/${targetId}?at=${atAbs}`)
+            }
+          />
+
+          {/* 5 · Evidence（证据从哪来：溯源 + 最近测评 Δ） */}
           <section className="space-y-2">
             <Section title={t.evidenceEyebrow} />
             {evidence.state === "ok" ? (

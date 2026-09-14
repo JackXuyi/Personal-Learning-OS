@@ -12,6 +12,14 @@
 
 const MARK_CLASS = "bg-primary/15 rounded-sm";
 
+/**
+ * 锚点高亮窗口：从锚点起高亮这么多个字符（够看清上下文，又不至于糊满屏）。
+ *
+ * 共享常量 —— 「资料内容 Tab」的 `?at=` 跳转与「章内提问」的引用跳转用同一窗口，
+ * 两处口径必须一致（`detail/ContentTab.tsx` 与 `ChapterReaderPage.tsx`）。
+ */
+export const HIGHLIGHT_WINDOW = 120;
+
 /** 清除 root 内所有既有高亮（把 <mark> 还原成普通文本，避免层层嵌套）。 */
 export function clearHighlights(root: HTMLElement): void {
   const marks = root.querySelectorAll("mark");

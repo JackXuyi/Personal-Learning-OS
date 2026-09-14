@@ -1147,6 +1147,31 @@ export const en: Messages = {
       toPlan: "Back to plan for the full next step",
       noSnapshot:
         "This document has no saved body snapshot (empty textPreview), so the original text can't be shown.",
+      /** Zone 5 “Ask this chapter” (in-chapter Q&A; answers use only your own source text). */
+      qa: {
+        eyebrow: "Ask this chapter",
+        placeholder: "Ask about this chapter — answers come only from your own text…",
+        ask: "Ask",
+        asking: "Asking…",
+        searching: "Searching your source text…",
+        explainOf: (kp: string) => `Explain: ${kp}`,
+        tooLong: (n: number) => `Keep the question under ${n} characters`,
+        notReady: "AI not ready — configure a model in Settings → AI model center before asking.",
+        goConfigure: "Configure AI →",
+        expanded: "This chapter wasn't enough — expanded to other chapters of this document",
+        notFound: "The source doesn't mention this. Try rephrasing, or search the whole document in Library.",
+        emptyIndex:
+          "This chapter has no retrieval index yet — re-split it in Document detail → Chapters, or rebuild the index in Settings.",
+        unanchored: "This answer couldn't be located back in your source text — treat it with caution.",
+        retry: "Retry",
+        citationsTitle: "Evidence (tap a row to jump to the source)",
+        footnote: "Answers use only the text you imported; every citation jumps back for verification.",
+        fulltextOnly: "Full-text only",
+        errParse: "The AI response couldn't be parsed. Please retry.",
+        errNotConfigured: "AI not ready: configure a local model or API in Settings → AI model center.",
+        errFetch: "Failed to search or read the document. Please retry.",
+        errGeneric: "Asking failed. Please retry.",
+      },
     },
   },
 
