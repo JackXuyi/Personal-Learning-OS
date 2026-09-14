@@ -24,6 +24,7 @@ import type {
   Paper,
   PaperAnswers,
   PaperResult,
+  Restatement,
   Section,
   SourceDocument,
 } from "../domain";
@@ -158,6 +159,13 @@ export interface StorageAdapter {
   getProfile(): Promise<LearnerProfile | undefined>;
   /** 传 `undefined` = 清除画像（UC-07）。 */
   saveProfile(profile: LearnerProfile | undefined): Promise<void>;
+
+  // ===== 章级复述（F5；决策 D1-A：落库；不参与掌握度）=====
+  /** 某章的全部复述记录（createdAt 降序）。 */
+  listRestatements(chapterId: string): Promise<Restatement[]>;
+  /** 按 id upsert（先落文本、后回填 feedback 均为本方法）。 */
+  saveRestatement(record: Restatement): Promise<void>;
+  deleteRestatement(id: string): Promise<void>;
 
   // ===== 目标（多目标，U0 数据准备；docs/ui-workbench-plan-2026-09.md §7.2）=====
   listGoals(): Promise<LearningGoal[]>;

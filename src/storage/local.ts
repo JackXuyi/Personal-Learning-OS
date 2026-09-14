@@ -19,6 +19,7 @@ import type {
   Paper,
   PaperAnswers,
   PaperResult,
+  Restatement,
   Section,
   SourceDocument,
 } from "../domain";
@@ -40,6 +41,8 @@ const KEY_GRAPH = "plos.graph";
 const KEY_LEARNER = "plos.learner";
 /** 学习者画像（F1）：与 LearnerState / Goal 同层，TauriStorage 自动继承。 */
 const KEY_PROFILE = "plos.learner-profile";
+/** 章级复述（F5）：新 key，无旧数据 → 零迁移。 */
+const KEY_RESTATEMENTS = "plos.restatements";
 const KEY_GOALS = "plos.goals";
 const KEY_ACTIVE_GOAL = "plos.active-goal";
 const KEY_EVIDENCE = "plos.evidence";
@@ -88,6 +91,9 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     this.graph = load<KnowledgeGraph>(KEY_GRAPH, { units: [], relations: [] });
     this.learnerState = load<LearnerState>(KEY_LEARNER, { byUnit: {} });
     this.profile = load<LearnerProfile | undefined>(KEY_PROFILE, undefined);
+    this.restatements = new Map(
+      load<Restatement[]>(KEY_RESTATEMENTS, []).map((r) => [r.id, r]),
+    );
     this.goals = new Map(load<LearningGoal[]>(KEY_GOALS, []).map((g) => [g.id, g]));
     this.activeGoalId = load<string | undefined>(KEY_ACTIVE_GOAL, undefined);
     this.evidenceLog = load<EvidenceEntry[]>(KEY_EVIDENCE, []);
@@ -138,6 +144,7 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     // 会回落 undefined，与「未填写」语义一致。
     if (this.profile === undefined) localStorage.removeItem(KEY_PROFILE);
     else localStorage.setItem(KEY_PROFILE, JSON.stringify(this.profile));
+    localStorage.setItem(KEY_RESTATEMENTS, JSON.stringify([...this.restatements.values()]));
     localStorage.setItem(KEY_GOALS, JSON.stringify([...this.goals.values()]));
     localStorage.setItem(KEY_EVIDENCE, JSON.stringify(this.evidenceLog));
   }
@@ -258,6 +265,14 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
   }
   override async saveProfile(profile: LearnerProfile | undefined): Promise<void> {
     await super.saveProfile(profile);
+    this.persist();
+  }
+  override async saveRestatement(record: Restatement): Promise<void> {
+    await super.saveRestatement(record);
+    this.persist();
+  }
+  override async deleteRestatement(id: string): Promise<void> {
+    await super.deleteRestatement(id);
     this.persist();
   }
   override async saveGoal(goal: LearningGoal): Promise<void> {

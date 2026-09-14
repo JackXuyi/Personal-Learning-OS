@@ -23,6 +23,7 @@ import type {
   Paper,
   PaperAnswers,
   PaperResult,
+  Restatement,
   Section,
   SourceDocument,
 } from "../domain";
@@ -40,6 +41,8 @@ export class InMemoryStorage implements StorageAdapter {
   protected learnerState: LearnerState = { byUnit: {} };
   /** 学习者画像（F1）。缺省 undefined = 未填写（不制造假画像）。 */
   protected profile: LearnerProfile | undefined;
+  /** 章级复述（F5）。key = Restatement.id。 */
+  protected restatements = new Map<string, Restatement>();
   protected goals = new Map<string, LearningGoal>();
   protected activeGoalId: string | undefined;
   protected evidenceLog: EvidenceEntry[] = [];
@@ -319,6 +322,19 @@ export class InMemoryStorage implements StorageAdapter {
   }
   async saveProfile(profile: LearnerProfile | undefined): Promise<void> {
     this.profile = profile;
+  }
+
+  // ===== 章级复述（F5）=====
+  async listRestatements(chapterId: string): Promise<Restatement[]> {
+    return [...this.restatements.values()]
+      .filter((r) => r.chapterId === chapterId)
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }
+  async saveRestatement(record: Restatement): Promise<void> {
+    this.restatements.set(record.id, record);
+  }
+  async deleteRestatement(id: string): Promise<void> {
+    this.restatements.delete(id);
   }
 
   async listGoals(): Promise<LearningGoal[]> {
