@@ -403,12 +403,13 @@ never depend on a network call.
 Every capability the project intends to ship — this doubles as the roadmap.
 `[x]` = shipped · `[ ]` = not yet · `P0` / `P1` / `P2` = priority of the unshipped items.
 
-**23 shipped · 19 not yet.**
+**24 shipped · 19 not yet.**
 
 ### 📥 Ingestion
 
 - [x] PDF / Markdown / TXT / pasted notes / GitHub-repository import
 - [x] Encoding sniffing (BOM / UTF-8 / GB18030) and duplicate-safe re-import
+- [x] AI enrichment after import — the document title (titles you typed are kept) and a whole-document overview are generated in the background
 - [ ] OCR fallback for scanned PDFs `P2` — pdfjs returns 0 characters on image-only PDFs
 - [ ] DOCX parsing `P2`
 - [ ] EPUB parsing `P2`
