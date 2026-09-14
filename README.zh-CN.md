@@ -7,6 +7,8 @@
 
 [简体中文](README.zh-CN.md) · [English](README.md)
 
+<div align="center">
+
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Status](https://img.shields.io/badge/status-pre--MVP-orange)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)
