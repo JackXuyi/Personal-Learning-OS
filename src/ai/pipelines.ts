@@ -24,10 +24,12 @@ import type {
   Chapter,
   KnowledgeRelation,
   KnowledgeUnit,
+  LearnerProfile,
   Paper,
   PaperQuestion,
 } from "../domain";
 import { newId } from "../domain";
+import { buildLearnerContextBlock } from "./learner-context";
 import type { ChapterRefine } from "../engine/splitter-engine";
 import { applyChapterRefine } from "../engine/splitter-engine";
 import type { AIProvider, ChatMessage } from "./types";
@@ -183,11 +185,17 @@ const QUIZ_SYSTEM =
   "- 输出 JSON 数组、顺序与题目清单一致、长度一致（不要 markdown 围栏与多余文字）。" +
   '元素格式：{"type":"choice|judge|qa|application","prompt":"题干","options":["…","…","…","…"],"answer":2,"referenceAnswer":"评分参考(主观题必填，客观题可省略)"}，choice 的 answer 为正确项下标（0 起），judge 的 answer 为 true/false。';
 
-/** 纯函数：构建出题提示词。profile = 本地 createPaper 产出的题（配额单源）。 */
+/**
+ * 纯函数：构建出题提示词。
+ *
+ * ⚠️ `profile` = 本地 createPaper 产出的题（配额单源），**与 `LearnerProfile` 无关**；
+ * F1 的学习者画像一律叫 `learner`，且只影响 user 消息尾部的背景块。
+ */
 export function buildQuizGenMessages(
   chapters: readonly Chapter[],
   text: string,
   profile: readonly PaperQuestion[],
+  learner?: LearnerProfile,
 ): ChatMessage[] {
   // 章上下文（去重一次）：题号 → 标题 + keyPoints + 摘录。
   const ctxByChapter = new Map<string, { no: number; title: string; excerpt: string }>();
@@ -216,13 +224,16 @@ export function buildQuizGenMessages(
     return `${i + 1}. 章「${ctx?.title ?? q.chapterId}」· ${typeLabel[q.type]}：针对本章内容出题。`;
   });
 
+  // F1：学习者背景块（未填写 → undefined → 不追加，输出与改动前逐字节相同）。
+  const learnerBlock = buildLearnerContextBlock(learner);
   return [
     { role: "system", content: QUIZ_SYSTEM },
     {
       role: "user",
       content:
         `章节正文摘录（作答依据）：\n${ctxLines.join("\n\n")}\n\n` +
-        `题目清单（共 ${profile.length} 题，输出数组必须逐题对应）：\n${qLines.join("\n")}`,
+        `题目清单（共 ${profile.length} 题，输出数组必须逐题对应）：\n${qLines.join("\n")}` +
+        (learnerBlock ? `\n\n${learnerBlock}` : ""),
     },
   ];
 }
@@ -311,11 +322,13 @@ export async function generateQuizQuestionsWithAi(input: {
   chapters: readonly Chapter[];
   /** 所属文档正文（chapter.contentRef 所在原文）。 */
   text: string;
+  /** F1 学习者画像：注入背景块（缺省 = 不注入，零回归）。 */
+  learner?: LearnerProfile;
 }): Promise<PaperQuestion[]> {
-  const { provider, paper, chapters, text } = input;
+  const { provider, paper, chapters, text, learner } = input;
   const profile = paper.questions;
   if (profile.length === 0) return profile;
-  const messages = buildQuizGenMessages(chapters, text, profile);
+  const messages = buildQuizGenMessages(chapters, text, profile, learner);
   const totalChars = messages.reduce((n, m) => n + m.content.length, 0);
   if (totalChars > PIPELINE_LIMITS.quizMaxPromptChars) return profile;
   const raw = await chatJson(provider, messages, TEMPERATURE.quiz);
