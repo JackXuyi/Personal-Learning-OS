@@ -206,6 +206,7 @@ F1 画像  →  F7 章节编辑（快赢，1~2 天）  →  F4 导出  →  F3 �
 **范围**（建议分次迭代，不要一次全做）
 
 1. **章内提问框**（推荐先做）：基于当前章走 `hybridSearch` 检索 + `provider.chat` 回答，**答案一律锚回原文**（复用 `ai/evidence-anchor`，不许模型自造引文）
+   - ✅ **2026-09-14 已落地**：`ChapterReaderPage` 右栏第 4 区「问这一章」；方案 `docs/learn-chapter-qa-design-2026-09.md`、实施 `docs/learn-chapter-qa-task-runbook-2026-09.md`、单测 `npm run test:qa`（27 项）。本章命中不足时扩到同资料其他章并逐条标注来源章；零伪造引用（锚不上即丢弃，全锚不上则 `unanchored` + 显式警示）。
 2. **高亮与笔记**：划线 → 存为该章关联批注 → 复习时回看
 3. **费曼输出**：用自己的话复述 → AI 对照原文给出差距反馈 → 可一键转为一道主观题进入掌握度闭环
 4. **自测卡**：从 `keyPoints` 一键生成 flashcard，接入既有间隔重复调度

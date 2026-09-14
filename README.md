@@ -403,7 +403,7 @@ never depend on a network call.
 Every capability the project intends to ship — this doubles as the roadmap.
 `[x]` = shipped · `[ ]` = not yet · `P0` / `P1` / `P2` = priority of the unshipped items.
 
-**22 shipped · 20 not yet.**
+**23 shipped · 19 not yet.**
 
 ### 📥 Ingestion
 
@@ -427,7 +427,7 @@ Every capability the project intends to ship — this doubles as the roadmap.
 
 - [x] Chapter reader — original text beside AI key points
 - [x] Per-chapter concept graph
-- [ ] In-chapter Q&A grounded in your own text `P1`
+- [x] In-chapter Q&A grounded in your own text — every citation jumps back to the source passage
 - [ ] Highlights and notes `P1`
 - [ ] Feynman restatement with AI gap feedback `P1`
 - [ ] Flashcards generated from key points `P1`
