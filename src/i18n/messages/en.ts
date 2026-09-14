@@ -827,6 +827,28 @@ export const en: Messages = {
         openFull: "Open reader →",
         previewEmpty: "No text snapshot for this chapter.",
       },
+      /** Manual chapter editing (rename / merge / drag reorder). */
+      chaptersEdit: {
+        editChapters: "Edit chapters",
+        doneEditing: "Done",
+        dragHandle: "Drag to reorder",
+        select: "Select chapter",
+        rename: "Rename",
+        mergeSelected: (n: number) => `Merge ${n} selected`,
+        mergeHint: "Select at least two chapters",
+        mergeConfirmTitle: "Merge chapters?",
+        mergeConfirmRange: (from: number, to: number, n: number) =>
+          `Chapters ${from}–${to} will merge into one (${n} chapters):`,
+        mergeConfirmMore: (n: number) => `and ${n} more`,
+        mergeConfirmNote:
+          "Key points are merged and de-duplicated; mastery keeps the strongest evidence.",
+        mergeConfirmWarn: "Unchecked chapters inside the range are merged too.",
+        mergeOk: "Merge",
+        mergedNotice: (n: number) => `Merged ${n} chapter(s) · mastery carried over`,
+        renamedNotice: "Title updated",
+        reorderedNotice: "Order updated",
+        stale: "Chapters changed — refresh and retry",
+      },
       metaLine: (source: string, imported: string, chars: number) =>
         `${source} · imported ${imported} · ${chars} chars`,
       content: {

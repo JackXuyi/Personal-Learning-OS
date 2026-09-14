@@ -805,6 +805,27 @@ export const zh = {
         openFull: "去阅读页 →",
         previewEmpty: "这一章没有正文快照。",
       },
+      /** 章节人工编辑（重命名 / 合并 / 拖拽排序）。 */
+      chaptersEdit: {
+        editChapters: "编辑章节",
+        doneEditing: "完成",
+        dragHandle: "拖拽排序",
+        select: "选择章节",
+        rename: "重命名",
+        mergeSelected: (n: number) => `合并所选（${n}）`,
+        mergeHint: "至少勾选两章",
+        mergeConfirmTitle: "合并章节？",
+        mergeConfirmRange: (from: number, to: number, n: number) =>
+          `将合并第 ${from}–${to} 章，共 ${n} 章：`,
+        mergeConfirmMore: (n: number) => `等 ${n} 章`,
+        mergeConfirmNote: "要点会合并去重，掌握度按最强证据保留。",
+        mergeConfirmWarn: "区间内未勾选的章节也会一并合并。",
+        mergeOk: "合并",
+        mergedNotice: (n: number) => `已合并 ${n} 章 · 掌握度已并入保留章`,
+        renamedNotice: "标题已更新",
+        reorderedNotice: "顺序已更新",
+        stale: "章节已变化，请刷新后重试",
+      },
       metaLine: (source: string, imported: string, chars: number) =>
         `${source} · 导入于 ${imported} · ${chars} 字`,
       content: {
