@@ -403,7 +403,7 @@ never depend on a network call.
 Every capability the project intends to ship — this doubles as the roadmap.
 `[x]` = shipped · `[ ]` = not yet · `P0` / `P1` / `P2` = priority of the unshipped items.
 
-**24 shipped · 19 not yet.**
+**26 shipped · 18 not yet.**
 
 ### 📥 Ingestion
 
@@ -450,7 +450,8 @@ Every capability the project intends to ship — this doubles as the roadmap.
 - [x] Six goal types with chapter scoping (`requiredChapterIds`)
 - [x] Six-class priority planner; every action carries its reason
 - [x] Readiness = share of in-scope chapters at or above 80% mastery
-- [ ] Learner profile — self-reported level, weekly time budget, preferences `P0`
+- [x] Learner profile — self-reported level, weekly time budget, preferences; drives paper difficulty, the finish-date estimate, and the AI prompt context
+- [x] Résumé import — parse a PDF or pasted résumé into a background summary + a level suggestion (PII is masked on-device before sending; the raw text is never stored)
 - [ ] Time-aware planning — daily quota, behind/ahead warning `P1`
 - [ ] Progress analytics — activity heatmap, mastery trend, weak-point ranking `P1`
 
