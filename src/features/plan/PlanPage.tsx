@@ -34,14 +34,16 @@ import {
   chapterActionMeta,
   chapterDisplayTitle,
   estimateEtaMin,
+  estimatePlanEta,
 } from "./chapter-action";
 import { useChapterIndex, useRunChapterAction } from "./run-action";
+import { fmtDate } from "../goals/GoalsPage";
 
 /** NEXT 高优段条数（其余进 UP NEXT）。 */
 const NEXT_LIMIT = 3;
 
 export default function PlanPage() {
-  const { m } = useI18n();
+  const { m, lang } = useI18n();
   const plan = useLoopStore((s) => s.chapterPlan);
   const loading = useLoopStore((s) => s.loading);
   const refresh = useLoopStore((s) => s.refresh);
@@ -53,6 +55,16 @@ export default function PlanPage() {
   }, [refresh]);
 
   const readyRatio = plan && plan.total > 0 ? plan.mastered / plan.total : 0;
+
+  // F1：完成日期估算（条件句）。未声明每周预算 → finishAt 为 undefined → 整行不渲染。
+  const eta = plan
+    ? estimatePlanEta({
+        actions: plan.actions,
+        chapterOf: (id) => chapterById.get(id),
+        ...(plan.profile ? { profile: plan.profile } : {}),
+        ...(plan.goal?.deadlineAt !== undefined ? { deadlineAt: plan.goal.deadlineAt } : {}),
+      })
+    : undefined;
 
   /** 行首语义点：补考必弱；未达标标 weak；达标 mastered；0 掌握 idle。 */
   const toneOf = (action: NextAction, mastery: number): StatusTone => {
@@ -133,6 +145,18 @@ export default function PlanPage() {
                     ? m.plan.remaining(actions.length)
                     : m.plan.allReadyDesc}
                 </p>
+                {eta?.finishAt !== undefined ? (
+                  <p className="mt-0.5 text-sm text-ink-2" data-testid="plan-eta-finish">
+                    {m.plan.etaFinish(fmtDate(eta.finishAt, lang))}
+                    {eta.deadline
+                      ? ` · ${
+                          eta.deadline.behind
+                            ? m.plan.etaBehind(eta.deadline.days)
+                            : m.plan.etaAhead(eta.deadline.days)
+                        }`
+                      : ""}
+                  </p>
+                ) : null}
               </div>
               <div className="w-44 shrink-0">
                 <Bar value={readyRatio} target={MASTERY_THRESHOLD} />

@@ -1,5 +1,6 @@
 /**
- * My Learner（/learner）—— 系统如何理解我（UI Workbench U6 §23，纯视图）。
+ * My Learner（/learner）—— 两段式：**我声明的**（F1 画像，可编辑）+
+ * **系统观测的**（由学习记录推导，纯只读）。
  *
  * 全部数字来自 domain 字段（U6 验收抽查）：
  * - KNOWLEDGE 计数 / 平均掌握度  ← aggregateLearner(learner.byUnit)；
@@ -15,11 +16,14 @@ import { Card, Section, Stat } from "../../components/primitives";
 import { buttonVariants } from "../../components/ui/button";
 import { PageContainer } from "../../components/layout/AppShell";
 import { cn } from "../../lib/utils";
-import type { LearnerState } from "../../domain";
+import type { LearnerLevel, LearnerState } from "../../domain";
+import { MASTERY_FLOOR } from "../../domain";
 import { applyForgetting } from "../../engine";
-import { storage } from "../../stores/useLoopStore";
+import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { useI18n } from "../../i18n";
+import LearnerProfileCard from "../profile/LearnerProfileCard";
+import ResumeImportDialog from "../profile/ResumeImportDialog";
 import {
   aggregateLearner,
   gapsOf,
@@ -29,14 +33,31 @@ import {
 import type { ChapterRow } from "../goals/goal-util";
 import { loadChapterRows } from "../goals/goal-util";
 
+/** 档位序（自评 vs 实测冲突提示用；越戒越好只有 4 档，硬编码秩即可）。 */
+const LEVEL_RANK: Record<LearnerLevel, number> = {
+  beginner: 0,
+  basic: 1,
+  intermediate: 2,
+  advanced: 3,
+};
+
 export default function LearnerPage() {
   const { m } = useI18n();
   const lr = m.learner;
   const records = useSessionStore((s) => s.records);
+  const profile = useLoopStore((s) => s.profile);
+  const refresh = useLoopStore((s) => s.refresh);
   const [rows, setRows] = useState<ChapterRow[] | undefined>();
   const [learner, setLearner] = useState<LearnerState | undefined>();
   /** 概念标题索引（graph.units；供 byUnit 中概念主体解析）。 */
   const [conceptTitles, setConceptTitles] = useState<Map<string, string>>(new Map());
+  const [resumeOpen, setResumeOpen] = useState(false);
+
+  // 画像随 store 快照（runChapterLoop 读 storage.getProfile()）——/learner 可能是
+  // 冷启动首个页面，故这里主动 refresh 一次，保证声明区拿到真实画像。
+  useEffect(() => {
+    void refresh(m);
+  }, [refresh]);
 
   useEffect(() => {
     void (async () => {
@@ -76,6 +97,12 @@ export default function LearnerPage() {
 
   const strengths = strengthsOf(aggregate, 6);
   const gaps = gapsOf(aggregate, 6);
+  // 自评高于实测：仅在**有实测样本**时提示，避免新用户被误告警。
+  const mismatch =
+    profile !== undefined &&
+    aggregate.counts.total > 0 &&
+    LEVEL_RANK[profile.level] >= LEVEL_RANK.intermediate &&
+    aggregate.avgMastery < MASTERY_FLOOR;
 
   return (
     <PageContainer>
@@ -83,6 +110,16 @@ export default function LearnerPage() {
         <h1 className="text-xl font-semibold text-ink-1">{lr.title}</h1>
         <p className="mt-0.5 text-sm text-ink-2">{lr.subtitle}</p>
       </header>
+
+      {/* 我声明的（F1） */}
+      <LearnerProfileCard profile={profile} onOpenResume={() => setResumeOpen(true)} />
+
+      <Section title={lr.observedSection} className="mt-8" />
+      {mismatch && profile ? (
+        <p className="mt-2 rounded-md border border-line bg-subtle p-2 text-xs leading-relaxed text-ink-2">
+          ⓘ {lr.profile.mismatch(lr.profile.level[profile.level], Math.round(aggregate.avgMastery * 100))}
+        </p>
+      ) : null}
 
       {aggregate.counts.total === 0 ? (
         <Card className="mt-6 border-dashed">
@@ -211,6 +248,13 @@ export default function LearnerPage() {
           </div>
         </div>
       )}
+
+      {/* 导入简历（D6-A：页内弹窗，不新增路由） */}
+      <ResumeImportDialog
+        open={resumeOpen}
+        onClose={() => setResumeOpen(false)}
+        profile={profile}
+      />
     </PageContainer>
   );
 }

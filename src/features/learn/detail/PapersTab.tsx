@@ -24,6 +24,7 @@ import { createPaperAndSave, PaperFlowError } from '../../quiz/paper-flow';
 import { recommendDocPaper, recommendPaper } from '../paper-advice';
 import type {
   Chapter,
+  LearnerProfile,
   LearnerState,
   Paper,
   PaperMode,
@@ -46,6 +47,8 @@ export default function PapersTab({ doc, chapters, learner }: PapersTabProps) {
 
   const [papers, setPapers] = useState<Paper[]>([]);
   const [results, setResults] = useState<PaperResult[]>([]);
+  /** F1 画像（难度先验）：与出卷引擎同源读取，保证「推荐带 = 实出带」。 */
+  const [profile, setProfile] = useState<LearnerProfile | undefined>();
   // 出卷 busy 全局化：paper:{docId}（与 NewQuizPage/AssessmentPage 共享互斥语义）。
   const task = useAiTask(`paper:${doc.id}`);
   /** 本轮点击的按钮键（loading 展示在哪个按钮上；纯 UI 指示）。 */
@@ -57,13 +60,15 @@ export default function PapersTab({ doc, chapters, learner }: PapersTabProps) {
     let alive = true;
     void (async () => {
       try {
-        const [ps, rs] = await Promise.all([
+        const [ps, rs, pf] = await Promise.all([
           storage.listPapers(),
           storage.listPaperResults(),
+          storage.getProfile(),
         ]);
         if (!alive) return;
         setPapers(ps);
         setResults(rs);
+        setProfile(pf);
       } catch (e) {
         console.error('[PapersTab] 加载试卷失败：', e);
       }
@@ -102,8 +107,8 @@ export default function PapersTab({ doc, chapters, learner }: PapersTabProps) {
   }, [papers, chapters]);
 
   const docAdvice = useMemo(
-    () => recommendDocPaper({ chapters, learner }),
-    [chapters, learner],
+    () => recommendDocPaper({ chapters, learner, profile }),
+    [chapters, learner, profile],
   );
 
   /**
@@ -242,7 +247,7 @@ export default function PapersTab({ doc, chapters, learner }: PapersTabProps) {
       {/* 每章一行 */}
       {chapters.map((ch, idx) => {
         const list = byChapter.get(ch.id) ?? [];
-        const advice = recommendPaper({ chapter: ch, learner });
+        const advice = recommendPaper({ chapter: ch, learner, profile });
         return (
           <div key={ch.id} className="rounded-lg border border-line bg-surface p-4">
             <div className="flex items-center gap-2">

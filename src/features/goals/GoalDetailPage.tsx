@@ -18,7 +18,7 @@ import type { Chapter, EvidenceEntry, LearningGoal, SourceDocument } from "../..
 import { runChapterLoop, type ChapterLoopSnapshot } from "../../engine";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { useI18n, type Messages } from "../../i18n";
-import { chapterDisplayTitle } from "../plan/chapter-action";
+import { chapterDisplayTitle, estimatePlanEta } from "../plan/chapter-action";
 import { fmtDate } from "./GoalsPage";
 
 interface Loaded {
@@ -153,6 +153,13 @@ export default function GoalDetailPage() {
   const notStartedList = scopeChapters.filter(
     (c) => (plan.learner.byUnit[c.id]?.mastery ?? 0) < MASTERY_FLOOR,
   );
+  // F1：按画像的每周预算推算完成日（未声明 → 整行不渲染）。
+  const eta = estimatePlanEta({
+    actions: plan.actions,
+    chapterOf: (id) => scopeChapters.find((c) => c.id === id),
+    ...(plan.profile ? { profile: plan.profile } : {}),
+    ...(goal.deadlineAt !== undefined ? { deadlineAt: goal.deadlineAt } : {}),
+  });
 
   return (
     <PageContainer>
@@ -264,6 +271,18 @@ export default function GoalDetailPage() {
         ) : (
           <p className="mt-2 text-xs text-ink-3">{g.scopeEmptyHint}</p>
         )}
+        {eta.finishAt !== undefined ? (
+          <p className="mt-2 text-xs text-ink-2" data-testid="goal-eta-finish">
+            {m.plan.etaFinish(fmtDate(eta.finishAt, lang))}
+            {eta.deadline
+              ? ` · ${
+                  eta.deadline.behind
+                    ? m.plan.etaBehind(eta.deadline.days)
+                    : m.plan.etaAhead(eta.deadline.days)
+                }`
+              : ""}
+          </p>
+        ) : null}
       </div>
 
       {/* 关联资料：SourceDocument.goalIds 反查（目标页反哺，评审 M1-2） */}
