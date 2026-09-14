@@ -35,6 +35,11 @@ export const OVERVIEW_LIMITS = {
   /** 归并阶段喂给 AI 的中部摘要总量上限（超出按顺序截断并标注）。 */
   reduceChars: 16_000,
   gistChars: 60,
+  /**
+   * AI 建议的资料标题上限（附加产物）。与 gistChars 同量级，但**独立于概览**：
+   * 它不进 `AiOverviewDraft`，故不参与 parseOverviewDraft 的硬拒绝（见 parseOverviewTitle）。
+   */
+  titleChars: 60,
   sectionMax: 6,
   sectionHeadingChars: 20,
   sectionDetailChars: 80,
@@ -131,7 +136,8 @@ const CHUNK_DIGEST_SYSTEM =
 /** 单次成稿的 system prompt（正文 ≤ chunkChars 时用它，一次读全文）。 */
 const OVERVIEW_SYSTEM =
   "你是严谨的学习资料导读编辑。用户会给出**一整份**学习资料正文，请为它写一份导读概览。\n" +
-  "输出四项：\n" +
+  "输出五项：\n" +
+  "- title：资料标题（≤60 字）——一句话概括整份资料的主题；不要书名号、不要「本文」等空话；\n" +
   "- gist：一句话定位（≤60 字）——这份资料在讲什么、给谁看；\n" +
   "- sections：主干脉络 1–6 段，**按资料原有顺序**，每段 " +
   '{"heading":"主题（≤20 字）","detail":"这一段讲了什么（≤80 字）"}；\n' +
@@ -140,7 +146,7 @@ const OVERVIEW_SYSTEM =
   "要求：只依据正文，绝不编造；sections 必须覆盖**全文**主干（含靠后的章节），不要只总结开头；\n" +
   "不要写「本文介绍了…」这类空话，直接给出内容本身。\n" +
   "只输出一个 JSON 对象（不要 markdown 围栏与多余文字），格式：" +
-  '{"gist":"…","sections":[{"heading":"…","detail":"…"}],"prerequisites":["…"],"keywords":["…"]}。';
+  '{"title":"…","gist":"…","sections":[{"heading":"…","detail":"…"}],"prerequisites":["…"],"keywords":["…"]}。';
 
 /**
  * 归并成稿（reduce）的 system prompt。
@@ -150,7 +156,8 @@ const OVERVIEW_SYSTEM =
 const OVERVIEW_MERGE_SYSTEM =
   "你是严谨的学习资料导读编辑。用户会给出**同一份长资料**各分段的归纳摘要（按原文顺序）。\n" +
   "请把它们**归并成一份整篇导读**，而不是逐段罗列。\n" +
-  "输出四项：\n" +
+  "输出五项：\n" +
+  "- title：资料标题（≤60 字）——一句话概括整份资料的主题；不要书名号、不要「本文」等空话；\n" +
   "- gist：一句话定位（≤60 字）——整份资料在讲什么；\n" +
   "- sections：主干脉络 1–6 段（**合并重复主题**、按资料原顺序），每段 " +
   '{"heading":"≤20 字","detail":"≤80 字"}；\n' +
@@ -159,7 +166,7 @@ const OVERVIEW_MERGE_SYSTEM =
   "铁律：只依据给出的摘要，不引入摘要里没有的内容；sections 的条数必须**明显少于**\n" +
   "给出的摘要条数（要做合并归纳，不是逐条搬运）。\n" +
   "只输出一个 JSON 对象（不要 markdown 围栏与多余文字），格式：" +
-  '{"gist":"…","sections":[{"heading":"…","detail":"…"}],"prerequisites":["…"],"keywords":["…"]}。';
+  '{"title":"…","gist":"…","sections":[{"heading":"…","detail":"…"}],"prerequisites":["…"],"keywords":["…"]}。';
 
 /** 纯函数：构建分块归纳提示词（map 阶段，单块）。 */
 export function buildChunkDigestMessages(input: {
@@ -326,6 +333,28 @@ export function parseOverviewDraft(raw: unknown): AiOverviewDraft {
   };
 }
 
+/** 标题首尾包裹符号（书名号 / 各类引号 / 尖括号）剥壳用。 */
+const TITLE_WRAP = /^[《【<「『"'‘“]+|[》】>」』"'’”]+$/g;
+
+/**
+ * 纯函数：从成稿响应里取「AI 建议的资料标题」。
+ *
+ * 与 `parseOverviewDraft` 的关键差异：**该函数从不抛错**。
+ * 概览的硬拒绝（空 gist / 空 sections）成立是因为「空概览没价值，宁要求重试」；
+ * 而标题是**附加产物**——模型偶尔漏一个字段不该让整份概览白跑。
+ * 因此任何不合规输入（非对象 / 缺 title / 非字符串 / 空白 / 剥壳后为空）
+ * 一律返回 `undefined`，由调用方决定「保留原标题」。
+ *
+ * 剥壳：`《Agent 架构入门》` / `"RAG 检索"` → `Agent 架构入门` / `RAG 检索`。
+ */
+export function parseOverviewTitle(raw: unknown): string | undefined {
+  if (!isRecord(raw)) return undefined;
+  const s = str(raw.title)?.trim();
+  if (!s) return undefined;
+  const stripped = s.replace(TITLE_WRAP, "").trim();
+  return stripped ? stripped.slice(0, OVERVIEW_LIMITS.titleChars) : undefined;
+}
+
 /* ------------------------------------------------------------------ */
 /* 4) 执行器（单次成稿 / 分层归纳）                                    */
 /* ------------------------------------------------------------------ */
@@ -354,6 +383,9 @@ export type OverviewProgress = (
  * - 单块归纳失败 → **跳过并计数**，继续后续块（长资料不该因一块坏掉全废）；
  * - 全部块失败 → 抛错；
  * - 归并输出不合规 → 抛错（由调用方保证不写库）。
+ *
+ * 返回值中的 `title` 是**附加产物**：模型未返回 / 空白时为 `undefined`，
+ * 既不参与上述抛错路径，也不进 `draft`（避免污染 `DocumentOverview`，见 §4.3.3）。
  */
 export async function summarizeDocumentWithAi(
   provider: AIProvider,
@@ -365,6 +397,8 @@ export async function summarizeDocumentWithAi(
   },
 ): Promise<{
   draft: AiOverviewDraft;
+  /** AI 建议的资料标题；模型未返回 / 空白时为 undefined。独立于 draft。 */
+  title?: string;
   mode: OverviewMode;
   chunks: number;
   /** map 阶段失败并跳过的块数（single 时为 0）。 */
@@ -391,7 +425,13 @@ export async function summarizeDocumentWithAi(
       buildOverviewMessages({ title: input.title, text }),
       OVERVIEW_TEMPERATURE,
     );
-    return { draft: parseOverviewDraft(raw), mode: "single", chunks: 1, skipped: 0 };
+    return {
+      draft: parseOverviewDraft(raw),
+      title: parseOverviewTitle(raw),
+      mode: "single",
+      chunks: 1,
+      skipped: 0,
+    };
   }
 
   // map：串行逐块。单块失败跳过并计数，不阻断后续块。
@@ -433,6 +473,7 @@ export async function summarizeDocumentWithAi(
   );
   return {
     draft: parseOverviewDraft(raw),
+    title: parseOverviewTitle(raw),
     mode: "map-reduce",
     chunks: blocks.length,
     skipped,
