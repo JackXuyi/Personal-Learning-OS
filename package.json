@@ -21,6 +21,7 @@
     "test:keypoint": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/library-keypoint.test.ts",
     "test:preview": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/library-chapter-preview.test.ts",
     "test:splitter": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/library-splitter.test.ts",
+    "test:chapters": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/chapter-edit.test.ts",
     "test:overview": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/library-overview.test.ts",
     "test:card": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/library-card-status.test.ts",
     "test:aimap": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/ai-map-reduce.test.ts",
