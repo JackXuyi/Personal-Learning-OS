@@ -398,42 +398,75 @@ never depend on a network call.
 
 ---
 
-## 🗺️ Roadmap
+## 🗺️ Feature checklist
 
-### Done
+Every capability the project intends to ship — this doubles as the roadmap.
+`[x]` = shipped · `[ ]` = not yet · `P0` / `P1` / `P2` = priority of the unshipped items.
 
-- [x] Local-first desktop foundation — Tauri 2, React 19, SQLite
-- [x] Multi-source import — PDF / Markdown / TXT / paste / GitHub
-- [x] Deterministic chapter splitting + optional AI refinement
-- [x] Chapter reader with AI key points and concept graph
-- [x] Quiz engine — 4 paper modes, adaptive difficulty
-- [x] Grading — local objective + AI subjective with feedback
-- [x] Report page with per-chapter mastery deltas
-- [x] Mastery model with smoothing and forgetting curve
-- [x] Spaced repetition scheduling (`nextReviewAt` → review queue)
-- [x] Goal scoping, learning planner with 6 priority classes, readiness
-- [x] Hybrid retrieval — FTS5 + vector, fused with RRF
-- [x] Bundled local model with offline inference
+**21 shipped · 21 not yet.**
 
-### In progress
+### 📥 Ingestion
 
-- [ ] **Learner profile input** — self-reported level, weekly time budget, learning
-      preferences (currently the learner page is read-only; the profile does not yet
-      influence plans or question difficulty)
-- [ ] **AI assessment contract** — `generateAssessment` / `evaluateAnswer` are still
-      stubs; goal-level capability evaluation is not wired
-- [ ] Manual chapter editing — rename / merge / reorder (engine primitives exist,
-      UI is not connected yet)
-- [ ] Deadline-aware planning (currently ETA ignores `deadlineAt`)
-- [ ] OCR fallback for scanned PDFs (pdfjs returns 0 characters on image-only PDFs)
+- [x] PDF / Markdown / TXT / pasted notes / GitHub-repository import
+- [x] Encoding sniffing (BOM / UTF-8 / GB18030) and duplicate-safe re-import
+- [ ] OCR fallback for scanned PDFs `P2` — pdfjs returns 0 characters on image-only PDFs
+- [ ] DOCX parsing `P2`
+- [ ] EPUB parsing `P2`
+- [ ] Fetch a web page by URL `P2`
 
-### Planned
+### ✂️ Splitting & structure
 
-- [ ] DOCX / EPUB import
-- [ ] Web page fetching by URL
-- [ ] Cross-document concept graph
-- [ ] Community knowledge packs
-- [ ] Encrypted sync *(pro tier)*
+- [x] Deterministic chapter splitting (heading tree / paragraph clustering) with short-chapter merge
+- [x] Optional AI refinement of chapter titles and boundaries
+- [ ] Rename / merge / drag-reorder chapters `P2` — engine primitives exist, no UI yet
+- [ ] Manually split a chapter in two `P2`
+- [ ] Cross-document study unit / learning path `P2`
+- [ ] Manual override of chapter prerequisites `P2`
+
+### 📖 Study
+
+- [x] Chapter reader — original text beside AI key points
+- [x] Per-chapter concept graph
+- [ ] In-chapter Q&A grounded in your own text `P1`
+- [ ] Highlights and notes `P1`
+- [ ] Feynman restatement with AI gap feedback `P1`
+- [ ] Flashcards generated from key points `P1`
+- [ ] Cross-document concept graph `P2`
+
+### 📝 Assessment
+
+- [x] 4 paper modes — unit / stage / final / retake, with adaptive difficulty
+- [x] Local objective grading, instant
+- [x] AI subjective grading with feedback and a source pointer
+- [x] Report — per-chapter mastery deltas, wrong answers, weak points
+- [x] Mastery smoothing: `0.65 × score + 0.35 × previous`
+- [x] Forgetting curve — 30-day half-life
+- [x] Spaced repetition: `nextReviewAt` → review queue
+- [ ] Goal-level capability assessment `P1` — blocked on a product definition
+
+### 🎯 Goals & planning
+
+- [x] Six goal types with chapter scoping (`requiredChapterIds`)
+- [x] Six-class priority planner; every action carries its reason
+- [x] Readiness = share of in-scope chapters at or above 80% mastery
+- [ ] Learner profile — self-reported level, weekly time budget, preferences `P0`
+- [ ] Time-aware planning — daily quota, behind/ahead warning `P1`
+- [ ] Progress analytics — activity heatmap, mastery trend, weak-point ranking `P1`
+
+### 🔍 Retrieval
+
+- [x] Hybrid search — SQLite FTS5 + local vectors, fused with RRF; results anchored back to the exact source passage
+- [x] Silent degradation to full-text when the embedding model is unavailable
+
+### 🔒 Data & portability
+
+- [x] One `StorageAdapter` over SQLite / localStorage / in-memory
+- [x] Bundled local model — fully offline, no account, no telemetry, no mandatory API key
+- [x] Append-only evidence stream (`EvidenceEntry`)
+- [ ] Full export / import / backup `P0` — this README promises "export and walk away", but the storage layer has no export method yet
+- [ ] Markdown export of a single chapter `P0`
+- [ ] Community knowledge packs `P2`
+- [ ] Encrypted sync *(pro tier)* `P2`
 
 ---
 
@@ -444,7 +477,7 @@ to weigh in.
 
 - **Ideas & feedback** — open an issue to discuss the mastery model, quiz design, or roadmap.
 - **Design** — help with concept graph modeling, assessment design, or the learner model.
-- **Code** — pick an item from *In progress* above and open a PR.
+- **Code** — pick any unchecked item from the feature checklist above and open a PR.
 - **Docs** — improve this README or add a design doc under `docs/`.
 
 **Before opening a PR:**
