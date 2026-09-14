@@ -12,13 +12,22 @@
  * - 幂等由写入口负责（如按 sourceId 查重），本类型不承担去重逻辑。
  */
 
-/** 证据动作类型。 */
-export type EvidenceKind = "assessment" | "review";
+/**
+ * 证据动作类型。
+ *
+ * ⚠️ 这是**跨切面**扩展点：新增 kind 时两处消费点必须同步修正（见
+ * features/evidence-label.ts::evidenceActionKey 的说明），否则会被
+ * 静默显示成「复习要点」。
+ */
+export type EvidenceKind = "assessment" | "review" | "restatement";
 
 /**
  * 一次证据行。
  * - assessment：测评判卷完成（delta = 该章掌握度净变化，verdict = pass/fail 达标判定）；
- * - review：复习要点提交（delta = 0，verdict = 自评档 forget/hard/good/easy）。
+ * - review：复习要点提交（delta = 0，verdict = 自评档 forget/hard/good/easy）；
+ * - restatement：费曼式复述的显式「安排复习」（delta = 0，verdict = 覆盖率派生的
+ *   SelfRating 键）。复述**不改掌握度** —— mastery 唯一写方仍是卷面（见
+ *   docs/learn-feynman-restatement-design-2026-09.md §3.4 G1）。
  */
 export interface EvidenceEntry {
   /** 事件发生时间（epoch ms）。 */
@@ -26,11 +35,11 @@ export interface EvidenceEntry {
   kind: EvidenceKind;
   /** 证据主体 —— V2 为章 id。 */
   subjectId: string;
-  /** 判定结果：assessment → "pass"|"fail"；review → SelfRating 键。 */
+  /** 判定结果：assessment → "pass"|"fail"；review / restatement → SelfRating 键。 */
   verdict?: string;
-  /** 掌握度净变化（0..1，可负；review 恒 0）。 */
+  /** 掌握度净变化（0..1，可负；review / restatement 恒 0）。 */
   delta: number;
-  /** 幂等去重来源（assessment = 试卷 id；写入口按此查重）。 */
+  /** 幂等去重来源（assessment = 试卷 id；restatement = 复述记录 id；写入口按此查重）。 */
   sourceId?: string;
 }
 
