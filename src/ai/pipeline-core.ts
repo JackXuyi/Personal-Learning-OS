@@ -63,6 +63,18 @@ export const PIPELINE_LIMITS = {
    * 约束不允许 `ai/` import `features/`，故两侧同值并各自注释来源，避免静默漂移。
    */
   chapterQaQuoteMaxChars: 2_000,
+  /** 复述：covered + missed 合计条数上限（对齐 keyPointMergeMax）。 */
+  restatementMaxPoints: 8,
+  /** 复述：errors 条数上限。 */
+  restatementMaxErrors: 4,
+  /** 复述：单条 point 字符上限（对齐 keyPointMaxChars）。 */
+  restatementPointMaxChars: 60,
+  /** 复述：单条 quote / evidence 字符上限（对齐 keyPointQuoteMaxChars）。 */
+  restatementQuoteMaxChars: 200,
+  /** 复述：advice 字符上限（对齐主观批语口径）。 */
+  restatementAdviceMaxChars: 120,
+  /** 复述：章正文注入上限（对齐 chapterBlockMaxChars）。 */
+  restatementBodyChars: 12_000,
 } as const;
 
 /** 温度：精修/出题偏稳定，批改最低（事实判定）。 */
