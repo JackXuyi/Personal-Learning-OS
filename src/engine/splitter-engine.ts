@@ -9,7 +9,7 @@
  * - 全部为纯函数，不触碰存储 / Provider——调用方（store / UI）负责持久化；
  * - 产出仅含 Chapter 元数据 + contentRef 正文切片引用（不复制原文）；
  * - keyPoints 在无 AI 时用「正文首句摘要」兜底（AI 提炼属 N3/T12 提示词管线）；
- * - 附带人工微调原语（rename / merge / reorder），供 N1 切分预览 UI 使用。
+ * - 人工微调原语（rename / merge / reorder）已迁至 chapter-edit-engine.ts（单一真源）。
  *
  * AI 精修（标题提炼 / 边界修正 / keyPoints 生成）在 N3/T12 作为可选的
  * post-process 接入，本模块签名保持不变（input → SplitResult）。
@@ -17,6 +17,7 @@
 import type { Chapter } from "../domain";
 import { newId } from "../domain";
 import { hasMeaningfulText } from "../lib/text-quality";
+import { mergeChapterRange, renumberChapters } from "./chapter-edit-engine";
 
 export type SplitFormat = "markdown" | "txt" | "auto";
 export type SplitStrategy = "headings" | "paragraphs";
@@ -390,10 +391,15 @@ export interface ChapterRefine {
  * 规则：
  * - 只接受 index 合法且去重的建议（后者覆盖前者）；title/keyPoints 各自
  *   清洗后应用（title 截断至 40 字去换行；keyPoints 每条约 80 字、至多 5 条）；
- * - mergeIntoPrevious：把该章并入其上一章（区间取并集、标题留首章、要点合并
- *   截断至 6 条）；连续的 merge 会自然累积成同一章（第 i 章并入上一章后，
- *   第 i+1 章再并入「上一章」即并入累积后的章）；
+ * - mergeIntoPrevious：把该章并入其上一章 —— **合并语义统一走
+ *   chapter-edit-engine.mergeChapterRange**（与人工合并同一份核心）：区间取并集、
+ *   标题留首章、keyPoints 全区间并集去重截断至 6 条、unitIds 并集、
+ *   keyPointRefs 与 keyPoints 对齐；连续的 merge 会累积成同一章；
  * - 返回数组保持输入顺序并重写 order（order 不变量不被破坏）。
+ *
+ * 实现分两趟（T8，2026-09-14）：第一趟应用 title/keyPoints 精修并标记哪些章要
+ * 并入上一章，第二趟把每个「连续并入段」连同其锚点章一次性交给 mergeChapterRange。
+ * 这样 AI 精修与人工合并产出**完全一致**的结果，不再有两套合并口径。
  */
 export function applyChapterRefine(
   chapters: Chapter[],
@@ -409,34 +415,41 @@ export function applyChapterRefine(
   }
   if (byIndex.size === 0) return chapters;
 
-  const out: Chapter[] = [];
-  for (let i = 0; i < chapters.length; i++) {
-    let cur = chapters[i];
+  // 第一趟：应用 title / keyPoints 精修，并标记「并入上一章」。
+  const refined: Chapter[] = chapters.map((cur, i) => {
     const refine = byIndex.get(i);
-    if (refine) {
-      const title = cleanRefinedTitle(refine.title);
-      const keyPoints = cleanRefinedKeyPoints(refine.keyPoints);
-      cur = {
-        ...cur,
-        title: title ?? cur.title,
-        keyPoints: keyPoints ?? cur.keyPoints,
-      };
-      if (refine.mergeIntoPrevious && out.length > 0) {
-        const prev = out[out.length - 1];
-        out[out.length - 1] = {
-          ...prev,
-          contentRef: { start: prev.contentRef.start, end: cur.contentRef.end },
-          keyPoints: [...prev.keyPoints, ...cur.keyPoints]
-            .filter(hasMeaningfulText)
-            .slice(0, 6),
-        };
-        continue;
-      }
-    }
-    out.push(cur);
-  }
+    if (!refine) return cur;
+    const title = cleanRefinedTitle(refine.title);
+    const keyPoints = cleanRefinedKeyPoints(refine.keyPoints);
+    return { ...cur, title: title ?? cur.title, keyPoints: keyPoints ?? cur.keyPoints };
+  });
+  const mergeIntoPrev = refined.map((_, i) => i > 0 && Boolean(byIndex.get(i)?.mergeIntoPrevious));
 
-  return out.map((c, i) => ({ ...c, order: i + 1 }));
+  // 第二趟：划分「连续并入段」[anchorIdx, endIdx] —— endIdx 及其向前连续的 true 都归 anchorIdx。
+  const segments: [number, number][] = [];
+  let i = 1;
+  while (i < refined.length) {
+    if (!mergeIntoPrev[i]) {
+      i += 1;
+      continue;
+    }
+    let end = i;
+    while (end + 1 < refined.length && mergeIntoPrev[end + 1]) end += 1;
+    let start = i;
+    while (start - 1 >= 1 && mergeIntoPrev[start - 1]) start -= 1;
+    segments.push([start - 1, end]);
+    i = end + 1;
+  }
+  if (segments.length === 0) return renumberChapters(refined);
+
+  // 从后往前合并：用章 id 定位（靠后的段不会影响靠前段各章 id 的存在性）。
+  let out = refined;
+  for (let s = segments.length - 1; s >= 0; s--) {
+    const [anchorIdx, endIdx] = segments[s];
+    const r = mergeChapterRange(out, refined[anchorIdx].id, refined[endIdx].id);
+    if (r.absorbedIds.length > 0) out = r.chapters;
+  }
+  return renumberChapters(out);
 }
 
 /** 清洗 AI 标题：去空白换行、截断至 40 字；空串返回 undefined（保持原样）。 */
@@ -456,56 +469,8 @@ function cleanRefinedKeyPoints(keyPoints: string[] | undefined): string[] | unde
   return cleaned.length === 0 ? undefined : cleaned.slice(0, 5);
 }
 
-// ------------------------------------------------- 人工微调原语（N1 切分预览 UI 使用）
+// ------------------------------------------------- 人工微调原语
 
-/** 重命名章节（返回新数组；不改 order / 区间）。 */
-export function renameChapter(chapters: Chapter[], chapterId: string, title: string): Chapter[] {
-  return chapters.map((c) => (c.id === chapterId ? { ...c, title: title.trim() || c.title } : c));
-}
-
-/**
- * 合并同一文档中连续的一段章节（含 fromId..toId，均需存在且相邻；入参按 order 升序）。
- * 区间取合并段的并集，标题保留首章，keyPoints 合并截断；合并章落在被合并段原位。
- */
-export function mergeChapters(
-  chapters: Chapter[],
-  fromId: string,
-  toId: string,
-): { chapters: Chapter[]; merged: Chapter | undefined } {
-  const ids = chapters.map((c) => c.id);
-  const from = ids.indexOf(fromId);
-  const to = ids.indexOf(toId);
-  if (from === -1 || to === -1 || from > to) return { chapters, merged: undefined };
-
-  const merged: Chapter = {
-    ...chapters[from],
-    contentRef: { start: chapters[from].contentRef.start, end: chapters[to].contentRef.end },
-    title: chapters[from].title,
-    keyPoints: [...chapters[from].keyPoints, ...chapters[to].keyPoints].slice(0, 5),
-  };
-  const next = [...chapters.slice(0, from), merged, ...chapters.slice(to + 1)];
-  return { chapters: renumber(next), merged };
-}
-
-/** 按指定 id 顺序重排章节并重写 order；未列出的保持原相对顺序附后。 */
-export function reorderChapters(chapters: Chapter[], orderedIds: string[]): Chapter[] {
-  const byId = new Map(chapters.map((c) => [c.id, c]));
-  const next: Chapter[] = [];
-  for (const id of orderedIds) {
-    const c = byId.get(id);
-    if (c) {
-      next.push(c);
-      byId.delete(id);
-    }
-  }
-  for (const c of byId.values()) next.push(c); // 未列出的保持在后
-  return renumber(next);
-}
-
-/**
- * 重写 order 为连续 1..n（merge/reorder 后保持不变量）。
- * 注意：保持传入数组顺序，不做排序——调用方负责传入有序列表。
- */
-function renumber(chapters: Chapter[]): Chapter[] {
-  return chapters.map((c, i) => ({ ...c, order: i + 1 }));
-}
+// renameChapter / mergeChapterRange / reorderChapters 已迁至 chapter-edit-engine.ts
+// （单一真源），由「章节列表」编辑模式（features/learn/chapter-edit-service）调用。
+// 本模块的 applyChapterRefine 在 T8 后复用同一份区间合并语义。

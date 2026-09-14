@@ -102,8 +102,8 @@ export function remapLearnerStateOnResplit(
   return { state: { byUnit }, carried, dropped };
 }
 
-/** 多个旧章掌握度 → 一个新章（max 分数 / sum 计数 / max 时间 / 并集误解）。 */
-function mergeUnits(units: UnitMastery[]): UnitMastery {
+/** 多个旧章掌握度 → 一个新章（max 分数 / sum 计数 / max 时间 / 并集误解）。导出供人工合并复用同一套规则。 */
+export function mergeUnits(units: UnitMastery[]): UnitMastery {
   const first = units[0];
   const maxNum = (pick: (u: UnitMastery) => number) =>
     Math.max(...units.map(pick));
@@ -132,4 +132,34 @@ function mergeUnits(units: UnitMastery[]): UnitMastery {
     applicationAbility: maxNum((u) => u.applicationAbility),
     interviewAbility: maxNum((u) => u.interviewAbility),
   };
+}
+
+/**
+ * 人工编辑（合并）后的掌握度**局部**迁移。
+ *
+ * 与 remapLearnerStateOnResplit 的关键差异：**未涉及的键原样保留**。
+ * 后者返回全新的 `byUnit`，未匹配的旧键会被丢弃 —— 那是重切分场景的语义
+ * （所有章都换了 id）。而人工合并只动 1–2 章，直接复用会清空该用户其他
+ * 所有章的掌握度，故必须有本函数（见 TC-UC05-01 的「其他键完全不变」断言）。
+ *
+ * - `keepId` 的掌握度 = 旧值（若有）与被吞章按 mergeUnits 规则合并；
+ * - `absorbedIds` 的键迁移后删除；无记录的 id 静默跳过（不计入 dropped）；
+ * - 无 absorbedIds 或全部无记录 → 原样返回（零写盘）。
+ */
+export function remapMasteryOnChapterEdit(
+  state: LearnerState,
+  merge?: { keepId: string; absorbedIds: string[] },
+): { state: LearnerState; carried: number; dropped: number } {
+  if (!merge || merge.absorbedIds.length === 0) return { state, carried: 0, dropped: 0 };
+
+  const byUnit = { ...state.byUnit };
+  const keep = byUnit[merge.keepId];
+  const absorbed = merge.absorbedIds
+    .map((id) => byUnit[id])
+    .filter((u): u is UnitMastery => Boolean(u));
+  if (absorbed.length === 0) return { state, carried: 0, dropped: 0 };
+
+  byUnit[merge.keepId] = keep ? mergeUnits([keep, ...absorbed]) : mergeUnits(absorbed);
+  for (const id of merge.absorbedIds) delete byUnit[id];
+  return { state: { byUnit }, carried: 1, dropped: absorbed.length };
 }
