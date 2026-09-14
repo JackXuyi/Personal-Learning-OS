@@ -13,6 +13,7 @@ import type {
   KnowledgeGraph,
   KnowledgeRelation,
   KnowledgeUnit,
+  LearnerProfile,
   LearnerState,
   LearningGoal,
   Paper,
@@ -37,6 +38,8 @@ const KEY_PAPER_DRAFTS = "plos.paper-drafts";
 const KEY_PAPER_RESULTS = "plos.paper-results";
 const KEY_GRAPH = "plos.graph";
 const KEY_LEARNER = "plos.learner";
+/** 学习者画像（F1）：与 LearnerState / Goal 同层，TauriStorage 自动继承。 */
+const KEY_PROFILE = "plos.learner-profile";
 const KEY_GOALS = "plos.goals";
 const KEY_ACTIVE_GOAL = "plos.active-goal";
 const KEY_EVIDENCE = "plos.evidence";
@@ -84,6 +87,7 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     );
     this.graph = load<KnowledgeGraph>(KEY_GRAPH, { units: [], relations: [] });
     this.learnerState = load<LearnerState>(KEY_LEARNER, { byUnit: {} });
+    this.profile = load<LearnerProfile | undefined>(KEY_PROFILE, undefined);
     this.goals = new Map(load<LearningGoal[]>(KEY_GOALS, []).map((g) => [g.id, g]));
     this.activeGoalId = load<string | undefined>(KEY_ACTIVE_GOAL, undefined);
     this.evidenceLog = load<EvidenceEntry[]>(KEY_EVIDENCE, []);
@@ -130,6 +134,10 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     );
     localStorage.setItem(KEY_GRAPH, JSON.stringify(this.graph));
     localStorage.setItem(KEY_LEARNER, JSON.stringify(this.learnerState));
+    // 未填写 = 移除 key（而非写入字符串 "undefined"）：load 的 `raw ? … : fallback`
+    // 会回落 undefined，与「未填写」语义一致。
+    if (this.profile === undefined) localStorage.removeItem(KEY_PROFILE);
+    else localStorage.setItem(KEY_PROFILE, JSON.stringify(this.profile));
     localStorage.setItem(KEY_GOALS, JSON.stringify([...this.goals.values()]));
     localStorage.setItem(KEY_EVIDENCE, JSON.stringify(this.evidenceLog));
   }
@@ -246,6 +254,10 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
   }
   override async saveLearnerState(state: LearnerState): Promise<void> {
     await super.saveLearnerState(state);
+    this.persist();
+  }
+  override async saveProfile(profile: LearnerProfile | undefined): Promise<void> {
+    await super.saveProfile(profile);
     this.persist();
   }
   override async saveGoal(goal: LearningGoal): Promise<void> {

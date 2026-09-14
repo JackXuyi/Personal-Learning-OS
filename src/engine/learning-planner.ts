@@ -16,6 +16,7 @@ import type {
   LearnerState,
   LearningGoal,
   NextAction,
+  StudyDepth,
   UnitMastery,
 } from "../domain";
 import { MASTERY_FLOOR, MASTERY_THRESHOLD, newId } from "../domain";
@@ -147,6 +148,12 @@ export interface ChapterPlanInput {
    * 缺省 = 现状行为（向后兼容：无图/空图与不传等价）。
    */
   graph?: KnowledgeGraph;
+  /**
+   * 可选：学习偏好（F1）。只消费 `depth` —— `style` 不参与排序
+   * （状态机已定死 action kind，硬塞排序会产出「填了没用」的伪效果）。
+   * 缺省 = 现状顺序（零回归）。
+   */
+  prefs?: { depth?: StudyDepth };
   /** 测试注入时间戳。 */
   now?: number;
 }
@@ -167,6 +174,18 @@ type ChapterActionSpec = {
 };
 
 const pct = (v: number): number => Math.round(v * 100);
+
+/**
+ * 队列档位覆盖（F1 学习偏好 · D3）。
+ *
+ * 默认恒等（`depth` 或未填写 → 与改动前逐项相同）。`breadth`（广度优先）把
+ * 「推进未学章」(cls 5) 提到「测已学章」(cls 3) 之前 —— 先把全书铺开再统一测验。
+ * **只在同类档位之间换序**，不跨过重学弱章 / 补考 / 复习要点 / 到期复习。
+ */
+export function clsRankMap(depth?: StudyDepth): Record<number, number> {
+  if (depth === "breadth") return { 0: 0, 1: 1, 2: 2, 3: 5, 4: 4, 5: 3 };
+  return { 0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5 };
+}
 
 /**
  * 单章决策：已掌握 → 若到期复习（nextReviewAt 已过）给低优先级复习动作，
@@ -275,6 +294,8 @@ export function buildChapterPlan(
   m: Messages = zh,
 ): NextAction[] {
   const { learnerState, now = Date.now(), graph } = input;
+  // F1：偏好的档位覆盖（默认恒等 → 零回归）。
+  const rank = clsRankMap(input.prefs?.depth);
   // D2：概念 prerequisite 边 → 章级前置（未传图则为 undefined，全程不参与）。
   const prereqMap = graph ? chapterPrerequisiteIds(graph, input.chapters) : undefined;
   const chapterById = new Map(input.chapters.map((c) => [c.id, c]));
@@ -298,7 +319,7 @@ export function buildChapterPlan(
     .filter((s): s is ChapterActionSpec => s !== undefined)
     .sort(
       (a, b) =>
-        a.cls - b.cls ||
+        rank[a.cls] - rank[b.cls] ||
         // 软排序：同类内前置未掌握者后移（不跨类、不丢弃——用户仍可手动执行）。
         (a.blocked ? 1 : 0) - (b.blocked ? 1 : 0) ||
         (a.dueAt ?? Number.POSITIVE_INFINITY) - (b.dueAt ?? Number.POSITIVE_INFINITY) ||

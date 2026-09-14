@@ -12,7 +12,7 @@
  * （P0-3 不伪造）；gradeAndApply 汇总卷面 → 调 learner-model.applyPaperResult
  * 平滑更新章掌握度（0.65×score + 0.35×prev）并写 nextReviewAt（P0-1）。
  */
-import type { Chapter, LearnerState } from "../domain";
+import type { Chapter, LearnerProfile, LearnerState } from "../domain";
 import type {
   CognitiveLevel,
   Paper,
@@ -25,6 +25,7 @@ import type {
 } from "../domain";
 import { isSubjectiveType, newId, PAPER_MODE_LABEL, sortChaptersByOrder } from "../domain";
 import { applyPaperResult } from "./learner-model";
+import { bandForChapter } from "./profile-band";
 
 /* ------------------------------------------------------------------ */
 /* 难度带（Bloom / 配比的自适应输入）                                  */
@@ -162,6 +163,11 @@ export interface CreatePaperInput {
   allChapters?: Chapter[];
   /** 学习者状态：按 chapterId 取 mastery 做难度自适应。 */
   learnerState?: LearnerState;
+  /**
+   * F1 学习者画像：**仅在章节无掌握度证据时**作难度先验
+   * （`bandForChapter`）。缺省 = 现状（无证据 → band 1）。
+   */
+  profile?: LearnerProfile;
   /** 是否允许主观题（= 是否配置了 AI 判分）；false 时主观题剔除（诚实降级）。 */
   allowSubjective?: boolean;
   /** 测试注入时间戳。 */
@@ -178,6 +184,7 @@ export function createPaper(input: CreatePaperInput): Paper {
     chapters,
     allChapters = chapters,
     learnerState,
+    profile,
     allowSubjective = false,
     now = Date.now(),
   } = input;
@@ -187,19 +194,19 @@ export function createPaper(input: CreatePaperInput): Paper {
   const questionIndex: Record<string, number> = {};
 
   if (scope.mode === "final-test") {
-    buildFinalTest(ordered, allChapters, learnerState, allowSubjective, questions, questionIndex);
+    buildFinalTest(ordered, allChapters, learnerState, allowSubjective, questions, questionIndex, profile);
   } else if (scope.mode === "unit-test") {
     // 单元测语义：只对单章出卷（防御多章误传，取第一章）。
     const chapter = ordered[0];
     if (chapter) {
-      questions.push(...unitQuota(chapter, allChapters, learnerState, allowSubjective, questionIndex));
+      questions.push(...unitQuota(chapter, allChapters, learnerState, allowSubjective, questionIndex, profile));
     }
   } else {
     ordered.forEach((chapter, ci) => {
       questions.push(
         ...(scope.mode === "retake"
-          ? retakeQuota(chapter, allChapters, learnerState, questionIndex)
-          : stageQuota(chapter, allChapters, learnerState, allowSubjective, questionIndex, ci)),
+          ? retakeQuota(chapter, allChapters, learnerState, questionIndex, profile)
+          : stageQuota(chapter, allChapters, learnerState, allowSubjective, questionIndex, ci, profile)),
       );
     });
   }
@@ -221,9 +228,10 @@ function objectiveQuestions(
   count: number,
   questionIndex: Record<string, number>,
   lift = 0,
+  profile?: LearnerProfile,
 ): PaperQuestion[] {
   const out: PaperQuestion[] = [];
-  const band = bandOfMastery(learnerState?.byUnit[chapter.id]?.mastery);
+  const band = bandForChapter(learnerState?.byUnit[chapter.id], profile);
   const kps = chapter.keyPoints.length > 0 ? chapter.keyPoints : [chapter.title];
   for (let i = 0; i < count; i++) {
     const gi = nextIndex(questionIndex);
@@ -245,9 +253,10 @@ function unitQuota(
   learnerState: LearnerState | undefined,
   allowSubjective: boolean,
   questionIndex: Record<string, number>,
+  profile?: LearnerProfile,
 ): PaperQuestion[] {
-  const band = bandOfMastery(learnerState?.byUnit[chapter.id]?.mastery);
-  const out = objectiveQuestions(chapter, allChapters, learnerState, 3, questionIndex);
+  const band = bandForChapter(learnerState?.byUnit[chapter.id], profile);
+  const out = objectiveQuestions(chapter, allChapters, learnerState, 3, questionIndex, 0, profile);
   if (band > 1 && allowSubjective) {
     const kps = chapter.keyPoints.length > 0 ? chapter.keyPoints : undefined;
     out.push(buildSubjective(chapter, kps?.[0], "qa", band));
@@ -264,9 +273,18 @@ function stageQuota(
   allowSubjective: boolean,
   questionIndex: Record<string, number>,
   ci: number,
+  profile?: LearnerProfile,
 ): PaperQuestion[] {
-  const band = bandOfMastery(learnerState?.byUnit[chapter.id]?.mastery);
-  const out = objectiveQuestions(chapter, allChapters, learnerState, band === 1 ? 4 : 3, questionIndex);
+  const band = bandForChapter(learnerState?.byUnit[chapter.id], profile);
+  const out = objectiveQuestions(
+    chapter,
+    allChapters,
+    learnerState,
+    band === 1 ? 4 : 3,
+    questionIndex,
+    0,
+    profile,
+  );
   if (band > 1 && allowSubjective) {
     const kps = chapter.keyPoints.length > 0 ? chapter.keyPoints : undefined;
     const type: "qa" | "application" = ci % 2 === 0 ? "qa" : "application";
@@ -281,8 +299,9 @@ function retakeQuota(
   allChapters: Chapter[],
   learnerState: LearnerState | undefined,
   questionIndex: Record<string, number>,
+  profile?: LearnerProfile,
 ): PaperQuestion[] {
-  return objectiveQuestions(chapter, allChapters, learnerState, 3, questionIndex, -1);
+  return objectiveQuestions(chapter, allChapters, learnerState, 3, questionIndex, -1, profile);
 }
 
 /** 综合测：总题量 clamp(3n, 15, 20)，客观 ~60% / 主观 ~40%（每章主观至多 2）。 */
@@ -293,6 +312,7 @@ function buildFinalTest(
   allowSubjective: boolean,
   questions: PaperQuestion[],
   questionIndex: Record<string, number>,
+  profile?: LearnerProfile,
 ): void {
   const n = Math.max(1, chapters.length);
   const total = Math.min(20, Math.max(15, n * 3));
@@ -305,14 +325,14 @@ function buildFinalTest(
 
   chapters.forEach((chapter, ci) => {
     const add = ci < objRemainder ? 1 : 0;
-    objectiveQuestions(chapter, allChapters, learnerState, objBase + add, questionIndex)
+    objectiveQuestions(chapter, allChapters, learnerState, objBase + add, questionIndex, 0, profile)
       .forEach((q) => questions.push(q));
   });
 
   // 主观题：轮转分配（章 = s % n；qa/application 按主观全局序号交替）。
   for (let s = 0; s < subjectiveTotal; s++) {
     const chapter = chapters[s % n];
-    const band = bandOfMastery(learnerState?.byUnit[chapter.id]?.mastery);
+    const band = bandForChapter(learnerState?.byUnit[chapter.id], profile);
     const kps = chapter.keyPoints;
     const kp = kps.length > 0 ? kps[s % kps.length] : undefined;
     const type: "qa" | "application" = s % 2 === 0 ? "qa" : "application";
@@ -409,10 +429,12 @@ export function createRetakePaper(input: {
   /** docId → 该文档全部章（choice 干扰项源）；缺省时退化为用范围章自身。 */
   docChapters?: ReadonlyMap<string, readonly Chapter[]>;
   learnerState?: LearnerState;
+  /** F1 画像：补考卷各章同样走「有证据看实测 / 无证据看先验」（缺省 = 现状）。 */
+  profile?: LearnerProfile;
   /** 测试注入时间戳。 */
   now?: number;
 }): Paper {
-  const { chapters, docChapters, learnerState, now = Date.now() } = input;
+  const { chapters, docChapters, learnerState, profile, now = Date.now() } = input;
   const ordered = sortChaptersByOrder(chapters);
 
   // 按文档分组（保持 order 顺序）：每组 allChapters 取该文档全量章。
@@ -434,6 +456,7 @@ export function createRetakePaper(input: {
       chapters: group,
       allChapters: [...(docChapters?.get(group[0].documentId) ?? group)],
       learnerState,
+      profile,
       allowSubjective: false,
       now,
     }),

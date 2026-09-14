@@ -17,4 +17,5 @@ export * from "./splitter-engine";
 export * from "./chapter-edit-engine";
 export * from "./chunk-engine";
 export * from "./quiz-engine";
+export * from "./profile-band";
 export * from "./loop";

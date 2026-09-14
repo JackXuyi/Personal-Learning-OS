@@ -8,7 +8,7 @@ import {
 } from "../engine";
 import { applyEvaluation, applyForgetting, applyRating, nextReviewInDays } from "../engine";
 import { newId } from "../domain";
-import type { Evaluation, LearnerState, LearningGoal, SelfRating } from "../domain";
+import type { Evaluation, LearnerProfile, LearnerState, LearningGoal, SelfRating } from "../domain";
 import type { Messages } from "../i18n/messages/zh";
 import { zh } from "../i18n/messages/zh";
 
@@ -39,6 +39,11 @@ interface LoopStoreState {
   goals: LearningGoal[];
   /** 当前目标上下文（activeGoal；id 失效/未设置时回退列表首个目标）。 */
   activeGoal: LearningGoal | undefined;
+  /**
+   * 学习者画像（F1）。由章级快照带出（`runChapterLoop` 读 `storage.getProfile()`），
+   * 未填写 = `undefined`。
+   */
+  profile: LearnerProfile | undefined;
   loading: boolean;
   error: string | undefined;
   /** 重算快照；m = 当前界面语言（引擎 reason 文案随语言注入，默认中文）。 */
@@ -47,6 +52,11 @@ interface LoopStoreState {
   switchGoal: (goalId: string, m?: Messages) => Promise<void>;
   /** 新建 / 更新目标（goal repo，U6 Goals CRUD）；保存后重算快照。 */
   saveGoal: (goal: LearningGoal, m?: Messages) => Promise<void>;
+  /**
+   * 保存 / 清除画像（F1）。**唯一写路径**：`storage.saveProfile` 后 `refresh`
+   * 重算快照（画像影响计划队列顺序与 ETA，必须连带刷新）。
+   */
+  saveProfile: (profile: LearnerProfile | undefined, m?: Messages) => Promise<void>;
   /**
    * 删除目标（U6）。若删除的是当前 activeGoal，清掉 activeGoal 偏好 →
    * 读取时回退首个剩余目标（无脏状态，§U6 验收）。删除后重算快照。
@@ -73,6 +83,7 @@ export const useLoopStore = create<LoopStoreState>((set, get) => ({
   chapterPlan: undefined,
   goals: [],
   activeGoal: undefined,
+  profile: undefined,
   loading: false,
   error: undefined,
 
@@ -95,6 +106,9 @@ export const useLoopStore = create<LoopStoreState>((set, get) => ({
         chapterPlan,
         goals,
         activeGoal: resolvedActive,
+        // 画像随章级快照带出（runChapterLoop 已读 storage.getProfile()）——
+        // 单一来源，不再单独读一次 storage。
+        profile: chapterPlan.profile,
         loading: false,
       });
     } catch (err) {
@@ -109,6 +123,11 @@ export const useLoopStore = create<LoopStoreState>((set, get) => ({
 
   saveGoal: async (goal, m?: Messages) => {
     await storage.saveGoal(goal);
+    await get().refresh(m);
+  },
+
+  saveProfile: async (profile, m?: Messages) => {
+    await storage.saveProfile(profile);
     await get().refresh(m);
   },
 

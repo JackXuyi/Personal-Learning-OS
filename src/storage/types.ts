@@ -18,6 +18,7 @@ import type {
   KnowledgeGraph,
   KnowledgeRelation,
   KnowledgeUnit,
+  LearnerProfile,
   LearnerState,
   LearningGoal,
   Paper,
@@ -151,6 +152,12 @@ export interface StorageAdapter {
   // ===== 学习者状态=====
   getLearnerState(): Promise<LearnerState>;
   saveLearnerState(state: LearnerState): Promise<void>;
+
+  // ===== 学习者画像（F1；缺省 = 未填写，绝不自动写默认值）=====
+  /** 未填写返回 `undefined`（调用方据此走「现状行为」，不制造假画像）。 */
+  getProfile(): Promise<LearnerProfile | undefined>;
+  /** 传 `undefined` = 清除画像（UC-07）。 */
+  saveProfile(profile: LearnerProfile | undefined): Promise<void>;
 
   // ===== 目标（多目标，U0 数据准备；docs/ui-workbench-plan-2026-09.md §7.2）=====
   listGoals(): Promise<LearningGoal[]>;

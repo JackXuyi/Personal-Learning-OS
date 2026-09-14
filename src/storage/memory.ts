@@ -17,6 +17,7 @@ import type {
   KnowledgeGraph,
   KnowledgeRelation,
   KnowledgeUnit,
+  LearnerProfile,
   LearnerState,
   LearningGoal,
   Paper,
@@ -37,6 +38,8 @@ export class InMemoryStorage implements StorageAdapter {
   protected paperResults = new Map<string, PaperResult>();
   protected graph: KnowledgeGraph = { units: [], relations: [] };
   protected learnerState: LearnerState = { byUnit: {} };
+  /** 学习者画像（F1）。缺省 undefined = 未填写（不制造假画像）。 */
+  protected profile: LearnerProfile | undefined;
   protected goals = new Map<string, LearningGoal>();
   protected activeGoalId: string | undefined;
   protected evidenceLog: EvidenceEntry[] = [];
@@ -309,6 +312,13 @@ export class InMemoryStorage implements StorageAdapter {
   }
   async saveLearnerState(state: LearnerState): Promise<void> {
     this.learnerState = state;
+  }
+
+  async getProfile(): Promise<LearnerProfile | undefined> {
+    return this.profile;
+  }
+  async saveProfile(profile: LearnerProfile | undefined): Promise<void> {
+    this.profile = profile;
   }
 
   async listGoals(): Promise<LearningGoal[]> {

@@ -10,6 +10,7 @@ import type {
   CognitiveLevel,
   Chapter,
   KnowledgeGraph,
+  LearnerProfile,
   LearnerState,
   LearningGoal,
   NextAction,
@@ -211,6 +212,8 @@ export interface ChapterLoopSnapshot {
   /** 章 id → 所属文档标题（跨文档展示 docTitle · 第 x 章）。 */
   docTitleOf: Record<string, string>;
   learner: LearnerState;
+  /** F1 学习者画像（未填写 = undefined）。消费点：计划档位覆盖 / 完成日期估算。 */
+  profile: LearnerProfile | undefined;
   /** 章总数（跨文档）。 */
   total: number;
   /** 达标章数（掌握度 ≥ MASTERY_THRESHOLD）。 */
@@ -233,12 +236,14 @@ export async function runChapterLoop(
   m: Messages = zh,
   goalId?: string,
 ): Promise<ChapterLoopSnapshot> {
-  const [goals, docs, rawLearner, graph] = await Promise.all([
+  const [goals, docs, rawLearner, graph, profile] = await Promise.all([
     storage.listGoals(),
     storage.listDocuments(),
     storage.getLearnerState(),
     // 概念图：章级前置软排序的输入（D2）；SQLite 不可用时自动回退 localStorage blob。
     storage.getGraph(),
+    // 学习者画像（F1）：计划档位覆盖的输入；未填写 → undefined → 零回归。
+    storage.getProfile(),
   ]);
   // 读时遗忘衰减（V2 T9）：章级规划与就绪度基于衰减视图（幂等，不写回）。
   const learner = applyForgetting(rawLearner, Date.now());
@@ -275,7 +280,15 @@ export async function runChapterLoop(
   const mastered = allChapters.filter(
     (c) => (learner.byUnit[c.id]?.mastery ?? 0) >= MASTERY_THRESHOLD,
   ).length;
-  const actions = buildChapterPlan({ chapters: allChapters, learnerState: learner, graph }, m);
+  const actions = buildChapterPlan(
+    {
+      chapters: allChapters,
+      learnerState: learner,
+      graph,
+      ...(profile ? { prefs: profile.preferences } : {}),
+    },
+    m,
+  );
 
   return {
     goal,
@@ -283,6 +296,7 @@ export async function runChapterLoop(
     chaptersByDoc,
     docTitleOf,
     learner,
+    profile,
     total,
     mastered,
     actions,
