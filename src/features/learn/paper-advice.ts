@@ -8,10 +8,10 @@
  *   保证「详情页推荐」与「出卷引擎实际出的卷」口径一致，不自造一套阈值。
  * - **只建议不生成**：试卷 Tab 仅展示，出卷动作跳 `/quiz/new` 由用户确认。
  */
-import type { Chapter, LearnerState, PaperMode } from "../../domain";
+import type { Chapter, LearnerProfile, LearnerState, PaperMode } from "../../domain";
 import { MASTERY_FLOOR, MASTERY_THRESHOLD } from "../../domain";
 import type { DifficultyBand } from "../../engine/quiz-engine";
-import { bandOfMastery } from "../../engine/quiz-engine";
+import { bandForChapter } from "../../engine/profile-band";
 
 /** 「已达标」判定线：≥ 此值不再推荐单章出卷（区别于达标线，给综合测留空间）。 */
 export const MASTERY_MASTERED = 0.9;
@@ -46,12 +46,14 @@ export interface PaperAdvice {
 export function recommendPaper(args: {
   chapter: Chapter;
   learner?: LearnerState | null;
+  /** F1 画像：无掌握度证据时的难度先验（缺省 = 现状 band 1）。 */
+  profile?: LearnerProfile;
 }): PaperAdvice {
-  const { chapter, learner } = args;
+  const { chapter, learner, profile } = args;
   const unit = learner?.byUnit[chapter.id];
   const mastery = unit?.mastery ?? 0;
   const attempts = unit?.attempts ?? 0;
-  const band = bandOfMastery(mastery);
+  const band = bandForChapter(unit, profile);
 
   if (attempts === 0) return { mode: "unit-test", band, reason: "never" };
   if (mastery < MASTERY_FLOOR) return { mode: "retake", band, reason: "failed" };
@@ -76,14 +78,16 @@ export function isChapterMastered(
 export function recommendDocPaper(args: {
   chapters: readonly Chapter[];
   learner?: LearnerState | null;
+  /** F1 画像：无掌握度证据时的难度先验（缺省 = 现状 band 1）。 */
+  profile?: LearnerProfile;
 }): PaperAdvice | undefined {
-  const { chapters, learner } = args;
+  const { chapters, learner, profile } = args;
   if (chapters.length === 0) return undefined;
   const allMastered = chapters.every((c) => isChapterMastered(c, learner));
   if (!allMastered) return undefined;
   // 综合测难度带取全章最高带：整卷应能拉开区分度。
   const band = chapters.reduce<DifficultyBand>((acc, c) => {
-    const b = bandOfMastery(learner?.byUnit[c.id]?.mastery ?? 0);
+    const b = bandForChapter(learner?.byUnit[c.id], profile);
     return b > acc ? b : acc;
   }, 1);
   return { mode: "final-test", band, reason: "allMastered" };

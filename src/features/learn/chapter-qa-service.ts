@@ -91,12 +91,14 @@ export async function askChapter(input: AskChapterInput): Promise<ChapterAnswer>
       return { ...base, status: "not-found", scopeUsed: ctx.scopeUsed };
     }
 
-    // ④ 调模型（只拿 quotes，偏移一律本地反查）
+    // ④ 调模型（只拿 quotes，偏移一律本地反查）；F1 画像注入背景块（未填写 = undefined）
+    const profile = await store.getProfile();
     const draft = await answerChapterQuestion(provider, {
       chapterTitle: chapter.title,
       documentTitle: doc.title,
       question,
       blocks: ctx.blocks,
+      learner: profile,
     });
     if (!draft.found) return { ...base, status: "not-found", scopeUsed: ctx.scopeUsed };
 

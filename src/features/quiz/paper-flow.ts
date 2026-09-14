@@ -71,11 +71,15 @@ export async function createPaperAndSave(
 
   const provider = buildActiveProvider();
   const aiReady = provider.isConfigured();
+  // F1：画像在**此处**读取（唯一出卷入口），本地卷与 AI 题面共用同一份 ——
+  // 未填写 = undefined，两条路径都退回改动前行为（零回归）。
+  const profile = await storage.getProfile();
   const local = createPaper({
     scope: { chapterIds: ordered.map((c) => c.id), mode: input.mode },
     chapters: ordered,
     allChapters,
     learnerState: input.learnerState ?? undefined,
+    profile,
     allowSubjective: aiReady,
   });
 
@@ -90,6 +94,7 @@ export async function createPaperAndSave(
           paper: local,
           chapters: ordered,
           text: input.text,
+          learner: profile,
         }),
       };
       ai = true;

@@ -2,9 +2,9 @@
  * 章级计划动作的共享展示与执行工具（T8）——
  * 首页主 CTA / /plan 计划页 / 报告页共用，避免各页维护一份 kind → 徽标/动词/跳转映射。
  */
-import type { Chapter, LearnerState, NextAction, Paper } from "../../domain";
-import { PAPER_MODE_DURATION_MIN } from "../../domain";
-import { createRetakePaper } from "../../engine";
+import type { Chapter, LearnerProfile, LearnerState, NextAction, Paper } from "../../domain";
+import { PAPER_MODE_DURATION_MIN, PROFILE_LIMITS } from "../../domain";
+import { createRetakePaper, DEFAULT_PACE, paceOf } from "../../engine";
 // 子路径 import（不经 i18n barrel），避免 .tsx 参与单测直跑（与 engine/loop.ts 一致）。
 import { zh, type Messages } from "../../i18n/messages/zh";
 
@@ -102,6 +102,7 @@ export function chapterChars(chapter: Chapter | undefined): number {
 export function estimateEtaMin(
   action: NextAction,
   chapter: Chapter | undefined,
+  pace: number = DEFAULT_PACE,
 ): number {
   if (action.kind === "chapter-quiz") return PAPER_MODE_DURATION_MIN["unit-test"];
   if (action.kind === "retake-quiz") return PAPER_MODE_DURATION_MIN.retake;
@@ -110,9 +111,67 @@ export function estimateEtaMin(
     return chars === 0 ? 5 : clamp(Math.round(chars / 800), 2, 12);
   }
   if (action.kind === "learn-chapter") {
-    return chars === 0 ? 12 : clamp(Math.round(chars / 350), 5, 40);
+    return chars === 0 ? 12 : clamp(Math.round(chars / pace), 5, 40);
   }
   return 8;
+}
+
+/** 计划整体的时间估算（F1：把「要多久」升级为「按你的时间预算，来不来得及」）。 */
+export interface PlanEta {
+  /** 计划总时长（分钟）。 */
+  totalMinutes: number;
+  /**
+   * 预计完成时间戳。仅当**声明了**每周预算时给出；未声明 → `undefined`
+   * （UI 整行不渲染，退回现状文案）。
+   */
+  finishAt?: number;
+  /** 完成日 vs 截止日（**两者都存在**时才给出，D5）。 */
+  deadline?: { at: number; behind: boolean; days: number };
+}
+
+/** 每周预算是否有效（越界 / 缺省 = 未声明）。 */
+function weeklyOf(profile?: LearnerProfile): number | undefined {
+  const w = profile?.weeklyMinutes;
+  if (w === undefined || w < PROFILE_LIMITS.weeklyMinutesMin || w > PROFILE_LIMITS.weeklyMinutesMax) {
+    return undefined;
+  }
+  return w;
+}
+
+/**
+ * 计划 ETA 聚合（纯函数）。
+ *
+ * `totalMinutes` 恒有值（所有队列项之和，按画像的阅读速度因子）；`finishAt`
+ * 需要每周预算，`deadline` 还需要目标截止日 —— 缺哪个就不给哪个，UI 据此
+ * 逐行收起，绝不展示猜测值。
+ */
+export function estimatePlanEta(args: {
+  actions: readonly NextAction[];
+  chapterOf: (id: string) => Chapter | undefined;
+  profile?: LearnerProfile;
+  deadlineAt?: number;
+  now?: number;
+}): PlanEta {
+  const { actions, chapterOf, profile, deadlineAt, now = Date.now() } = args;
+  const pace = paceOf(profile);
+  const totalMinutes = actions.reduce(
+    (n, a) => n + estimateEtaMin(a, chapterOf(a.unitId), pace),
+    0,
+  );
+  const weekly = weeklyOf(profile);
+  if (weekly === undefined) return { totalMinutes };
+
+  const finishAt = now + (totalMinutes / weekly) * 7 * 86_400_000;
+  if (deadlineAt === undefined) return { totalMinutes, finishAt };
+  return {
+    totalMinutes,
+    finishAt,
+    deadline: {
+      at: deadlineAt,
+      behind: finishAt > deadlineAt,
+      days: Math.round(Math.abs(finishAt - deadlineAt) / 86_400_000),
+    },
+  };
 }
 
 function clamp(n: number, lo: number, hi: number): number {
