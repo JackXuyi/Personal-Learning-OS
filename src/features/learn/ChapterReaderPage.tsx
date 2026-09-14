@@ -1,14 +1,16 @@
 /**
  * P2 章节阅读（/learn/:chapterId）—— 三步闭环「步骤 1」的逐章学习页（T5，UI Workbench U3）。
  *
- * 布局：左 = 章正文（doc.textPreview 的 contentRef 切片）；右 = 五区（与 Learner Model 相连，
- * docs/ui-workbench-plan-2026-09.md §6-U3 + docs/learn-chapter-qa-design-2026-09.md §7）：
+ * 布局：左 = 章正文（doc.textPreview 的 contentRef 切片）；右 = 六区（与 Learner Model 相连，
+ * docs/ui-workbench-plan-2026-09.md §6-U3 + docs/learn-chapter-qa-design-2026-09.md §7
+ * + docs/learn-feynman-restatement-design-2026-09.md §7）：
  *   1) 章状态 —— 状态徽标 + 掌握度 Bar + 口径说明（我学到哪）；
  *   2) Why it matters —— 要点首条 / 正文首句兜底（它讲什么 / 为什么值得学）；
  *   3) Knowledge —— 要点生成可点选知识 chips（N5 unitIds 就绪后以概念为准）；
  *      底部保留「打开本章概念图谱」N5 入口；
  *   4) 问这一章 —— 章内提问面板（答案只依据用户导入的原文，引用可点回正文高亮）；
- *   5) Evidence —— 溯源（《doc》第 x 章）+ 最近一次含本章的测评 Δ 掌握度（证据从哪来）。
+ *   5) 讲给我听 —— 费曼式复述面板（用自己的话讲一遍，AI 对照本章原文给差距反馈）；
+ *   6) Evidence —— 溯源（《doc》第 x 章）+ 最近一次含本章的测评 Δ 掌握度（证据从哪来）。
  * 状态机写回：打开阅读（not-started → learning）与「标记学完」（→ ready）
  * 直接整批写 storage（listChapters/saveChapters 契约，docs §5.1）。
  * 原文档位：`?at=<文档绝对偏移>` 跳转 → 换算章内相对偏移后高亮并滚动
@@ -27,6 +29,7 @@ import { useI18n } from "../../i18n";
 import { chapterBadge } from "./chapter-badge";
 import { highlightRange, HIGHLIGHT_WINDOW } from "./highlight";
 import ChapterQaPanel from "./reader/ChapterQaPanel";
+import ChapterRestatementPanel from "./reader/ChapterRestatementPanel";
 import { pickRenderer } from "./render/renderer-registry";
 import PlainTextRenderer from "./render/PlainTextRenderer";
 import RenderErrorBoundary from "./render/RenderErrorBoundary";
@@ -239,7 +242,7 @@ export default function ChapterReaderPage() {
           </div>
         </Card>
 
-        {/* 右：章状态 / Why it matters / Knowledge / 问这一章 / Evidence 五区 */}
+        {/* 右：章状态 / Why it matters / Knowledge / 问这一章 / 讲给我听 / Evidence 六区 */}
         <div className="min-w-0 space-y-6">
           {/* 1 · 章状态（我学到哪） */}
           <section className="space-y-2">
@@ -318,7 +321,14 @@ export default function ChapterReaderPage() {
             }
           />
 
-          {/* 5 · Evidence（证据从哪来：溯源 + 最近测评 Δ） */}
+          {/* 5 · 讲给我听（费曼式复述；AI 对照本章原文给出可锚回的差距反馈） */}
+          <ChapterRestatementPanel
+            doc={doc}
+            chapter={chapter}
+            onHighlight={(start, end) => setHighlight({ start, end })}
+          />
+
+          {/* 6 · Evidence（证据从哪来：溯源 + 最近测评 Δ） */}
           <section className="space-y-2">
             <Section title={t.evidenceEyebrow} />
             {evidence.state === "ok" ? (

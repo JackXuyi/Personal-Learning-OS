@@ -18,6 +18,7 @@ import type { Chapter, EvidenceEntry, LearningGoal, SourceDocument } from "../..
 import { runChapterLoop, type ChapterLoopSnapshot } from "../../engine";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { useI18n, type Messages } from "../../i18n";
+import { evidenceActionKey } from "../evidence-label";
 import { chapterDisplayTitle, estimatePlanEta } from "../plan/chapter-action";
 import { fmtDate } from "./GoalsPage";
 
@@ -467,7 +468,7 @@ function CareerExtra({
             <EvidenceRow
               key={`${e.at}-${i}`}
               time={fmtDate(e.at, lang)}
-              title={m.units.action[e.kind === "assessment" ? "assessment" : "review-points"]}
+              title={m.units.action[evidenceActionKey(e.kind)]}
               delta={e.delta === 0 ? undefined : `${e.delta > 0 ? "+" : ""}${(e.delta * 100).toFixed(0)}%`}
               deltaTone={e.delta > 0 ? "up" : e.delta < 0 ? "down" : "neutral"}
             />

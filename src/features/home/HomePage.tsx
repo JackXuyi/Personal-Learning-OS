@@ -14,10 +14,11 @@ import { Button, buttonVariants } from "../../components/ui/button";
 import { cn } from "../../lib/utils";
 import { Select } from "../../components/ui/select";
 import { MASTERY_THRESHOLD } from "../../domain";
-import type { Chapter, EvidenceEntry, NextAction } from "../../domain";
+import type { Chapter, EvidenceEntry, EvidenceKind, NextAction } from "../../domain";
 import { bandOf, type ChapterLoopSnapshot } from "../../engine";
 import { useI18n, type Messages } from "../../i18n";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
+import { evidenceActionKey } from "../evidence-label";
 import { chapterActionMeta, chapterDisplayTitle } from "../plan/chapter-action";
 import { useChapterIndex, useRunChapterAction } from "../plan/run-action";
 
@@ -356,9 +357,12 @@ interface EvidenceView {
   tone: "up" | "down" | "neutral";
 }
 
-/** log kind → 行内动作前缀（不随存储，界面语言映射）。 */
-function evidenceActionLabel(kind: "assessment" | "review", m: Messages): string {
-  return kind === "assessment" ? m.units.action.assessment : m.units.action.review;
+/**
+ * log kind → 行内动作前缀（不随存储，界面语言映射）。
+ * 映射单一真源 = `features/evidence-label.ts::evidenceActionKey`（两页共用）。
+ */
+function evidenceActionLabel(kind: EvidenceKind, m: Messages): string {
+  return m.units.action[evidenceActionKey(kind)];
 }
 
 /** log 行 → 展示行（章标题经 plan 索引；找不到章回退 subjectId）。 */
