@@ -136,7 +136,7 @@
 |---|---|---|
 | P2-1 | 图谱节点不可键盘访问 | `GraphView.tsx` 节点为 `<g>` 无 tabIndex/role |
 | P2-2 | Spaces 长期 scaffold 占位，导航与 i18n 已暴露 | `SpacesPage.tsx:7` |
-| P2-3 | 死代码：`createKnowledgeEngine`、`renameChapter`、`saveKnowledgeUnit(s)` 无调用方 | `knowledge-engine.ts:19`、`splitter-engine.ts:459` |
+| P2-3 | 死代码：`createKnowledgeEngine`、`saveKnowledgeUnit(s)` 无调用方（`renameChapter` 已于 2026-09-14 接线，见 `docs/chapter-edit-design-2026-09.md`，本项不再适用） | `knowledge-engine.ts:19` |
 | P2-4 | `DocumentStatus` 恒 `ready`，`rawSizeBytes` 从不赋值 | `domain/document.ts:19/33` |
 | P2-5 | 资料卡片只有统计，不驱动行动（无"继续学习/下一待学章/下次复习"入口） | `library/DocumentCard.tsx` |
 
@@ -174,7 +174,7 @@
 15. **笔记与划线**：阅读页支持选中划线 + 笔记，落在章级，可被检索与出卷引用。
 16. **切分参数可视化**：至少暴露「标题层级」「最小章长度」两个参数，配合预览。
 17. **索引健壮性**：chunk 重建改为事务化（或先写后删），失败可回滚；设置页增加索引健康度（已索引 / 失败 / 待重建）。
-18. **清债**：删除 `createKnowledgeEngine`、`renameChapter` 等无调用方实现；`DocumentStatus` / `rawSizeBytes` 要么真实赋值要么从类型移除。
+18. **清债**：删除 `createKnowledgeEngine` 等无调用方实现（`renameChapter` / `mergeChapters` / `reorderChapters` 已于 2026-09-14 由章节编辑功能接线并迁至 `engine/chapter-edit-engine.ts`，见 `docs/chapter-edit-design-2026-09.md`）；`DocumentStatus` / `rawSizeBytes` 要么真实赋值要么从类型移除。
 
 ---
 

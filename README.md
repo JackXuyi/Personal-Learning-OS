@@ -403,7 +403,7 @@ never depend on a network call.
 Every capability the project intends to ship — this doubles as the roadmap.
 `[x]` = shipped · `[ ]` = not yet · `P0` / `P1` / `P2` = priority of the unshipped items.
 
-**21 shipped · 21 not yet.**
+**22 shipped · 20 not yet.**
 
 ### 📥 Ingestion
 
@@ -418,7 +418,7 @@ Every capability the project intends to ship — this doubles as the roadmap.
 
 - [x] Deterministic chapter splitting (heading tree / paragraph clustering) with short-chapter merge
 - [x] Optional AI refinement of chapter titles and boundaries
-- [ ] Rename / merge / drag-reorder chapters `P2` — engine primitives exist, no UI yet
+- [x] Rename / merge / drag-reorder chapters — edit mode on the chapter list, saved on every action
 - [ ] Manually split a chapter in two `P2`
 - [ ] Cross-document study unit / learning path `P2`
 - [ ] Manual override of chapter prerequisites `P2`
