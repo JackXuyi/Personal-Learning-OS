@@ -8,10 +8,11 @@
  *  - planOverviewBlocks：门槛、章边界、章内二次切、无章节按段落、块数上限、
  *    连续覆盖不变式、空正文、contentRef 越界；
  *  - parseChunkDigest / parseOverviewDraft：裁剪 / 去重 / 上限 / 拒绝路径；
+ *  - parseOverviewTitle：剥壳（书名号 / 引号）、截断、非法输入不抛错（TC-EN-*）；
  *  - isOverviewStale：三态；
- *  - 三个 builder：消息结构；
+ *  - 三个 builder：消息结构（含成稿提示词的 title 要求）；
  *  - summarizeDocumentWithAi：空正文 / 超长抛错、单次成稿、map-reduce、
- *    单块失败跳过计数、全块失败抛错。
+ *    单块失败跳过计数、全块失败抛错、返回值带 AI 标题且 title 不进 draft。
  *
  * 无网络、无 provider 构造：所有 AI 交互都走本地假 provider 或纯函数。
  */
@@ -23,6 +24,7 @@ import {
   buildOverviewMessages,
   parseChunkDigest,
   parseOverviewDraft,
+  parseOverviewTitle,
   planOverviewBlocks,
   summarizeDocumentWithAi,
 } from "../src/ai/overview-pipeline.ts";
@@ -251,6 +253,52 @@ await check("TC-OV-13 parseOverviewDraft：gist 空 / sections 空 / 非对象 �
   }
 });
 
+/* ---------- 3b. parseOverviewTitle（导入后 AI 整理新增，TC-EN-*） ---------- */
+
+await check("TC-EN-01 parseOverviewTitle：合规标题原样返回，超长截断至 titleChars", () => {
+  assert.equal(parseOverviewTitle({ title: "Agent 架构入门" }), "Agent 架构入门");
+  assert.equal(
+    parseOverviewTitle({ title: "乙".repeat(200) })?.length,
+    OVERVIEW_LIMITS.titleChars,
+  );
+});
+
+await check("TC-EN-02 parseOverviewTitle：剥掉首尾书名号 / 引号", () => {
+  assert.equal(parseOverviewTitle({ title: "《Agent 架构入门》" }), "Agent 架构入门");
+  assert.equal(parseOverviewTitle({ title: '"RAG 检索"' }), "RAG 检索");
+  assert.equal(parseOverviewTitle({ title: "「RAG 检索」" }), "RAG 检索");
+});
+
+await check("TC-EN-03 parseOverviewTitle：非法输入一律 undefined，且绝不抛错", () => {
+  const bads: unknown[] = [
+    null,
+    undefined,
+    {},
+    { title: "   " },
+    { title: 123 },
+    "标题",
+    ["标题"],
+    { title: "《》" },
+  ];
+  for (const bad of bads) {
+    assert.equal(parseOverviewTitle(bad), undefined, `应容忍：${JSON.stringify(bad)}`);
+  }
+});
+
+await check("TC-EN-04 两个成稿提示词都要求 title（system 含说明 + JSON 含键）", () => {
+  const single = buildOverviewMessages({ title: "t", text: "正文" });
+  assert.ok(single[0].content.includes("- title"), "单次成稿 system 应要求 title");
+  assert.ok(single[0].content.includes('"title"'), "JSON 格式应含 title 键");
+
+  const merge = buildOverviewMergeMessages({
+    title: "t",
+    totalChars: 10,
+    digests: [{ digest: "d", keywords: [], headings: [] }],
+  });
+  assert.ok(merge[0].content.includes("- title"), "归并成稿 system 应要求 title");
+  assert.ok(merge[0].content.includes('"title"'), "JSON 格式应含 title 键");
+});
+
 /* ---------- 4. isOverviewStale ---------- */
 
 await check("TC-OV-14 isOverviewStale 三态：无概览 false / 长度一致 false / 长度不一致 true", () => {
@@ -400,6 +448,33 @@ await check("执行器：归并输出不合规 → 抛错（sections 为空不�
     () => summarizeDocumentWithAi(p, { title: "t", text: "甲".repeat(30_000) }),
     (err: unknown) => err instanceof AiProviderError,
   );
+});
+
+await check("执行器：返回值带 AI 标题，且 title 不进 draft（TC-EN-05）", async () => {
+  const withTitle = { ...JSON_OVERVIEW, title: "AI 起的标题" };
+  const reply = async (input: ChatInput): Promise<ChatOutput> => ({
+    content: input.messages[0].content.includes("其中一段")
+      ? JSON.stringify({ digest: "这一段讲了张量", keywords: ["张量"], headings: ["张量"] })
+      : JSON.stringify(withTitle),
+  });
+  const r = await summarizeDocumentWithAi(mkProvider(reply), {
+    title: "原标题",
+    text: "甲".repeat(5000),
+  });
+  assert.equal(r.title, "AI 起的标题");
+  assert.ok(
+    !Object.keys(r.draft).includes("title"),
+    "title 不得进 draft（否则 spread 会污染 DocumentOverview）",
+  );
+});
+
+await check("执行器：模型漏 title → undefined，概览照常产出（TC-EN-06）", async () => {
+  const r = await summarizeDocumentWithAi(mkProvider(phaseAwareReply), {
+    title: "原标题",
+    text: "甲".repeat(5000),
+  });
+  assert.equal(r.title, undefined);
+  assert.equal(r.draft.gist, JSON_OVERVIEW.gist);
 });
 
 console.log(results.join("\n"));

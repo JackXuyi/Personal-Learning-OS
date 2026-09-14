@@ -46,6 +46,18 @@ export type DuplicateAction = "skip" | "overwrite" | "create";
 export interface ImportUnit {
   /** 资料标题（文件名去扩展名 / 仓库名 / 粘贴标题）。 */
   title: string;
+  /**
+   * 标题来源——决定 AI 能否覆盖它（docs/import-ai-enrich-design-2026-09.md §4.3.2）。
+   * - `"user"`：用户在粘贴表单里手填 → AI 一律不改；
+   * - `"derived"`（缺省）：文件名 / GitHub 仓库名 / 兜底「未命名」 → AI 可改。
+   *
+   * 刻意不做「按标题文本猜像不像文件名」的启发式：判定依据必须显式，
+   * 否则会出现「用户手填了 `notes.md` 结果被 AI 改名」这类不可预期行为。
+   *
+   * **不入库、不进 SourceDocument**：它只在「本次导入」这一跳有意义；
+   * 资料被手动改名后（RenameDocDialog）语义已由用户接管，无需持久化标记。
+   */
+  titleSource?: "user" | "derived";
   /** SourceDocument.format：pdf | markdown | txt。 */
   format: DocumentFormat;
   /** 交给 splitDocument 的格式：md 合并文本 → "markdown"；PDF 抽取 → "txt"。 */
