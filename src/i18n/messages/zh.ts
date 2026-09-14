@@ -355,6 +355,14 @@ export const zh = {
         downloadTip:
           "首次下载设备推荐档约 2.5 GB(Qwen3.5-4B),视网速需要几分钟;下载在后台进行,可随时取消。",
       },
+      /** 导入后 AI 整理（资料标题 + 整篇概览）自动执行开关。 */
+      importAssist: {
+        title: "导入后 AI 整理",
+        desc: "导入完成的资料会在后台由 AI 读一遍正文，生成资料标题与整篇概览。",
+        label: "导入后自动整理标题与概览",
+        hint: "只替换来自文件名或「未命名」的标题；你手填过的标题不会被改动。",
+        noAi: "配置 AI 模型后才会生效。",
+      },
     },
     /** 设置 · 向量索引（RAG 接线：语义检索所需）。 */
     embedding: {
@@ -1084,6 +1092,8 @@ export const zh = {
       structureLocal: "本地启发式切分 · 未配置 AI",
       resultTitle: (title: string) => `「${title}」已可学习`,
       inspect: "检查结构 →",
+      /** 后台 AI 整理提示（结果卡；docs/import-ai-enrich-design-2026-09.md §7.4）。 */
+      enrichQueued: "AI 正在后台整理标题与概览，完成后自动更新。",
     },
     reader: {
       missingTitle: "章节不存在",

@@ -11,19 +11,28 @@
  *
  * 说明：阶段标签为 UX 反馈文案，与实际流水线（save → split → refine →
  * saveChapters）映射，不新造引擎能力（方案约束：不绑架 Domain）。
+ *
+ * V4 变更（docs/import-ai-enrich-design-2026-09.md）：导入成功后追加一个**后台**
+ * 任务 —— 已配 AI 且开关为开时，用 AI 读正文生成资料标题（仅当原标题是兜底值）
+ * 与整篇概览。不阻塞结果卡、不进入五阶段进度；由 `auto-enrich.ts` 串行排队，
+ * 完成后广播 DOCS_CHANGED_EVENT 刷新资料库列表。
  */
 import { useEffect, useState } from "react";
 import type { DocumentFormat, SourceDocument } from "../../domain";
 import { newId } from "../../domain";
-import { buildActiveProvider } from "../../stores/useSettingsStore";
+import { buildActiveProvider, useSettingsStore } from "../../stores/useSettingsStore";
 import { storage } from "../../stores/useLoopStore";
 import { useI18n } from "../../i18n";
+import { useAiReady } from "../../hooks/useAiReady";
 import LocalFilePanel from "./import/LocalFilePanel";
 import GithubPanel from "./import/GithubPanel";
 import type { ImportTab, ImportUnit, ImportSummary, DuplicateAction } from "./import/types";
 import { LIMITS } from "./import/types";
 import { runUnitImport, runBatchImport } from "./import/pipeline";
 import { autoIndexAfterImport, autoIndexBlockedReason } from "./index-service";
+import { scheduleAutoEnrich } from "./auto-enrich";
+import { isReplaceableTitle } from "./enrich-service";
+import { notifyDocsChanged } from "../../components/layout/AppShell";
 import { refreshEmbeddingStatus } from "../../ai/embedding";
 import { githubErrorText, localErrorText } from "./import/error-text";
 import { useIndexStore } from "../../stores/useIndexStore";
@@ -105,6 +114,15 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
   const [single, setSingle] = useState<SingleResult>();
   /** 批量汇总（多份导入后置；failed 含预转换失败与管道失败）。 */
   const [summary, setSummary] = useState<ImportSummary>();
+  /**
+   * 本次是否已触发后台 AI 整理（决定结果区是否显示提示行）。
+   * 真正的执行门控在 auto-enrich 内部，故提示还需与门控同源判定，
+   * 否则开关关着 / 未配 AI 时会显示一行「AI 正在后台整理」的假提示。
+   */
+  const [enrichScheduled, setEnrichScheduled] = useState(false);
+  const aiReady = useAiReady();
+  const autoEnrichOn = useSettingsStore((s) => s.autoEnrichOnImport);
+  const showEnrichHint = enrichScheduled && autoEnrichOn !== false && aiReady;
 
   // --- O2/D1 重复导入冲突面板状态 ---
   /** 一行冲突 = 待导入 unit + 已存在的同源旧资料标题。 */
@@ -146,6 +164,7 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
     setSummary(undefined);
     setConflicts(undefined);
     setPendingRun(undefined);
+    setEnrichScheduled(false);
   };
 
   /** 单份导入：U5 五阶段 + 单份结果卡（onDuplicate：D1 冲突处理动作）。 */
@@ -180,6 +199,11 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
         if (result.chapterIds.length === 0) setNotice(fmt.tooShort);
         // 导入成功后后台入队向量化（D2-A）：不阻塞结果卡；能力不足时内部静默跳过。
         autoIndexAfterImport();
+        // 后台 AI 整理标题与概览（D1：不阻塞结果卡；失败/未配置/开关关一律静默）。
+        setEnrichScheduled(true);
+        void scheduleAutoEnrich(result.docId, {
+          replaceTitle: isReplaceableTitle(result.unit.titleSource),
+        }).then(() => notifyDocsChanged());
       })
       .catch((err: unknown) => {
         setNotice(fmt.splitFail(err instanceof Error ? err.message : String(err)));
@@ -212,6 +236,15 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
         });
         // 批量导入同样后台入队（只补缺失，重复导入不会重复算）。
         if (out.ok.length > 0) autoIndexAfterImport();
+        // 后台 AI 整理：逐份调度，队列内部串行（不抢算力，且每份完成即刷新列表）。
+        if (out.ok.length > 0) {
+          setEnrichScheduled(true);
+          for (const r of out.ok) {
+            void scheduleAutoEnrich(r.docId, {
+              replaceTitle: isReplaceableTitle(r.unit.titleSource),
+            }).then(() => notifyDocsChanged());
+          }
+        }
       })
       .catch((err: unknown) => {
         setNotice(fmt.splitFail(err instanceof Error ? err.message : String(err)));
@@ -259,6 +292,8 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
       }
       await runSingleImport({
         title: title.trim() || fmt.unnamedDoc,
+        // 手填标题 → AI 不得覆盖；留空落「未命名」兜底 → 属于可覆盖值。
+        titleSource: title.trim() ? "user" : "derived",
         format,
         splitFormat,
         text: body,
@@ -333,6 +368,12 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
       };
       await storage.saveDocument(doc);
       setNotice(fmt.savedDoc(doc.title));
+      // 仅保存（未切分）同样触发后台整理：概览只依赖正文，不依赖章节。
+      // 手填标题视同 user（不覆盖），留空落「未命名」兜底（可覆盖）——与粘贴主路径同口径。
+      setEnrichScheduled(true);
+      void scheduleAutoEnrich(doc.id, {
+        replaceTitle: isReplaceableTitle(title.trim() ? "user" : "derived"),
+      }).then(() => notifyDocsChanged());
     } finally {
       setBusy(false);
     }
@@ -728,6 +769,13 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
         <div className="space-y-5 px-6 pb-5">
           {renderProgress()}
           {renderResult()}
+          {/* 后台 AI 整理提示：单份 / 批量 / 仅保存三条路径共用一行；
+              与真实门控（开关 + AI 就绪）同源，开关关着时不会出现假提示。 */}
+          {showEnrichHint ? (
+            <p className="text-xs text-ink-3" data-testid="import-enrich-status">
+              {fmt.enrichQueued}
+            </p>
+          ) : null}
           {notice ? <p className="text-xs text-state-weak">{notice}</p> : null}
         </div>
 

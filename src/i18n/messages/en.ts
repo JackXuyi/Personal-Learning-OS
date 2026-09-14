@@ -357,6 +357,14 @@ export const en: Messages = {
         downloadTip:
           "First download of the recommended tier is ~2.5 GB (Qwen3.5-4B) and takes a few minutes depending on speed; downloads run in the background and can be cancelled anytime.",
       },
+      /** Auto AI enrichment (title + overview) after import. */
+      importAssist: {
+        title: "AI enrichment after import",
+        desc: "Imported documents are read by AI in the background to produce a title and a whole-document overview.",
+        label: "Auto-generate title and overview on import",
+        hint: "Only replaces titles derived from a file name or the “Untitled” fallback; titles you typed are kept.",
+        noAi: "Takes effect once an AI model is configured.",
+      },
     },
     /** Settings · vector index (needed by semantic retrieval). */
     embedding: {
@@ -1111,6 +1119,9 @@ export const en: Messages = {
       structureLocal: "Local heuristic split · no AI configured",
       resultTitle: (title: string) => `“${title}” is ready to learn`,
       inspect: "Inspect structure →",
+      /** Background AI enrichment hint (result card). */
+      enrichQueued:
+        "AI is preparing the title and overview in the background; this page updates automatically.",
     },
     reader: {
       missingTitle: "Chapter not found",

@@ -7,6 +7,7 @@ import { labelOfLocalModel, labelOfProvider } from "../../ai/presets";
 import BuiltinModelsPanel from "./BuiltinModelsPanel";
 import ApiModelsTab from "./ApiModelsTab";
 import VectorIndexCard from "./VectorIndexCard";
+import ImportEnrichCard from "./ImportEnrichCard";
 
 /**
  * 设置 · AI 模型中心（U6b 由 SettingsPage 迁移，作为「AI」分区内容）。
@@ -115,6 +116,9 @@ export default function AIModelsSection() {
 
       {/* 向量索引（RAG 语义检索）：端点/Key 继承「当前使用模型」，模型名单独配置。 */}
       <VectorIndexCard />
+
+      {/* 导入后 AI 整理：后台生成资料标题与整篇概览（开关只关自动，不关手动）。 */}
+      <ImportEnrichCard />
     </div>
   );
 }

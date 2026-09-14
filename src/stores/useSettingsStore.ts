@@ -63,6 +63,14 @@ export interface SavedSettings {
    * 导入后自动向量化(默认开)。关闭后不再调用本地模型,仍可手动「重建索引」。
    */
   autoIndexOnImport?: boolean;
+  /**
+   * 导入后自动用 AI 整理**资料标题与整篇概览**(默认开)。
+   *
+   * 与 `autoIndexOnImport` 的区别:该开关只关「自动」,不关「手动」——
+   * 关闭后详情页「概览」Tab 的生成按钮仍可用。
+   * 见 docs/import-ai-enrich-design-2026-09.md §4.3.6。
+   */
+  autoEnrichOnImport?: boolean;
   /** 该配置最后一次通过连接测试的时间戳(通过才记录)。 */
   testedAt?: number;
   /** 最近一次通过测试的往返耗时(毫秒)。 */
@@ -85,6 +93,8 @@ interface SettingsState extends SavedSettings {
   resetEmbeddingToDefault: () => void;
   /** 开关「导入后自动向量化」。 */
   setAutoIndexOnImport: (on: boolean) => void;
+  /** 开关「导入后自动整理标题与概览」。 */
+  setAutoEnrichOnImport: (on: boolean) => void;
 }
 
 const DEFAULTS: SavedSettings = {
@@ -93,6 +103,7 @@ const DEFAULTS: SavedSettings = {
   // 默认即启用本地向量模型(未下载时由 UI 提示下载,能力门闩另判)。
   embedding: { model: DEFAULT_EMBEDDING_MODEL, custom: false },
   autoIndexOnImport: true,
+  autoEnrichOnImport: true,
 };
 
 function legacyToActive(p: LegacyFlatSettings): NonNullable<SavedActive> {
@@ -122,6 +133,7 @@ function normalizePersisted(persisted: unknown): SavedSettings | null {
         typeof p.lastLatencyMs === "number" ? p.lastLatencyMs : undefined,
       savedAt: typeof p.savedAt === "number" ? p.savedAt : undefined,
       autoIndexOnImport: p.autoIndexOnImport !== false,
+      autoEnrichOnImport: p.autoEnrichOnImport !== false,
     };
   }
   if ("kind" in p) {
@@ -134,6 +146,7 @@ function normalizePersisted(persisted: unknown): SavedSettings | null {
       lastLatencyMs: flat.lastLatencyMs,
       savedAt: flat.savedAt,
       autoIndexOnImport: true,
+      autoEnrichOnImport: true,
     };
   }
   return null;
@@ -224,6 +237,10 @@ export const useSettingsStore = create<SettingsState>()(
       setAutoIndexOnImport: (on) => {
         set({ autoIndexOnImport: on, savedAt: Date.now() });
       },
+
+      setAutoEnrichOnImport: (on) => {
+        set({ autoEnrichOnImport: on, savedAt: Date.now() });
+      },
     }),
     {
       name: "plos:settings:v1", // key 沿用旧名以兼容历史数据;schema 版本 v2
@@ -237,6 +254,7 @@ export const useSettingsStore = create<SettingsState>()(
         providerReady: s.providerReady,
         embedding: s.embedding ?? null,
         autoIndexOnImport: s.autoIndexOnImport !== false,
+        autoEnrichOnImport: s.autoEnrichOnImport !== false,
         testedAt: s.testedAt,
         lastLatencyMs: s.lastLatencyMs,
         savedAt: s.savedAt,
