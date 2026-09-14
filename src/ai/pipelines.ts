@@ -112,6 +112,15 @@ export type {
   MappedConceptResult,
 } from "./concept-map-reduce";
 
+/** 章内提问（实现见 `chapter-qa.ts`）。 */
+export {
+  CHAPTER_QA_SYSTEM,
+  buildChapterQaMessages,
+  parseChapterQaAnswer,
+  answerChapterQuestion,
+} from "./chapter-qa";
+export type { ChapterQaDraft, ChapterQaInput } from "./chapter-qa";
+
 /* ------------------------------------------------------------------ */
 /* 1) 章节切分 AI 精修（splitDocument AI 精修，T12a）                  */
 /* ------------------------------------------------------------------ */

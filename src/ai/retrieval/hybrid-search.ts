@@ -39,7 +39,21 @@ export interface HybridSearchOptions {
   storage: StorageAdapter;
   /** 不传(浏览器预览 / 未配置本地向量模型)→ 仅全文检索。 */
   embedder?: Embedder;
+  /** 既有:只作用于 FTS 路(下推 SQL)。向量路**不**受此约束,见 `restrictChunkIds`。 */
   scope?: RetrievalScope;
+  /**
+   * 新增:把检索锁在这些 chunk 内 —— **两路同时生效**。
+   *
+   * 为什么必须新增而不是复用 `scope`: `scope` 对向量路无效,而向量路是
+   * 「全库 top-N 召回再回表」,若只在融合后过滤,范围内的 chunk 没进全库
+   * top-N 时会漏召回(范围内实际有内容却返回 0 条)。正确做法是在**候选阶段**
+   * 就把向量集合限死:把本集合传给 `listEmbeddingVectors("chunk", ids)`
+   * (该接口本就支持按 targetIds 过滤)。
+   *
+   * 语义:`undefined` = 不限范围(既有行为);`[]` = 明确「范围内无内容」
+   * → 直接返回空结果,**不退化成全库检索**。
+   */
+  restrictChunkIds?: readonly string[];
   /** 最终返回条数（默认 8）。 */
   limit?: number;
   /** 每路召回条数（默认 20）。 */
@@ -55,10 +69,10 @@ export interface HybridSearchResult {
 /**
  * FTS + 向量双路检索 → RRF 融合 → 补全文档/章标题。
  *
- * 向量路的 scope 说明：`scope` 只作用于 FTS 路（下推到 SQL）。向量路是
- * 「先按相似度召回 chunk 再回表」，若将来需要按范围限定，应在 `cosineTopK`
- * 之后按 chunk 的 documentId/chapterId 过滤；当前产品入口（资料库全局搜索）
- * 不需要，故不做多余过滤。
+ * 范围限定（两个不同口径，别混用）：
+ * - `scope`   —— 只作用于 FTS 路（下推到 SQL）；向量路不受它约束。
+ * - `restrictChunkIds` —— **两路同时生效**（向量候选在检索前就按集合限死，
+ *   FTS 结果在融合前再过滤一次保证口径一致）。`[]` 直接短路返回空。
  */
 export async function hybridSearch(
   query: string,
@@ -68,6 +82,11 @@ export async function hybridSearch(
   const recall = Math.max(1, opts.recall ?? 20);
   const q = query.trim();
   if (q.length === 0) return { hits: [], mode: "fulltext" };
+
+  // 空集合 = 明确「范围内无内容」：短路，绝不退化成全库（否则「章内提问」会串章）。
+  if (opts.restrictChunkIds && opts.restrictChunkIds.length === 0) {
+    return { hits: [], mode: "fulltext" };
+  }
 
   const { storage, embedder } = opts;
   const byId = new Map<string, Chunk>();
@@ -84,7 +103,9 @@ export async function hybridSearch(
       const vectors = await embedder.embed([q]);
       const queryVec = vectors[0];
       if (queryVec && queryVec.length > 0) {
-        const candidates = await storage.listEmbeddingVectors(TARGET_TYPE);
+        // restrictChunkIds 传 undefined 时保持既有「全量候选」行为；
+        // 传集合时在**候选阶段**就限死范围（缺口 A 的核心修复）。
+        const candidates = await storage.listEmbeddingVectors(TARGET_TYPE, opts.restrictChunkIds);
         if (candidates.length > 0) {
           const { hits } = cosineTopK(queryVec, candidates, recall);
           const chunks = await Promise.all(hits.map((h) => storage.getChunk(h.targetId)));
@@ -99,8 +120,11 @@ export async function hybridSearch(
     }
   }
 
-  // ---- 融合 ----
-  const fused = fuseRankings([ftsIds, vecIds], { limit });
+  // ---- 融合前按范围过滤 FTS 路（scope 已下推，但显式限制保证两路口径一致）----
+  const allow = opts.restrictChunkIds ? new Set(opts.restrictChunkIds) : undefined;
+  const inRange = (id: string) => !allow || allow.has(id);
+
+  const fused = fuseRankings([ftsIds.filter(inRange), vecIds], { limit });
   const chunks = fused
     .map((id) => byId.get(id))
     .filter((c): c is Chunk => c !== undefined);

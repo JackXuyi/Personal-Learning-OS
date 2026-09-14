@@ -55,6 +55,14 @@ export const PIPELINE_LIMITS = {
   /** 单条要点 / 原文摘录的字符上限（防 AI 灌水）。 */
   keyPointMaxChars: 60,
   keyPointQuoteMaxChars: 200,
+  /** 章内提问：模型可返回的 quotes 条数上限（也是 service 的引用条数上限）。 */
+  chapterQaMaxQuotes: 5,
+  /**
+   * 章内提问：单条 quote 的字符上限。
+   * 显式镜像 `features/learn/evidence-anchor.ts` 的 `MAX_QUOTE_CHARS` —— 分层
+   * 约束不允许 `ai/` import `features/`，故两侧同值并各自注释来源，避免静默漂移。
+   */
+  chapterQaQuoteMaxChars: 2_000,
 } as const;
 
 /** 温度：精修/出题偏稳定，批改最低（事实判定）。 */
