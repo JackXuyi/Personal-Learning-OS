@@ -9,6 +9,8 @@
  * KnowledgeRelation / Embedding / 全文搜索能力。
  */
 import type {
+  CardState,
+  CardStateMap,
   Chapter,
   Chunk,
   Embedding,
@@ -166,6 +168,14 @@ export interface StorageAdapter {
   /** 按 id upsert（先落文本、后回填 feedback 均为本方法）。 */
   saveRestatement(record: Restatement): Promise<void>;
   deleteRestatement(id: string): Promise<void>;
+
+  // ===== 自测卡调度状态（F5 第 4 条；决策 D4-A：只落状态，卡面每次由 Chapter 派生）=====
+  /** 全部卡级调度状态（key = `DerivedCard.id`）。 */
+  listCardStates(): Promise<CardStateMap>;
+  /** 按 cardId upsert（评分与撤销均走本方法）。 */
+  saveCardState(state: CardState): Promise<void>;
+  /** 批量删除（孤儿清理 / 用户重置进度）；**空数组 = 无操作**。 */
+  deleteCardStates(cardIds: string[]): Promise<void>;
 
   // ===== 目标（多目标，U0 数据准备；docs/ui-workbench-plan-2026-09.md §7.2）=====
   listGoals(): Promise<LearningGoal[]>;

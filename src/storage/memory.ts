@@ -8,6 +8,8 @@
  * / Embedding 五类实体的内存实现，供检索引擎与概念抽取消费。
  */
 import type {
+  CardState,
+  CardStateMap,
   Chapter,
   Chunk,
   Embedding,
@@ -43,6 +45,8 @@ export class InMemoryStorage implements StorageAdapter {
   protected profile: LearnerProfile | undefined;
   /** 章级复述（F5）。key = Restatement.id。 */
   protected restatements = new Map<string, Restatement>();
+  /** 自测卡调度状态（F5 第 4 条）。key = DerivedCard.id；只存调度，不存卡面。 */
+  protected cardStates: CardStateMap = {};
   protected goals = new Map<string, LearningGoal>();
   protected activeGoalId: string | undefined;
   protected evidenceLog: EvidenceEntry[] = [];
@@ -335,6 +339,17 @@ export class InMemoryStorage implements StorageAdapter {
   }
   async deleteRestatement(id: string): Promise<void> {
     this.restatements.delete(id);
+  }
+
+  // ===== 自测卡调度状态（F5 第 4 条）=====
+  async listCardStates(): Promise<CardStateMap> {
+    return { ...this.cardStates };
+  }
+  async saveCardState(state: CardState): Promise<void> {
+    this.cardStates[state.cardId] = state;
+  }
+  async deleteCardStates(cardIds: string[]): Promise<void> {
+    for (const id of cardIds) delete this.cardStates[id];
   }
 
   async listGoals(): Promise<LearningGoal[]> {
