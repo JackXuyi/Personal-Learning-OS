@@ -75,6 +75,32 @@ export const PIPELINE_LIMITS = {
   restatementAdviceMaxChars: 120,
   /** 复述：章正文注入上限（对齐 chapterBlockMaxChars）。 */
   restatementBodyChars: 12_000,
+  /**
+   * 目标级能力评测（F6）：能力项产出条数上限。
+   * 显式镜像 `engine/capability-engine.ts` 的 `CAPABILITY_LIMITS.maxItems` ——
+   * 分层约束不允许 `ai/` import `engine/`，故两侧同值并各自注释来源。
+   */
+  capabilityItemMax: 6,
+  /** 能力项：label / description 字符上限（对齐 CAPABILITY_LIMITS.labelChars / descChars）。 */
+  capabilityItemLabelChars: 60,
+  capabilityItemDescChars: 200,
+  /** 场景任务：条数上限（对齐 CAPABILITY_LIMITS.maxTasks）。 */
+  capabilityTaskMax: 5,
+  /** 场景任务：题面字符上限（对齐 CAPABILITY_LIMITS.promptChars）。 */
+  capabilityTaskPromptChars: 600,
+  /** 场景任务：交付要求字符上限（对齐 CAPABILITY_LIMITS.deliverableHintChars）。 */
+  capabilityTaskHintChars: 200,
+  /** 场景任务：rubric 评判要点条数与单条字数上限（对齐 CAPABILITY_LIMITS.criteria*）。 */
+  capabilityTaskCriteriaMax: 4,
+  capabilityTaskCriteriaChars: 120,
+  /** 判分：理由字符上限（对齐 CAPABILITY_LIMITS.rationaleChars）。 */
+  capabilityRationaleChars: 120,
+  /** 判分：单条引文字符上限（对齐 CAPABILITY_LIMITS.quoteMaxChars / restatementQuoteMaxChars）。 */
+  capabilityQuoteMaxChars: 200,
+  /** 素材注入上限（对齐 restatementBodyChars）。 */
+  capabilityMaterialChars: 12_000,
+  /** 单任务作答注入上限（对齐 CAPABILITY_LIMITS.answerMaxChars）。 */
+  capabilityAnswerChars: 4_000,
 } as const;
 
 /** 温度：精修/出题偏稳定，批改最低（事实判定）。 */
