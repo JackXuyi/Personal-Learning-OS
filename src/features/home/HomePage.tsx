@@ -19,7 +19,8 @@ import { bandOf, type ChapterLoopSnapshot } from "../../engine";
 import { useI18n, type Messages } from "../../i18n";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { evidenceActionKey } from "../evidence-label";
-import { chapterActionMeta, chapterDisplayTitle } from "../plan/chapter-action";
+import { chapterActionMeta, chapterDisplayTitle, estimateEtaMin } from "../plan/chapter-action";
+import { planQuota } from "../plan/plan-quota";
 import { useChapterIndex, useRunChapterAction } from "../plan/run-action";
 
 /**
@@ -117,6 +118,18 @@ function TodayView() {
   const items = plan.actions.slice(1, 4);
   const gaps = plan.actions.length;
 
+  // F2：时间维度（纯派生）。无截止日 → dueTodayMin/pace 均缺失 → 首页与改动前一致（D3/D4）。
+  const quota = planQuota({
+    actions: plan.actions,
+    chapterOf: (id) => index.get(id),
+    ...(plan.profile ? { profile: plan.profile } : {}),
+    ...(plan.goal?.deadlineAt !== undefined ? { deadlineAt: plan.goal.deadlineAt } : {}),
+  });
+  // 标题里的分钟数取**本清单口径**（`items` 的时长和）—— 与「N 项」同口径，
+  // 否则会出现「3 项 · 建议 12 分钟（那其实是主行动的时长）」的自相矛盾。
+  const itemsMinutes = items.reduce((n, a) => n + estimateEtaMin(a, index.get(a.unitId)), 0);
+  const showQuota = quota.dueTodayMin !== undefined;
+
   return (
     <div className="mt-5">
       {/* 目标上下文 + 章就绪度 */}
@@ -143,6 +156,13 @@ function TodayView() {
         />
       </div>
 
+      {/* F2 落后警示（D4）：仅「有截止日 + 已声明预算 + 落后」时出现；超前不显示（不制造暗示）。 */}
+      {quota.pace?.behind ? (
+        <p className="mt-2 text-sm text-amber-700" data-testid="home-behind-warning">
+          ⚠ {m.home.behindWarning(quota.pace.days)}
+        </p>
+      ) : null}
+
       {/* NEXT BEST ACTION —— 一屏一个主决策 */}
       <Section title={m.home.nextBestAction} className="mt-6" />
       <div className="mt-2">
@@ -153,7 +173,11 @@ function TodayView() {
       {items.length > 0 ? (
         <>
           <Section
-            title={m.home.todayTitle(items.length)}
+            title={
+              showQuota
+                ? m.home.quotaTitle(items.length, itemsMinutes)
+                : m.home.todayTitle(items.length)
+            }
             className="mt-6"
             action={
               <Link to="/plan" className="text-xs font-medium text-primary hover:text-primary/70">
