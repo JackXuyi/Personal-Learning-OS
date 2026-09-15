@@ -14,12 +14,13 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Bar, Card, EvidenceRow, KnowledgeRow, Section } from "../../components/primitives";
 import { PageContainer } from "../../components/layout/AppShell";
 import { MASTERY_FLOOR, MASTERY_THRESHOLD } from "../../domain";
-import type { Chapter, EvidenceEntry, LearningGoal, SourceDocument } from "../../domain";
-import { runChapterLoop, type ChapterLoopSnapshot } from "../../engine";
+import type { CapabilityItem, CapabilityReport, Chapter, EvidenceEntry, LearningGoal, SourceDocument } from "../../domain";
+import { capabilityStatsOf, runChapterLoop, type ChapterLoopSnapshot } from "../../engine";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { useI18n, type Messages } from "../../i18n";
 import { evidenceActionKey } from "../evidence-label";
 import { chapterDisplayTitle, estimatePlanEta } from "../plan/chapter-action";
+import { listGoalCapabilityItems, latestCapabilityReport } from "./capability-service";
 import { fmtDate } from "./GoalsPage";
 
 interface Loaded {
@@ -29,6 +30,8 @@ interface Loaded {
   isActive: boolean;
   /** 反查关联资料（SourceDocument.goalIds 含本目标；评审 M1-2）。 */
   linkedDocs: SourceDocument[];
+  /** F6：能力框架规模 + 最近一份报告（**不改 readiness 口径**，只并列展示）。 */
+  capability: { items: CapabilityItem[]; report?: CapabilityReport };
 }
 
 /** 掌握度 → 状态点语义（与 bandOf 同源简化：0 / <0.6 / <0.8 / ≥0.8）。 */
@@ -56,11 +59,13 @@ export default function GoalDetailPage() {
   const load = useCallback(async () => {
     setError(undefined);
     try {
-      const [goals, activeGoal, evidence, docs] = await Promise.all([
+      const [goals, activeGoal, evidence, docs, capItems, capReport] = await Promise.all([
         storage.listGoals(),
         storage.getActiveGoal(),
         storage.listEvidence(),
         storage.listDocuments(),
+        listGoalCapabilityItems(goalId, storage),
+        latestCapabilityReport(goalId, storage),
       ]);
       const goal = goals.find((x) => x.id === goalId);
       if (!goal) {
@@ -70,7 +75,14 @@ export default function GoalDetailPage() {
       // 章级闭环快照按该目标 scope 重算（作用域与就绪度同源：runChapterLoop §7.3）。
       const plan = await runChapterLoop(storage, m, goal.id);
       const linkedDocs = docs.filter((d) => (d.goalIds ?? []).includes(goal.id));
-      setLoaded({ goal, plan, evidence, isActive: activeGoal?.id === goal.id, linkedDocs });
+      setLoaded({
+        goal,
+        plan,
+        evidence,
+        isActive: activeGoal?.id === goal.id,
+        linkedDocs,
+        capability: { items: capItems, ...(capReport ? { report: capReport } : {}) },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -161,6 +173,11 @@ export default function GoalDetailPage() {
     ...(plan.profile ? { profile: plan.profile } : {}),
     ...(goal.deadlineAt !== undefined ? { deadlineAt: goal.deadlineAt } : {}),
   });
+  // F6：能力达标度与章就绪度**同源不同口径**（章就绪度不受能力评测影响）。
+  const capStats = loaded.capability.report
+    ? capabilityStatsOf(loaded.capability.report)
+    : undefined;
+  const capReport = loaded.capability.report;
 
   return (
     <PageContainer>
@@ -284,6 +301,51 @@ export default function GoalDetailPage() {
               : ""}
           </p>
         ) : null}
+      </div>
+
+      {/* CAPABILITY（F6）：与章就绪度**并列**展示 —— 章就绪度不等于「我够格了」，
+          但两者口径互不改写（决策 D5-A：能力评测不进 readiness 公式）。 */}
+      <div
+        className="mt-6 rounded-xl border border-line bg-surface p-4"
+        data-testid="goal-capability"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-3">
+              {g.detail.capabilityEyebrow}
+            </p>
+            {capStats ? (
+              <p className="mt-1 text-sm font-semibold text-ink-1">
+                {g.detail.capabilityOf(capStats.passed, capStats.total)}{" "}
+                <span className="font-normal text-ink-3">
+                  · {Math.round(capStats.rate * 100)}%
+                </span>
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-ink-2">{g.detail.capabilityEmpty}</p>
+            )}
+            {capStats && capStats.uncovered > 0 ? (
+              <p className="mt-1 text-[11px] text-state-weak">
+                {g.detail.capabilityUncovered(capStats.uncovered)}
+              </p>
+            ) : null}
+            {capReport ? (
+              <p className="mt-1 text-[11px] text-ink-3">
+                {m.capability.snapshotNote(fmtDate(capReport.createdAt, lang))}
+              </p>
+            ) : null}
+            <p className="mt-1 text-[11px] text-ink-3">
+              {m.capability.itemsCount(loaded.capability.items.length)}
+            </p>
+          </div>
+          <Link
+            to={`/goals/${goal.id}/capability`}
+            data-testid="goal-capability-link"
+            className="shrink-0 rounded-md border border-line bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-subtle"
+          >
+            {g.detail.viewCapabilityReport}
+          </Link>
+        </div>
       </div>
 
       {/* 关联资料：SourceDocument.goalIds 反查（目标页反哺，评审 M1-2） */}

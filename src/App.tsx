@@ -16,6 +16,8 @@ import AssessmentPage from "./features/assessment/AssessmentPage";
 import GoalsPage from "./features/goals/GoalsPage";
 import GoalFormPage from "./features/goals/GoalFormPage";
 import GoalDetailPage from "./features/goals/GoalDetailPage";
+import CapabilityPage from "./features/goals/CapabilityPage";
+import CapabilityRunPage from "./features/goals/CapabilityRunPage";
 import LearnerPage from "./features/learner/LearnerPage";
 import PlanPage from "./features/plan/PlanPage";
 import ReviewSession from "./features/study/ReviewSession";
@@ -52,6 +54,9 @@ export default function App() {
           <Route path="goals" element={<GoalsPage />} />
           <Route path="goals/new" element={<GoalFormPage />} />
           <Route path="goals/:goalId/edit" element={<GoalFormPage />} />
+          {/* F6 目标级能力评测（语义更窄者优先：capability 路由必须先于详情页） */}
+          <Route path="goals/:goalId/capability" element={<CapabilityPage />} />
+          <Route path="goals/:goalId/capability/run/:runId" element={<CapabilityRunPage />} />
           <Route path="goals/:goalId" element={<GoalDetailPage />} />
           {/* U6 My Learner：纯视图画像 */}
           <Route path="learner" element={<LearnerPage />} />

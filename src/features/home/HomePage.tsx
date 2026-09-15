@@ -209,6 +209,7 @@ function TodayView() {
                   key={`${row.at}-${i}`}
                   time={timeAgo(row.at, m)}
                   title={row.title}
+                  verdict={row.verdict}
                   delta={row.delta}
                   deltaTone={row.tone}
                 />
@@ -353,8 +354,14 @@ function chapterIndexOf(plan: ChapterLoopSnapshot, chapterId: string): Chapter |
 interface EvidenceView {
   at: number;
   title: string;
-  delta: string;
+  /**
+   * 掌握度变化量。**能力评测行不给**（F6）：`kind:"capability"` 的 `delta` 恒 0
+   * —— 它不改 mastery，显示「0.00」会让人以为「白学了」。
+   */
+  delta?: string;
   tone: "up" | "down" | "neutral";
+  /** 结论（能力评测行用「达标 / 未达标」代替变化量）。 */
+  verdict?: string;
 }
 
 /**
@@ -365,12 +372,34 @@ function evidenceActionLabel(kind: EvidenceKind, m: Messages): string {
   return m.units.action[evidenceActionKey(kind)];
 }
 
-/** log 行 → 展示行（章标题经 plan 索引；找不到章回退 subjectId）。 */
+/**
+ * log 行 → 展示行。
+ *
+ * **主体解析（F6 / 决策 D7-A）**：`subjectKind === "goal"` 时主体是**目标**而非章
+ * —— 标题走 `capability.evidenceSubject(goalTitle)`；目标已被删（证据保留）→
+ * `capability.evidenceFallback`（**绝不显示裸 goalId**）。
+ *
+ * **零回归（TC-REG-04）**：旧数据没有 `subjectKind`（缺省 = chapter），一律走下方
+ * 章分支，行为与改动前逐字节一致。
+ */
 function logToView(
   entry: EvidenceEntry,
   plan: ChapterLoopSnapshot,
   m: Messages,
+  goalTitleOf: ReadonlyMap<string, string>,
 ): EvidenceView {
+  if (entry.kind === "capability" && entry.subjectKind === "goal") {
+    const goalTitle = goalTitleOf.get(entry.subjectId);
+    return {
+      at: entry.at,
+      title: goalTitle
+        ? m.capability.evidenceSubject(goalTitle)
+        : m.capability.evidenceFallback,
+      tone: "neutral",
+      verdict:
+        entry.verdict === "fail" ? m.capability.verdict.fail : m.capability.verdict.pass,
+    };
+  }
   const chapter = chapterIndexOf(plan, entry.subjectId);
   const baseTitle = chapter
     ? chapterDisplayTitle(chapter, plan.docTitleOf[chapter.id], m)
@@ -391,7 +420,12 @@ async function loadRecentEvidence(
 ): Promise<EvidenceView[]> {
   try {
     const log = await storage.listEvidence();
-    if (log.length > 0) return log.slice(0, 6).map((e) => logToView(e, plan, m));
+    if (log.length > 0) {
+      // 目标标题索引（能力评测行需要）：读失败 → 空索引 → 行内回退通用文案。
+      const goals = await storage.listGoals().catch(() => []);
+      const goalTitleOf = new Map(goals.map((g) => [g.id, g.title] as const));
+      return log.slice(0, 6).map((e) => logToView(e, plan, m, goalTitleOf));
+    }
   } catch {
     /* log 读取失败 → 走旧组装兜底。 */
   }
