@@ -7,7 +7,9 @@
  *   1) 章状态 —— 状态徽标 + 掌握度 Bar + 口径说明（我学到哪）；
  *   2) Why it matters —— 要点首条 / 正文首句兜底（它讲什么 / 为什么值得学）；
  *   3) Knowledge —— 要点生成可点选知识 chips（N5 unitIds 就绪后以概念为准）；
- *      底部保留「打开本章概念图谱」N5 入口；
+ *      底部保留「打开本章概念图谱」N5 入口；action 区另有**自测卡入口**
+ *      （「自测本章 · N 张」，由带原文出处的要点派生，零 AI；见
+ *      docs/learn-flashcard-design-2026-09.md）；
  *   4) 问这一章 —— 章内提问面板（答案只依据用户导入的原文，引用可点回正文高亮）；
  *   5) 讲给我听 —— 费曼式复述面板（用自己的话讲一遍，AI 对照本章原文给差距反馈）；
  *   6) Evidence —— 溯源（《doc》第 x 章）+ 最近一次含本章的测评 Δ 掌握度（证据从哪来）。
@@ -30,6 +32,7 @@ import { chapterBadge } from "./chapter-badge";
 import { highlightRange, HIGHLIGHT_WINDOW } from "./highlight";
 import ChapterQaPanel from "./reader/ChapterQaPanel";
 import ChapterRestatementPanel from "./reader/ChapterRestatementPanel";
+import { peekCardStats } from "./flashcard-service";
 import { pickRenderer } from "./render/renderer-registry";
 import PlainTextRenderer from "./render/PlainTextRenderer";
 import RenderErrorBoundary from "./render/RenderErrorBoundary";
@@ -52,6 +55,13 @@ export default function ChapterReaderPage() {
   const [evidence, setEvidence] = useState<ChapterEvidence>({ state: "loading" });
   /** Knowledge 区点选高亮的知识块（-1 = 无）。 */
   const [activeChip, setActiveChip] = useState(-1);
+  /**
+   * 自测卡计数（F5 第 4 条）—— **只读**统计：已派生的卡数 / 到期数 / 无原文出处条数。
+   * 计数真实来自 `keyPoints` ∩ `keyPointRefs`，不编造（入口按钮的显示依据）。
+   */
+  const [cards, setCards] = useState<
+    { total: number; due: number; uncarded: number } | undefined
+  >();
 
   const [searchParams] = useSearchParams();
   /** 原文锚点（文档绝对偏移）；非法值一律当未提供（与 ContentTab 同口径）。 */
@@ -116,6 +126,18 @@ export default function ChapterReaderPage() {
   useEffect(() => {
     setHighlight(undefined);
   }, [chapter?.id, at]);
+
+  /** 自测卡计数（只读；`peekCardStats` 不写任何东西）。要点重跑后自动刷新。 */
+  useEffect(() => {
+    if (!chapter || !doc) return;
+    let alive = true;
+    void peekCardStats({ documentId: doc.id, chapterId: chapter.id }, Date.now()).then((st) => {
+      if (alive) setCards({ total: st.total, due: st.due, uncarded: st.uncarded });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [doc?.id, chapter?.id, chapter?.keyPoints.length, chapter?.keyPointRefs?.length]);
 
   /**
    * 渲染完成后再高亮：Markdown 子树异步提交 DOM，两帧时机与 `ContentTab` 一致。
@@ -276,12 +298,26 @@ export default function ChapterReaderPage() {
             <Section
               title={t.knowledgeEyebrow}
               action={
-                <Link
-                  to={`/learn/${chapter.id}/graph`}
-                  className="text-xs font-medium text-ink-3 transition-colors hover:text-primary"
-                >
-                  {t.openGraph}
-                </Link>
+                <div className="flex items-center gap-3">
+                  {cards && cards.total > 0 ? (
+                    <Link
+                      to={`/study/session?mode=cards&documentId=${doc.id}&chapterId=${chapter.id}`}
+                      data-testid="chapter-cards-cta"
+                      className="text-xs font-medium text-primary transition-colors hover:underline"
+                    >
+                      <span data-testid="chapter-cards-count">
+                        {t.cards.cta(cards.total)}
+                        {cards.due > 0 ? ` · ${t.cards.dueBadge(cards.due)}` : ""}
+                      </span>
+                    </Link>
+                  ) : null}
+                  <Link
+                    to={`/learn/${chapter.id}/graph`}
+                    className="text-xs font-medium text-ink-3 transition-colors hover:text-primary"
+                  >
+                    {t.openGraph}
+                  </Link>
+                </div>
               }
             />
             {chapter.keyPoints.length > 0 ? (
@@ -309,6 +345,25 @@ export default function ChapterReaderPage() {
             ) : (
               <p className="text-sm text-ink-3">{t.noPoints}</p>
             )}
+            {/* 无原文出处的要点不成卡：如实说明，不生成「正面 = 背面」的空卡 */}
+            {cards && cards.uncarded > 0 ? (
+              <div data-testid="chapter-cards-uncarded" className="space-y-0.5">
+                {cards.total > 0 ? (
+                  <p className="text-xs text-ink-3">
+                    {t.cards.uncarded(cards.uncarded, cards.uncarded + cards.total)}
+                  </p>
+                ) : (
+                  <p className="text-xs text-ink-3">{t.cards.uncardedAll}</p>
+                )}
+                <Link
+                  to={`/learn/doc/${doc.id}?tab=knowledge`}
+                  className="inline-block text-xs font-medium text-primary hover:underline"
+                >
+                  {t.cards.goAnalyze}
+                </Link>
+                <p className="text-xs text-ink-3">{t.cards.needAi}</p>
+              </div>
+            ) : null}
           </section>
 
           {/* 4 · 问这一章（章内提问；答案只依据本资料原文，引用可点回正文） */}

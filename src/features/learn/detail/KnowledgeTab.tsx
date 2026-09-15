@@ -5,9 +5,12 @@
  * - **B2**：AI 就绪判定从恒 null 的 stub 换成 `useAiReady()`（响应式订阅全局配置）；
  * - 要点带**原文出处**：优先渲染 `chapter.keyPointRefs`（point + quote + 跳转），
  *   老数据无 refs 时回退 `keyPoints` 纯文本（TC-EDGE-01 不报错）；
- * - 新增「AI 分析要点」入口（analyzeKeyPointsNow），与既有「AI 分析概念」并列。
+ * - 新增「AI 分析要点」入口（analyzeKeyPointsNow），与既有「AI 分析概念」并列；
+ * - 新增**资料级自测卡入口**（F5 第 4 条：由带原文出处的要点派生卡片，零 AI，
+ *   计数只读；见 docs/learn-flashcard-design-2026-09.md）—— 与要点分析按钮并列，
+ *   无卡时禁用（不编造计数）。
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useI18n } from '../../../i18n';
 import { storage } from '../../../stores/useLoopStore';
@@ -19,6 +22,7 @@ import { notifyDocsChanged } from '../../../components/layout/AppShell';
 import { buildActiveProvider } from '../../../stores/useSettingsStore';
 import { useAiReady } from '../../../hooks/useAiReady';
 import { analyzeConceptsNow, analyzeKeyPointsNow } from '../analyze-service';
+import { peekCardStats } from '../flashcard-service';
 import { MarkdownInline } from '../render/markdown-core';
 import GraphView from '../../knowledge/GraphView';
 import { subgraphOf } from '../../../engine/graph-engine';
@@ -62,6 +66,21 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
 
   const extracted = chapters.filter((c) => (c.unitIds?.length ?? 0) > 0).length;
   const withRefs = chapters.filter((c) => (c.keyPointRefs?.length ?? 0) > 0).length;
+
+  /**
+   * 资料级自测卡计数（F5 第 4 条）—— 只读（`peekCardStats` 零写入），
+   * 无卡时按钮禁用；计数真实来自「带原文出处的要点」，不编造。
+   */
+  const [cardStats, setCardStats] = useState<{ total: number; due: number } | undefined>();
+  useEffect(() => {
+    let alive = true;
+    void peekCardStats({ documentId: doc.id }, Date.now()).then((st) => {
+      if (alive) setCardStats({ total: st.total, due: st.due });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [doc.id, chapters.length, withRefs]);
 
   const masteryMap = useMemo(() => {
     if (!learner) return {};
@@ -188,6 +207,16 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
         <Section
           title={t.learn.detail.knowledge.pointsHead}
           action={
+          <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => navigate(`/study/session?mode=cards&documentId=${doc.id}`)}
+            disabled={!cardStats || cardStats.total === 0}
+            data-testid="knowledge-cards-cta"
+          >
+            {t.learn.reader.cards.startAll(cardStats?.total ?? 0, cardStats?.due ?? 0)}
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -199,6 +228,7 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
               ? t.learn.detail.knowledge.reExtractPoints
               : t.learn.detail.knowledge.extractPoints}
           </Button>
+          </div>
           }
         />
         {!aiReady && (

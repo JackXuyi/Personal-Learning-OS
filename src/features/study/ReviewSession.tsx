@@ -12,6 +12,8 @@ import { storage, useLoopStore, type SubmitResult } from "../../stores/useLoopSt
 import { useSessionStore } from "../../stores/useSessionStore";
 import { useI18n } from "../../i18n";
 import { unitTitle } from "../units";
+import CardSession from "./CardSession";
+import { resolveReviewSessionMode } from "./session-mode";
 
 type Stage = "show" | "rated";
 
@@ -30,7 +32,30 @@ interface SessionItem {
   intervalDays: number;
 }
 
+/**
+ * 模式分发（F5 第 4 条「自测卡」）：`?mode=cards&documentId=…[&chapterId=…]` →
+ * 卡片会话（`CardSession`）；其余一律走既有会话体（概念层 / 全局闭环快照）。
+ * 判定逻辑与「为什么卡片模式必须优先于概念模式」见 `session-mode.ts`。
+ *
+ * 采用**委托**而非在本组件内加分支：既有会话体（`SessionBody`）因此**零改动** ——
+ * 卡片模式根本不经过它的 hooks 与数据流，`snapshot` / `submitAnswer` /
+ * `applyRating` 全都碰不到（卡片**不移动掌握度**）。
+ */
 export default function ReviewSession() {
+  const [params] = useSearchParams();
+  const mode = resolveReviewSessionMode({
+    mode: params.get("mode"),
+    documentId: params.get("documentId"),
+    chapterId: params.get("chapterId"),
+  });
+  if (mode.cardMode && mode.cardDocumentId) {
+    return <CardSession documentId={mode.cardDocumentId} chapterId={mode.cardChapterId} />;
+  }
+  return <SessionBody />;
+}
+
+/** 既有会话体：概念层队列（带 `chapterId`）或全局闭环快照队列（默认）。 */
+function SessionBody() {
   const { m } = useI18n();
   const r = m.review;
   const navigate = useNavigate();
