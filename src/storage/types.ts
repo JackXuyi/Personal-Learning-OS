@@ -9,6 +9,9 @@
  * KnowledgeRelation / Embedding / 全文搜索能力。
  */
 import type {
+  CapabilityItem,
+  CapabilityReport,
+  CapabilityRun,
   CardState,
   CardStateMap,
   Chapter,
@@ -188,4 +191,25 @@ export interface StorageAdapter {
   getActiveGoal(): Promise<LearningGoal | undefined>;
   /** id 传 undefined = 清除偏好（读取时回退首个目标）。 */
   setActiveGoal(id: string | undefined): Promise<void>;
+
+  // ===== 目标级能力评测（F6；决策 D5-A：独立证据层，绝不写 LearnerState）=====
+  /**
+   * 某目标的能力项清单（`createdAt` 升序 = 展示顺序）。
+   * 不存在的目标返回空数组（不抛错 —— 调用方据此走「建立能力框架」空态）。
+   */
+  listCapabilityItems(goalId: string): Promise<CapabilityItem[]>;
+  /** 整批写回（清单编辑 = 全量覆盖）。**空数组 = 清空该目标清单**。 */
+  saveCapabilityItems(goalId: string, items: CapabilityItem[]): Promise<void>;
+  /** 某目标的全部评测运行（`createdAt` 降序）。 */
+  listCapabilityRuns(goalId: string): Promise<CapabilityRun[]>;
+  getCapabilityRun(id: string): Promise<CapabilityRun | undefined>;
+  /** 按 id upsert（草稿作答、提交、评分回填均为本方法）。 */
+  saveCapabilityRun(run: CapabilityRun): Promise<void>;
+  /** 某目标的全部报告（`createdAt` 降序；append-only —— 重评产生新报告）。 */
+  listCapabilityReports(goalId: string): Promise<CapabilityReport[]>;
+  getCapabilityReport(id: string): Promise<CapabilityReport | undefined>;
+  /** 按 id upsert；**报告不原地更新**（同 id 仅用于幂等重放）。 */
+  saveCapabilityReport(report: CapabilityReport): Promise<void>;
+  /** 目标级联清理（UC-08）：清空清单 + 删除该目标全部 run / report。幂等。 */
+  deleteCapabilityDataByGoal(goalId: string): Promise<void>;
 }

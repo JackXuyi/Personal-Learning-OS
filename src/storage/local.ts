@@ -6,6 +6,9 @@
  * 工厂函数。注意：localStorage 不得用于存放密钥。
  */
 import type {
+  CapabilityItem,
+  CapabilityReport,
+  CapabilityRun,
   CardState,
   CardStateMap,
   Chapter,
@@ -50,6 +53,10 @@ const KEY_CARDS = "plos.flashcards";
 const KEY_GOALS = "plos.goals";
 const KEY_ACTIVE_GOAL = "plos.active-goal";
 const KEY_EVIDENCE = "plos.evidence";
+/** 目标级能力评测（F6）：三个新 key，无旧数据 → 零迁移。 */
+const KEY_CAPABILITY_ITEMS = "plos.capability-items";
+const KEY_CAPABILITY_RUNS = "plos.capability-runs";
+const KEY_CAPABILITY_REPORTS = "plos.capability-reports";
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -102,6 +109,16 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     this.goals = new Map(load<LearningGoal[]>(KEY_GOALS, []).map((g) => [g.id, g]));
     this.activeGoalId = load<string | undefined>(KEY_ACTIVE_GOAL, undefined);
     this.evidenceLog = load<EvidenceEntry[]>(KEY_EVIDENCE, []);
+    // 目标级能力评测（F6）
+    this.capabilityItems = new Map(
+      Object.entries(load<Record<string, CapabilityItem[]>>(KEY_CAPABILITY_ITEMS, {})),
+    );
+    this.capabilityRuns = new Map(
+      load<CapabilityRun[]>(KEY_CAPABILITY_RUNS, []).map((r) => [r.id, r]),
+    );
+    this.capabilityReports = new Map(
+      load<CapabilityReport[]>(KEY_CAPABILITY_REPORTS, []).map((r) => [r.id, r]),
+    );
   }
 
   /**
@@ -153,6 +170,16 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     localStorage.setItem(KEY_CARDS, JSON.stringify(this.cardStates));
     localStorage.setItem(KEY_GOALS, JSON.stringify([...this.goals.values()]));
     localStorage.setItem(KEY_EVIDENCE, JSON.stringify(this.evidenceLog));
+    // 目标级能力评测（F6）
+    localStorage.setItem(
+      KEY_CAPABILITY_ITEMS,
+      JSON.stringify(Object.fromEntries(this.capabilityItems)),
+    );
+    localStorage.setItem(KEY_CAPABILITY_RUNS, JSON.stringify([...this.capabilityRuns.values()]));
+    localStorage.setItem(
+      KEY_CAPABILITY_REPORTS,
+      JSON.stringify([...this.capabilityReports.values()]),
+    );
   }
 
   override async saveDocument(doc: SourceDocument): Promise<void> {
@@ -295,6 +322,10 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     await super.saveGoal(goal);
     this.persist();
   }
+  /**
+   * 删除目标：`super` 已级联清理该目标的能力数据（F6 / UC-08，见 memory.ts），
+   * 故此处只需落盘 —— **不要**在此重复调用 `deleteCapabilityDataByGoal`。
+   */
   override async deleteGoal(id: string): Promise<void> {
     await super.deleteGoal(id);
     this.persist();
@@ -312,6 +343,24 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
 
   override async appendEvidence(entry: EvidenceEntry): Promise<void> {
     await super.appendEvidence(entry);
+    this.persist();
+  }
+
+  // ===== 目标级能力评测（F6）写操作 override =====
+  override async saveCapabilityItems(goalId: string, items: CapabilityItem[]): Promise<void> {
+    await super.saveCapabilityItems(goalId, items);
+    this.persist();
+  }
+  override async saveCapabilityRun(run: CapabilityRun): Promise<void> {
+    await super.saveCapabilityRun(run);
+    this.persist();
+  }
+  override async saveCapabilityReport(report: CapabilityReport): Promise<void> {
+    await super.saveCapabilityReport(report);
+    this.persist();
+  }
+  override async deleteCapabilityDataByGoal(goalId: string): Promise<void> {
+    await super.deleteCapabilityDataByGoal(goalId);
     this.persist();
   }
 }

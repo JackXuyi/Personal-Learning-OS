@@ -8,6 +8,9 @@
  * / Embedding 五类实体的内存实现，供检索引擎与概念抽取消费。
  */
 import type {
+  CapabilityItem,
+  CapabilityReport,
+  CapabilityRun,
   CardState,
   CardStateMap,
   Chapter,
@@ -50,6 +53,12 @@ export class InMemoryStorage implements StorageAdapter {
   protected goals = new Map<string, LearningGoal>();
   protected activeGoalId: string | undefined;
   protected evidenceLog: EvidenceEntry[] = [];
+  /** 能力项清单（F6）。key = goalId（每目标一份，顺序即展示顺序）。 */
+  protected capabilityItems = new Map<string, CapabilityItem[]>();
+  /** 评测运行（F6）。key = CapabilityRun.id。 */
+  protected capabilityRuns = new Map<string, CapabilityRun>();
+  /** 能力报告（F6，append-only）。key = CapabilityReport.id。 */
+  protected capabilityReports = new Map<string, CapabilityReport>();
 
   // RAG 存储层：Section / Chunk / Knowledge / Relation / Embedding
   protected sections = new Map<string, Section>();
@@ -358,8 +367,15 @@ export class InMemoryStorage implements StorageAdapter {
   async saveGoal(goal: LearningGoal): Promise<void> {
     this.goals.set(goal.id, goal);
   }
+  /**
+   * 删除目标 + **级联清理该目标的能力数据**（UC-08；F6）。
+   *
+   * 级联放在基类而非 `local.ts`：memory 后端（单测 / SSR）同样必须无残留
+   * —— 否则「删除目标后换后端仍有孤儿报告」类 bug 只在测试里隐形。
+   */
   async deleteGoal(id: string): Promise<void> {
     this.goals.delete(id);
+    await this.deleteCapabilityDataByGoal(id);
   }
 
   async getActiveGoal(): Promise<LearningGoal | undefined> {
@@ -372,6 +388,47 @@ export class InMemoryStorage implements StorageAdapter {
   }
   async setActiveGoal(id: string | undefined): Promise<void> {
     this.activeGoalId = id;
+  }
+
+  // ===== 目标级能力评测（F6）=====
+  async listCapabilityItems(goalId: string): Promise<CapabilityItem[]> {
+    return [...(this.capabilityItems.get(goalId) ?? [])].sort((a, b) => a.createdAt - b.createdAt);
+  }
+  async saveCapabilityItems(goalId: string, items: CapabilityItem[]): Promise<void> {
+    // 空数组 = 清空：删 key 而不是留空数组，避免 listCapabilityItems 语义分叉。
+    if (items.length === 0) this.capabilityItems.delete(goalId);
+    else this.capabilityItems.set(goalId, [...items]);
+  }
+  async listCapabilityRuns(goalId: string): Promise<CapabilityRun[]> {
+    return [...this.capabilityRuns.values()]
+      .filter((r) => r.goalId === goalId)
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }
+  async getCapabilityRun(id: string): Promise<CapabilityRun | undefined> {
+    return this.capabilityRuns.get(id);
+  }
+  async saveCapabilityRun(run: CapabilityRun): Promise<void> {
+    this.capabilityRuns.set(run.id, run);
+  }
+  async listCapabilityReports(goalId: string): Promise<CapabilityReport[]> {
+    return [...this.capabilityReports.values()]
+      .filter((r) => r.goalId === goalId)
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }
+  async getCapabilityReport(id: string): Promise<CapabilityReport | undefined> {
+    return this.capabilityReports.get(id);
+  }
+  async saveCapabilityReport(report: CapabilityReport): Promise<void> {
+    this.capabilityReports.set(report.id, report);
+  }
+  async deleteCapabilityDataByGoal(goalId: string): Promise<void> {
+    this.capabilityItems.delete(goalId);
+    for (const [id, r] of this.capabilityRuns) {
+      if (r.goalId === goalId) this.capabilityRuns.delete(id);
+    }
+    for (const [id, r] of this.capabilityReports) {
+      if (r.goalId === goalId) this.capabilityReports.delete(id);
+    }
   }
 
   async listEvidence(): Promise<EvidenceEntry[]> {
