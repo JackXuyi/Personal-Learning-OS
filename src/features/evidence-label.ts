@@ -19,7 +19,7 @@
 import type { EvidenceKind } from "../domain";
 
 /** `m.units.action` 中与证据动作对应的键。 */
-export type EvidenceActionKey = "assessment" | "review-points" | "restatement";
+export type EvidenceActionKey = "assessment" | "review-points" | "restatement" | "card";
 
 /** EvidenceKind → `m.units.action` 键（穷尽 switch：新增 kind 会在此 typecheck 报错）。 */
 export function evidenceActionKey(kind: EvidenceKind): EvidenceActionKey {
@@ -30,5 +30,7 @@ export function evidenceActionKey(kind: EvidenceKind): EvidenceActionKey {
       return "review-points";
     case "restatement":
       return "restatement";
+    case "card":
+      return "card";
   }
 }

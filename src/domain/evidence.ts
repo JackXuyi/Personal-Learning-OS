@@ -19,7 +19,7 @@
  * features/evidence-label.ts::evidenceActionKey 的说明），否则会被
  * 静默显示成「复习要点」。
  */
-export type EvidenceKind = "assessment" | "review" | "restatement";
+export type EvidenceKind = "assessment" | "review" | "restatement" | "card";
 
 /**
  * 一次证据行。
@@ -27,7 +27,10 @@ export type EvidenceKind = "assessment" | "review" | "restatement";
  * - review：复习要点提交（delta = 0，verdict = 自评档 forget/hard/good/easy）；
  * - restatement：费曼式复述的显式「安排复习」（delta = 0，verdict = 覆盖率派生的
  *   SelfRating 键）。复述**不改掌握度** —— mastery 唯一写方仍是卷面（见
- *   docs/learn-feynman-restatement-design-2026-09.md §3.4 G1）。
+ *   docs/learn-feynman-restatement-design-2026-09.md §3.4 G1）；
+ * - card：自测卡四档评分（delta = 0，verdict = SelfRating 键，sourceId = DerivedCard.id）。
+ *   卡片**不改掌握度** —— 其调度状态（`CardState`）与 `LearnerState` 无通路
+ *   （见 docs/learn-flashcard-design-2026-09.md §13 D6）。
  */
 export interface EvidenceEntry {
   /** 事件发生时间（epoch ms）。 */
@@ -35,11 +38,14 @@ export interface EvidenceEntry {
   kind: EvidenceKind;
   /** 证据主体 —— V2 为章 id。 */
   subjectId: string;
-  /** 判定结果：assessment → "pass"|"fail"；review / restatement → SelfRating 键。 */
+  /** 判定结果：assessment → "pass"|"fail"；review / restatement / card → SelfRating 键。 */
   verdict?: string;
-  /** 掌握度净变化（0..1，可负；review / restatement 恒 0）。 */
+  /** 掌握度净变化（0..1，可负；review / restatement / card 恒 0）。 */
   delta: number;
-  /** 幂等去重来源（assessment = 试卷 id；restatement = 复述记录 id；写入口按此查重）。 */
+  /**
+   * 幂等去重来源（assessment = 试卷 id；restatement = 复述记录 id；
+   * card = DerivedCard.id；写入口按此查重）。
+   */
   sourceId?: string;
 }
 
