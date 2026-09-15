@@ -407,7 +407,7 @@ never depend on a network call.
 Every capability the project intends to ship — this doubles as the roadmap.
 `[x]` = shipped · `[ ]` = not yet · `P0` / `P1` / `P2` = priority of the unshipped items.
 
-**28 shipped · 16 not yet.**
+**30 shipped · 15 not yet.**
 
 ### 📥 Ingestion
 
@@ -448,6 +448,7 @@ Every capability the project intends to ship — this doubles as the roadmap.
 - [x] Forgetting curve — 30-day half-life
 - [x] Spaced repetition: `nextReviewAt` → review queue
 - [x] Goal-level capability assessment — an objective baseline paper (reference score only) plus scenario tasks scored by AI against a rubric, every citation anchored back to your own answer; produces an append-only capability report and never moves mastery
+- [x] Capability item list — the AI proposes 3–6 items from the goal and its chapters, and you can add, edit or drop them; each item's pass threshold is adjustable
 
 ### 🎯 Goals & planning
 
