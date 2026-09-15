@@ -19,7 +19,7 @@
 import type { EvidenceKind } from "../domain";
 
 /** `m.units.action` 中与证据动作对应的键。 */
-export type EvidenceActionKey = "assessment" | "review-points" | "restatement" | "card";
+export type EvidenceActionKey = "assessment" | "review-points" | "restatement" | "card" | "capability";
 
 /** EvidenceKind → `m.units.action` 键（穷尽 switch：新增 kind 会在此 typecheck 报错）。 */
 export function evidenceActionKey(kind: EvidenceKind): EvidenceActionKey {
@@ -32,5 +32,8 @@ export function evidenceActionKey(kind: EvidenceKind): EvidenceActionKey {
       return "restatement";
     case "card":
       return "card";
+    case "capability":
+      // F6：主体是**目标**（subjectKind="goal"），不是章 —— 见 domain/evidence.ts。
+      return "capability";
   }
 }

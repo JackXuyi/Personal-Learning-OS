@@ -34,6 +34,7 @@ export * from "./embedding";
 export * from "./qa";
 export * from "./restatement";
 export * from "./flashcard";
+export * from "./capability";
 
 /** 确定性的、无依赖的 id 生成器（契合 local-first 理念）。 */
 export function newId(prefix: string): string {
