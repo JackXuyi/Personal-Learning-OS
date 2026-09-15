@@ -425,6 +425,10 @@ export const zh = {
     pendingOf: (n: number) => `待补 ${n} 项`,
     nextBestAction: "下一步行动",
     todayTitle: (n: number) => `今日 ${n} 项`,
+    /** F2：有截止日时补时长；无截止日仍走 todayTitle（零回归）。 */
+    quotaTitle: (n: number, min: number) => `今日 ${n} 项 · 建议 ${min} 分钟`,
+    /** F2：落后警示（沿用「预计晚 N 天」口径，不引入第二套数字）。 */
+    behindWarning: (days: number) => `按当前节奏，预计晚 ${days} 天达标`,
     viewPlan: "查看完整计划",
     recentEvidence: "最近证据",
     evidenceEmpty: "暂无测评记录——完成测评或复习后，学习证据会出现在这里。",
@@ -1377,6 +1381,13 @@ export const zh = {
     etaFinish: (date: string) => `按你声明的每周时间预算，预计 ${date} 学完`,
     etaBehind: (days: number) => `比截止日晚 ${days} 天`,
     etaAhead: (days: number) => `比截止日充裕 ${days} 天`,
+    /** F2：每日配额与时间分组（只陈述数字，不含「落后/加油」之类的评判）。 */
+    quotaToday: (min: number, n: number) => `今天建议 ${min} 分钟 · ${n} 项`,
+    quotaDaysLeft: (d: number) => `距截止还有 ${d} 天`,
+    quotaOverdue: (d: number) => `已超截止 ${d} 天`,
+    groupToday: "今天必做",
+    groupWeek: "本周完成",
+    groupLater: "之后",
   },
 
   review: {

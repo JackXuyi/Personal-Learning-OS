@@ -431,6 +431,10 @@ export const en: Messages = {
     pendingOf: (n: number) => `${n} to go`,
     nextBestAction: "Next best action",
     todayTitle: (n: number) => `${n} items today`,
+    /** F2: adds duration when a deadline exists; no deadline keeps todayTitle. */
+    quotaTitle: (n: number, min: number) => `${n} items today · ${min} min suggested`,
+    /** F2: behind warning (reuses the "N days past" figure, no second number). */
+    behindWarning: (days: number) => `At this pace, ${days} day(s) past the target`,
     viewPlan: "View full plan",
     recentEvidence: "Recent evidence",
     evidenceEmpty:
@@ -1419,6 +1423,13 @@ export const en: Messages = {
     etaFinish: (date: string) => `With your declared weekly budget, done around ${date}`,
     etaBehind: (days: number) => `${days} days past the deadline`,
     etaAhead: (days: number) => `${days} days ahead of the deadline`,
+    /** F2: daily quota and time groups (states numbers only, no judgement). */
+    quotaToday: (min: number, n: number) => `${min} min suggested today · ${n} item(s)`,
+    quotaDaysLeft: (d: number) => `${d} day(s) to the deadline`,
+    quotaOverdue: (d: number) => `${d} day(s) past the deadline`,
+    groupToday: "Do today",
+    groupWeek: "This week",
+    groupLater: "Later",
   },
 
   review: {
