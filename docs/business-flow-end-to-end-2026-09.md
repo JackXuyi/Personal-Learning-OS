@@ -35,10 +35,14 @@
 | E1 | 设定学习目标 | ✅ | — |
 | E2 | 填写个人信息 + 圈选资料 | ⚠️ **半缺失** | 🔴 **画像无任何输入字段，LearnerPage 纯只读** |
 | E3 | 生成学习计划 | ✅ | 🟠 deadline 不参与排程，ETA 与截止期脱钩 |
-| E4 | AI 评测 | ⚠️ **降级态** | 🔴 `generateAssessment/evaluateAnswer` 全部 `not implemented` |
+| E4 | AI 评测 | ✅ **已闭合** | ⚠️ 原文为「🔴 `generateAssessment/evaluateAnswer` 全部 `not implemented`」—— **已由 F6 目标级能力评测收口（2026-09-15）**，那两个废弃契约已从接口删除（T13） |
 | E5 | 达到目标 | ✅ | 🟠 无达标庆祝/证书/复盘沉淀 |
 
-> 主流程 = S1→S7；扩展流程 = E1→E5。**当前真实可端到端演示的是 S1→S7 全链 + E1/E3/E5**；E2 的"填写个人信息"与 E4 的"AI 评测"是两个未闭合的洞。
+> 主流程 = S1→S7；扩展流程 = E1→E5。**当前真实可端到端演示的是 S1→S7 全链 + E1/E3/E4/E5**。
+>
+> ⚠️ **本表修订记录（2026-09-15）**：E4 由 F6 收口（`docs/goal-capability-assessment-design-2026-09.md`）。
+> **另注：E2 行同样已过期**（F1 学习者画像已于 2026-09-14 落地，含简历导入与三处消费点接线，见 `docs/learner-profile-design-2026-09.md`），
+> 但 E2 不在 F6 范围内，本轮**未逐项核对**，仅在此标注以免误读。
 
 ---
 
@@ -52,7 +56,7 @@ flowchart TD
         E1["E1 设定学习目标<br/>LearningGoal"]
         E2["E2 填写个人信息 + 圈选资料<br/>LearnerProfile(r) + requiredChapterIds"]
         E3["E3 生成学习计划<br/>buildChapterPlan → NextAction[]"]
-        E4["E4 AI 评测<br/>generateAssessment / evaluateAnswer"]
+        E4["E4 AI 评测 ✅ 已闭合<br/>F6 目标级能力评测<br/>（场景任务 + rubric 判分）"]
         E5["E5 达到目标<br/>readiness ≥ 1.0"]
         E1 --> E2 --> E3 --> E4 --> E5
         E5 -.回流.-> E3
@@ -74,11 +78,15 @@ flowchart TD
     E2 ==>|"圈定范围<br/>requiredChapterIds"| S3
     E3 ==>|"计划头项 = 首页主行动"| S3
     S6 ==>|"卷面成绩 → 章掌握度"| E5
-    E4 -.待实现<br/>写入 misconceptions.-> S6
+    %% 注：此处原有 E4 -.待实现 · 写入 misconceptions.-> S6 一条虚线。
+    %% 该形态已被 F6 永久放弃（2026-09-15）：能力评测是**独立证据层**，
+    %% 只落 CapabilityReport + 证据流（kind="capability"、delta:0），
+    %% 不写 misconceptions、不改 mastery，故不指向 S6。
 
     S2 -->|"rebuildChunks + saveEmbeddings"| RAG["(RAG 索引)<br/>FTS + 向量"]
     RAG -.hybridSearch<br/>检索辅助.-> S3
-    RAG -.-> E4
+    %% 注：原 RAG -.-> E4 亦已删除 —— F6 的评测素材是**目标范围的整章正文 + keyPoints 全量**，
+    %% 不经 hybridSearch（见 docs/goal-capability-assessment-design-2026-09.md G3）。
 ```
 
 ### 1.2 领域对象与数据流全景
@@ -361,17 +369,17 @@ applyPaperResult / applyKeyPointRating  ──写入──▶  UnitMastery.nextR
 
 ---
 
-### E4 · AI 进行评测
+### E4 · AI 进行评测　✅ **已闭合（2026-09-15，F6）**
 
 | 项 | 内容 |
 |---|---|
 | **页面** | `/assessment`（`AssessmentPage.tsx`） |
 | **入口** | `/assessment` 页内 `startChapterPaper:81-103` → `createPaperAndSave`（本地确定性题）—— 即"资料作用域"单章出卷 |
 | **概念单元自测** | `AssessmentSession.tsx:34-147`：答案对照参考 + **人工自评对错**、1/2 键、写回 `submitAnswer` |
-| 🔴 **AI 评测未实现** | `assessment-engine.ts:56-85`：无 AI 时**不伪造判分**，返回 `score: undefined`（pending）或 `notAnswered`，`misconceptions` **恒空** |
-| 🔴 **契约层未实现** | 所有 provider 的 `generateAssessment` / `evaluateAnswer` 直接抛错：`ai/openai-compatible.ts:163-173`、`ai/builtin.ts:215-225`、`ai/registry.ts:39-44`；无模型时 `ai/active.ts:65-70` reject |
-| **结论** | **本地闭环可跑通**（客观题 + 人工自评），**AI 出题/判分确为占位**。UI 层已就绪，缺的是 provider 实现 |
-| **对 E4 的语义澄清** | "AI 进行评测"当前**实际由三条已实现的 AI 链路部分承接**：① `generateQuizQuestionsWithAi`（改写题面）② `gradeSubjectiveWithAi`（主观题批改）③ 章级 map-reduce（要点/概念抽取）。真正缺失的是**"针对目标的能力评测"**（如：给一个 Agent 开发任务，让 AI 评判完成度）|
+| ✅ **章级评测的本地判分** | `assessment-engine.ts`：无 AI 时**不伪造判分**，返回 `score: undefined`（pending）或 `notAnswered`，`misconceptions` **恒空**。**F6 T13 后此为唯一路径**（见下行） |
+| ✅ **废弃契约已清理** | 原「所有 provider 的 `generateAssessment` / `evaluateAnswer` 直接抛错」—— **已于 2026-09-15（F6 T13）从 `AIProvider` 接口整体删除**（实测 4 处实现：`openai-compatible.ts` / `builtin.ts` / `registry.ts` / **`active.ts`**，全为零调用方）；`assessment-engine.ts` 同步止损为**纯本地确定性引擎**（`provider` 形参移除） |
+| **结论** | **本地闭环可跑通**（客观题 + 人工自评）；**目标级 AI 评测已由 F6 落地**（下一行）；章级「AI 出题 / 判分」这一具体形态**已被有意放弃**，不再作为缺口 |
+| **对 E4 的语义澄清** | 当时记录：「AI 进行评测」实际由三条已实现的 AI 链路部分承接 ① `generateQuizQuestionsWithAi`（改写题面）② `gradeSubjectiveWithAi`（主观题批改）③ 章级 map-reduce（要点/概念抽取）；真正缺失的是**"针对目标的能力评测"**。**→ 该缺口已由 F6 于 2026-09-15 补齐**：目标拆成 3–6 个能力项，用**场景任务**取证据、AI 按 rubric 逐项判分并给可锚回作答原文的引文，产出 append-only 能力报告；入口 `/goals/:goalId/capability`（`docs/goal-capability-assessment-design-2026-09.md`）|
 
 ---
 
@@ -446,10 +454,12 @@ not-started ──打开阅读──▶ learning ──标记学完(markReady)�
 | `/quiz/:paperId` | QuizAnswerPage | S4 | 作答（草稿/键盘流） |
 | `/quiz/:paperId/grading` | QuizGradingPage | S6 | 判卷（客观即时 / 主观 AI） |
 | `/report/:paperId` | QuizReportPage | S6 | 报告 + 补考入口 |
-| `/assessment` | AssessmentPage | E4 | 概念自测 + 单章出卷（AI 评测占位） |
+| `/assessment` | AssessmentPage | E4 | 概念自测 + 单章出卷（章级；**目标级 AI 评测走 `/goals/:goalId/capability`**） |
 | `/goals` | GoalsPage | E1 | 目标列表 |
 | `/goals/new` `/goals/:goalId/edit` | GoalFormPage | E1/E2 | 目标表单 + **章范围圈选** |
-| `/goals/:goalId` | GoalDetailPage | E5 | 就绪度明细 |
+| `/goals/:goalId` | GoalDetailPage | E5 | 就绪度明细 + **CAPABILITY 摘要卡（F6）** |
+| `/goals/:goalId/capability` | CapabilityPage | E4 | **能力框架管理 + 最新/历史能力报告（F6）** |
+| `/goals/:goalId/capability/run/:runId` | CapabilityRunPage | E4 | **两阶段评测作答（客观卷 → 场景任务）（F6）** |
 | `/learner` | LearnerPage | E2-b | 学习者画像（**当前只读**） |
 | `/plan` | PlanPage | E3 | 计划队列（重学/补考/复习/推进） |
 | `/study/session` | ReviewSession | S7 | 复习会话（四档自评） |
@@ -465,7 +475,7 @@ not-started ──打开阅读──▶ learning ──标记学完(markReady)�
 | # | 缺口 | 证据 | 影响 | 建议 |
 |---|---|---|---|---|
 | 1 | **E2-b「填写自己的信息」完全不存在** | `domain/learner.ts:18-46` 无画像字段；`LearnerPage.tsx:32-63` 纯只读 | 用户以为填了水平就能个性化，实际零影响；扩展流程第 2 步缺一半 | 新增 `LearnerProfile` 实体 + 编辑表单 + 三个消费点（出卷 band 初值 / ETA / 排序权重） |
-| 2 | **E4「AI 评测」契约未实现** | `generateAssessment` / `evaluateAnswer` 全部抛 `not implemented`（`openai-compatible.ts:163-173` 等）；`assessment-engine.ts:56-85` 恒 pending | 扩展流程第 4 步无法闭环；评估只能靠客观题 | 实现 `generateAssessment`（目标维度出题）+ `evaluateAnswer`（能力判定）；或重定义为"AI 生成评测报告"（复用已有 map-reduce） |
+| ~~2~~ | ~~**E4「AI 评测」契约未实现**~~ ✅ **已闭合（2026-09-15，F6）** | 原证据：`generateAssessment` / `evaluateAnswer` 全部抛 `not implemented`（`openai-compatible.ts:163-173` 等）；`assessment-engine.ts:56-85` 恒 pending | — | ✅ **已交付**：F6 目标级能力评测（场景任务 + AI rubric 判分 + 引文锚回作答原文 + append-only 报告，不改 mastery）；同时按 T13 删除那两个废弃契约。见 `docs/goal-capability-assessment-design-2026-09.md` |
 | 3 | **`submitAnswer` 走 `applyRating`，破坏双证据原则** | `useLoopStore.ts:123` vs 设计 `applyKeyPointRating`；对照 `ChapterReaderPage.tsx:116` 的正确用法 | 同一复习动作两个入口产生两种掌握度后果，掌握度数据被自评污染 | 改 `submitAnswer` 调 `applyKeyPointRating`（`learner-model.ts:219`） |
 
 ### 🟠 P1 —— 流程可用但明显打折
@@ -492,7 +502,9 @@ not-started ──打开阅读──▶ learning ──标记学完(markReady)�
 
 > **主流程（S1–S7）已经是一条真正跑得通的闭环**：导入 → 切分 → 学 → 测 → 判 → 报告 → 调度 → 复习，且数据真实回写、展示前会衰减、到期会入队。它的成熟度足以支撑端到端演示。
 >
-> **扩展流程（E1–E5）目前的形状是"两头实、中间虚"**：E1（目标）和 E3（计划）与 E5（就绪度）已经真正接线，E2 的"填写个人信息"和 E4 的"AI 评测"是两个空档 —— 这两个洞补齐后，"设定目标 → 告诉我学什么 → 按我的水平测 → 判定我达标"才是一个完整的产品叙事。
+> **扩展流程（E1–E5）的"中间虚"已由 F6 补上（2026-09-15）**：本段原写「E1 / E3 / E5 已真正接线，E2 的"填写个人信息"与 E4 的"AI 评测"是两个空档」。**E4 现已闭合** —— F6 目标级能力评测落地：目标拆成 3–6 个能力项，用场景任务取证据、AI 按 rubric 逐项判分（引文锚回作答原文）、产出 append-only 报告且**不改 mastery**；入口在目标详情页（`docs/goal-capability-assessment-design-2026-09.md`）。
+>
+> 因此「设定目标 → 告诉我学什么 → **按我的水平测** → 判定我达标」这条叙事现在**四个环节都有真实实现**。**E2 的画像输入另由 F1 于 2026-09-14 补齐**（本文件未逐项核对，见 §零表格下方注）。仍待做的收尾是 F3（趋势与复盘 —— 让积累的证据**看得见**）与 F4（导出 —— 兑现"随时带走"）。
 
 ---
 

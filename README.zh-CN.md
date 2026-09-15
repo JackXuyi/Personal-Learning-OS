@@ -358,12 +358,15 @@ AI 被一个接口从业务逻辑中彻底解耦，供应商可以自由替换�
 
 ```ts
 interface AIProvider {
+  readonly kind: ProviderKind
+  isConfigured(): boolean
   chat(input: ChatInput): Promise<ChatOutput>
-  extractKnowledge(document: Document): Promise<Knowledge[]>
-  generateAssessment(context: AssessmentContext): Promise<Question>
-  evaluateAnswer(question: Question, answer: Answer): Promise<Evaluation>
 }
 ```
+
+接口刻意保持精简。向量化恒定走本机（`ai/embedding.ts`），概念抽取在 `ai/pipelines.ts`，
+目标级能力评测在 `ai/capability.ts` —— 三者都不挂在 `AIProvider` 上，因此把聊天切到
+云端 API 不会让它们静默消失。
 
 **默认内置且已激活 —— 无需额外安装：**
 
@@ -449,7 +452,7 @@ Ollama、llama.cpp、LM Studio 以及 OpenAI 兼容端点（OpenAI、Anthropic�
 - [x] 掌握度平滑：`0.65 × 卷面 + 0.35 × 原掌握度`
 - [x] 遗忘曲线 —— 半衰期 30 天
 - [x] 间隔重复：`nextReviewAt` → 复习队列
-- [ ] 目标级能力评测 `P1` —— 卡在产品定义尚未澄清
+- [x] 目标级能力评测 —— 客观摸底卷（仅作参考分）+ 场景任务；AI 按 rubric 逐项判分，每处引文都能锚回你的作答原文；产出 append-only 能力报告，绝不改动掌握度
 
 ### 🎯 目标与计划
 

@@ -21,7 +21,7 @@
 
 用户在整个"学习"环节**没有任何主动加工动作** —— 不能划线、不能记笔记、不能提问、不能复述。这是当前最大的产品空白，而不是评测。
 
-**3. 扩展流程「两头实、中间虚」。** E1 目标、E3 计划、E5 就绪度已接线；**E2-b 画像输入**与 **E4 AI 评测**是两个洞。另外 README 产品原则 #1 承诺的「随时导出离开」**在代码里并不存在** —— 属于必须收口的过度承诺。
+**3. 扩展流程「两头实、中间虚」—— 两个洞都已收口。** E1 目标、E3 计划、E5 就绪度已接线；曾经的「**E2-b 画像输入**」洞已由 F1 补上（2026-09-14），「**E4 AI 评测**」洞已由 F6 补上（**2026-09-15**，见 `docs/goal-capability-assessment-design-2026-09.md`）。剩下 README 产品原则 #1 承诺的「随时导出离开」**在代码里并不存在** —— 属于必须收口的过度承诺（F4 待做）。
 
 ### 八个候选，分三档
 
@@ -32,7 +32,7 @@
 | **P1** | F3 学习复盘与趋势 | 把已经记下来的证据流变成可看的成长轨迹 | 中 |
 | **P1** | F2 计划的时间维度 | 把"学习队列"变成"学习计划"，能回答"今天要做多少" | 中 |
 | **P1** ◐ | F5 主动学习工具 | 补上"学习"这一半：提问、笔记、复述、自测卡（**提问 + 费曼复述 + 自测卡已实施**；仅笔记未做） | 大 |
-| **P1** | F6 目标级能力评测 | 回答"我够格了吗"，而不只是"这章学会了吗" | 大（需先澄清定义） |
+| **P1** ✅ | F6 目标级能力评测 | 回答"我够格了吗"，而不只是"这章学会了吗"（**已实施 2026-09-15**，见 `docs/goal-capability-assessment-design-2026-09.md`） | 大 |
 | **P2** | F7 资料结构可编辑 | 把切分控制权交给用户 + 跨文档组学习路径 | 小~中 |
 | **P2** | F8 导入覆盖面 | OCR / DOCX / EPUB / URL，降低第一分钟摩擦 | 增量 |
 
@@ -41,7 +41,7 @@
 ```text
 F1 画像  →  F7 章节编辑（快赢，1~2 天）  →  F4 导出  →  F3 复盘
                                                           ↓
-                              F2 时间维度  →  F5 主动学习  →  F6 能力评测（需先出定义）
+                              F2 时间维度  →  F5 主动学习  →  F6 能力评测 ✅（2026-09-15）
                                                           ↓
                                                      F8 导入（可随时插入）
 ```
@@ -230,37 +230,44 @@ F1 画像  →  F7 章节编辑（快赢，1~2 天）  →  F4 导出  →  F3 �
 
 ---
 
-### F6 · 目标级能力评测（Capability Assessment）　`P1 · 大`
+### F6 · 目标级能力评测（Capability Assessment）　`P1 · 大`　✅ **已实施（2026-09-15）**
+
+> **状态**：✅ 已完成 D1–D9 全部决策并落地。方案见 `docs/goal-capability-assessment-design-2026-09.md`（§13 决策点），
+> 执行记录见 `docs/goal-capability-assessment-task-runbook-2026-09.md`（T1–T14 全部 done）。
+> **决策 D5-A 硬不变式**：能力评测是**独立证据层**，绝不写 `LearnerState`（mastery 唯一写方仍是卷面）；
+> 结果只落 `CapabilityReport` + 证据流（`kind="capability"`、`subjectKind="goal"`、`delta:0`）。
+> **决策 D9-A**：客观摸底卷分数只作「知识底座参考分」**独立成块**展示，不加权、不合成、缺考不阻断判定。
 
 **一句话**：回答"我够格了吗"，而不只是"我这章学会了吗"。
 
-**现状证据（性质与旧判断不同）**
+**现状证据（当时的判断，保留作依据）**
 
-- `generateAssessment` / `evaluateAnswer` 在两个 provider 全抛 `not-implemented`（`openai-compatible.ts:163-175`、`builtin.ts:215-227`、`registry.ts:39-44`
+- ~~`generateAssessment` / `evaluateAnswer` 在两个 provider 全抛 `not-implemented`（`openai-compatible.ts:163-175`、`builtin.ts:215-227`、`registry.ts:39-44`）~~ —— **已于 T13 从接口上整体删除**（实测 **4 处**实现：上述 3 处 + `ai/active.ts:65-70` 的 `NoActiveProvider`；方案漏记了第 4 处）
 - **但实际链路已经绕过这两个方法** —— 真实能力走专用管线：`generateQuizQuestionsWithAi`（改题面）、`gradeSubjectiveWithAi`（主观批改）、`extractChapterConceptsWithAi`（概念抽取）
 - → 缺的**不是"接口实现"**，而是**"能力评测"这个产品概念本身没定义**
 
-**⚠️ 需要先澄清的产品问题（未澄清前不开工）**
+**产品问题（已澄清 2026-09-15）**
 
-| 问题 | 选项 |
+| 问题 | 结论 |
 |---|---|
-| 评测对象是什么？ | 目标的综合能力 / 单项技能 / 一个产出物（作品、方案、代码） |
-| 评测形态是什么？ | 机考综合卷 / 场景任务 / 作品评审 / 面试模拟 |
-| 通过标准由谁定义？ | AI 判定 / 用户自定 / 目标模板预置 |
+| 评测对象是什么？ | 目标的**综合能力** —— 拆成 3–6 个能力项；非单项技能、非产出物评审 |
+| 评测形态是什么？ | **场景任务（判定唯一依据）+ 客观摸底卷（仅参考分）** |
+| 通过标准由谁定义？ | **AI 按 rubric 逐项判分**；能力项自带 `weight` / `threshold`，可人工调 |
 
-**范围（澄清后）**
+**范围（已交付）**
 
-1. 定义 `CapabilityAssessment` 领域对象，与章级 `Paper` 明确区分
-2. 目标模板：六类目标各携带能力项清单（如 `career` → 岗位能力矩阵）
-3. 产出**能力报告**：能力项 × 达标状态 × 证据引用（引用回具体试卷与章节）
-4. 顺带决策：`generateAssessment` / `evaluateAnswer` 是**实现**还是**从接口上删除**（当前是废弃契约，留着误导后来者）
+1. ✅ 定义 `CapabilityItem` / `CapabilityTask` / `CapabilityRun` / `CapabilityReport` 领域对象（`domain/capability.ts`），与章级 `Paper` 明确分层
+2. ◐ **实现偏差**：目标模板预置能力项清单 → 改为 **AI 依据目标类型 + 范围章节正文提炼**（`ai/capability.ts::extractCapabilityItems`），比预置模板更贴合实际范围；人工可内联编辑
+3. ✅ 产出**能力报告**：能力项 × 达标状态 × 证据引用 —— 引文**反查锚回用户作答原文**，锚不上即丢弃；全锚不上标 `unanchored`（保留分数与理由，不伪造引用）
+4. ✅ 顺带决策已落地：`generateAssessment` / `evaluateAnswer` **从接口上删除**（T13）
 
-**依赖**：F1（画像影响评测难度）、F3（报告需要趋势数据）
+**依赖**：F1（画像影响评测难度 —— 已接线）、F3（报告需要趋势数据 —— 报告本身已 append-only 落库，**趋势展示仍待 F3**）
 
-**Done 标准**
+**Done 标准 → 验收**
 
-- **先产出产品定义文档并经用户确认**，再进入实施
-- 能力报告的每一项都能追溯到具体证据（试卷 / 章节 / 时间），符合"证据可溯"原则
+- ✅ 先产出产品定义文档并经用户确认（D1–D9 全确认后才开工）
+- ✅ 能力报告的每一项都能追溯到具体证据（引文锚回作答原文），符合"证据可溯"原则
+- ✅ `tests/capability.test.ts` 43 条断言全绿，含 `TC-REG-01`「跑完整评测后 `LearnerState` 逐字节不变」
 
 ---
 
@@ -331,7 +338,7 @@ flowchart LR
     F3["F3 复盘趋势<br/>(P1 · 中)"]
     F2["F2 时间维度<br/>(P1 · 中)"]
     F5["F5 主动学习<br/>(P1 · 大)"]
-    F6["F6 能力评测<br/>(P1 · 大)"]
+    F6["F6 能力评测<br/>(P1 · 大 · ✅已实施)"]
     F7["F7 章节编辑<br/>(P2 · 小)"]
     F8["F8 导入覆盖<br/>(P2 · 增量)"]
 
@@ -345,7 +352,7 @@ flowchart LR
 ```
 
 **无前置、可立即开工**：F1 · F4 · F5 · F7 · F8
-**有前置**：F2（← F1）· F6（← F1 + F3 + 产品定义澄清）
+**有前置**：F2（← F1）· ~~F6（← F1 + F3 + 产品定义澄清）~~ → **F6 已实施（2026-09-15）**
 
 ---
 
@@ -357,7 +364,7 @@ flowchart LR
 |---|---|---|---|
 | 1 | `submitAnswer` 调 `applyRating`（会改 mastery），应调 `applyKeyPointRating` | `stores/useLoopStore.ts:123` | **同一复习动作两个入口产生两种掌握度后果**，破坏"章 mastery 唯一写方 = 卷面"的双证据原则；正确参照 `ChapterReaderPage.tsx:116 markReviewed` |
 | 2 | planner 两处注释互相矛盾 | `engine/learning-planner.ts:9-11` vs `:154` | 代码实为「测已学章(3) 优先于到期复习(4)」，注释写反，会误导后续改动 |
-| 3 | `generateAssessment` / `evaluateAnswer` 废弃契约未清理 | `openai-compatible.ts:163-175` · `builtin.ts:215-227` · `registry.ts:39-44` | 三个 provider 都抛 `not-implemented`，但无人调用；留着让后来者以为"AI 评测只差实现" |
+| 3 | ~~`generateAssessment` / `evaluateAnswer` 废弃契约未清理~~ ✅ **已清理（2026-09-15，F6 T13）** | 原位置：`openai-compatible.ts` · `builtin.ts` · `registry.ts` · **`active.ts`（方案曾漏记）** | 实测 **4 处** provider 实现全部只抛 `not-implemented` 且零调用方。已从 `AIProvider` 接口整体删除（含 `AssessmentContext`），9 个测试假 provider 同步清理；`engine/assessment-engine.ts` 止损为纯本地确定性引擎（`provider` 形参一并移除） |
 | 4 | README 过度承诺 | `README.md` 产品原则 #1 | 已在新版 README 保留原表述，**要么补 F4，要么改文案** |
 
 > 第 1 条建议**立即修**：它污染掌握度数据，且修复面极小（改一个函数调用 + 一处单测）。
@@ -366,9 +373,9 @@ flowchart LR
 
 ## 五、一句话总结
 
-> **评测这条腿已经能跑了，学习那条腿还没长出来。**
-> 下一步的价值不在于"再加一种题型"，而在于：让系统知道你**是谁**（F1）、让你的投入变得**可携带**（F4）、让积累的证据**看得见**（F3）、让计划带上**时间**（F2）、让你在学习时**能动手**（F5）。
-> F6 是最终叙事闭环的收口，但它的定义还没澄清 —— **先把定义写出来，再谈实现**。
+> **评测这条腿已闭环，学习这条腿长出一半；还差「看得见」与「带得走」。**
+> 已收口：让系统知道你**是谁**（F1 ✅）、让你在学习时**能动手**（F5 ◐ —— 提问 / 费曼复述 / 自测卡已做，笔记未做）、回答"**我够格了吗**"（F6 ✅ 2026-09-15）、把章节结构的控制权交给你（F7 ◐ —— 重命名 / 合并 / 拖拽排序已做）。
+> 仍未做：让积累的证据**看得见**（F3 · 趋势与复盘）、让计划带上**时间**（F2）、让你的投入**可携带**（F4 —— README 产品原则 #1 的过度承诺仍欠着）、降低第一分钟摩擦（F8 · 导入覆盖面）。
 
 ---
 
@@ -378,3 +385,11 @@ flowchart LR
 - 复核到的"已完成"项：`buildActiveProvider` 6 处消费点、`EvidenceEntry` 3 写 2 读、`hybridSearch` 2 处消费
 - 复核到的"未实现"项：`LearnerProfile` 不存在、`StorageAdapter` 无导出方法、`deadlineAt` 零消费点、章节编辑原语零 UI 调用点、全仓无 trend/heatmap/streak
 - 本文件为**规划文档**，未修改任何生产代码；每个 feature 实施前需按 `skills/pre-task-technical-design` 单独出技术方案
+
+---
+
+## 变更记录
+
+| 日期 | 变更 | 关联 |
+|---|---|---|
+| 2026-09-15 | **F6 目标级能力评测落地并回写本文**：§零.3「E4 AI 评测洞」标记已收口；§三 候选表 F6 标 ✅；§F6 节补「已实施」状态块 + 产品问题结论 + 范围交付情况；§三 mermaid 与「有前置」同步；§四.3 技术债第 3 条（`generateAssessment` / `evaluateAnswer` 废弃契约）标**已清理**（实测 4 处 provider，方案曾漏记 `ai/active.ts`）；§五 总结改写为「两条腿现状」 | `docs/goal-capability-assessment-design-2026-09.md` · `docs/goal-capability-assessment-task-runbook-2026-09.md`（T1–T14 done） |

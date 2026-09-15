@@ -352,12 +352,16 @@ AI is decoupled from business logic behind one interface, so providers can be sw
 
 ```ts
 interface AIProvider {
+  readonly kind: ProviderKind
+  isConfigured(): boolean
   chat(input: ChatInput): Promise<ChatOutput>
-  extractKnowledge(document: Document): Promise<Knowledge[]>
-  generateAssessment(context: AssessmentContext): Promise<Question>
-  evaluateAnswer(question: Question, answer: Answer): Promise<Evaluation>
 }
 ```
+
+The interface is deliberately thin. Embeddings always run on-device (`ai/embedding.ts`),
+concept extraction lives in `ai/pipelines.ts`, and goal-level capability assessment lives in
+`ai/capability.ts` — none of them hang off `AIProvider`, so switching chat to a cloud API
+cannot silently drop them.
 
 **Bundled and active by default — nothing to install:**
 
@@ -443,7 +447,7 @@ Every capability the project intends to ship — this doubles as the roadmap.
 - [x] Mastery smoothing: `0.65 × score + 0.35 × previous`
 - [x] Forgetting curve — 30-day half-life
 - [x] Spaced repetition: `nextReviewAt` → review queue
-- [ ] Goal-level capability assessment `P1` — blocked on a product definition
+- [x] Goal-level capability assessment — an objective baseline paper (reference score only) plus scenario tasks scored by AI against a rubric, every citation anchored back to your own answer; produces an append-only capability report and never moves mastery
 
 ### 🎯 Goals & planning
 
