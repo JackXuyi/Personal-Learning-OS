@@ -39,8 +39,6 @@ const offlineProvider: AIProvider = {
   kind: "builtin",
   isConfigured: () => false,
   chat: () => Promise.reject(new Error("不应被调用")),
-  generateAssessment: () => Promise.reject(new Error("不应被调用")),
-  evaluateAnswer: () => Promise.reject(new Error("不应被调用")),
 };
 
 await check("合规响应 → 原样返回", () => {

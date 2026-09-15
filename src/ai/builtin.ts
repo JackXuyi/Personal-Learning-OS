@@ -7,16 +7,15 @@
  *
  * 能力边界:
  * - `chat` 已打通(llm_generate)。
- * - `generateAssessment / evaluateAnswer` 属提示词管线里程碑,当前显式
- *   not-implemented(与 OpenAI 兼容层保持一致)。
+ * - 出题 / 判分不在本 Provider 接口（F6 T13 清理）：曾有一对
+ *   `generateAssessment / evaluateAnswer` 空实现（恒抛 not-implemented、零调用方），
+ *   已随 F6 删除；真实实现是 `ai/capability.ts` 的目标级能力评测管线。
  * - 概念抽取不走本 Provider 接口：见 `ai/pipelines.ts`
  *   `extractChapterConceptsWithAi`（G8：接口上的 `extractKnowledge` 空实现已删除）。
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import type { Answer, Evaluation, Question } from "../domain";
 import type {
   AIProvider,
-  AssessmentContext,
   ChatInput,
   ChatOutput,
   ProviderConfig,
@@ -210,19 +209,5 @@ export class BuiltinProvider implements AIProvider {
       const message = err instanceof Error ? err.message : String(err);
       throw new AiProviderError("request-failed", message);
     }
-  }
-
-  async generateAssessment(_context: AssessmentContext): Promise<Question> {
-    throw new AiProviderError(
-      "not-implemented",
-      "generateAssessment prompt pipeline is not implemented yet (next milestone).",
-    );
-  }
-
-  async evaluateAnswer(_question: Question, _answer: Answer): Promise<Evaluation> {
-    throw new AiProviderError(
-      "not-implemented",
-      "evaluateAnswer prompt pipeline is not implemented yet (next milestone).",
-    );
   }
 }

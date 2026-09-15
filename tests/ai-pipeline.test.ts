@@ -43,8 +43,6 @@ function recordingProvider(content = '{"ok":true}'): {
       last = input;
       return { content };
     },
-    generateAssessment: () => Promise.reject(new Error("不应被调用")),
-    evaluateAnswer: () => Promise.reject(new Error("不应被调用")),
   };
   return { provider, last: () => last };
 }

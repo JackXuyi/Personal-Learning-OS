@@ -7,7 +7,6 @@
  * （OpenAI / Anthropic / Gemini / DeepSeek）以及未来的社区
  * Provider 都可以自由替换。
  */
-import type { Answer, Evaluation, Question } from "../domain";
 
 export type ProviderKind =
   | "builtin"
@@ -61,14 +60,6 @@ export interface ProviderConfig {
   // 向量化恒定走本地模型,见 `ai/embedding.ts` 的 Embedder。
 }
 
-/** Question-generation context from the Assessment Engine. */
-export interface AssessmentContext {
-  unitId: string;
-  /** Target Bloom level for the generated question. */
-  cognitiveLevel: Question["cognitiveLevel"];
-  questionType: Question["type"];
-}
-
 /** Typed error so engines can degrade gracefully instead of crashing. */
 export class AiProviderError extends Error {
   readonly code: "not-configured" | "not-implemented" | "request-failed";
@@ -101,7 +92,12 @@ export interface AIProvider {
    * 接口上曾有一个 `extractKnowledge(document)` 空实现（恒抛 not-implemented、
    * 零调用方），与真实实现构成双轨隐性坑 —— 已删除。
    */
-  generateAssessment(context: AssessmentContext): Promise<Question>;
 
-  evaluateAnswer(question: Question, answer: Answer): Promise<Evaluation>;
+  /**
+   * 出题 / 判分**不在此接口**（F6 T13 清理）：曾有一对 `generateAssessment` /
+   * `evaluateAnswer`（4 个 provider 实现全部只抛 `not-implemented`、零调用方），
+   * 留着会让后来者误判「AI 评测只差实现」。真实实现是 F6 的目标级能力评测管线
+   * —— `ai/capability.ts`（提炼能力项 / 出场景任务 / 按 rubric 判分），
+   * 编排在 `features/goals/capability-service.ts`。**不要再往本接口加出题方法**。
+   */
 }

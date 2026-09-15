@@ -21,7 +21,6 @@ import { embeddingKey } from "../src/domain/embedding.ts";
 import type { RetrievalScope } from "../src/storage/types.ts";
 import { InMemoryStorage } from "../src/storage/memory.ts";
 import type { AIProvider } from "../src/ai/types.ts";
-import { AiProviderError } from "../src/ai/types.ts";
 import type { Embedder } from "../src/ai/embedding.ts";
 import { hybridSearch } from "../src/ai/retrieval/hybrid-search.ts";
 import {
@@ -161,8 +160,6 @@ function fakeProvider(content: string, configured = true): { provider: AIProvide
       calls.chat += 1;
       return Promise.resolve({ content });
     },
-    generateAssessment: () => Promise.reject(new AiProviderError("not-implemented", "n/a")),
-    evaluateAnswer: () => Promise.reject(new AiProviderError("not-implemented", "n/a")),
   };
   return { provider, calls };
 }

@@ -55,12 +55,6 @@ function fakeProvider(opts: {
       if (throws) throw throws;
       return { content: reply };
     },
-    generateAssessment: async () => {
-      throw new Error("unused");
-    },
-    evaluateAnswer: async () => {
-      throw new Error("unused");
-    },
   };
 }
 

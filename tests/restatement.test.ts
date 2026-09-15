@@ -130,8 +130,6 @@ function fakeProvider(
       if (opts.throws) throw opts.throws;
       return { content: opts.reply ?? "{}" };
     },
-    generateAssessment: () => Promise.reject(new Error("unused in tests")),
-    evaluateAnswer: () => Promise.reject(new Error("unused in tests")),
   };
   return { provider, calls };
 }

@@ -36,8 +36,6 @@ function mkProvider(
     kind: "builtin",
     isConfigured: () => configured,
     chat: reply,
-    generateAssessment: () => Promise.reject(new Error("不应被调用")),
-    evaluateAnswer: () => Promise.reject(new Error("不应被调用")),
   };
 }
 

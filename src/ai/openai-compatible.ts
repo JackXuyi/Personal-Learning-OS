@@ -5,10 +5,8 @@
  * llama.cpp server 与 LM Studio 都暴露 OpenAI 兼容 API。
  * 同构协议的云厂商（OpenAI、DeepSeek）也复用本实现。
  */
-import type { Answer, Evaluation, Question } from "../domain";
 import type {
   AIProvider,
-  AssessmentContext,
   ChatInput,
   ChatOutput,
   ProviderConfig,
@@ -155,22 +153,5 @@ export class OpenAICompatibleProvider implements AIProvider {
       outChars: content.length,
     });
     return { content };
-  }
-
-  // 测评两项能力属于 AI schema（模式）层面的工作，而非传输格式层面的工作。
-  // 它们与 chat() 共用同一传输层——待测评提示词设计完成后在下一个里程碑实现。
-  // 概念抽取不在本接口（G8）：真实实现见 ai/pipelines.extractChapterConceptsWithAi。
-  async generateAssessment(_context: AssessmentContext): Promise<Question> {
-    throw new AiProviderError(
-      "not-implemented",
-      "generateAssessment prompt pipeline is not implemented yet (next milestone).",
-    );
-  }
-
-  async evaluateAnswer(_question: Question, _answer: Answer): Promise<Evaluation> {
-    throw new AiProviderError(
-      "not-implemented",
-      "evaluateAnswer prompt pipeline is not implemented yet (next milestone).",
-    );
   }
 }

@@ -5,7 +5,6 @@
  * (source: local),要么是配置好的 API 端点(source: api)。
  * 详见 docs/ai-model-center-plan-2026-09.md §3。
  */
-import type { Answer, Evaluation, Question } from "../domain";
 import { createProvider } from "./registry";
 import type {
   AIProvider,
@@ -60,12 +59,6 @@ class NoActiveProvider implements AIProvider {
     );
   }
   chat(_input: ChatInput): Promise<ChatOutput> {
-    return Promise.reject(this.fail());
-  }
-  generateAssessment(): Promise<Question> {
-    return Promise.reject(this.fail());
-  }
-  evaluateAnswer(_question: Question, _answer: Answer): Promise<Evaluation> {
     return Promise.reject(this.fail());
   }
 }

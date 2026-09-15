@@ -182,7 +182,7 @@ const QUESTION = {
 check("assessment-engine 未作答 feedback：默认中文 / (en) 英文", async () => {
   const zhEval = await createAssessmentEngine().evaluate(QUESTION, { content: "   " });
   assert.equal(zhEval.feedback, zh.engine.notAnswered);
-  const enEval = await createAssessmentEngine(undefined, en).evaluate(QUESTION, { content: "   " });
+  const enEval = await createAssessmentEngine(en).evaluate(QUESTION, { content: "   " });
   assert.equal(enEval.feedback, en.engine.notAnswered);
 });
 
