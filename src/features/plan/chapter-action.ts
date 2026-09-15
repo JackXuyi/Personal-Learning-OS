@@ -129,8 +129,11 @@ export interface PlanEta {
   deadline?: { at: number; behind: boolean; days: number };
 }
 
-/** 每周预算是否有效（越界 / 缺省 = 未声明）。 */
-function weeklyOf(profile?: LearnerProfile): number | undefined {
+/**
+ * 每周预算是否有效（越界 / 缺省 = 未声明）。
+ * F2：导出供 `plan-quota` 复用 —— 「预算是否有效」必须只有一份判据。
+ */
+export function weeklyMinutesOf(profile?: LearnerProfile): number | undefined {
   const w = profile?.weeklyMinutes;
   if (w === undefined || w < PROFILE_LIMITS.weeklyMinutesMin || w > PROFILE_LIMITS.weeklyMinutesMax) {
     return undefined;
@@ -158,7 +161,7 @@ export function estimatePlanEta(args: {
     (n, a) => n + estimateEtaMin(a, chapterOf(a.unitId), pace),
     0,
   );
-  const weekly = weeklyOf(profile);
+  const weekly = weeklyMinutesOf(profile);
   if (weekly === undefined) return { totalMinutes };
 
   const finishAt = now + (totalMinutes / weekly) * 7 * 86_400_000;
