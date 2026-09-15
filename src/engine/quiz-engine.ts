@@ -23,7 +23,7 @@ import type {
   PaperScope,
   QuizType,
 } from "../domain";
-import { isSubjectiveType, newId, PAPER_MODE_LABEL, sortChaptersByOrder } from "../domain";
+import { isSubjectiveType, newId, PAPER_MODE_LABEL } from "../domain";
 import { applyPaperResult } from "./learner-model";
 import { bandForChapter } from "./profile-band";
 
@@ -354,123 +354,10 @@ function assemble(scope: PaperScope, questions: PaperQuestion[], now: number): P
   };
 }
 
-/* ------------------------------------------------------------------ */
-/* 卷型候选（向导与详情页「一键出卷」共用的单一真源）                  */
-/* ------------------------------------------------------------------ */
-
-/** 新建卷可选的三种卷型（补考卷由报告页触发，不在其列）。 */
-export const NEW_PAPER_MODES = ["unit-test", "stage-test", "final-test"] as const;
-
-/** 卷型 → 所需最小章数。 */
-export const PAPER_MODE_MIN_CHAPTERS: Record<Exclude<PaperMode, "retake">, number> = {
-  "unit-test": 1,
-  "stage-test": 2,
-  "final-test": 3,
-};
-
-/**
- * 给定「已选章数 / 总章数」，返回可出的卷型（纯函数）。
- *
- * 规则原在 /quiz/new 向导内部，资料详情页「一键出卷」需要同源校验
- * （否则推荐出的 retake / 不合法 final-test 会绕过向导校验直接落库），
- * 故下沉到引擎层，两边共用一份规则。
- */
-export function availablePaperModes(args: {
-  /** 已选章数。 */
-  selected: number;
-  /** 该资料的总章数。 */
-  total: number;
-}): Exclude<PaperMode, "retake">[] {
-  const { selected: n, total } = args;
-  const ok = (mm: Exclude<PaperMode, "retake">): boolean => {
-    if (n === 0) return false;
-    switch (mm) {
-      case "unit-test":
-        return n === 1;
-      case "stage-test":
-        // ≥2 章；全本（2 章以下小资料）也允许，避免无模式可选。
-        return n >= 2 && (n < total || total <= 2);
-      case "final-test":
-        return n === total && total >= PAPER_MODE_MIN_CHAPTERS["final-test"];
-    }
-  };
-  return NEW_PAPER_MODES.filter(ok);
-}
-
-/**
- * 判断某卷型当前是否可出（纯函数，GUI 禁用态与落库前校验共用）。
- */
-export function canCreatePaperMode(
-  mode: PaperMode,
-  args: { selected: number; total: number },
-): boolean {
-  if (mode === "retake") return false; // 补考卷只能由报告页触发
-  return availablePaperModes(args).includes(mode);
-}
-
-/* ------------------------------------------------------------------ */
-/* 补考卷聚合出卷（T10 · 仅错题章范围）                                */
-/* ------------------------------------------------------------------ */
-
-/**
- * 补考卷（docs §4 模式表：仅错题章 · 每章 3 客观 · 主观剔除 · 降一档难度）。
- *
- * 与 createPaper(mode="retake") 的关系：当错题章跨越多个文档时，choice 的
- * 干扰项必须取自「各章自己的文档」（同文档其他章要点），否则会把别的文档
- * 内容泄作选项（P1 语义）。因此这里按 documentId 分组后分别调 createPaper
- * （各组的 allChapters = 该文档全部章），再合并成一张 Paper。
- *
- * 纯函数；确定性规则与 createPaper 一致（同输入 → 同题型/同题面结构）。
- * 空章输入返回空卷（不抛错，与 createPaper 无章时行为一致，由 UI 守卫）。
- */
-export function createRetakePaper(input: {
-  /** 需要补考的章（错题章范围；内部按 order 升序）。 */
-  chapters: Chapter[];
-  /** docId → 该文档全部章（choice 干扰项源）；缺省时退化为用范围章自身。 */
-  docChapters?: ReadonlyMap<string, readonly Chapter[]>;
-  learnerState?: LearnerState;
-  /** F1 画像：补考卷各章同样走「有证据看实测 / 无证据看先验」（缺省 = 现状）。 */
-  profile?: LearnerProfile;
-  /** 测试注入时间戳。 */
-  now?: number;
-}): Paper {
-  const { chapters, docChapters, learnerState, profile, now = Date.now() } = input;
-  const ordered = sortChaptersByOrder(chapters);
-
-  // 按文档分组（保持 order 顺序）：每组 allChapters 取该文档全量章。
-  const groups: Chapter[][] = [];
-  const byDoc = new Map<string, Chapter[]>();
-  for (const chapter of ordered) {
-    let group = byDoc.get(chapter.documentId);
-    if (!group) {
-      group = [];
-      byDoc.set(chapter.documentId, group);
-      groups.push(group);
-    }
-    group.push(chapter);
-  }
-
-  const parts = groups.map((group) =>
-    createPaper({
-      scope: { chapterIds: group.map((c) => c.id), mode: "retake" },
-      chapters: group,
-      allChapters: [...(docChapters?.get(group[0].documentId) ?? group)],
-      learnerState,
-      profile,
-      allowSubjective: false,
-      now,
-    }),
-  );
-
-  return {
-    id: newId("paper"),
-    scope: { chapterIds: ordered.map((c) => c.id), mode: "retake" },
-    title: PAPER_MODE_LABEL.retake,
-    questions: parts.flatMap((p) => p.questions),
-    status: "open",
-    createdAt: now,
-  };
-}
+/* 卷型候选（NEW_PAPER_MODES / availablePaperModes / canCreatePaperMode）
+   与跨文档聚合出卷（createPaperGroupedByDoc / createRetakePaper /
+   createGoalPaper）已拆到 `./paper-scope.ts`（G5 行数护栏），由 engine/index.ts
+   统一 re-export，调用方不变。 */
 
 /* ------------------------------------------------------------------ */
 /* 导出：题型配比快照（供 UI 预览 / 文档核对）                        */

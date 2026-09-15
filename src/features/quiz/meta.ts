@@ -15,8 +15,11 @@ import { zh, type Messages } from "../../i18n";
  *
  * 真源已下沉到引擎 `PAPER_MODE_MIN_CHAPTERS`（资料详情页「一键出卷」与向导
  * 共用同一份校验规则），此处仅转出，避免两处常量漂移。
+ *
+ * 深路径指向 `engine/paper-scope`（G5 拆分后该常量随卷型候选一起迁出，
+ * 见 docs/goal-capability-assessment-design-2026-09.md §8.5）。
  */
-export { PAPER_MODE_MIN_CHAPTERS as MODE_MIN_CHAPTERS } from "../../engine/quiz-engine";
+export { PAPER_MODE_MIN_CHAPTERS as MODE_MIN_CHAPTERS } from "../../engine/paper-scope";
 
 /** 模式 → 一行可读说明（配比 + 时长），供模式卡片副标题。 */
 export function modeHint(

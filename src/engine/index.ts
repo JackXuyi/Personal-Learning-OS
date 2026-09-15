@@ -17,6 +17,8 @@ export * from "./splitter-engine";
 export * from "./chapter-edit-engine";
 export * from "./chunk-engine";
 export * from "./quiz-engine";
+export * from "./paper-scope";
 export * from "./profile-band";
 export * from "./flashcard-engine";
+export * from "./capability-engine";
 export * from "./loop";
