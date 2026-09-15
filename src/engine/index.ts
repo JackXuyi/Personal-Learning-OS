@@ -18,4 +18,5 @@ export * from "./chapter-edit-engine";
 export * from "./chunk-engine";
 export * from "./quiz-engine";
 export * from "./profile-band";
+export * from "./flashcard-engine";
 export * from "./loop";
