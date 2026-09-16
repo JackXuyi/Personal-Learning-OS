@@ -62,6 +62,8 @@ export const zh = {
     library: { label: "资料库", hint: "文档 · 导入与探索" },
     graph: { label: "图谱", hint: "概念关系 · 即将上线" },
     learner: { label: "我的画像", hint: "系统如何理解我" },
+    /* F3 复盘与趋势（独立分析页 /progress）。 */
+    progress: { label: "复盘", hint: "看得见成长" },
     /* U6 导航项（GOALS 组主入口 /goals）。 */
     goals: { label: "目标", hint: "目标管理与就绪度" },
     footerHint: "⌘K 快速操作",
@@ -680,6 +682,52 @@ export const zh = {
         needLevel: "请勾选「采用 AI 建议的自评水平」，或先在画像表单里选择档位。",
       },
     },
+    /* F3 入口卡（/learner → /progress）。 */
+    progressEntryTitle: "复盘与趋势",
+    progressEntryDesc: "活动热力图 · 掌握度趋势 · 最该补的",
+  },
+
+  /* F3 复盘与趋势（/progress）—— 纯只读派生页，方案 docs/progress-analytics-design-2026-09.md §8.9。 */
+  progress: {
+    title: "复盘与趋势",
+    subtitle: "把学习记录变成看得见的轨迹",
+    loading: "正在加载……",
+    // 全空态（新用户）：只渲染这一张卡，不渲染四块空坐标系。
+    emptyTitle: "还没有可复盘的数据",
+    emptyDesc: "完成一次测评或复习后，这里会出现你的活动热力图、掌握度趋势与弱点排行。",
+    emptyAction: "去计划页",
+    // 热力图
+    heatmapTitle: "学习活动",
+    heatmapCaption: (weeks: number, total: number) => `近 ${weeks} 周 · 共 ${total} 次学习记录`,
+    heatmapRange: (from: string, to: string) => `记录区间 ${from} — ${to}`,
+    heatmapTruncated: "记录已达存储上限，更早的活动已被裁剪。",
+    heatmapLegendLess: "少",
+    heatmapLegendMore: "多",
+    heatmapCell: (date: string, count: number) => `${date} · ${count} 条`,
+    heatmapEmpty: "还没有学习记录。",
+    // 掌握度趋势
+    trendTitle: "掌握度趋势",
+    trendCaption: (papers: number, chapters: number) => `基于 ${papers} 次判卷 · ${chapters} 个章节`,
+    trendChapterLabel: "章节",
+    trendAllChapters: "整体平均",
+    trendEmpty: "还没有试卷记录——完成一次测评后，这里会出现掌握度曲线。",
+    trendSinglePoint: "再测评一次即可看到趋势。",
+    trendNotice: "曲线取判卷当时的掌握度快照，不含后续遗忘衰减。",
+    // 弱点排行（三因子）
+    weaknessTitle: "最该补的",
+    weaknessEmpty: "暂无弱点——继续保持。",
+    weaknessMastery: (p: number) => `掌握度 ${p}%`,
+    weaknessPaper: (p: number) => `卷面 ${p}%`,
+    weaknessNoPaper: "尚无卷面分",
+    weaknessMisconceptions: (n: number) => `${n} 个误解`,
+    weaknessGo: "去补 →",
+    // 目标进度时间线
+    timelineTitle: "目标进度",
+    timelineCovered: (covered: number, required: number) => `已考 ${covered}/${required} 章`,
+    timelineDeadline: "截止",
+    timelineNotice: "基于试卷记录近似重建，仅统计已考章节。",
+    timelineNoGoal: "还没有目标——创建一个目标后可以看到进度时间线。",
+    timelineNoPapers: "该目标范围内还没有试卷记录。",
   },
 
   scaffold: {

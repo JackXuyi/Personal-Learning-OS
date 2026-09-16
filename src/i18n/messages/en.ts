@@ -57,6 +57,8 @@ export const en: Messages = {
     library: { label: "Library", hint: "Documents · import" },
     graph: { label: "Graph", hint: "Concept relations · soon" },
     learner: { label: "My Learner", hint: "How the system sees you" },
+    /* F3 progress analytics (standalone /progress page). */
+    progress: { label: "Progress", hint: "See your growth" },
     /* U6 nav item (GOALS group main entry /goals). */
     goals: { label: "Goals", hint: "Manage goals & readiness" },
     footerHint: "⌘K quick actions",
@@ -697,6 +699,52 @@ export const en: Messages = {
         needLevel: "Tick “Adopt the AI-suggested level”, or pick a level in the profile form first.",
       },
     },
+    /* F3 entry card (/learner → /progress). */
+    progressEntryTitle: "Progress & trends",
+    progressEntryDesc: "Activity heatmap · mastery trend · weakest first",
+  },
+
+  /* F3 progress analytics (/progress) — read-only derived page, see docs/progress-analytics-design-2026-09.md §8.9. */
+  progress: {
+    title: "Progress & trends",
+    subtitle: "Turn your study records into a visible trajectory",
+    loading: "Loading…",
+    // Fully empty (new user): only this card — never four blank chart frames.
+    emptyTitle: "Nothing to review yet",
+    emptyDesc: "Finish an assessment or a review, and your activity heatmap, mastery trend and weak-point ranking will appear here.",
+    emptyAction: "Go to plan",
+    // Heatmap
+    heatmapTitle: "Learning activity",
+    heatmapCaption: (weeks: number, total: number) => `Last ${weeks} weeks · ${total} records`,
+    heatmapRange: (from: string, to: string) => `Coverage ${from} — ${to}`,
+    heatmapTruncated: "The log has reached its storage cap — older activity has been trimmed.",
+    heatmapLegendLess: "Less",
+    heatmapLegendMore: "More",
+    heatmapCell: (date: string, count: number) => `${date} · ${count} records`,
+    heatmapEmpty: "No study records yet.",
+    // Mastery trend
+    trendTitle: "Mastery trend",
+    trendCaption: (papers: number, chapters: number) => `${papers} graded papers · ${chapters} chapters`,
+    trendChapterLabel: "Chapter",
+    trendAllChapters: "Overall average",
+    trendEmpty: "No papers yet — finish an assessment and the mastery curve will appear here.",
+    trendSinglePoint: "Take one more assessment to see a trend.",
+    trendNotice: "The curve uses the mastery snapshot at grading time; later forgetting decay is not applied.",
+    // Weakest first (three factors)
+    weaknessTitle: "Weakest first",
+    weaknessEmpty: "No weak points — keep it up.",
+    weaknessMastery: (p: number) => `Mastery ${p}%`,
+    weaknessPaper: (p: number) => `Paper ${p}%`,
+    weaknessNoPaper: "No paper score yet",
+    weaknessMisconceptions: (n: number) => `${n} misconceptions`,
+    weaknessGo: "Review →",
+    // Goal progress timeline
+    timelineTitle: "Target progress",
+    timelineCovered: (covered: number, required: number) => `${covered}/${required} chapters assessed`,
+    timelineDeadline: "Deadline",
+    timelineNotice: "Approximately reconstructed from paper records; assessed chapters only.",
+    timelineNoGoal: "No goal yet — create one to see a progress timeline.",
+    timelineNoPapers: "No paper records within this goal's scope yet.",
   },
 
   scaffold: {
