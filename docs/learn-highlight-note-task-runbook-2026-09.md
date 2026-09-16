@@ -71,9 +71,30 @@
 
 ---
 
+## 收工清单（分层提交）
+
+按 `plos-layered-commit` 的层级顺序落 7 条本地提交（**只落本地，未 push**）：
+
+| # | 层 | 短哈希 | 内容 |
+|---|----|--------|------|
+| 1 | `domain` | `47a8643` | `Annotation` 领域模型 + 区间派生 id + 护栏常量 |
+| 2 | `storage` | `d9f2836` | 存储五方法 + `plos.annotations` 持久化 + 文档级联 |
+| 3 | `features`（服务层） | `918a8c1` | 八态编排 + `relinkAnnotations` 接线（T5 / T10） |
+| 4 | `features`（DOM 层） | `9c22bfb` | DOM 文本定位层（T4）+ `?at=` 口径修正（T12 / D10） |
+| 5 | `ui` + `i18n` | `8b8d1a7` | 浮动工具条 + 右栏第 7 区 + 页面接线 + 双语文案 |
+| 6 | `test` | `ed59131` | 45 项单测 + `test:annotation` script |
+| 7 | `docs` | `746c7de` | 方案 v0.3 + 本 runbook + roadmap / README 同步 |
+
+提交前后核对：`git diff --cached --name-only` 全空、`git status --short` 全空、`git rev-list --count origin/main..HEAD` = 19（本组 7 条叠加既有 12 条）。
+
+⚠️ **组 3 → 组 4 → 组 5 之间存在两个「提交态不自洽」的中间态**：`ChapterReaderPage.tsx` **单文件横跨三层**（DOM 定位口径 / 服务层调用 / 右栏 UI），组 4 删掉 `highlightRange` 后它仍在引用旧名，直到组 5 才补齐。拆 hunk 可消除，但收益低于风险（`git apply --cached` 需伪造一个从未存在过的中间态文件），故按「紧随的下一组补齐」处理。同理 **T4 与 T12 同批提交** —— 两者都改 `highlight.ts`，且 T12 正是删掉 T4 暂留的 `highlightRange`，属同一文件的同一处演化，不宜再拆。
+
+---
+
 ## 变更记录
 
 | 日期 | 变更 |
 |------|------|
 | 2026-09-16 | 建立 runbook（方案 v0.2 确认后） |
 | 2026-09-16 | T1–T11 + T12 全部 done（含 T9/T10/T12 的实施细节与真实库实测数字）；方案同步升 v0.3 |
+| 2026-09-16 | 回填收工清单（7 条分层提交哈希 + 中间态不自洽的说明） |
