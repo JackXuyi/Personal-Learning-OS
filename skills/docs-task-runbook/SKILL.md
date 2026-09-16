@@ -71,6 +71,26 @@ For each task **T1, T2, …**:
 
 If new work appears mid-flight: **append** new tasks to the runbook instead of silently expanding scope.
 
+### Departures from the written design
+
+- **Record departures; never take them silently.** If the implementation must differ from the
+  approved design (a field name, an exported helper, a chart range, a copy unit), add a table to the
+  design doc — *位置 / 设计原文 / 实现 / 理由* — plus a line in its change log. Otherwise "the code
+  matches the plan" quietly stops being true, and the next reader cannot tell drift from intent.
+- **Small polish counts as a departure too.** Renaming a parameter to the real domain type, or
+  exporting a private helper so the page reuses the same timezone rule instead of re-deriving it,
+  are improvements — but they still differ from what was approved, so they get a row.
+
+### Test assertions: lock the design, don't invent requirements
+
+- **Assert only what the design requires.** An over-reaching assertion (e.g. "no dirty key in *any*
+  output" when the design only filters the ranking) fails for a legitimate reason and tempts a wrong
+  "fix" in production code. When a test fails on first run, first ask whether the *assertion* is
+  wrong before touching the implementation.
+- **When two modules deliberately differ on the same input, lock both behaviours** with their own
+  cases and a comment saying why the difference is intentional — otherwise the next person
+  "unifies" them.
+
 ## 4. After all runbook tasks are done — refresh key docs
 
 - Update **canonical docs** affected by the change: requirements, architecture, governance, INDEX links, or design language—**only** where behavior or structure actually changed.
