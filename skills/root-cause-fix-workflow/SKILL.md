@@ -16,6 +16,29 @@ Use this workflow for **bug fixes, incident follow-ups, flaky tests, unexpected 
 - Reproduce the issue when possible (steps, environment, inputs).
 - Separate **symptom** (what users see) from **failure mode** (what actually breaks).
 
+### 1b. Ground facts in the app's own data (PLOS-specific)
+
+Symptom-level UI reports ("the list looks empty") are frequently **data-shape**
+problems, not missing data. Read the real store before theorizing — a 3-second
+SQLite query beats a paragraph of plausible reasoning.
+
+- Tauri persists to localStorage on disk:
+  `~/Library/WebKit/personal-learning-os/WebsiteData/Default/<origin>/<origin>/LocalStorage/localstorage.sqlite3`
+- Copy the snapshot **together with `-wal` and `-shm`** (otherwise you read a stale page cache), then decode:
+  `sqlite3 <copy>/localstorage.sqlite3 "select writefile('./x.bin', value) from ItemTable where key='plos.chapters';"`
+  → the blob is **UTF-16LE**; decode via `readFileSync(p).toString("utf16le")` (Node) or `.decode("utf-16-le")` (Python).
+- `plos.*` keys are the source of truth for chapters / documents / evidence / goals / learner.
+
+Then **reproduce the rendering offline** instead of launching a browser
+(`rules/no-headless-browser-validation.mdc`): in a throwaway script, re-implement
+the relevant `components` overrides, run it with
+`node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs`,
+and print before/after HTML side by side. One SSR line is decisive evidence —
+e.g. it proved that the fragment `"4."` renders as **two** lines, one blank bullet each.
+
+⚠️ A probe script written into the repo must be deleted **in the same command**
+(`… ; rm -f ./.probe.tmp.ts ; git status --short`) — never leave temp files behind.
+
 ### 2. Locate concrete code
 
 - Name **specific files, functions, hooks, configs, or build steps** tied to the failure.
@@ -44,6 +67,13 @@ Before implementing, sanity-check:
 - **Is this the minimal correct fix**, or are we papering over bad API/design?
 - **Is there a better place** to enforce the rule (types, schema, lint, build, docs, tests)?
 - **Can we prevent recurrence** (assertion, test, monitoring, clearer error message)?
+- **Are duplicate rules the actual root cause?** If the same cleaning/validation
+  logic exists in 2–3 places with silently drifting options, the fix is to extract
+  **one shared function with explicit options** and let each call site declare only
+  its differences. Patching N of N+1 sites guarantees the bug returns.
+  (Case: key-point cleaning lived in `cleanRefinedKeyPoints` / `mergeChapterRange` /
+  `mergeShortChapters` — the third one had **no gate at all**, which is exactly how
+  dirty fragments reached a user-visible chapter.)
 
 ### 6. Raise dimension when useful
 
