@@ -141,7 +141,11 @@ function InlineStrong({ children }: { children?: ReactNode }) {
  * 行内组件表：不产生块级元素。
  * 严格用于「本来就在一段话里」的文本（要点、引用、摘要），因此：
  * - `p` 不再包 `<p>`（否则 12px 引用块里塞进 15px 段落 + 额外外边距）；
- * - 列表退化为块级 span + 圆点，避免在行内出现缩进层级；
+ * - 列表退化为块级 span，**且不自印圆点** —— 三处调用方（章要点 / 原文引用 /
+ *   概览 prerequisites）都在外层自带 `•`，自印会让同一行出现两个符号；
+ * - **空块一律返回 null**：`hr` 之类的空元素若渲染成 `<span class="block">`，
+ *   会在行内凭空撑出一行（线上案例 2026-09-16：碎片 `"4."` 被 CommonMark
+ *   判为空有序列表项 → 一行空圆点）；
  * - 标题降级为加粗。
  *
  * **必须显式覆写 `pre`**：上面是 `...markdownComponents` 展开，会把块级的新 `pre`
@@ -152,7 +156,7 @@ export const inlineMarkdownComponents: Components = {
   p: ({ children }) => <>{children}</>,
   ul: ({ children }) => <span className="block">{children}</span>,
   ol: ({ children }) => <span className="block">{children}</span>,
-  li: ({ children }) => <span className="block">· {children}</span>,
+  li: ({ children }) => <span className="block">{children}</span>,
   h1: InlineStrong,
   h2: InlineStrong,
   h3: InlineStrong,
@@ -162,7 +166,7 @@ export const inlineMarkdownComponents: Components = {
   blockquote: ({ children }) => (
     <span className="block border-l-2 border-line pl-2 text-ink-3">{children}</span>
   ),
-  hr: () => <span className="block" />,
+  hr: () => null,
   pre: PlainPre,
 };
 
