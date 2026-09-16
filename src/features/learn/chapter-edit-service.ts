@@ -17,6 +17,7 @@ import {
   reorderChapters,
 } from "../../engine/chapter-edit-engine";
 import { rebuildChunks } from "./index-chunks";
+import { relinkAnnotations } from "./annotation-service";
 import { remapMasteryOnChapterEdit } from "./resplit-mastery";
 
 /** 一次人工编辑动作。 */
@@ -55,6 +56,16 @@ export interface ChapterEditResult {
   droppedMastery: number;
   /** 重建的 chunk 条数（短路未写库时为 0）。 */
   chunks: number;
+  /**
+   * 【F5 第 2 条】划线批注按 `quote` 重新定位成功的条数。
+   *
+   * 只有 merge 会改 `contentRef`（rename 改 heading、reorder 改顺序 → 区间不动），
+   * 故 rename / reorder 恒为 0；但统一调用一次 `relinkAnnotations` 而不是按操作
+   * 分支判断 —— 少一个分支就少一类漏迁移（与「结构已变必重建 chunk」同思路）。
+   */
+  annotationsRelinked: number;
+  /** 划线批注再也定位不到、已删除的条数。 */
+  annotationsDropped: number;
 }
 
 /**
@@ -120,12 +131,19 @@ export async function applyChapterEdit(
   // 结构已变 → 必须重建 chunk（heading / chapterId / position 三者都可能失效）。
   const { chunks } = await rebuildChunks(doc, next, storage);
 
+  // F5 第 2 条：合并会改写章节区间 → 划线批注按 quote 重定位（命中改写区间 /
+  // 未命中删除）。必须在 saveChapters 之后。本调用自身吞掉存储异常，
+  // 不会把「批注没跟上」升级成「章节编辑失败」。
+  const relink = await relinkAnnotations({ documentId: doc.id, storage });
+
   return {
     chapters: next,
     absorbed: merge?.absorbedIds.length ?? 0,
     carriedMastery: remapped.carried,
     droppedMastery: remapped.dropped,
     chunks,
+    annotationsRelinked: relink.relinked,
+    annotationsDropped: relink.dropped,
   };
 }
 
@@ -137,5 +155,8 @@ function unchanged(chapters: readonly Chapter[]): ChapterEditResult {
     carriedMastery: 0,
     droppedMastery: 0,
     chunks: 0,
+    // 无实际变化 → 区间未动 → 无需重定位（也确实零写盘）。
+    annotationsRelinked: 0,
+    annotationsDropped: 0,
   };
 }

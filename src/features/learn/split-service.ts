@@ -11,6 +11,7 @@ import type { Chapter, SourceDocument } from "../../domain";
 import type { StorageAdapter } from "../../storage";
 import { splitDocument } from "../../engine/splitter-engine";
 import type { SplitStrategy } from "../../engine/splitter-engine";
+import { relinkAnnotations } from "./annotation-service";
 import { rebuildChunks } from "./index-chunks";
 import { matchResplit, remapLearnerStateOnResplit } from "./resplit-mastery";
 
@@ -51,6 +52,15 @@ export interface SplitRunResult {
   carriedMastery: number;
   /** 旧章中未能同源、掌握度被丢弃的章数。 */
   droppedMastery: number;
+  /**
+   * 【F5 第 2 条】划线批注按 `quote` 重新定位成功的条数（不适用时为 0）。
+   *
+   * 与掌握度同理：重切分把 `contentRef` 整体换掉，旧偏移必然失效，故必须**同批**
+   * 兑现「锚定真源是 quote、偏移只是缓存」。这里如实报数给 UI，不静默处理。
+   */
+  annotationsRelinked: number;
+  /** 划线批注再也定位不到、已删除的条数（内容被替换，留不下孤儿）。 */
+  annotationsDropped: number;
 }
 
 /**
@@ -92,6 +102,11 @@ export async function splitDocumentNow(
   // 位置：章节与掌握度都已写成功之后——避免 chunk 先落库而章节写入失败造成不一致。
   await rebuildChunks({ ...doc, textPreview: text }, heuristic.chapters, storage);
 
+  // F5 第 2 条：划线批注的区间随 `contentRef` 一起失效 → 按 quote 在新正文上重定位。
+  // 必须在 saveChapters **之后**（要读新章节区间）；本调用自身吞掉存储异常并返回
+  // 零计数（宁可留旧偏移，也不半批写一半），故不会污染上面的切分结果。
+  const relink = await relinkAnnotations({ documentId: doc.id, storage, now });
+
   return {
     mode: old.length > 0 ? "resplit" : "initial",
     chapters: heuristic.chapters,
@@ -99,5 +114,7 @@ export async function splitDocumentNow(
     previousChapters: old.length,
     carriedMastery: remapped.carried,
     droppedMastery: remapped.dropped,
+    annotationsRelinked: relink.relinked,
+    annotationsDropped: relink.dropped,
   };
 }
