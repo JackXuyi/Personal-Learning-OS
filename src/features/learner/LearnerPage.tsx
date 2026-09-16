@@ -249,6 +249,23 @@ export default function LearnerPage() {
         </div>
       )}
 
+      {/* F3 入口（D1）：本页保持「系统怎么理解我」的定位，时间维度去 /progress */}
+      <Card className="mt-8">
+        <Link
+          to="/progress"
+          data-testid="learner-progress-entry"
+          className="group flex items-center justify-between gap-3"
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-ink-1 group-hover:text-primary">
+              {lr.progressEntryTitle}
+            </span>
+            <span className="mt-0.5 block text-xs text-ink-3">{lr.progressEntryDesc}</span>
+          </span>
+          <span className="shrink-0 text-xs text-ink-3 group-hover:text-primary">→</span>
+        </Link>
+      </Card>
+
       {/* 导入简历（D6-A：页内弹窗，不新增路由） */}
       <ResumeImportDialog
         open={resumeOpen}

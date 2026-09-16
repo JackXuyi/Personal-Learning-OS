@@ -15,6 +15,7 @@ import {
   Network,
   Settings,
   Target,
+  TrendingUp,
   UserRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -49,7 +50,7 @@ export interface NavItemSpec {
 /**
  * 平铺顺序 = 学习闭环，而非模块归类：
  * 今日（现在做什么）→ 计划（接下来学什么）→ 资料库（看什么）→ 测评（检验）
- * → 目标（为何而学）→ 我的画像（我是谁）→ 设置（系统）。
+ * → 目标（为何而学）→ 我的画像（我是谁）→ 复盘（过去做得怎么样）→ 设置（系统）。
  */
 export const NAV_ITEMS: NavItemSpec[] = [
   { to: "/", navKey: "home", icon: House, end: true },
@@ -58,6 +59,8 @@ export const NAV_ITEMS: NavItemSpec[] = [
   { to: "/quiz", navKey: "quiz", icon: ClipboardCheck },
   { to: "/goals", navKey: "goals", icon: Target },
   { to: "/learner", navKey: "learner", icon: UserRound },
+  /* F3：复盘与趋势 —— 「记录」的出口（与 /learner 的「此刻切片」分工不同）。 */
+  { to: "/progress", navKey: "progress", icon: TrendingUp },
   { to: "/settings", navKey: "settings", icon: Settings, readyDot: true },
 ];
 

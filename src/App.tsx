@@ -19,6 +19,7 @@ import GoalDetailPage from "./features/goals/GoalDetailPage";
 import CapabilityPage from "./features/goals/CapabilityPage";
 import CapabilityRunPage from "./features/goals/CapabilityRunPage";
 import LearnerPage from "./features/learner/LearnerPage";
+import ProgressPage from "./features/progress/ProgressPage";
 import PlanPage from "./features/plan/PlanPage";
 import ReviewSession from "./features/study/ReviewSession";
 import SettingsPage from "./features/settings/SettingsPage";
@@ -60,6 +61,8 @@ export default function App() {
           <Route path="goals/:goalId" element={<GoalDetailPage />} />
           {/* U6 My Learner：纯视图画像 */}
           <Route path="learner" element={<LearnerPage />} />
+          {/* F3 复盘与趋势：独立分析页（D1 —— /learner 保持「系统怎么理解我」的定位，只挂入口卡） */}
+          <Route path="progress" element={<ProgressPage />} />
           {/* /study 概念层队列已迁移为 V2 章级 /plan（docs §2 融合矩阵 #5）；/study/session 保留概念复习会话 */}
           <Route path="study" element={<Navigate to="/plan" replace />} />
           <Route path="plan" element={<PlanPage />} />
