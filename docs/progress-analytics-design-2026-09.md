@@ -4,7 +4,7 @@
 |------|------|
 | 作者 | Agent |
 | 日期 | 2026-09-15 |
-| 状态 | **待确认**（D1–D4 已定案，见 §0.1） |
+| 状态 | ✅ **已实施（2026-09-16）** —— D1–D4 全部落地（§0.1）；实施结果见 **§13** |
 | 关联需求 | `docs/roadmap-next-features-plan-2026-09.md` §F3（P1 · 中）；`docs/ui-workbench-plan-2026-09.md` §24/§149/§402（预留的独立分析页）；`README.zh-CN.md` 功能清单「学习复盘与趋势 —— 活动热力图、掌握度趋势、弱点排行 `P1`」 |
 
 ---
@@ -1114,7 +1114,7 @@ progress: {                                            // 新增整段（双语�
 | T6 | `App.tsx` 路由 + `nav-items.ts` 导航项 | T5 | S |
 | T7 | `LearnerPage.tsx` 入口卡 | T5 | S |
 | T8 | i18n 双语（`nav.progress` + `progress` 整段 + `learner` 2 键） | T5 T6 T7 | S |
-| T9 | 文档同步：README 双语复选框（→ 32/13）+ 方案 §14 + roadmap §F3 标 ✅ + runbook | T3–T8 | S |
+| T9 | 文档同步：README 双语复选框（→ 32/13）+ 方案 §13 + roadmap §F3 标 ✅ + runbook | T3–T8 | S |
 
 > **顺序依据**：T8（i18n）必须在 T6/T7 之后做 `test:i18n` 校验 —— 但 `nav.progress` 缺失会让 T6 的 `nav-items.ts` **编译不过**（`NavKey` 约束），所以实施时 T8 的 `nav.progress` 两键应与 T6 同批；提交时按「逐提交可编译」把 i18n 与 UI 放同一组。
 
@@ -1218,9 +1218,68 @@ progress: {                                            // 新增整段（双语�
 
 ---
 
+## 13. 实施结果（2026-09-16）
+
+> 执行记录见 `docs/progress-analytics-task-runbook-2026-09.md`（T1–T9 全部 done）。
+> 本节只记**交付物、验收结论、实测数字**与**对本文伪代码的偏离**；过程细节在 runbook。
+
+### 13.1 交付物
+
+| 类型 | 文件 | 行数 |
+|------|------|------|
+| 新增 | `src/features/progress/analytics.ts` | 428 |
+| 新增 | `src/features/progress/charts.tsx` | 313 |
+| 新增 | `src/features/progress/ProgressPage.tsx` | 280 |
+| 新增 | `tests/progress-analytics.test.ts` | 451 |
+| 新增 | `docs/progress-analytics-task-runbook-2026-09.md` | — |
+| 修改 | `src/storage/memory.ts`（`EVIDENCE_LOG_MAX = 5000` + 导出 + `appendEvidence` 改用常量） | +11 |
+| 修改 | `src/components/layout/nav-items.ts`（`/progress` 导航项 + 头注顺序说明） | +3 |
+| 修改 | `src/App.tsx`（`progress` 路由） | +3 |
+| 修改 | `src/features/learner/LearnerPage.tsx`（入口卡） | +18 |
+| 修改 | `src/i18n/messages/{zh,en}.ts`（**37 键**，严格成对） | 各 +~60 |
+| 修改 | `package.json`（`test:progress` + 挂进 `test:library`） | +2 |
+
+### 13.2 验收（对照 §2 成功标准）
+
+| # | 标准 | 结果 |
+|---|------|------|
+| ① | 有数据时四块都渲染且数字可指到 domain 字段 | ✅ |
+| ② | 空数据 / 单条数据有明确空态，不出现分不清的空白图表 | ✅ 全空只渲一张空态卡；单点趋势画点 + 引导语 |
+| ③ | 新增纯函数有单测 | ✅ `npm run test:progress` → **35/35 ALL PASS**（目标 ≥24） |
+| ④ | `npm run typecheck` 仅余 3 条既存 `AIModelsSection` 错误 | ✅ 实测仅这 3 条，无新增 |
+| ⑤ | `src-tauri/**`、`storage/tauri.ts`、`storage/local.ts` 零改动 | ✅ `git status` 实测为空（`domain/` 与 `stores/` 亦未触碰） |
+| ⑥ | 全部测试套件全绿 | ✅ `test:library` 全链 ALL PASS（含 `test:progress`）；`test:storage` 28/28；`test:i18n` 8/8 |
+
+### 13.3 对本文伪代码的偏离（4 处，均为实施期有意收敛）
+
+| # | 位置 | 伪代码 | 实现 | 理由 |
+|---|------|--------|------|------|
+| 1 | §8.1 `buildTimeline` 入参 | `goal.chapterIds` | `goal.requiredChapterIds`（新增窄接口 `TimelineGoal`） | 沿用 domain 真实字段名，调用点可直接传 `activeGoal`，无需字段映射（减少一处出错面） |
+| 2 | §8.1 时间工具 | `dateKeyOf` 私有 | **导出** `dateKeyOf` | 页面要格式化「记录覆盖区间」，必须复用同一套时区口径；页面临时另写一份分桶规则就会与热力图错位（同类陷阱见 §8.5） |
+| 3 | §8.3 `TimelineChart` 的 x 轴 | 右端 = `max(最后判卷, now)`，deadline 超出则裁到右端 | 右端 = `max(最后判卷, now, deadline)` | 按伪代码，**未来截止日会被一律裁到右端**，截止标记退化为装饰；而「曲线离截止还有多远」正是 UC-04 的核心信息。纳入范围后标记始终可见（与 §7.1 线框一致） |
+| 4 | §8.9 `heatmapCaption` | `(days, total) => 近 ${days} 天` | `(weeks, total) => 近 ${weeks} 周`，传 `HEATMAP_WEEKS` | 按天会渲染「近 182 天」，可读性差；§7.1 线框本来就写「近 26 周」 |
+
+另：§8.1 伪代码写 `unit.misconceptions ?? []`，实现直接取 `unit.misconceptions` —— 该字段在 `UnitMastery` 中是**必填** `string[]`，`??` 无实际作用。
+
+### 13.4 未能按方案执行的部分
+
+**无。** §12 的 35 条用例全部实现并通过；§2 的六项成功标准全部达成。
+
+唯一被修正的是**测试自身**：`TC-REG-02` 原断言「趋势的 `chapters` 不含脏 key」，但趋势读的是**试卷历史**（章删了历史仍在 → 用 `id` 兜底），脏 key 过滤只属弱点榜（读 `byUnit`）。已改为只断言弱点榜，并新增 `TC-UC02-05` 显式锁定两种口径的差别（见 runbook T3 记录）。
+
+### 13.5 待人工核对（受 `rules/no-headless-browser-validation.mdc` 约束未起浏览器）
+
+- `/progress` 四块在真实数据下的视觉与色阶可读性；
+- 全空态 / 单点趋势 / 裁剪提示条三种边缘形态；
+- 侧栏「复盘」项的图标与顺序观感；
+- `/learner` 入口卡的位置与形态。
+
+---
+
 ## 变更记录
 
 | 日期 | 变更 | 作者 |
 |------|------|------|
 | 2026-09-15 | 初稿：D1–D4 四项决策定案（全取推荐），12 章完成 | Agent |
 | 2026-09-16 | roadmap §F3 状态同步：正文与总表标 ◐「方案已出，待确认」；标注两处被方案否决的前提（范围第 5 条 / Done 标准第 3 条）；补 D1 路由改档与「1 万条」前提不成立说明。**README 双语暂不改**（T9 排在实施后 → 32/13） | Agent |
+| 2026-09-16 | **实施完成**（T1–T9 全部 done）：新增 `/progress` 四块视图（热力图 / 掌握度趋势 / 弱点排行 / 目标进度时间线）；`EVIDENCE_LOG_MAX` 500 → 5000。补 **§13 实施结果**（交付物 / 六项验收 / **4 处伪代码偏离登记** / 待人工核对项）；表头状态改 ✅；§9 T9 的「方案 §14」更正为 §13 | Agent |

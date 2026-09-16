@@ -407,7 +407,7 @@ never depend on a network call.
 Every capability the project intends to ship — this doubles as the roadmap.
 `[x]` = shipped · `[ ]` = not yet · `P0` / `P1` / `P2` = priority of the unshipped items.
 
-**31 shipped · 14 not yet.**
+**32 shipped · 13 not yet.**
 
 ### 📥 Ingestion
 
@@ -458,7 +458,7 @@ Every capability the project intends to ship — this doubles as the roadmap.
 - [x] Learner profile — self-reported level, weekly time budget, preferences; drives paper difficulty, the finish-date estimate, and the AI prompt context
 - [x] Résumé import — parse a PDF or pasted résumé into a background summary + a level suggestion (PII is masked on-device before sending; the raw text is never stored)
 - [x] Time-aware planning — with a deadline set, "N min suggested today · M items" and a today / this week / later split of the queue; a behind-schedule warning on home, **without touching planner priority**
-- [ ] Progress analytics — activity heatmap, mastery trend, weak-point ranking `P1`
+- [x] Progress & trends — activity heatmap (daily buckets, with the actual record coverage range and trimming notice), mastery trend curve (grading-time snapshots, drillable per chapter), weak-point ranking (mastery gap + paper errors + misconception count), and a goal progress timeline against the deadline; all **read-only derived** — mastery is never touched and no state is written
 
 ### 🔍 Retrieval
 
