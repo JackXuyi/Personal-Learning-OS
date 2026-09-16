@@ -9,6 +9,7 @@
  * KnowledgeRelation / Embedding / 全文搜索能力。
  */
 import type {
+  Annotation,
   CapabilityItem,
   CapabilityReport,
   CapabilityRun,
@@ -179,6 +180,21 @@ export interface StorageAdapter {
   saveCardState(state: CardState): Promise<void>;
   /** 批量删除（孤儿清理 / 用户重置进度）；**空数组 = 无操作**。 */
   deleteCardStates(cardIds: string[]): Promise<void>;
+
+  // ===== 划线批注（F5 第 2 条；决策 D4：不写证据流、不参与掌握度）=====
+  /**
+   * 某章的全部批注，**按 `start` 升序**（与正文阅读顺序一致，且是 DOM 消歧的
+   * 顺序依据 D8）。无批注返回空数组（不抛错）。
+   */
+  listAnnotationsByChapter(chapterId: string): Promise<Annotation[]>;
+  /** 某资料的全部批注（按 `start` 升序；重切分后重定位用）。 */
+  listAnnotations(documentId: string): Promise<Annotation[]>;
+  /** 按 id upsert（新建 / 改笔记均为本方法）。 */
+  saveAnnotation(annotation: Annotation): Promise<void>;
+  /** 单条删除（用户手动删除）。幂等（删不存在的 id 不抛错）。 */
+  deleteAnnotation(id: string): Promise<void>;
+  /** 整批删除（孤儿清理 / 重切分后重定位失败）；**空数组 = 无操作**。 */
+  deleteAnnotations(ids: string[]): Promise<void>;
 
   // ===== 目标（多目标，U0 数据准备；docs/ui-workbench-plan-2026-09.md §7.2）=====
   listGoals(): Promise<LearningGoal[]>;

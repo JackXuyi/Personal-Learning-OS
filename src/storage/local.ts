@@ -6,6 +6,7 @@
  * 工厂函数。注意：localStorage 不得用于存放密钥。
  */
 import type {
+  Annotation,
   CapabilityItem,
   CapabilityReport,
   CapabilityRun,
@@ -50,6 +51,8 @@ const KEY_PROFILE = "plos.learner-profile";
 const KEY_RESTATEMENTS = "plos.restatements";
 /** 自测卡调度状态（F5 第 4 条）：新 key，无旧数据 → 零迁移。 */
 const KEY_CARDS = "plos.flashcards";
+/** 划线批注（F5 第 2 条）：新 key，无旧数据 → 零迁移。 */
+const KEY_ANNOTATIONS = "plos.annotations";
 const KEY_GOALS = "plos.goals";
 const KEY_ACTIVE_GOAL = "plos.active-goal";
 const KEY_EVIDENCE = "plos.evidence";
@@ -106,6 +109,9 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
       load<Restatement[]>(KEY_RESTATEMENTS, []).map((r) => [r.id, r]),
     );
     this.cardStates = load<CardStateMap>(KEY_CARDS, {});
+    this.annotations = new Map(
+      load<Annotation[]>(KEY_ANNOTATIONS, []).map((a) => [a.id, a]),
+    );
     this.goals = new Map(load<LearningGoal[]>(KEY_GOALS, []).map((g) => [g.id, g]));
     this.activeGoalId = load<string | undefined>(KEY_ACTIVE_GOAL, undefined);
     this.evidenceLog = load<EvidenceEntry[]>(KEY_EVIDENCE, []);
@@ -168,6 +174,7 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     else localStorage.setItem(KEY_PROFILE, JSON.stringify(this.profile));
     localStorage.setItem(KEY_RESTATEMENTS, JSON.stringify([...this.restatements.values()]));
     localStorage.setItem(KEY_CARDS, JSON.stringify(this.cardStates));
+    localStorage.setItem(KEY_ANNOTATIONS, JSON.stringify([...this.annotations.values()]));
     localStorage.setItem(KEY_GOALS, JSON.stringify([...this.goals.values()]));
     localStorage.setItem(KEY_EVIDENCE, JSON.stringify(this.evidenceLog));
     // 目标级能力评测（F6）
@@ -316,6 +323,22 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     // 空数组短路：不做无意义的整库回写（单测 TC-EDGE-10）
     if (cardIds.length === 0) return;
     await super.deleteCardStates(cardIds);
+    this.persist();
+  }
+
+  // ===== 划线批注（F5 第 2 条）写操作 override =====
+  override async saveAnnotation(annotation: Annotation): Promise<void> {
+    await super.saveAnnotation(annotation);
+    this.persist();
+  }
+  override async deleteAnnotation(id: string): Promise<void> {
+    await super.deleteAnnotation(id);
+    this.persist();
+  }
+  override async deleteAnnotations(ids: string[]): Promise<void> {
+    // 空数组短路：与 deleteCardStates 同体例（避免整库回写）
+    if (ids.length === 0) return;
+    await super.deleteAnnotations(ids);
     this.persist();
   }
   override async saveGoal(goal: LearningGoal): Promise<void> {

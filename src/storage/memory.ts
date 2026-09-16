@@ -8,6 +8,7 @@
  * / Embedding 五类实体的内存实现，供检索引擎与概念抽取消费。
  */
 import type {
+  Annotation,
   CapabilityItem,
   CapabilityReport,
   CapabilityRun,
@@ -62,6 +63,8 @@ export class InMemoryStorage implements StorageAdapter {
   protected restatements = new Map<string, Restatement>();
   /** 自测卡调度状态（F5 第 4 条）。key = DerivedCard.id；只存调度，不存卡面。 */
   protected cardStates: CardStateMap = {};
+  /** 划线批注（F5 第 2 条）。key = Annotation.id。 */
+  protected annotations = new Map<string, Annotation>();
   protected goals = new Map<string, LearningGoal>();
   protected activeGoalId: string | undefined;
   protected evidenceLog: EvidenceEntry[] = [];
@@ -92,6 +95,10 @@ export class InMemoryStorage implements StorageAdapter {
     this.documents.delete(id);
     // 级联清理：删除文档时一并移除其章节，保持数据一致性。
     this.chaptersByDocument.delete(id);
+    // 级联清理（F5 第 2 条）：批注归属资料，资料没了批注即成孤儿 → 一并删除。
+    for (const [annId, ann] of this.annotations) {
+      if (ann.documentId === id) this.annotations.delete(annId);
+    }
   }
 
   async listChapters(documentId: string): Promise<Chapter[]> {
@@ -373,6 +380,23 @@ export class InMemoryStorage implements StorageAdapter {
     for (const id of cardIds) delete this.cardStates[id];
   }
 
+  // ===== 划线批注（F5 第 2 条）=====
+  async listAnnotationsByChapter(chapterId: string): Promise<Annotation[]> {
+    return [...this.annotations.values()].filter((a) => a.chapterId === chapterId).sort(byStart);
+  }
+  async listAnnotations(documentId: string): Promise<Annotation[]> {
+    return [...this.annotations.values()].filter((a) => a.documentId === documentId).sort(byStart);
+  }
+  async saveAnnotation(annotation: Annotation): Promise<void> {
+    this.annotations.set(annotation.id, annotation);
+  }
+  async deleteAnnotation(id: string): Promise<void> {
+    this.annotations.delete(id);
+  }
+  async deleteAnnotations(ids: string[]): Promise<void> {
+    for (const id of ids) this.annotations.delete(id);
+  }
+
   async listGoals(): Promise<LearningGoal[]> {
     return [...this.goals.values()];
   }
@@ -453,4 +477,12 @@ export class InMemoryStorage implements StorageAdapter {
       this.evidenceLog = this.evidenceLog.slice(-EVIDENCE_LOG_MAX);
     }
   }
+}
+
+/**
+ * 批注排序：`start` 升序，同起点用 `end` 兜底（保证全序，避免同起点时
+ * 排序不稳定 → 顺序贪心消歧（D8）的结果在不同引擎上飘）。
+ */
+function byStart(a: Annotation, b: Annotation): number {
+  return a.start - b.start || a.end - b.end;
 }
