@@ -18,6 +18,7 @@ import { useAiTask } from '../../../stores/useAiTaskStore';
 import { Button } from '../../../components/ui/button';
 import { Section } from '../../../components/primitives';
 import { AiTaskStatusLine } from '../../../components/ai-task-status-line';
+import { isUsefulKeyPoint } from '../../../lib/text-quality';
 import { notifyDocsChanged } from '../../../components/layout/AppShell';
 import { buildActiveProvider } from '../../../stores/useSettingsStore';
 import { useAiReady } from '../../../hooks/useAiReady';
@@ -200,6 +201,22 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
         ? pointsTask
         : conceptsTask;
 
+  /**
+   * 渲染前过质量门（2026-09-16 缺陷修复）：存量的脏要点（PDF 抽取把编号标题糊进
+   * 正文 → 断句切出碎片 `"4."`）不再渲染成「一个孤立圆点」的空行。
+   *
+   * 判据与生成侧 `cleanKeyPoints` 共用 `isUsefulKeyPoint`（单一真源）——
+   * 生成侧负责不再产出，这里负责已落库的存量不再显示，两侧标准不会漂移。
+   */
+  const pointViews = useMemo(
+    () =>
+      chapters.map((ch) => ({
+        refs: (ch.keyPointRefs ?? []).filter((r) => isUsefulKeyPoint(r.point)),
+        points: (ch.keyPoints ?? []).filter(isUsefulKeyPoint),
+      })),
+    [chapters],
+  );
+
   return (
     <div className="space-y-6">
       {/* 章要点 */}
@@ -259,9 +276,9 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
                 {idx + 1}  {ch.title}
               </Link>
 
-              {ch.keyPointRefs && ch.keyPointRefs.length > 0 ? (
+              {pointViews[idx].refs.length > 0 ? (
                 <ul className="mt-2 space-y-2">
-                  {ch.keyPointRefs.map((ref, i) => (
+                  {pointViews[idx].refs.map((ref, i) => (
                     <li key={i} className="text-xs text-ink-2">
                       <p>
                         <span className="mr-1">•</span>
@@ -283,10 +300,10 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
                     </li>
                   ))}
                 </ul>
-              ) : ch.keyPoints && ch.keyPoints.length > 0 ? (
+              ) : pointViews[idx].points.length > 0 ? (
                 /* 老数据回退：无 keyPointRefs → 仅要点文本（TC-EDGE-01） */
                 <ul className="mt-2 space-y-1 text-xs text-ink-2">
-                  {ch.keyPoints.map((kp, i) => (
+                  {pointViews[idx].points.map((kp, i) => (
                     <li key={i}>
                       <span className="mr-1">•</span>
                       <MarkdownInline text={kp} />

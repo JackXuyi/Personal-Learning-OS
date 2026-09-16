@@ -26,6 +26,7 @@ import { Button } from "../../components/ui/button";
 import { MASTERY_THRESHOLD, isDueReview } from "../../domain";
 import type { Chapter, LearnerState, SourceDocument } from "../../domain";
 import { applyKeyPointRating } from "../../engine";
+import { isUsefulKeyPoint } from "../../lib/text-quality";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { useI18n } from "../../i18n";
 import { chapterBadge } from "./chapter-badge";
@@ -221,7 +222,13 @@ export default function ChapterReaderPage() {
   }
 
   const body = doc.textPreview?.slice(chapter.contentRef.start, chapter.contentRef.end) ?? "";
-  const whyLead = leadOf(chapter, body);
+  /**
+   * 渲染前过质量门（2026-09-16 缺陷修复）：存量脏要点（PDF 抽取把编号标题糊进
+   * 正文 → 断句切出碎片 `"4."`）不再渲染成只有编号的要点芯片，也不再用作导语。
+   * 判据与生成侧 `cleanKeyPoints` 共用 `isUsefulKeyPoint`（单一真源）。
+   */
+  const keyPoints = chapter.keyPoints.filter(isUsefulKeyPoint);
+  const whyLead = leadOf(keyPoints, body);
   /** 与「资料内容」Tab 同源：markdown 走 GFM，其余按格式回落，规则一致。 */
   const Renderer = pickRenderer(doc.format);
 
@@ -320,9 +327,9 @@ export default function ChapterReaderPage() {
                 </div>
               }
             />
-            {chapter.keyPoints.length > 0 ? (
+            {keyPoints.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
-                {chapter.keyPoints.map((kp, i) => {
+                {keyPoints.map((kp, i) => {
                   const active = activeChip === i;
                   return (
                     <button
@@ -466,9 +473,12 @@ export default function ChapterReaderPage() {
 /**
  * Why it matters 导语：要点首条优先；无要点时回退正文首句（去标题行）截断，
  * 保持右栏始终能回答「这章讲什么」。
+ *
+ * 入参是**已过质量门**的要点（调用方过滤，见组件内 `keyPoints`）——
+ * 否则脏碎片会成为整段导语。
  */
-function leadOf(chapter: Chapter, body: string): string | undefined {
-  if (chapter.keyPoints.length > 0) return chapter.keyPoints[0];
+function leadOf(keyPoints: readonly string[], body: string): string | undefined {
+  if (keyPoints.length > 0) return keyPoints[0];
   const first = body
     .split("\n")
     .map((s) => s.trim())

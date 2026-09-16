@@ -17,6 +17,7 @@ import { Button } from "../../../components/ui/button";
 import { Spinner } from "../../../components/ui/spinner";
 import { Textarea } from "../../../components/ui/textarea";
 import { useAiReady } from "../../../hooks/useAiReady";
+import { isUsefulKeyPoint } from "../../../lib/text-quality";
 import { MAX_QUESTION_CHARS, askChapter } from "../chapter-qa-service";
 import { splitCitationMarkers } from "./qa-citations";
 
@@ -38,6 +39,11 @@ export default function ChapterQaPanel({
   const { m } = useI18n();
   const t = m.learn.reader.qa;
   const aiReady = useAiReady();
+  /**
+   * 示例问题取本章要点前 3 条 **且过质量门**（2026-09-16 缺陷修复）：
+   * 脏碎片（PDF 抽取的编号 `"4."`）会生成「解释 4.」这种无意义建议。
+   */
+  const examplePoints = chapter.keyPoints.filter(isUsefulKeyPoint).slice(0, 3);
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
   const [answer, setAnswer] = useState<ChapterAnswer | undefined>();
@@ -91,9 +97,9 @@ export default function ChapterQaPanel({
         ) : null}
 
         {/* 示例问题：直接取自本章要点，点一下即提问（零编造） */}
-        {!answer && aiReady && chapter.keyPoints.length > 0 ? (
+        {!answer && aiReady && examplePoints.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {chapter.keyPoints.slice(0, 3).map((kp, i) => (
+            {examplePoints.map((kp, i) => (
               <button
                 key={i}
                 type="button"
