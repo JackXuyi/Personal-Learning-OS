@@ -35,6 +35,18 @@ import type {
 import { sortChaptersByOrder } from "../domain";
 import type { RetrievalScope, StorageAdapter } from "./types";
 
+/**
+ * 证据日志上限（超出丢最旧）。
+ *
+ * ⚠️ 口径唯一来源：`features/progress/analytics.ts` 的裁剪提示判定从这里导入，
+ * 不得在 UI 侧或派生层重写 5000（否则改上限时两处漂移 —— F2「两把尺子」的同类陷阱）。
+ *
+ * 500 → 5000（F3 D2）：500 条按每天 3 条只够约 5 个月，热力图会显示「以前没学习」
+ * 的假空窗。容量核算：5000 × ~150 B ≈ 750 KB << localStorage 5 MB 配额
+ * （见 docs/progress-analytics-design-2026-09.md §4.3）。
+ */
+export const EVIDENCE_LOG_MAX = 5000;
+
 export class InMemoryStorage implements StorageAdapter {
   readonly name: string = "memory";
   protected documents = new Map<string, SourceDocument>();
@@ -436,9 +448,9 @@ export class InMemoryStorage implements StorageAdapter {
   }
   async appendEvidence(entry: EvidenceEntry): Promise<void> {
     this.evidenceLog.push(entry);
-    // 简单上限防无限增长（本地应用规模足够）。
-    if (this.evidenceLog.length > 500) {
-      this.evidenceLog = this.evidenceLog.slice(-500);
+    // 上限见 EVIDENCE_LOG_MAX 注释（F3 D2：500 → 5000）。超出保留最新。
+    if (this.evidenceLog.length > EVIDENCE_LOG_MAX) {
+      this.evidenceLog = this.evidenceLog.slice(-EVIDENCE_LOG_MAX);
     }
   }
 }
