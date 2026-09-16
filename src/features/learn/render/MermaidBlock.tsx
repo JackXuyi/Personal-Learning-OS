@@ -7,9 +7,11 @@
  *    因此这里只允许 `import("mermaid")`，**不允许** `from "mermaid"` 值导入。
  * 2. **必须自己吞掉异常**：`RenderErrorBoundary` 一旦接住错误，会把**整篇正文**
  *    降级成纯文本。单块语法错误绝不能连坐全篇 → 错误只落到本块 state。
- * 3. **源码容器常驻 DOM**（只切 `hidden`）：`highlightRange` 用 `TreeWalker` 累加
- *    文本节点长度来把 `textPreview` 的绝对偏移映射到 DOM。若图渲染时把源码文本从
- *    DOM 里抹掉，图之后的所有「知识点 → 原文」锚点都会整体失准。
+ * 3. **源码容器常驻 DOM**（只切 `hidden`）：本约束是**为旧的偏移口径而设** —— 旧
+ *    `highlightRange` 靠 `TreeWalker` 累加文本节点长度把 `textPreview` 偏移映射到
+ *    DOM，源码文本一旦被抹掉，其后所有锚点都会整体失准。T12 起锚点改为「源串切
+ *    quote → DOM 字面匹配」，该约束**已非必需**；但保留它仍有益（图块内文本参与
+ *    匹配、源码可随时查看），故**本次不动**（见方案 §8.16「连带收益」）。
  */
 import { useEffect, useId, useState } from "react";
 import { useI18n } from "../../../i18n";
@@ -141,7 +143,8 @@ export default function MermaidBlock({ source }: MermaidBlockProps) {
         />
       ) : null}
 
-      {/* 源码容器：**常驻 DOM**，仅切 hidden —— 保证 highlightRange 的文本长度守恒 */}
+      {/* 源码容器：**常驻 DOM**，仅切 hidden —— 让图块文本参与锚点匹配 + 源码随时可查
+          （T12 起不再是偏移精度的必需项，理由见文件头第 3 条） */}
       <pre
         data-mermaid-source=""
         className={`mt-2 overflow-x-auto rounded bg-subtle p-2 font-mono text-[12px] leading-5 text-ink-2 ${

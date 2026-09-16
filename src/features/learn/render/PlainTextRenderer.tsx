@@ -1,21 +1,25 @@
 /**
  * 纯文本渲染器 —— pdf / docx / epub / web / note / txt / custom 的默认渲染。
  *
- * 行渲染规则（`#` 标题放大、空行留白、其余 pre-wrap）原先定义在 `ArticleBody`；
- * 该组件已在 v2 优化中删除（阅读页改用 `pickRenderer`），**本文件即该规则的
- * 唯一实现** —— 需要调整纯文本观感请改这里。
+ * ⚠️ **行渲染规则的唯一实现已搬到 `plain-text-layout.ts::plainTextLayout`**
+ * （2026-09-16，F5 第 2 条「划线高亮与笔记」§11.2）：
+ * 高亮定位层必须知道「哪些字符不在 DOM 里」（`\n` / 行尾空白 / `### ` 前缀都是
+ * 被丢弃的），才能把用户划线准确匹配回原文。若渲染器与定位层各写一遍这套规则，
+ * 就是本仓库反复踩过的根因（同一规则散在多处）→ 现在两处共用同一个纯函数，
+ * 本文件只负责把行映射成 JSX。
+ *
+ * 历史：该规则原先定义在 `ArticleBody`；组件已在 v2 优化中删除（阅读页改用
+ * `pickRenderer`）。**需要调整纯文本观感请改 `plain-text-layout.ts`。**
  */
 import type { DocumentRendererProps } from "./renderer-registry";
+import { plainTextLayout } from "./plain-text-layout";
 
 export default function PlainTextRenderer({ text }: DocumentRendererProps) {
-  const lines = text.split("\n");
   return (
     <div data-testid="plain-body" className="text-[15px] leading-7 text-ink-2">
-      {lines.map((raw, i) => {
-        const line = raw.trimEnd();
-        const heading = /^(#{1,6})\s+(.*)$/.exec(line);
-        if (heading) {
-          const level = heading[1].length;
+      {plainTextLayout(text).map((line, i) => {
+        if (line.kind === "heading") {
+          const level = line.level ?? 1;
           return (
             <p
               key={i}
@@ -25,16 +29,16 @@ export default function PlainTextRenderer({ text }: DocumentRendererProps) {
                   : "mt-4 mb-1.5 text-base font-semibold text-ink-1"
               }
             >
-              {heading[2].replace(/\s+#+\s*$/, "")}
+              {line.text}
             </p>
           );
         }
-        if (line.trim() === "") {
+        if (line.kind === "blank") {
           return <div key={i} className="h-3" />;
         }
         return (
           <p key={i} className="text-[15px] leading-7 text-ink-2">
-            <span className="whitespace-pre-wrap">{line}</span>
+            <span className="whitespace-pre-wrap">{line.text}</span>
           </p>
         );
       })}

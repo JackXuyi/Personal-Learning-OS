@@ -8,7 +8,7 @@
  * - 四态面板：输入 / 检查中 / 反馈 / 历史；反馈**内联**（无弹层），唯一例外是
  *   删除复述的二次确认（`ConfirmDialog`）。
  * - `no-body`（无正文快照）是**提交前**禁用态，与 `no-ai` 同一时刻只渲染一条提示。
- * - 点引文 → `onHighlight(章内相对偏移)` → 复用页面既有 `highlightRange` 通道。
+ * - 点引文 → `onHighlight(章内相对偏移)` → 复用页面既有 `highlightSourceRange` 通道。
  * - `data-testid` 一次到位（`rules/no-headless-browser-validation`：写 testid 但不启浏览器）。
  */
 import { useEffect, useRef, useState } from "react";

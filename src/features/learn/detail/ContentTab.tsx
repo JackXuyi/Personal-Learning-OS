@@ -5,7 +5,8 @@
  * - 渲染：`ArticleBody`（只认 `#`）→ `pickRenderer(doc.format)`，markdown 走
  *   真正的 GFM 渲染；渲染器抛错由 ErrorBoundary 降级为纯文本（E7）。
  * - 锚点：知识点 Tab 点「原文 →」会带 `?at=<start>` 过来，这里在渲染完成后
- *   按字符区间高亮并滚动到视野中央。
+ *   按**源串区间**切出 quote、再在渲染后的 DOM 文本上匹配定位并滚动（T12）。
+ *   ⚠️ 未展开时只渲染前 `PREVIEW_CHARS` 个字符 → `at` 越界时先展开全文再跳。
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../../i18n';
@@ -13,7 +14,7 @@ import { Button } from '../../../components/ui/button';
 import { pickRenderer } from '../render/renderer-registry';
 import PlainTextRenderer from '../render/PlainTextRenderer';
 import RenderErrorBoundary from '../render/RenderErrorBoundary';
-import { highlightRange, HIGHLIGHT_WINDOW } from '../highlight';
+import { highlightSourceRange, HIGHLIGHT_WINDOW } from '../highlight';
 import type { SourceDocument } from '../../../domain';
 
 const PREVIEW_CHARS = 200000;
@@ -38,14 +39,23 @@ export default function ContentTab({ doc, at }: ContentTabProps) {
   // 渲染完成后再高亮：Markdown 渲染是异步提交 DOM 的，effect 时机刚好。
   useEffect(() => {
     if (at === undefined || !Number.isFinite(at)) return;
+    // ⚠️ T12 步骤 0（截断边界，最易漏）：未展开时 DOM 只渲染前 PREVIEW_CHARS 个字符，
+    // 若 at ≥ 200000 则 DOM 里**根本没有这段文本** —— 必须先把全文渲染出来再跳，
+    // 否则换口径后体验会从「错位跳转」退化成「不跳转」（见方案 §8.16）。
+    if (at >= PREVIEW_CHARS && truncated && !showAll) {
+      setShowAll(true);
+      return; // 展开后 displayed 变化 → 本 effect 会再跑一次，那时才高亮
+    }
     const root = bodyRef.current;
     if (!root) return;
     // 两帧后执行，等 Markdown 子树挂载完成。
     const id = requestAnimationFrame(() => {
-      highlightRange(root, at, at + HIGHLIGHT_WINDOW);
+      // ⚠️ 第 2 个参数必须传**本 root 实际渲染的源串**（`displayed`），不是全文：
+      // 高亮区间由「源串切片 → DOM 字面匹配」得出，源串必须与 DOM 同源。
+      highlightSourceRange(root, displayed, at, at + HIGHLIGHT_WINDOW);
     });
     return () => cancelAnimationFrame(id);
-  }, [at, doc.id, displayed]);
+  }, [at, doc.id, displayed, truncated, showAll]);
 
   const metaLines = useMemo(() => {
     const lines = [];
