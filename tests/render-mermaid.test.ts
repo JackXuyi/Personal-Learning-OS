@@ -277,7 +277,8 @@ check("TC-EDGE-14 MermaidBlock 自带错误捕获（不得外抛触发整篇降�
     !codeLines(src).some((line) => /\bthrow\b/.test(line)),
     "组件内不得 throw：会冒泡到 RenderErrorBoundary 把整篇正文降级",
   );
-  // 源码容器常驻 DOM（仅切 hidden），保证 highlightRange 偏移守恒
+  // 源码容器常驻 DOM（仅切 hidden）—— T12 前是偏移精度的必需项，现改为
+  // 「让图块文本参与 highlightSourceRange 的字面匹配 + 源码随时可查」，仍须保留
   assert.ok(src.includes("data-mermaid-source"), "缺少源码容器标记");
   assert.ok(src.includes("hidden"), "源码容器需用 hidden 切换而非条件渲染");
   assert.ok(src.includes("cancelled"), "缺少卸载守卫");
