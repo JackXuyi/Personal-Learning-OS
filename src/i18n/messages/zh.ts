@@ -1015,6 +1015,11 @@ export const zh = {
             : `已切分 · ${c} 章（本地启发式）· 保留 ${carried} 章掌握度${dropped ? `，丢弃 ${dropped} 章` : ""}`,
         noBody: "这份资料没有正文，请先用「替换正文」导入内容。",
         noChapters: "没有切出章节——内容可能缺少标题或分段。",
+        /** 【F5 第 2 条】划线随重切分/合并重定位的附加说明。无需提示时返回空串，调用方直接拼接。 */
+        annotations: (relinked: number, dropped: number) =>
+          relinked === 0 && dropped === 0
+            ? ""
+            : ` · 划线重新定位 ${relinked} 条${dropped ? `，失效删除 ${dropped} 条` : ""}`,
       },
       /** 分析（AI）：可重复触发、可重跑。 */
       analyze: {
@@ -1353,6 +1358,34 @@ export const zh = {
         summaryDone: (n: number) => `本次复习 ${n} 张`,
         summaryEmpty: "本次没有完成任何卡片。",
         stillDue: (n: number) => `还有 ${n} 张待复习。`,
+      },
+      /** 第 7 区「我的划线」（F5 第 2 条；**零 AI 依赖**，划线可选带笔记）。 */
+      annotations: {
+        eyebrow: (n: number) => `我的划线${n > 0 ? `（${n}）` : ""}`,
+        mark: "划线",
+        markWithNote: "划线并写笔记",
+        notePlaceholder: "写点什么（可留空）…",
+        noteCount: (n: number, max: number) => `${n}/${max}`,
+        save: "保存",
+        cancel: "取消",
+        locate: "定位",
+        edit: "编辑",
+        remove: "删除",
+        removeConfirmTitle: "删除这条划线？",
+        removeConfirmDesc: "划线和你写的笔记都会删除，无法找回。不影响掌握度与测评记录。",
+        empty: "还没有划线。在左边正文里选中一句话，就能划线并写笔记。",
+        noBody: "本章没有正文快照，暂时不能划线。",
+        noNote: "（无笔记）",
+        orphan: "正文中未定位到",
+        status: {
+          unanchored: "这段选中的文字无法精确定位到原文，未保存。",
+          duplicate: "这段已经划过了。",
+          "too-short": "选中范围太短，请多选几个字。",
+          "too-long": "选中范围过长，请分段划线。",
+          capped: "本章划线数量已达上限。",
+          "no-body": "本章没有正文快照。",
+          error: "保存失败，请重试。",
+        },
       },
     },
   },

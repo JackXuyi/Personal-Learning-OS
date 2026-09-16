@@ -148,7 +148,11 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
       autoIndexAfterImport();
       notifyDocsChanged();
       await onChanged();
-      setNotice(noticeOf(result));
+      setNotice(
+        noticeOf(result) +
+          // 【F5 第 2 条】仅合并会改区间；重命名/排序恒为 0 → 追加空串，无噪音
+          t.learn.detail.split.annotations(result.annotationsRelinked, result.annotationsDropped),
+      );
       setSelectedIds(new Set());
       setRenamingId(null);
     } catch (e) {
@@ -213,7 +217,9 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
           result.carriedMastery,
           result.droppedMastery,
           false,
-        ),
+        ) +
+          // 【F5 第 2 条】重切分会让划线区间失效 → 如实报「重定位 / 失效」条数
+          t.learn.detail.split.annotations(result.annotationsRelinked, result.annotationsDropped),
       );
       // 重切后旧 chunk 与旧向量一并失效 → 补后台重算入队（G1），避免向量索引静默清零。
       autoIndexAfterImport();

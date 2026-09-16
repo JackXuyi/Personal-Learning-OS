@@ -13,10 +13,13 @@
  *   4) 问这一章 —— 章内提问面板（答案只依据用户导入的原文，引用可点回正文高亮）；
  *   5) 讲给我听 —— 费曼式复述面板（用自己的话讲一遍，AI 对照本章原文给差距反馈）；
  *   6) Evidence —— 溯源（《doc》第 x 章）+ 最近一次含本章的测评 Δ 掌握度（证据从哪来）。
+ *   7) 我的划线 —— 本章划线批注（左栏选中原文 → 划线 → 可选写笔记；**零 AI 依赖**，
+ *      见 docs/learn-highlight-note-design-2026-09.md）。物理位置插在 5 与 6 之间
+ *      （方案 §8.8），编号沿用 UI Workbench 的七区规划。
  * 状态机写回：打开阅读（not-started → learning）与「标记学完」（→ ready）
  * 直接整批写 storage（listChapters/saveChapters 契约，docs §5.1）。
  * 原文档位：`?at=<文档绝对偏移>` 跳转 → 换算章内相对偏移后高亮并滚动
- * （与「资料内容 Tab」同一套 `highlightRange` 口径）。
+ * （与「资料内容 Tab」同一套 `highlightSourceRange` 口径：源串切 quote → DOM 字面匹配）。
  * 底部主行动保留；「标记学完」后提示下一步并刷新章级计划（plan 头项联动）。
  */
 import { useEffect, useRef, useState } from "react";
@@ -24,15 +27,23 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { Bar, Card, EvidenceRow, Section } from "../../components/primitives";
 import { Button } from "../../components/ui/button";
 import { MASTERY_THRESHOLD, isDueReview } from "../../domain";
-import type { Chapter, LearnerState, SourceDocument } from "../../domain";
+import type { Annotation, Chapter, LearnerState, SourceDocument } from "../../domain";
 import { applyKeyPointRating } from "../../engine";
 import { isUsefulKeyPoint } from "../../lib/text-quality";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { useI18n } from "../../i18n";
 import { chapterBadge } from "./chapter-badge";
-import { highlightRange, HIGHLIGHT_WINDOW } from "./highlight";
+import { highlightSourceRange, markRanges, scrollToQuote, unwrapMarks, HIGHLIGHT_WINDOW } from "./highlight";
+import {
+  createAnnotation,
+  listChapterAnnotations,
+  removeAnnotation,
+  updateAnnotationNote,
+} from "./annotation-service";
 import ChapterQaPanel from "./reader/ChapterQaPanel";
 import ChapterRestatementPanel from "./reader/ChapterRestatementPanel";
+import ChapterAnnotationsPanel from "./reader/ChapterAnnotationsPanel";
+import SelectionToolbar from "./reader/SelectionToolbar";
 import { peekCardStats } from "./flashcard-service";
 import { pickRenderer } from "./render/renderer-registry";
 import PlainTextRenderer from "./render/PlainTextRenderer";
@@ -70,8 +81,14 @@ export default function ChapterReaderPage() {
   const at = Number.isFinite(atRaw) && atRaw >= 0 ? atRaw : undefined;
   /** 正文容器 —— 高亮副作用的作用域。 */
   const bodyRef = useRef<HTMLDivElement>(null);
+  /** 正文的**相对定位宿主**（选区浮动工具条以它为参照绝对定位）。 */
+  const bodyBoxRef = useRef<HTMLDivElement>(null);
   /** 章内引用高亮（章内相对偏移）；优先级高于 `?at=`。 */
   const [highlight, setHighlight] = useState<{ start: number; end: number } | undefined>();
+  /** 本章划线批注（按 `start` 升序，storage 保证 —— 顺序贪心消歧的前提）。 */
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  /** 正文里**成功定位到**的批注 id（其余在右栏标注「正文中未定位到」，**不删记录**）。 */
+  const [locatedIds, setLocatedIds] = useState<readonly string[]>([]);
 
   useEffect(() => {
     void (async () => {
@@ -140,15 +157,55 @@ export default function ChapterReaderPage() {
     };
   }, [doc?.id, chapter?.id, chapter?.keyPoints.length, chapter?.keyPointRefs?.length]);
 
-  /**
-   * 渲染完成后再高亮：Markdown 子树异步提交 DOM，两帧时机与 `ContentTab` 一致。
-   * `highlight`（章内引用，章内相对偏移）优先；否则用 `?at=`（文档绝对偏移）换算。
-   * 越界 / 非法值 → `highlightRange` 返回 false 且不做改动（静默，不报错）。
-   */
+  /** 加载本章划线批注（按章的维度组织 —— 复习回看就在这一章内看）。 */
   useEffect(() => {
     if (!chapter) return;
+    let alive = true;
+    void listChapterAnnotations(chapter.id).then((list) => {
+      if (alive) setAnnotations(list);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [chapter?.id]);
+
+  /**
+   * 应用持久划线（F5 第 2 条）：两帧后执行，与 `?at=` 瞬时高亮同时机。
+   *
+   * ⚠️ 只剥持久层（`unwrapMarks`）而不动瞬时锚点层 —— 两层分离（D6），
+   * 否则任何一次 `?at=` 跳转都会连带抹掉用户划线。
+   * ⚠️ `annotations` 已按 `start` 升序（storage 契约）→ `markRanges` 的顺序贪心正确。
+   */
+  useEffect(() => {
     const root = bodyRef.current;
     if (!root) return;
+    const id = requestAnimationFrame(() => {
+      unwrapMarks(root);
+      const okIdx = markRanges(
+        root,
+        annotations.map((a) => a.quote),
+      );
+      setLocatedIds(okIdx.map((i) => annotations[i].id));
+    });
+    return () => cancelAnimationFrame(id);
+  }, [annotations, chapter?.id, doc?.id]);
+
+  /**
+   * 渲染完成后再高亮：Markdown 子树异步提交 DOM，两帧时机与 `ContentTab` 一致。
+   *
+   * 两条来源**都是源串偏移**（旧实现误当 DOM 偏移用 → 系统性偏前，T12 已修正）：
+   *  ① 章内引用：QA `citation.start/end`、复述 `p.start/p.end` —— 均来自
+   *     `locateQuote` 的**章内相对源串偏移**（`ChapterQaPanel` / 复述面板）；
+   *  ② `?at=`：文档绝对偏移 → `- contentRef.start` 换算为章内相对。
+   * 二者统一交给 `highlightSourceRange(root, body, …)` —— 由源串切 quote 再匹配。
+   * 越界 / 定位失败 → 返回 false 且不做改动（静默不跳，绝不错位）。
+   */
+  useEffect(() => {
+    if (!chapter || !doc) return;
+    const root = bodyRef.current;
+    if (!root) return;
+    // body 必须与左栏实际渲染的源串是**同一个表达式**（见下方 <Renderer text={body}>）
+    const body = doc.textPreview?.slice(chapter.contentRef.start, chapter.contentRef.end) ?? "";
     const start = highlight
       ? highlight.start
       : at !== undefined
@@ -157,10 +214,10 @@ export default function ChapterReaderPage() {
     if (start === undefined) return;
     const end = highlight ? highlight.end : start + HIGHLIGHT_WINDOW;
     const id = requestAnimationFrame(() => {
-      highlightRange(root, start, end);
+      highlightSourceRange(root, body, start, end);
     });
     return () => cancelAnimationFrame(id);
-  }, [highlight, at, chapter?.id, chapter?.contentRef.start]);
+  }, [highlight, at, chapter?.id, chapter?.contentRef.start, doc?.id]);
 
   const mastery = chapter ? (learner?.byUnit[chapter.id]?.mastery ?? 0) : 0;
   const badge = chapter ? chapterBadge(chapter.status, mastery, m) : undefined;
@@ -199,6 +256,58 @@ export default function ChapterReaderPage() {
       /* 证据落库失败不阻塞复习主流程。 */
     }
     await useLoopStore.getState().refresh(m);
+  };
+
+  // ===== 划线批注（F5 第 2 条）=====
+
+  /**
+   * 某条划线在**源串**中的左侧上下文（供定位消歧用）。
+   *
+   * `Annotation.start` 是**文档绝对偏移**，先换算成章内相对再取前 60 字
+   * （与 `highlightSourceRange` 内部的 `CONTEXT_CHARS` 同量级）。
+   */
+  const contextOf = (a: Annotation): string => {
+    const body = doc?.textPreview?.slice(chapter?.contentRef.start, chapter?.contentRef.end) ?? "";
+    const local = a.start - (chapter?.contentRef.start ?? 0);
+    return body.slice(Math.max(0, local - 60), local);
+  };
+
+  /** 新建划线（含可选笔记）。`duplicate` 不新建，改为滚到已有那条（幂等语义）。 */
+  const handleCreateAnnotation = async (quote: string, note: string) => {
+    if (!chapter || !doc) return { status: "no-body" as const };
+    const r = await createAnnotation({ doc, chapter, quote, note, now: Date.now() });
+    const record = r.record;
+    if (record && r.status === "ok") {
+      // 就地并入列表并按 start 升序（与 storage 契约同序，保证顺序贪心正确）
+      setAnnotations((prev) => [...prev, record].sort((x, y) => x.start - y.start));
+    }
+    if (record && r.status === "duplicate") {
+      const root = bodyRef.current;
+      if (root) scrollToQuote(root, record.quote, contextOf(record));
+    }
+    return r;
+  };
+
+  /** 改笔记：只换 `note` / `updatedAt`，区间与 id 不变（高亮不必重建、列表不跳动）。 */
+  const handleUpdateNote = async (a: Annotation, note: string) => {
+    const r = await updateAnnotationNote({ record: a, note, now: Date.now() });
+    const saved = r.record;
+    if (r.status === "ok" && saved) {
+      setAnnotations((prev) => prev.map((x) => (x.id === saved.id ? saved : x)));
+    }
+    return r;
+  };
+
+  /** 删除一条划线（不影响掌握度 / 章状态 / 试卷）。 */
+  const handleRemoveAnnotation = async (a: Annotation) => {
+    await removeAnnotation(a.id);
+    setAnnotations((prev) => prev.filter((x) => x.id !== a.id));
+  };
+
+  /** 回看：滚到正文对应位置并闪烁；命不中则什么也不做（条目仍保留在右栏）。 */
+  const locateAnnotation = (a: Annotation) => {
+    const root = bodyRef.current;
+    if (root) scrollToQuote(root, a.quote, contextOf(a));
   };
 
   if (missing) {
@@ -257,17 +366,25 @@ export default function ChapterReaderPage() {
           <h1 className="text-xl font-semibold tracking-tight text-ink-1">
             {chapter.title || m.chapter.ordinal(chapter.order)}
           </h1>
-          <div ref={bodyRef} className="mt-4 break-words border-t border-line pt-5">
-            {body.length > 0 ? (
-              <RenderErrorBoundary
-                resetKey={`${doc.id}:${chapter.id}:${doc.format}`}
-                fallback={<PlainTextRenderer text={body} doc={doc} />}
-              >
-                <Renderer text={body} doc={doc} />
-              </RenderErrorBoundary>
-            ) : (
-              <p className="text-sm text-ink-3">{t.noSnapshot}</p>
-            )}
+          <div ref={bodyBoxRef} className="relative mt-4 border-t border-line pt-5">
+            <div ref={bodyRef} className="break-words">
+              {body.length > 0 ? (
+                <RenderErrorBoundary
+                  resetKey={`${doc.id}:${chapter.id}:${doc.format}`}
+                  fallback={<PlainTextRenderer text={body} doc={doc} />}
+                >
+                  <Renderer text={body} doc={doc} />
+                </RenderErrorBoundary>
+              ) : (
+                <p className="text-sm text-ink-3">{t.noSnapshot}</p>
+              )}
+            </div>
+            {/* 选区浮动工具条（相对 bodyBoxRef 绝对定位；选区必须落在 bodyRef 内） */}
+            <SelectionToolbar
+              rootRef={bodyRef}
+              hostRef={bodyBoxRef}
+              onCreate={handleCreateAnnotation}
+            />
           </div>
         </Card>
 
@@ -388,6 +505,17 @@ export default function ChapterReaderPage() {
             doc={doc}
             chapter={chapter}
             onHighlight={(start, end) => setHighlight({ start, end })}
+          />
+
+          {/* 7 · 我的划线（F5 第 2 条：选中原文 → 划线 → 可选笔记；零 AI）。
+              物理位置在 5 与 6 之间（方案 §8.8 定案），编号沿用七区规划。 */}
+          <ChapterAnnotationsPanel
+            annotations={annotations}
+            hasBody={body.length > 0}
+            locatedIds={locatedIds}
+            onLocate={locateAnnotation}
+            onUpdateNote={handleUpdateNote}
+            onRemove={handleRemoveAnnotation}
           />
 
           {/* 6 · Evidence（证据从哪来：溯源 + 最近测评 Δ） */}

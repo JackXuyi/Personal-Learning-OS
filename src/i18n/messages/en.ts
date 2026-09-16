@@ -1039,6 +1039,11 @@ export const en: Messages = {
             : `Split · ${c} chapters (local heuristic) · ${carried} carried${dropped ? `, ${dropped} dropped` : ""}`,
         noBody: "This document has no body — use \"Replace body\" first.",
         noChapters: "No chapters were produced — the content may lack headings or paragraphs.",
+        /** [F5 #2] Append-only note about highlights re-anchored after a re-split / merge. Empty when nothing to say. */
+        annotations: (relinked: number, dropped: number) =>
+          relinked === 0 && dropped === 0
+            ? ""
+            : ` · ${relinked} highlight(s) re-anchored${dropped ? `, ${dropped} dropped` : ""}`,
       },
       /** Analyze (AI): repeatable, re-runnable. */
       analyze: {
@@ -1389,6 +1394,35 @@ export const en: Messages = {
         summaryDone: (n: number) => `${n} cards reviewed`,
         summaryEmpty: "No cards were reviewed this session.",
         stillDue: (n: number) => `${n} card(s) still to review.`,
+      },
+      /** Section 7 "My highlights" (F5 item 2; zero-AI, optional note per highlight). */
+      annotations: {
+        eyebrow: (n: number) => `My highlights${n > 0 ? ` (${n})` : ""}`,
+        mark: "Highlight",
+        markWithNote: "Highlight + note",
+        notePlaceholder: "Write a note (optional)…",
+        noteCount: (n: number, max: number) => `${n}/${max}`,
+        save: "Save",
+        cancel: "Cancel",
+        locate: "Locate",
+        edit: "Edit",
+        remove: "Delete",
+        removeConfirmTitle: "Delete this highlight?",
+        removeConfirmDesc:
+          "The highlight and your note will be deleted permanently. Mastery and quiz records are unaffected.",
+        empty: "No highlights yet. Select a passage in the text to highlight it and add a note.",
+        noBody: "This chapter has no text snapshot, so highlighting is unavailable.",
+        noNote: "(no note)",
+        orphan: "Not found in the text",
+        status: {
+          unanchored: "Could not pin this selection to the original text — not saved.",
+          duplicate: "This passage is already highlighted.",
+          "too-short": "Selection too short — pick a few more characters.",
+          "too-long": "Selection too long — highlight it in parts.",
+          capped: "This chapter has reached the highlight limit.",
+          "no-body": "This chapter has no text snapshot.",
+          error: "Save failed. Please retry.",
+        },
       },
     },
   },

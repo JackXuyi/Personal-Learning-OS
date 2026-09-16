@@ -219,13 +219,16 @@ export default function LibraryPage() {
     setNotice(undefined);
     try {
       const result = await splitDocumentNow(doc, { storage });
+      // ⚠️ 待抽：「结果文案 + 划线重定位附加说明」这一组合已在 SplitTab（两处）与本处
+      // 重复 —— 若再出现第 3 个切分入口，抽成共享的 `splitResultNotice(result)`。
       setNotice(
         m.learn.detail.split.result(
           result.chapters.length,
           result.carriedMastery,
           result.droppedMastery,
           false,
-        ),
+        ) +
+          m.learn.detail.split.annotations(result.annotationsRelinked, result.annotationsDropped),
       );
       // 列表页就地重切同样使旧向量失效 → 补后台重算入队（G1）。
       autoIndexAfterImport();
