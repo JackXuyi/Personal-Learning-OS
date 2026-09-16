@@ -16,8 +16,8 @@
  */
 import type { Chapter } from "../domain";
 import { newId } from "../domain";
-import { hasMeaningfulText } from "../lib/text-quality";
-import { mergeChapterRange, renumberChapters } from "./chapter-edit-engine";
+import { cleanKeyPoints } from "../lib/text-quality";
+import { MERGED_KEY_POINTS_CAP, mergeChapterRange, renumberChapters } from "./chapter-edit-engine";
 
 export type SplitFormat = "markdown" | "txt" | "auto";
 export type SplitStrategy = "headings" | "paragraphs";
@@ -206,7 +206,8 @@ function chapterBodyCharCount(text: string, chapter: Chapter): number {
  * 规则：
  * - 非首章并入上一章（上一章 end 扩到本章 end，标题留上一章）；
  *   首章并入下一章（下一章 start 扩到本章 start，吸收本章标题行，不丢内容）；
- * - keyPoints 合并截断至 6 条；每次合并后重写 order 为连续 1..n；
+ * - keyPoints 合并走 `cleanKeyPoints` 清洗（质量门 + 去纯编号碎片 + 截断至 6 条）；
+ *   每次合并后重写 order 为连续 1..n；
  * - contentRef 一律取并集，原文零丢失；
  * - 防吞保护：本次合并会把章节收敛到只剩 1 章且整份正文总量 > 上限时，停止合并
  *   保留现状（已知代价：两章结构且正文超长时尾部短章保留——防吞优先于消碎）；
@@ -232,7 +233,9 @@ function mergeShortChapters(text: string, chapters: readonly Chapter[], minBody:
       out[idx - 1] = {
         ...prev,
         contentRef: { start: prev.contentRef.start, end: cur.contentRef.end },
-        keyPoints: [...prev.keyPoints, ...cur.keyPoints].slice(0, 6),
+        keyPoints: cleanKeyPoints([...prev.keyPoints, ...cur.keyPoints], {
+          maxItems: MERGED_KEY_POINTS_CAP,
+        }),
       };
     } else {
       // 首章并入下一章：下一章起点扩到首章起点（含首章标题行）。
@@ -241,7 +244,9 @@ function mergeShortChapters(text: string, chapters: readonly Chapter[], minBody:
       out[1] = {
         ...next,
         contentRef: { start: cur.contentRef.start, end: next.contentRef.end },
-        keyPoints: [...cur.keyPoints, ...next.keyPoints].slice(0, 6),
+        keyPoints: cleanKeyPoints([...cur.keyPoints, ...next.keyPoints], {
+          maxItems: MERGED_KEY_POINTS_CAP,
+        }),
       };
     }
     out.splice(idx, 1);
@@ -362,13 +367,19 @@ function firstBodyLines(body: string): string {
   return body.replace(/^#{1,6}\s+.*$/gm, "").replace(/^\n+/, "");
 }
 
-/** 本地兜底要点：正文首句，截断至 max 字符。 */
+/**
+ * 本地兜底要点：正文首句，截断至 max 字符。
+ *
+ * ⚠️ 句首若是纯编号 / 纯标点碎片（PDF 抽取把编号标题糊进正文 → 断句正则
+ * `(?<=[。！？.!?])\s*` 在小数点处切开 → 首句 = `"4."`），一律返回 `[]`，
+ * 不产出要点。两次上线案例：这类碎片会在界面上渲染成「一个孤立圆点」的空行。
+ */
 export function summarize(text: string, max = 80): string[] {
   const t = text.trim();
   if (t.length === 0) return [];
   const firstSentence = t.split(/(?<=[。！？.!?])\s*/)[0];
   const sliced = firstSentence.length <= max ? firstSentence : `${firstSentence.slice(0, max)}…`;
-  return sliced.length > 0 ? [sliced] : [];
+  return cleanKeyPoints([sliced]);
 }
 
 // ------------------------------------------------- AI 精修应用（N3/T12 提示词管线消费）
@@ -459,14 +470,11 @@ function cleanRefinedTitle(title: string | undefined): string | undefined {
   return t.length === 0 ? undefined : t.slice(0, 40);
 }
 
-/** 清洗 AI 要点：每条去空白截断至 80 字、剔空与纯符号（质量门，见 lib/text-quality）、至多 5 条；无有效条目返回 undefined。 */
+/** 清洗 AI 要点：每条去空白截断至 80 字、剔空与纯符号 / 纯编号（质量门，见 lib/text-quality）、至多 5 条；无有效条目返回 undefined。 */
 function cleanRefinedKeyPoints(keyPoints: string[] | undefined): string[] | undefined {
   if (!keyPoints || keyPoints.length === 0) return undefined;
-  const cleaned = keyPoints
-    .map((k) => k.replace(/\s+/g, " ").trim())
-    .filter((k) => k.length > 0 && hasMeaningfulText(k))
-    .map((k) => (k.length <= 80 ? k : `${k.slice(0, 80)}…`));
-  return cleaned.length === 0 ? undefined : cleaned.slice(0, 5);
+  const cleaned = cleanKeyPoints(keyPoints, { maxCharsPerItem: 80, maxItems: 5 });
+  return cleaned.length === 0 ? undefined : cleaned;
 }
 
 // ------------------------------------------------- 人工微调原语

@@ -13,7 +13,7 @@
  * - 合并后 keyPoints 与 keyPointRefs[].point 保持同步（`chapter.ts:77` 契约）。
  */
 import type { Chapter, ChapterStatus, KeyPointRef } from "../domain";
-import { hasMeaningfulText } from "../lib/text-quality";
+import { cleanKeyPoints, normalizeKeyPointText } from "../lib/text-quality";
 
 /** 合并后 keyPoints 上限（与 applyChapterRefine 的既有口径一致，避免两套标准）。 */
 export const MERGED_KEY_POINTS_CAP = 6;
@@ -56,7 +56,7 @@ export interface MergeRangeResult {
  * 字段合并规则（逐字段契约，见方案 §4.3.1）：
  * - id / title 取首章（保留最靠前的稳定标识，避免新 id 让历史试卷/证据全断）；
  * - contentRef 取区间并集（= 首章 start .. 尾章 end，因切分区间连续）；
- * - keyPoints 区间内所有章并集 → 规范化 → 质量门过滤 → 去重 → 截断至上限；
+ * - keyPoints 区间内所有章并集 → `cleanKeyPoints` 清洗（规范化 / 质量门 / 去重 / 截断至上限）；
  * - keyPointRefs 区间并集，并与合并后 keyPoints **逐一对齐**（对不上的丢弃）；
  * - unitIds 区间并集去重；status 取区间内最低；createdAt 取区间内最早。
  */
@@ -74,19 +74,17 @@ export function mergeChapterRange(
   const head = range[0];
   const tail = range[range.length - 1];
 
-  // keyPoints：全区间并集 → 规范化 → 质量门 → 去重（保序）→ 截断。
-  const keyPoints = dedupe(
-    range
-      .flatMap((c) => c.keyPoints)
-      .map(normalizePoint)
-      .filter((k) => k.length > 0 && hasMeaningfulText(k)),
-  ).slice(0, MERGED_KEY_POINTS_CAP);
+  // keyPoints：全区间并集 → 清洗单一真源（规范化 → 质量门 → 去重 → 截断）。
+  const keyPoints = cleanKeyPoints(
+    range.flatMap((c) => c.keyPoints),
+    { maxItems: MERGED_KEY_POINTS_CAP, dedupe: true },
+  );
 
   // keyPointRefs：全区间并集（各自按规范化后的 point 建索引），再对齐到保留的 keyPoints。
   const refByPoint = new Map<string, KeyPointRef>();
   for (const c of range) {
     for (const ref of c.keyPointRefs ?? []) {
-      const key = normalizePoint(ref.point);
+      const key = normalizeKeyPointText(ref.point);
       if (!refByPoint.has(key)) refByPoint.set(key, ref);
     }
   }
@@ -126,11 +124,6 @@ export function reorderChapters(chapters: Chapter[], orderedIds: string[]): Chap
   }
   for (const c of byId.values()) next.push(c); // 未列出的保持在后
   return renumberChapters(next);
-}
-
-/** 要点文本规范化：折叠所有空白为单空格并去首尾 —— 合并去重与 refs 对齐共用同一口径。 */
-function normalizePoint(point: string): string {
-  return point.replace(/\s+/g, " ").trim();
 }
 
 /** 数组去重（保序）。 */

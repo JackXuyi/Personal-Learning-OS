@@ -12,9 +12,15 @@
  *  6) UC-6 小文档全短章 → 收敛为 1 章；
  *  7) UC-7 minBodyCharsPerChapter: 0 → 关闭兜底，行为同旧版；
  *  8) UC-8 段落聚类路径不受影响。
+ *
+ * 2026-09-16 补（要点空数据缺陷修复）：
+ *  9) UC-9 断句碎片质量门：首句为纯编号 / 纯标点（`"4."` / `"4.2.2"`）→ 不产出要点；
+ * 10) UC-10 编号微型章被合并后，邻章要点里不含脏碎片；
+ * 11) UC-11 `isUsefulKeyPoint` 判据（渲染层与生成侧共用的单一真源）。
  */
 import assert from "node:assert/strict";
-import { splitDocument } from "../src/engine/splitter-engine.ts";
+import { splitDocument, summarize } from "../src/engine/splitter-engine.ts";
+import { isUsefulKeyPoint } from "../src/lib/text-quality.ts";
 
 // ------------------------------------------------------------- 用例工具
 
@@ -158,6 +164,61 @@ function testParagraphPathUnaffected(): void {
   assert.equal(sliceAll(paras, out.chapters), paras);
 }
 
+// ------------------------------------------------------------- UC-9 断句碎片质量门
+
+function testSummaryRejectsNumberingFragment(): void {
+  // 线上案例（dongdiwen.pdf 章 18/20/22）：PDF 抽取把编号标题糊进正文，
+  // 断句正则 `(?<=[。！？.!?])\s*` 在小数点处切开 → 首句 = 纯编号碎片。
+  assert.deepEqual(summarize("4.2.2 外汇管理出入境，须获得明确授权。"), []);
+  assert.deepEqual(summarize("5.1 关税及相关规定"), []);
+  assert.deepEqual(summarize("4."), []);
+
+  // 正常正文仍照常产出首句要点（不误伤）。
+  assert.deepEqual(summarize("东帝汶被列为最贫困国家之一，需重点关注。"), [
+    "东帝汶被列为最贫困国家之一，需重点关注。",
+  ]);
+  // 首句超长照旧截断（80 字 + 省略号）。
+  const long = `${"甲".repeat(120)}。`;
+  const out = summarize(long);
+  assert.equal(out.length, 1);
+  assert.equal(out[0], `${"甲".repeat(80)}…`);
+}
+
+// ------------------------------------------------------------- UC-10 合并后无脏碎片
+
+function testMergedChapterHasNoNumberingFragment(): void {
+  // 编号微型章（正文 20 字 < 200）并入下一章：合并拼接走 cleanKeyPoints，
+  // 脏碎片不得进邻章（修复前 `[...prev, ...cur].slice(0, 6)` 完全不过滤）。
+  const tiny = "4.2.2 外汇管理出入境，须获得明确授权。";
+  const text = `# 甲\n\n${tiny}\n\n# 乙\n\n${"正".repeat(300)}`;
+  const out = splitDocument({ documentId: "d9", text });
+
+  assert.equal(out.chapters.length, 1);
+  const pts = out.chapters[0].keyPoints;
+  assert.equal(pts.includes("4."), false, `脏碎片混入：${JSON.stringify(pts)}`);
+  assert.equal(pts.some((k) => !isUsefulKeyPoint(k)), false);
+  assert.equal(pts.length, 1);
+  assert.equal(pts[0], `${"正".repeat(80)}…`);
+}
+
+// ------------------------------------------------------------- UC-11 质量门判据
+
+function testUsefulKeyPointGate(): void {
+  // 不可用：空 / 纯空白 / 纯标点 / 纯编号（含多位数字编号 —— 过得了
+  // 「≥2 个字母数字」的旧门，必须由第二道门拒绝）。
+  for (const bad of ["", "  ", "---", "。", "4.", "5.", "4.2.2", "12."]) {
+    assert.equal(isUsefulKeyPoint(bad), false, `应判为不可用：${JSON.stringify(bad)}`);
+  }
+  // 可用：含实义词（带编号前缀或数字的正文照常放行）。
+  for (const ok of [
+    "东帝汶被列为最贫困国家之一",
+    "4.2.2 外汇管理出入境须获授权",
+    "GDP 增长 3.5%",
+  ]) {
+    assert.equal(isUsefulKeyPoint(ok), true, `应判为可用：${JSON.stringify(ok)}`);
+  }
+}
+
 // ------------------------------------------------------------- 执行
 
 const tests: [string, () => void][] = [
@@ -169,6 +230,9 @@ const tests: [string, () => void][] = [
   ["UC-6 小文档收敛为 1 章", testSmallDocCollapsesToOne],
   ["UC-7 minBodyCharsPerChapter=0 关闭兜底", testDisabledMerge],
   ["UC-8 段落聚类不受影响", testParagraphPathUnaffected],
+  ["UC-9 断句碎片质量门（纯编号首句不产出要点）", testSummaryRejectsNumberingFragment],
+  ["UC-10 编号微型章合并后邻章无脏碎片", testMergedChapterHasNoNumberingFragment],
+  ["UC-11 isUsefulKeyPoint 判据", testUsefulKeyPointGate],
 ];
 
 let failed = 0;
