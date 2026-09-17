@@ -15,6 +15,7 @@ import {
   type LogLevel,
 } from "../../lib/desktop-log";
 import AIModelsSection from "./AIModelsSection";
+import DataPortabilityCard from "../data/portability/DataPortabilityCard";
 
 /**
  * 设置（docs/settings-top-tab-layout-design-2026-09.md：外层分区改顶部横向 Tab；
@@ -62,7 +63,8 @@ export default function SettingsPage() {
   const [counts, setCounts] = useState<StorageCounts | undefined>();
 
   // Storage 分区计数：一次读取（docs/chapters 需逐文档；本地规模小）。
-  useEffect(() => {
+  // 抽成函数而非内联 effect：导入（数据可携带卡）换掉整库后需要重算一次。
+  const reloadCounts = () => {
     void (async () => {
       try {
         const [docs, papers, goals, evidence] = await Promise.all([
@@ -78,7 +80,9 @@ export default function SettingsPage() {
         /* 计数失败保持 undefined（Storage 分区显示占位）。 */
       }
     })();
-  }, []);
+  };
+
+  useEffect(reloadCounts, []);
 
   return (
     <PageContainer>
@@ -113,7 +117,12 @@ export default function SettingsPage() {
         {section === "ai" ? (
           <AIModelsSection />
         ) : section === "storage" ? (
-          <StorageSection counts={counts} st={st} loading={m.common.loading} />
+          <StorageSection
+            counts={counts}
+            st={st}
+            loading={m.common.loading}
+            onDataChanged={reloadCounts}
+          />
         ) : section === "learning" ? (
           <LearningSection st={st} />
         ) : section === "appearance" ? (
@@ -149,7 +158,18 @@ function SectionShell({ title, desc, children }: { title: string; desc?: string;
   );
 }
 
-function StorageSection({ counts, st, loading }: { counts: StorageCounts | undefined; st: Messages["settings"]; loading: string }) {
+function StorageSection({
+  counts,
+  st,
+  loading,
+  onDataChanged,
+}: {
+  counts: StorageCounts | undefined;
+  st: Messages["settings"];
+  loading: string;
+  /** 导入换掉整库后通知父级重算计数（数据可携带卡回调）。 */
+  onDataChanged: () => void;
+}) {
   const sg = st.storage;
   return (
     <SectionShell title={sg.title} desc={sg.desc}>
@@ -173,6 +193,10 @@ function StorageSection({ counts, st, loading }: { counts: StorageCounts | undef
         </div>
         <p className="border-t border-line pt-3 text-[11px] leading-relaxed text-ink-3">{sg.note}</p>
       </Card>
+      {/* 数据可携带（F4）：导出 / 导入 / 单章 Markdown。同屏有「我这库有多大」的语境。 */}
+      <div className="mt-3">
+        <DataPortabilityCard counts={counts} onDataChanged={onDataChanged} />
+      </div>
     </SectionShell>
   );
 }
