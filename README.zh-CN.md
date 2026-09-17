@@ -412,7 +412,7 @@ Ollama、llama.cpp、LM Studio 以及 OpenAI 兼容端点（OpenAI、Anthropic�
 项目打算交付的全部能力，同时充当路线图。
 `[x]` = 已实现 · `[ ]` = 未实现 · `P0` / `P1` / `P2` = 未实现项的优先级。
 
-**已实现 33 项 · 未实现 12 项。**
+**已实现 35 项 · 未实现 10 项。**
 
 ### 📥 资料接入
 
@@ -475,8 +475,8 @@ Ollama、llama.cpp、LM Studio 以及 OpenAI 兼容端点（OpenAI、Anthropic�
 - [x] 单一 `StorageAdapter` 覆盖 SQLite / localStorage / 内存
 - [x] 内置本地模型 —— 完全离线，无账号、无遥测、无需 API Key
 - [x] append-only 证据流（`EvidenceEntry`）
-- [ ] 全量导出 / 导入 / 备份 `P0` —— README 承诺“随时导出离开”，但存储层目前没有任何导出方法
-- [ ] 单章 Markdown 导出 `P0`
+- [x] 全量导出 / 导入 / 备份 `P0` —— 一个 `.plosbak.json` 装下资料、章节、笔记、进度与证据；恢复时可选合并或替换
+- [x] 单章 Markdown 导出 `P0`
 - [ ] 社区知识包 `P2`
 - [ ] 加密同步 *（Pro 层）* `P2`
 

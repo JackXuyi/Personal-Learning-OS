@@ -407,7 +407,7 @@ never depend on a network call.
 Every capability the project intends to ship — this doubles as the roadmap.
 `[x]` = shipped · `[ ]` = not yet · `P0` / `P1` / `P2` = priority of the unshipped items.
 
-**33 shipped · 12 not yet.**
+**35 shipped · 10 not yet.**
 
 ### 📥 Ingestion
 
@@ -470,8 +470,8 @@ Every capability the project intends to ship — this doubles as the roadmap.
 - [x] One `StorageAdapter` over SQLite / localStorage / in-memory
 - [x] Bundled local model — fully offline, no account, no telemetry, no mandatory API key
 - [x] Append-only evidence stream (`EvidenceEntry`)
-- [ ] Full export / import / backup `P0` — this README promises "export and walk away", but the storage layer has no export method yet
-- [ ] Markdown export of a single chapter `P0`
+- [x] Full export / import / backup `P0` — one `.plosbak.json` holding documents, chapters, notes, progress and evidence; merge or replace on restore
+- [x] Markdown export of a single chapter `P0`
 - [ ] Community knowledge packs `P2`
 - [ ] Encrypted sync *(pro tier)* `P2`
 
