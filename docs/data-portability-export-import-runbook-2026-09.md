@@ -86,3 +86,40 @@
 3. **单目标 / 单文档范围导出** —— 按 D6-A 不在 v1；`collectSnapshot` 已参数化，扩展成本低。
 4. **导入并发写库无锁** —— 本机单用户，接受（方案 §12.2）。
 5. **`cargo check` 的 2 条既存 warning**（`llm/models.rs` 未构造的枚举变体、`logging.rs` 未用的 `as_str`）—— 与本次无关，未顺手改。
+
+## 收工清单（分层提交）
+
+按 `plos-layered-commit` 的层级顺序落 8 条本地提交（**只落本地，未 push**）：
+
+| # | 层 | 短哈希 | 内容 |
+|---|----|--------|------|
+| 1 | `tauri` | `51721e9` | `backup.rs` 五命令 + `db_clear_rag` + `lib.rs` 注册（T2 / T3） |
+| 2 | `storage` | `3f0ed05` | `clearAll()` 三后端 + 偏好 / 迁移 flag 保留边界（T1） |
+| 3 | `features`（服务层） | `5a27865` | 格式层 + 导出 / 导入 / 单章 Markdown + 桌面封装（T4–T8） |
+| 4 | `i18n` | `3dc0c4a` | `settings.storage.data` 双语 44 键 + 重写旧 `note`（T10） |
+| 5 | `ui` | `a7e7b3a` | 数据可携带卡片 + 设置页接线（T9） |
+| 6 | `test` | `913e378` | 30 项单测 + `test:portability` 串联（T11） |
+| 7 | `docs` | `0364c56` | 方案（§13 实施偏差 14 条）+ 本 runbook + README / roadmap 同步（T12 / T13） |
+| 8 | `chore(skill)` | `9cb7d01` | 方案模板补 §3.4 决策点占位 + 自检项（流程缺口，非本 feature 代码） |
+
+提交前后核对：每组 `git diff --cached --name-only` 前＝仅目标文件、后＝空；末组后 `git status --short` 仅剩 `?? docs/learner-memory-design-2026-09.md`（F9 方案，**待确认未实施**，刻意不随本次提交）；`git rev-list --count origin/main..HEAD` = **8**。
+
+（回填本清单的提交是第 9 条 `docs`，不在上表内 —— 哈希无法自引用。）
+
+⚠️ 与 F5 不同，本次 8 组**不存在「提交态不自洽」的中间态**，逐组可编译（理由留证，便于日后回溯判断）：
+
+1. 组 1 先落 Rust 能力、组 2 才落调用它的 TS。`tauri.ts` 把命令名当字符串，反向也能 typecheck 通过，但运行时会调一条尚不存在的命令 —— 故刻意正序，不以「能编过」为准。
+2. 组 3 的服务层是**纯增量新模块**且不依赖 i18n（`makeFullSample` 之外，`markdown-export` 的 `pointsHeading` 由调用方传入），首个消费方在组 5 才出现。
+3. 组 4 的 i18n 键必须先于组 5 的 UI —— 反向会立即报「引用不存在的键」（`Messages` 类型约束），符合 `AGENTS.md` 的 i18n 硬约束。
+4. 组 6 的单测 import 组 3 的服务层与组 2 的 `clearAll`，两者已在库 → 单独 checkout 组 6 可跑绿。
+5. 组 7 的 README 统计行为**实测**结果：`grep -c '^- \[x\] '` = 35/35、`^- \[ \] ` = 10/10、`^### ` = 29/29（两版一致）；顶部硬编码统计行 grep 数不到，手工同步为 `35 shipped · 10 not yet` / `已实现 35 项 · 未实现 10 项`。
+
+另：组 1 落库后曾发现 commit subject 误标为 `T1/T2/T3`（T1 实际在组 2），已用 `rebase -i`（`edit` + `--amend`，**仅改提交信息**）修正；rebase 前后 `HEAD^{tree}` 均为 `9904dc4a…`，工作树内容零变化。
+
+## 变更记录
+
+| 日期 | 变更 |
+|------|------|
+| 2026-09-17 | 建立 runbook（方案 D1–D6 确认后） |
+| 2026-09-17 | T1–T13 全部 done（每项带 Outcome 与实施期发现）；验证门禁全绿：`typecheck` 零新增 error、`test:portability` 30/30、`test:library` 18 组、`cargo test --lib` 50/50 |
+| 2026-09-17 | 回填收工清单（8 条分层提交哈希 + 逐组可编译的留证说明） |
