@@ -14,6 +14,7 @@ use std::time::Duration;
 use serde_json::json;
 use tauri::Manager;
 
+mod backup;
 mod db;
 mod llm;
 mod logging;
@@ -125,6 +126,12 @@ pub fn run() {
             vault::vault_set_secret,
             vault::vault_get_secret,
             vault::vault_delete_secret,
+            // 备份文件通道（docs/data-portability-export-import-design-2026-09.md §8.2）
+            backup::backup_dir,
+            backup::backup_save,
+            backup::backup_list,
+            backup::backup_read,
+            backup::backup_reveal,
             // RAG 存储层（T6）
             db::commands::db_status,
             db::commands::db_list_sections,
@@ -154,6 +161,8 @@ pub fn run() {
             db::commands::db_list_embedding_vectors,
             db::commands::db_delete_embedding,
             db::commands::db_delete_embeddings_by_target,
+            // 整库清空（replace 导入；⚠️ 注册遗漏 = 运行时 Command not found）
+            db::commands::db_clear_rag,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the Personal Learning OS shell");

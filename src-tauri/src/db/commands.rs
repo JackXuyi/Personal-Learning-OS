@@ -615,3 +615,145 @@ pub async fn db_status(state: State<'_, DbState>) -> Result<serde_json::Value, S
         },
     }))
 }
+
+// ========== 整库清空（replace 导入）==========
+
+/// 清空 RAG 七表的实现（抽出来便于单测：命令签名带 `State` 没法直接调）。
+///
+/// ⚠️ `chunks_fts` 是 FTS5 虚拟表：用 `DELETE` 而不是 `DROP`（DROP 会连表结构
+/// 一起没，下次查询直接报 no such table）。
+/// ⚠️ `chunk_knowledge` 无外键约束 → 必须显式清，否则残留指向已删 chunk 的关联行。
+/// ⚠️ `_schema_version` **不清**：它是库自身的结构版本，不是用户数据。
+pub(crate) async fn clear_rag(pool: &sqlx::SqlitePool) -> Result<(), String> {
+    let mut tx = pool.begin().await.map_err(|err| db_err("开启事务", err))?;
+    for stmt in [
+        "DELETE FROM chunks_fts",
+        "DELETE FROM chunk_knowledge",
+        "DELETE FROM chunks",
+        "DELETE FROM sections",
+        "DELETE FROM knowledge_relations",
+        "DELETE FROM knowledge_units",
+        "DELETE FROM embeddings",
+    ] {
+        sqlx::query(stmt)
+            .execute(&mut *tx)
+            .await
+            .map_err(|err| db_err("清空 RAG 表", err))?;
+    }
+    tx.commit().await.map_err(|err| db_err("提交清空事务", err))
+}
+
+/// 清空 RAG 七表（replace 导入用）。事务保证「要么全清、要么不动」。
+///
+/// 前端 `TauriStorage.clearAll()` 依赖它：**失败必须抛错**（不要静默回退），
+/// 否则 localStorage 清了、SQLite 没清 → FTS 仍能检索到用户以为已删除的段落。
+#[tauri::command]
+pub async fn db_clear_rag(state: State<'_, DbState>) -> Result<(), String> {
+    clear_rag(&state.pool).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::init_pool;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_db_path(tag: &str) -> PathBuf {
+        let ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        std::env::temp_dir().join(format!("plos-clear-rag-{tag}-{ms}.db"))
+    }
+
+    /// 每张表插一行（含 FTS 与关联表），清空后必须全空且 `_schema_version` 仍在。
+    #[tokio::test]
+    async fn clear_rag_empties_seven_tables_and_keeps_schema_version() {
+        let path = temp_db_path("seven");
+        let pool = init_pool(&path).await.unwrap();
+
+        sqlx::query(
+            "INSERT INTO sections (id, chapter_id, document_id, title, level, idx, \
+             content_ref_start, content_ref_end, created_at) VALUES ('s1','c1','d1','t',1,0,0,10,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO chunks (id, document_id, chapter_id, content, position, created_at) \
+             VALUES ('k1','d1','c1','hello',0,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query("INSERT INTO chunks_fts (content, id, chapter_id, document_id) VALUES ('hello','k1','c1','d1')")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO chunk_knowledge (chunk_id, knowledge_id) VALUES ('k1','u1')")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO knowledge_units (id, title, kind, tags, created_at) \
+             VALUES ('u1','t','concept','[]',1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO knowledge_relations (id, from_id, to_id, rel_type, created_at) \
+             VALUES ('r1','u1','u2','related',1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO embeddings (id, target_type, target_id, model, vector_dim, created_at) \
+             VALUES ('e1','chunk','k1','m',4,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        clear_rag(&pool).await.unwrap();
+
+        for table in [
+            "sections",
+            "chunks",
+            "chunks_fts",
+            "chunk_knowledge",
+            "knowledge_units",
+            "knowledge_relations",
+            "embeddings",
+        ] {
+            let n: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            assert_eq!(n, 0, "{table} 未被清空");
+        }
+
+        // 结构版本是库自身状态，不属于用户数据 —— 清空后必须仍在。
+        let versions: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM _schema_version")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert!(versions >= 1, "_schema_version 不该被清空");
+
+        pool.close().await;
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 幂等：空库再清一次不报错（replace 导入可能撞上「本来就是空库」）。
+    #[tokio::test]
+    async fn clear_rag_is_idempotent() {
+        let path = temp_db_path("idempotent");
+        let pool = init_pool(&path).await.unwrap();
+        clear_rag(&pool).await.unwrap();
+        clear_rag(&pool).await.unwrap();
+        pool.close().await;
+        let _ = std::fs::remove_file(&path);
+    }
+}
