@@ -477,6 +477,40 @@ export class InMemoryStorage implements StorageAdapter {
       this.evidenceLog = this.evidenceLog.slice(-EVIDENCE_LOG_MAX);
     }
   }
+
+  /**
+   * 清空整库（replace 导入用，见
+   * docs/data-portability-export-import-design-2026-09.md §4.3.2）。
+   *
+   * 用「重新赋值」而不是 `Map.clear()`：与构造函数初值**逐字段同形**
+   * （含 `learnerState = { byUnit: {} }`、`profile = undefined`、
+   * `activeGoalId = undefined`、`evidenceLog = []`），避免将来新增字段时
+   * 漏清一处而无人发现。字段清单与构造函数一一对应。
+   */
+  async clearAll(): Promise<void> {
+    this.documents = new Map();
+    this.chaptersByDocument = new Map();
+    this.papers = new Map();
+    this.paperDrafts = new Map();
+    this.paperResults = new Map();
+    this.graph = { units: [], relations: [] };
+    this.learnerState = { byUnit: {} };
+    this.profile = undefined;
+    this.restatements = new Map();
+    this.cardStates = {};
+    this.annotations = new Map();
+    this.goals = new Map();
+    this.activeGoalId = undefined;
+    this.evidenceLog = [];
+    this.capabilityItems = new Map();
+    this.capabilityRuns = new Map();
+    this.capabilityReports = new Map();
+    this.sections = new Map();
+    this.chunks = new Map();
+    this.knowledgeUnits = new Map();
+    this.knowledgeRelations = new Map();
+    this.embeddings = new Map();
+  }
 }
 
 /**

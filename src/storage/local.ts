@@ -386,4 +386,56 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     await super.deleteCapabilityDataByGoal(goalId);
     this.persist();
   }
+
+  /**
+   * 本适配器负责的全部 key（清库真源）。
+   *
+   * ⚠️ 必须与 `persist()` 写入的 key 集合 + `KEY_ACTIVE_GOAL`（走独立路径、
+   * 不随 `persist()`）保持一致；新增 key 时**两处同步**，否则就是「导出带走了、
+   * 清库清不掉」的脏残留。**不含** `plos:settings:v1` / `plos:lang:v1`
+   * 与两个迁移 flag（内部状态，见 clearAll 语义边界）。
+   */
+  private static readonly ALL_KEYS: readonly string[] = [
+    KEY_DOCUMENTS,
+    KEY_CHAPTERS,
+    KEY_SECTIONS,
+    KEY_CHUNKS,
+    KEY_KNOWLEDGE_UNITS,
+    KEY_KNOWLEDGE_RELATIONS,
+    KEY_EMBEDDINGS,
+    KEY_PAPERS,
+    KEY_PAPER_DRAFTS,
+    KEY_PAPER_RESULTS,
+    KEY_GRAPH,
+    KEY_LEARNER,
+    KEY_PROFILE,
+    KEY_RESTATEMENTS,
+    KEY_CARDS,
+    KEY_ANNOTATIONS,
+    KEY_GOALS,
+    KEY_ACTIVE_GOAL,
+    KEY_EVIDENCE,
+    KEY_CAPABILITY_ITEMS,
+    KEY_CAPABILITY_RUNS,
+    KEY_CAPABILITY_REPORTS,
+  ];
+
+  /**
+   * 清空整库（replace 导入用）。
+   *
+   * 内存侧走基类的重建，落盘侧**逐个 `removeItem`** —— 刻意不调 `persist()`：
+   * 那会把 22 个 key 写成 `"[]"` 垃圾值（且 `profile` 分支走 removeItem，
+   * 同一方法里两种语义混淆）。清完就是「这台机器上没安装过数据」的状态，
+   * 与 `load()` 的 `raw ? … : fallback` 回落语义一致。
+   */
+  override async clearAll(): Promise<void> {
+    await super.clearAll();
+    for (const key of LocalStorageAdapter.ALL_KEYS) {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        /* 隐私模式 / 配额异常：内存已清空，落盘残留不阻塞主流程 */
+      }
+    }
+  }
 }

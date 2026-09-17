@@ -718,4 +718,26 @@ export class TauriStorage extends LocalStorageAdapter implements StorageAdapter 
     });
     return r.ok ? r.value.map(fromChunkDto) : super.fullTextSearch(query, scope, limit);
   }
+
+  /**
+   * 清空整库（replace 导入用，见
+   * docs/data-portability-export-import-design-2026-09.md §4.3.2）。
+   *
+   * ⚠️ 顺序不可颠倒：RAG 五类的真源在 SQLite，只清父类（localStorage）会留下
+   * 旧 chunk / section / 向量 → FTS 检索会返回用户以为已删除的段落，属于
+   * **静默错数据**，比报错严重。因此 `db_clear_rag` 失败时**抛错中止**，
+   * 由导入服务转成 `sqlite-blocked` 分类让 UI 明说「本机数据库未清空，已取消」。
+   *
+   * 这里刻意用**裸 `invoke`** 而非 `trySqlite`：后者的 `sqliteReady === false`
+   * 是「本会话此前失败过」的短路缓存，不是「库里没有数据」的事实 —— 拿缓存当
+   * 许可去跳过清库，正是上面那种静默错数据的入口。清库要么真清，要么明确失败。
+   */
+  override async clearAll(): Promise<void> {
+    try {
+      await invoke("db_clear_rag");
+    } catch (err) {
+      throw new Error(`db_clear_rag failed: ${String(err)}`);
+    }
+    await super.clearAll();
+  }
 }

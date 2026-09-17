@@ -228,4 +228,19 @@ export interface StorageAdapter {
   saveCapabilityReport(report: CapabilityReport): Promise<void>;
   /** 目标级联清理（UC-08）：清空清单 + 删除该目标全部 run / report。幂等。 */
   deleteCapabilityDataByGoal(goalId: string): Promise<void>;
+
+  /**
+   * 清空整库（replace 导入的唯一手段，见
+   * docs/data-portability-export-import-design-2026-09.md §4.3.2）。
+   *
+   * 语义边界：只清**本适配器负责的实体**（即导出白名单 20 项，见
+   * `features/data/portability/backup-format.ts::BACKUP_FIELDS`）；
+   * **不碰** UI 偏好（`plos:settings:v1` / `plos:lang:v1`）、**不碰**密钥
+   * （Keychain）、**不碰**内部迁移标记（`plos.rag.migrated.v1` /
+   * `plos.graph.migrated.v2`）与 Rust 侧日志配置。幂等。
+   *
+   * ⚠️ 新增实体时：本方法、导出白名单、导入写入顺序**三处必须同步** ——
+   * 漏一处就是「导出带走了、恢复时被丢」的静默数据丢失。
+   */
+  clearAll(): Promise<void>;
 }
