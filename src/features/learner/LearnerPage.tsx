@@ -17,11 +17,12 @@ import { buttonVariants } from "../../components/ui/button";
 import { PageContainer } from "../../components/layout/AppShell";
 import { cn } from "../../lib/utils";
 import type { LearnerLevel, LearnerState } from "../../domain";
-import { MASTERY_FLOOR } from "../../domain";
+import { MASTERY_FLOOR, parseMemoryDoc } from "../../domain";
 import { applyForgetting } from "../../engine";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { useI18n } from "../../i18n";
+import type { Messages } from "../../i18n/types";
 import LearnerProfileCard from "../profile/LearnerProfileCard";
 import ResumeImportDialog from "../profile/ResumeImportDialog";
 import {
@@ -51,6 +52,8 @@ export default function LearnerPage() {
   const [learner, setLearner] = useState<LearnerState | undefined>();
   /** 概念标题索引（graph.units；供 byUnit 中概念主体解析）。 */
   const [conceptTitles, setConceptTitles] = useState<Map<string, string>>(new Map());
+  /** F9 入口卡计数：生效条目数 + 最后整理时刻（不含手写区 —— 与「文档条目数」同口径）。 */
+  const [memory, setMemory] = useState<{ count: number; lastMergedAt: number }>();
   const [resumeOpen, setResumeOpen] = useState(false);
 
   // 画像随 store 快照（runChapterLoop 读 storage.getProfile()）——/learner 可能是
@@ -61,15 +64,22 @@ export default function LearnerPage() {
 
   useEffect(() => {
     void (async () => {
-      const [chapterRows, ls, graph] = await Promise.all([
+      const [chapterRows, ls, graph, memoryDoc, memoryMeta] = await Promise.all([
         loadChapterRows(storage),
         storage.getLearnerState(),
         storage.getGraph(),
+        storage.getMemoryDoc(),
+        storage.getMemoryMeta(),
       ]);
       setRows(chapterRows);
       // 读时遗忘衰减视图（幂等不写回），与 Today/Plan 同口径。
       setLearner(applyForgetting(ls, Date.now()));
       setConceptTitles(new Map(graph.units.map((u) => [u.id, u.title])));
+      // 条目数走**唯一的解析器**（不另数行 —— 数行会把标题/引用块也算进去）。
+      setMemory({
+        count: parseMemoryDoc(memoryDoc).entries.length,
+        lastMergedAt: memoryMeta.lastMergedAt,
+      });
     })();
   }, []);
 
@@ -266,6 +276,27 @@ export default function LearnerPage() {
         </Link>
       </Card>
 
+      {/* F9 入口（D2）：记忆文档 —— 与上一张卡同形态（方案 §7.6）。计数为 0 时仍可点进空态页。 */}
+      <Card className="mt-3">
+        <Link
+          to="/memory"
+          data-testid="learner-memory-entry"
+          className="group flex items-center justify-between gap-3"
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-ink-1 group-hover:text-primary">
+              {lr.memoryEntryTitle}
+            </span>
+            <span className="mt-0.5 block text-xs text-ink-3">
+              {memory && memory.count > 0
+                ? lr.memoryEntryDesc(memory.count, relativeDay(memory.lastMergedAt, m))
+                : lr.memoryEntryEmpty}
+            </span>
+          </span>
+          <span className="shrink-0 text-xs text-ink-3 group-hover:text-primary">→</span>
+        </Link>
+      </Card>
+
       {/* 导入简历（D6-A：页内弹窗，不新增路由） */}
       <ResumeImportDialog
         open={resumeOpen}
@@ -306,4 +337,23 @@ function ChapterLine({
 /** 章 id 直达阅读；概念 id（章内概念）去章图谱（N5 入口保留）。 */
 function chapterPath(id: string): string {
   return `/learn/${id}`;
+}
+
+/**
+ * 相对日（今天 / 昨天 / N 天前）—— 入口卡上「最后整理」用。
+ *
+ * 复用首页**已有的**相对日词汇表（`m.home.time`）而不是新建一套：同一句「今天」
+ * 在两处显示成两种写法是纯粹的裂缝，多一份译文也意味着多一处会漏改。
+ * ⚠️ `at === 0`（从未整理）→ 调用侧已用计数分支避开，这里不再兜底。
+ */
+function relativeDay(at: number, m: Messages): string {
+  const dayStart = (ms: number) => {
+    const d = new Date(ms);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  };
+  const days = Math.round((dayStart(Date.now()) - dayStart(at)) / 86_400_000);
+  if (days <= 0) return m.home.time.today;
+  if (days === 1) return m.home.time.yesterday;
+  return m.home.time.daysAgo(days);
 }

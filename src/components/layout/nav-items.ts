@@ -8,6 +8,7 @@
  * 详见 docs/nav-sidebar-redesign-design-2026-09.md §8.1。
  */
 import {
+  BrainCircuit,
   CalendarDays,
   ClipboardCheck,
   House,
@@ -61,6 +62,8 @@ export const NAV_ITEMS: NavItemSpec[] = [
   { to: "/learner", navKey: "learner", icon: UserRound },
   /* F3：复盘与趋势 —— 「记录」的出口（与 /learner 的「此刻切片」分工不同）。 */
   { to: "/progress", navKey: "progress", icon: TrendingUp },
+  /* F9：记忆 —— 系统整理出的那份文档（可查看、可直接改）。 */
+  { to: "/memory", navKey: "memory", icon: BrainCircuit },
   { to: "/settings", navKey: "settings", icon: Settings, readyDot: true },
 ];
 
