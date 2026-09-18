@@ -59,6 +59,8 @@ export const en: Messages = {
     learner: { label: "My Learner", hint: "How the system sees you" },
     /* F3 progress analytics (standalone /progress page). */
     progress: { label: "Progress", hint: "See your growth" },
+    /* F9 learner memory (standalone page /memory). */
+    memory: { label: "Memory", hint: "What the system noted — yours to edit" },
     /* U6 nav item (GOALS group main entry /goals). */
     goals: { label: "Goals", hint: "Manage goals & readiness" },
     footerHint: "⌘K quick actions",
@@ -789,6 +791,10 @@ export const en: Messages = {
     /* F3 entry card (/learner → /progress). */
     progressEntryTitle: "Progress & trends",
     progressEntryDesc: "Activity heatmap · mastery trend · weakest first",
+    /* F9 entry card (/learner → /memory). */
+    memoryEntryTitle: "What the system noted",
+    memoryEntryDesc: (n: number, lastMerged: string) => `${n} item(s) · last reviewed ${lastMerged}`,
+    memoryEntryEmpty: "Nothing to review yet — write notes, restate a chapter, or finish a quiz first.",
   },
 
   /* F3 progress analytics (/progress) — read-only derived page, see docs/progress-analytics-design-2026-09.md §8.9. */
@@ -832,6 +838,135 @@ export const en: Messages = {
     timelineNotice: "Approximately reconstructed from paper records; assessed chapters only.",
     timelineNoGoal: "No goal yet — create one to see a progress timeline.",
     timelineNoPapers: "No paper records within this goal's scope yet.",
+  },
+
+  /*
+   * F9 learner memory (/memory) — docs/learner-memory-design-2026-09.md §8.19.
+   *
+   * ⚠️ `headings` / `intro` / `manualHeading` are **not ordinary UI copy**: they get
+   * **written into the user's on-disk markdown document**. An existing document is never
+   * rewritten because the language changed (merge guard ②), so only newly created
+   * sections use the current language — mixed-language docs are deliberate, not a bug.
+   */
+  memory: {
+    title: "Learner memory",
+    subtitle: "An observation list the system distilled from your study records — editable by you",
+    loading: "Reviewing…",
+    dataLine: (notes: number, restatements: number, evidence: number, days: number) =>
+      `${notes} notes · ${restatements} restatements · ${evidence} records · spanning ${days} days`,
+    report: (updated: number, added: number, keptMine: number) =>
+      `This pass: ${updated} updated · ${added} added · ${keptMine} of your edits kept`,
+    reportNone: "Nothing changed this pass.",
+    lastMerged: (v: string) => `Last reviewed: ${v}`,
+    /* Human-readable review lag (building blocks for `MemoryFactTexts.latency`). */
+    latencyMinutes: (n: number) => `${n} min`,
+    latencyHours: (n: number) => `${n} h`,
+    latencyDays: (n: number) => `${n} d`,
+    /*
+     * ⚠️ The `fact*` keys below are **channel A's sentence templates**: they are written
+     * into the user's document too. Always phrased as “your records show …”, never
+     * “you are …” (design R1: an inference must not be mistaken for a fact).
+     */
+    factCadenceWindow: (window: string, minutes: number) =>
+      `Your records show: you usually study ${window}, about ${minutes} minutes per session.`,
+    factCadenceWindowOnly: (window: string) => `Your records show: you usually study ${window}.`,
+    factReviewOnTime: "Your records show: you mostly reviewed on time.",
+    factReviewLate: (latency: string) => `Your records show: reviews usually lag by about ${latency}.`,
+    factReviewOverdue: "Your records show: reviews often slip past their due date.",
+    factStudyModeQuiz: (breakdown: string) => `Your records show: quiz-driven study leads (${breakdown}).`,
+    factStudyModeReview: (breakdown: string) => `Your records show: review-driven study leads (${breakdown}).`,
+    factStudyModeCard: (breakdown: string) => `Your records show: self-testing with cards leads (${breakdown}).`,
+    factStudyModeRestatement: (breakdown: string) => `Your records show: restating leads (${breakdown}).`,
+    factStudyModeCapability: (breakdown: string) => `Your records show: capability assessments lead (${breakdown}).`,
+    kindAssessment: "quiz",
+    kindReview: "review",
+    kindCard: "card",
+    kindRestatement: "restatement",
+    kindCapability: "capability",
+    factOutputCoverage: (pct: number) => `Your records show: restatements cover about ${pct}% of key points.`,
+    factOutputDensity: (per: number) => `About ${per} highlights per chapter.`,
+    factOutputNoteRatio: (pct: number) => `${pct}% of them carry a note.`,
+    usageNote:
+      "This content is sent to the model when generating quizzes, answering in-chapter questions, and grading restatements — to tune examples and depth. It is never treated as instructions and never affects your plan or quotas.",
+    mode: { view: "View", edit: "Edit" },
+    editHint: "Just edit the text. Keep the trailing <!--m:…--> markers (they are how the system recognises a line); deleting a line means you disagree with it.",
+    saved: "Saved",
+    rowBadge: { derived: "derived", ai: "AI", edited: "edited", manual: "yours" },
+    diffTitle: "You edited these lines, and the system now thinks differently",
+    diffMine: (mine: string) => `Your wording: ${mine}`,
+    diffTheirs: (theirs: string) => `The system now says: ${theirs}`,
+    useSystem: "Use the system's version",
+    diffNote: "Leaving it alone is fine — the system never overwrites words you wrote.",
+    dismissedFold: (n: number) => `${n} line(s) you deleted`,
+    restore: "Restore (written back on the next pass)",
+    restoreNote: "Only lines the system can still derive come back; re-writing it under “My notes” is another way out.",
+    clearAll: "Clear all memory",
+    clearConfirm: "Clear everything? The document (including lines you wrote or edited) is deleted for good.",
+    clearNote: "Clearing your study records does not delete this whole document: lines you wrote or edited stay, derived lines are removed.",
+    aiOpen: "Let the system read my records",
+    aiRunning: "Distilling…",
+    aiDisabledNoAi: "Configure an AI model in Settings first — then the system can read your records.",
+    aiDisabledNoSamples: (missing: number) =>
+      `${missing} more note(s) or restatement(s) needed (a conclusion needs at least 3 samples).`,
+    privacyTitle: "This step sends your text to the model",
+    privacySend: (notes: number, restatements: number, chars: number) =>
+      `Sending ${notes} note(s) + ${restatements} restatement(s), about ${chars} characters.`,
+    privacyMaskNote:
+      "Phone numbers, emails, ID numbers, birthdays and homepage links are masked; names and company names are **not** masked and rely on prompt constraints.",
+    viewPayload: "Preview what will be sent",
+    payloadTitle: "What will be sent",
+    payloadWarn: "Below is everything that leaves this machine. Please confirm before sending.",
+    back: "Back",
+    send: "Send",
+    resultTitle: "What the system read",
+    resultHint: "Nothing is written until you confirm; skip “Write to document” and nothing changes.",
+    resultUpdated: (n: number) => `${n} will update existing lines`,
+    resultAdded: (n: number) => `${n} will be added`,
+    resultSkipped: (n: number) => `${n} duplicated something you rejected and were dropped`,
+    resultEmpty: "No new findings this time — your records do not support a new conclusion yet.",
+    writeToDoc: "Write to document",
+    retry: "Retry",
+    // ⚠️ The three keys below are written into the user's markdown document
+    headings: {
+      identity: "Basics",
+      domain: "Knowledge & skills",
+      preference: "Preferences",
+      cognition: "How you think",
+      cadence: "Study rhythm",
+      "goal-intent": "Intent",
+    },
+    intro:
+      "PLOS distilled this document from your study records; you can edit it freely.\n· Derived lines update on the next pass; lines you edited are never overwritten.\n· Deleting a line means you disagree — it will not come back.\n· Rename headings freely; please keep the trailing <!--…--> markers (they are how the system recognises a line).",
+    manualHeading: "My notes",
+    manualPlaceholder: "(Anything you write here is kept and sent to the model as well.)",
+    mismatch: (observed: string, declared: string) =>
+      `Your records look more like “${observed}”, while your profile declares “${declared}”.`,
+    mismatchAction: "Your declaration wins — this is only a note. Change it in “My profile” if you want.",
+    emptyTitle: "Not enough material to review yet",
+    emptyDesc: "Memory comes from your notes, restatements and study records; there is not enough for a reliable conclusion yet.",
+    emptyNeed: (label: string, need: number, current: number) =>
+      `${label} ${current} / ${need} needed`,
+    needLabelEvidence: "Study records",
+    needLabelSamples: "Notes / restatements",
+    emptyAction: "Keep studying",
+    goPlan: "Open plan",
+    staleEvidenceNote: "Your study records hit the storage cap and older activity was trimmed — some conclusions may no longer be fully backed.",
+    /* D12-A: disk mirror (desktop only; the browser falls back to downloading a .md). */
+    saveFile: "Save to file",
+    revealFile: "Show in file manager",
+    loadFile: "Load from file",
+    loadConfirm:
+      "Replace the in-app document with the file on disk? Lines you edited or wrote in the app will be overwritten (the in-app document is the source of truth; the file is only a copy).",
+    fileSaved: "Synced to file",
+    fileUnavailable: "Could not write the file — memory keeps working inside the app; nothing else is affected.",
+    err: {
+      saveFailed: "Save failed: local storage rejected the write (likely out of space). The document was not changed.",
+      invalidDoc: "Invalid document content — this edit was ignored.",
+      aiNotConfigured: "No AI model configured yet. Set one up in Settings first.",
+      notEnoughSamples: "Too few samples — the system will not write a conclusion without evidence.",
+      aiFailed: "The call failed. Please retry — the document and metadata were not changed.",
+      emptyDraft: "The model returned no usable conclusions this time.",
+    },
   },
 
   scaffold: {

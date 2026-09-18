@@ -64,6 +64,8 @@ export const zh = {
     learner: { label: "我的画像", hint: "系统如何理解我" },
     /* F3 复盘与趋势（独立分析页 /progress）。 */
     progress: { label: "复盘", hint: "看得见成长" },
+    /* F9 学习者记忆（独立分析页 /memory）。 */
+    memory: { label: "记忆", hint: "系统整理的、你能改的那份" },
     /* U6 导航项（GOALS 组主入口 /goals）。 */
     goals: { label: "目标", hint: "目标管理与就绪度" },
     footerHint: "⌘K 快速操作",
@@ -772,6 +774,10 @@ export const zh = {
     /* F3 入口卡（/learner → /progress）。 */
     progressEntryTitle: "复盘与趋势",
     progressEntryDesc: "活动热力图 · 掌握度趋势 · 最该补的",
+    /* F9 入口卡（/learner → /memory）。 */
+    memoryEntryTitle: "系统整理的记忆",
+    memoryEntryDesc: (n: number, lastMerged: string) => `${n} 条 · 最后整理 ${lastMerged}`,
+    memoryEntryEmpty: "还没有可整理的内容 —— 写笔记、做复述或完成几次测评后会自动出现。",
   },
 
   /* F3 复盘与趋势（/progress）—— 纯只读派生页，方案 docs/progress-analytics-design-2026-09.md §8.9。 */
@@ -815,6 +821,137 @@ export const zh = {
     timelineNotice: "基于试卷记录近似重建，仅统计已考章节。",
     timelineNoGoal: "还没有目标——创建一个目标后可以看到进度时间线。",
     timelineNoPapers: "该目标范围内还没有试卷记录。",
+  },
+
+  /*
+   * F9 学习者记忆（/memory）—— 方案 docs/learner-memory-design-2026-09.md §8.19。
+   *
+   * ⚠️ `headings` / `intro` / `manualHeading` **不是普通 UI 文案**：它们会被
+   * **写进用户磁盘上的那份 markdown 文档**。已存在的文档永不因语言切换而重写
+   * （合并器护栏 ②），故只有新建节用当前语言 —— 中英混排是刻意取舍，不是 bug。
+   */
+  memory: {
+    title: "学习者记忆",
+    subtitle: "系统从你的学习记录里整理出来的一份观察，你可以直接改",
+    loading: "正在整理……",
+    dataLine: (notes: number, restatements: number, evidence: number, days: number) =>
+      `${notes} 条笔记 · ${restatements} 次复述 · ${evidence} 条学习记录 · 覆盖 ${days} 天`,
+    report: (updated: number, added: number, keptMine: number) =>
+      `本轮整理：更新 ${updated} 条 · 新增 ${added} 条 · 保留你改写的 ${keptMine} 条`,
+    reportNone: "本轮没有变化。",
+    lastMerged: (v: string) => `最后整理：${v}`,
+    /* 复习滞后时长的人类可读化（`MemoryFactTexts.latency` 的拼装件）。 */
+    latencyMinutes: (n: number) => `${n} 分钟`,
+    latencyHours: (n: number) => `${n} 小时`,
+    latencyDays: (n: number) => `${n} 天`,
+    /*
+     * ⚠️ 以下 `fact*` 是**通道 A 的句子模板**：它们同样会被写进用户文档。
+     * 口径一律「你的记录显示…」而非「你是…」（方案 R1：推测不得被当真）。
+     */
+    factCadenceWindow: (window: string, minutes: number) =>
+      `你的记录显示：常在 ${window} 学习，单次约 ${minutes} 分钟。`,
+    factCadenceWindowOnly: (window: string) => `你的记录显示：常在 ${window} 学习。`,
+    factReviewOnTime: "你的记录显示：复习基本都按时做了。",
+    factReviewLate: (latency: string) => `你的记录显示：复习通常滞后约 ${latency}。`,
+    factReviewOverdue: "你的记录显示：复习常拖到逾期才做。",
+    factStudyModeQuiz: (breakdown: string) => `你的记录显示：以测验驱动为主（${breakdown}）。`,
+    factStudyModeReview: (breakdown: string) => `你的记录显示：以复习驱动为主（${breakdown}）。`,
+    factStudyModeCard: (breakdown: string) => `你的记录显示：以卡片自测为主（${breakdown}）。`,
+    factStudyModeRestatement: (breakdown: string) => `你的记录显示：以复述驱动为主（${breakdown}）。`,
+    factStudyModeCapability: (breakdown: string) => `你的记录显示：以能力评测为主（${breakdown}）。`,
+    kindAssessment: "测验",
+    kindReview: "复习",
+    kindCard: "卡片",
+    kindRestatement: "复述",
+    kindCapability: "能力评测",
+    factOutputCoverage: (pct: number) => `你的记录显示：复述通常能覆盖 ${pct}% 的要点。`,
+    factOutputDensity: (per: number) => `平均每章划线 ${per} 处。`,
+    factOutputNoteRatio: (pct: number) => `其中 ${pct}% 带笔记。`,
+    // 文案口径（R1）：只说「你的记录显示」，不说「你是」；也不宣称「已匿名化」。
+    usageNote:
+      "以上内容会在出题、章内提问、复述批改时一并交给模型，用来调整举例与讲解深浅；它不会被当作指令执行，也不影响计划与配额。",
+    mode: { view: "查看", edit: "编辑" },
+    editHint: "直接改文字即可。行尾的 <!--m:…--> 标记请留着（系统靠它认人）；删掉一行 = 你不同意它。",
+    saved: "已保存",
+    rowBadge: { derived: "整理", ai: "AI", edited: "你改过", manual: "你写的" },
+    diffTitle: "这些行你改过，系统现在有不同看法",
+    diffMine: (mine: string) => `你的写法：${mine}`,
+    diffTheirs: (theirs: string) => `系统现在认为：${theirs}`,
+    useSystem: "用系统的版本",
+    diffNote: "不动它也没关系 —— 系统永远不会覆盖你写下的字。",
+    dismissedFold: (n: number) => `你删掉过 ${n} 条`,
+    restore: "恢复（下次整理时写回）",
+    restoreNote: "恢复的是「系统还能推出的那些」；手写回「我的补充」区也是一条出路。",
+    clearAll: "清空全部记忆",
+    clearConfirm: "确定清空？文档（含你手写与改过的行）会被整份删除，且不可撤销。",
+    clearNote: "清空学习记录时不会整份删掉这份文档：你手写与改过的行会留下，系统整理的行会被清掉。",
+    aiOpen: "让系统读一读我的记录",
+    aiRunning: "正在归纳……",
+    aiDisabledNoAi: "要先在设置里配置 AI 模型，才能让系统读你的记录。",
+    aiDisabledNoSamples: (missing: number) =>
+      `还差 ${missing} 条笔记或复述（一条结论至少要 3 条样本支撑才允许写）。`,
+    privacyTitle: "这一步会把你的文字发给模型",
+    privacySend: (notes: number, restatements: number, chars: number) =>
+      `本次将发送 ${notes} 条笔记 + ${restatements} 次复述，共约 ${chars} 字。`,
+    privacyMaskNote:
+      "已掩码手机号 / 邮箱 / 身份证 / 生日 / 主页链接；姓名与公司名**不掩码**，靠提示词约束模型不输出。",
+    viewPayload: "先看看要发送的内容",
+    payloadTitle: "将要发送的内容",
+    payloadWarn: "下面就是离开本机的全部内容，请确认后再发送。",
+    back: "返回",
+    send: "发送",
+    resultTitle: "系统读出来的观察",
+    resultHint: "确认后才会写进文档；不点「写进文档」就什么都不会改。",
+    resultUpdated: (n: number) => `其中 ${n} 条会更新已有行`,
+    resultAdded: (n: number) => `${n} 条会新增`,
+    resultSkipped: (n: number) => `${n} 条与你否掉过的重复，已丢弃`,
+    resultEmpty: "这次没有新的发现 —— 你的记录还不够支撑新的结论。",
+    writeToDoc: "写进文档",
+    retry: "重试",
+    // ⚠️ 以下三个键会被写进用户的 markdown 文档
+    headings: {
+      identity: "基本信息",
+      domain: "知识领域",
+      preference: "偏好与方式",
+      cognition: "认知特征",
+      cadence: "学习节奏",
+      "goal-intent": "学习意图",
+    },
+    intro:
+      "这份文档是 PLOS 根据你的学习记录整理的，你可以直接修改。\n· 自动整理的行，下次整理时会更新；你改过的行不会被覆盖。\n· 删掉一行 = 你不同意它，系统不会再写回来。\n· 标题随便改；行尾的 <!--…--> 标记请留着（系统靠它认人）。",
+    manualHeading: "我的补充",
+    manualPlaceholder: "（你在这里写的话会一直保留，并同样会交给模型。）",
+    mismatch: (observed: string, declared: string) =>
+      `你的记录显示你更像「${observed}」，而画像里声明的是「${declared}」。`,
+    mismatchAction: "以你的声明为准，这里只提示不动它 —— 想改就去「我的画像」。",
+    emptyTitle: "还没有足够的内容可以整理",
+    emptyDesc: "记忆来自你的笔记、复述与学习记录；它们现在还不够形成一条可靠结论。",
+    /*
+     * 空态的「还差什么」两行：**必须同时给出当前值与目标值**（§7.3），
+     * 不给「再学一点」这种无量化引导。标签由调用侧从阈值表的键取，故这里是通用模板。
+     */
+    emptyNeed: (label: string, need: number, current: number) => `${label} ${current} / 需要 ${need}`,
+    needLabelEvidence: "学习记录",
+    needLabelSamples: "笔记 / 复述",
+    emptyAction: "继续去学",
+    goPlan: "去计划页",
+    staleEvidenceNote: "学习记录已达存储上限，更早的活动已被裁剪 —— 部分结论的依据可能不再完整。",
+    /* D12-A：磁盘镜像（仅桌面端；浏览器降级为下载一份 .md）。 */
+    saveFile: "保存到文件",
+    revealFile: "在文件管理器中显示",
+    loadFile: "从文件载入",
+    loadConfirm:
+      "用磁盘文件的内容替换 App 内的文档？你在 App 里改过或手写的行会被这份文件覆盖（App 内的文档才是真源，文件只是副本）。",
+    fileSaved: "已同步到文件",
+    fileUnavailable: "没能落盘 —— 记忆仍在 App 内正常工作，不影响任何功能。",
+    err: {
+      saveFailed: "保存失败：本地存储写入被拒绝（可能是空间不足）。文档没有被改动。",
+      invalidDoc: "文档内容非法，已忽略这次修改。",
+      aiNotConfigured: "尚未配置 AI 模型，请先到设置里配置。",
+      notEnoughSamples: "样本太少，系统不会在没有依据的情况下写结论。",
+      aiFailed: "调用失败，请重试。文档与元数据没有被改动。",
+      emptyDraft: "模型这次没有给出可用的结论。",
+    },
   },
 
   scaffold: {
