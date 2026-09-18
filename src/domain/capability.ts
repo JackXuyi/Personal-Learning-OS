@@ -17,6 +17,7 @@
  *    = 新能力项（同 `DerivedCard` 口径，避免增删/重命名后历史报告错配）。
  * 3. **报告 append-only**：重评产生新报告，历史报告按 run 快照渲染，永不原地更新。
  */
+import { hashId } from "../lib/hash";
 
 /**
  * 达标判定。
@@ -165,16 +166,12 @@ export type CapabilityErrorKind =
 export type CapabilityStatus = "ok" | "no-ai" | "no-scope" | "no-material" | "no-items" | "error";
 
 /**
- * djb2 32bit → base36：确定性、低碰撞、零依赖。
+ * ⚠️ 此处原有的一份私有 `hashId` 已抽到 `src/lib/hash.ts`（F9 学习者记忆是
+ * 「第四处」调用，触发了 `domain/annotation.ts` 预留的抽取约定，见该文件头注释）。
  *
- * 与 `engine/flashcard-engine.ts::hashId` 同算法（各自私有）—— 分层约束下
- * `domain/` 不得反向 import `engine/`，故两侧各持一份 6 行实现，非通用工具库。
+ * **输入拼接格式未变**（`goalId` + `"\u0000"` + `label`）→ 既有 `cap_*` id 逐字节不变，
+ * 历史能力报告不受影响（方案 R7 的零回归要求）。
  */
-function hashId(input: string): string {
-  let h = 5381;
-  for (let i = 0; i < input.length; i++) h = ((h << 5) + h + input.charCodeAt(i)) | 0;
-  return (h >>> 0).toString(36);
-}
 
 /**
  * 能力项稳定 id = `cap_` + djb2(`goalId` + `"\u0000"` + `label`)（决策 D6-A）。

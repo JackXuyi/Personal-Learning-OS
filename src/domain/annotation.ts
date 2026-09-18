@@ -17,6 +17,7 @@
  * - `doc.textPreview.slice(start, end) === quote` —— **必须逐字相等**，否则整条
  *   拒绝落库（零伪造区间，对齐 `locateQuote` 的「诚实降级」原则）。
  */
+import { hashId } from "../lib/hash";
 
 /** 尺寸护栏（UI 与服务层共用同一常量，防两处口径漂移）。 */
 export const ANNOTATION_LIMITS = {
@@ -72,16 +73,13 @@ export interface Annotation {
 /**
  * djb2 32bit → base36。
  *
- * 与 `domain/capability.ts` 和 `engine/flashcard-engine.ts` 同算法（**各自私有**）。
- * 此处内联第三份的理由与 `capability.ts` 注释相同：`domain` 不得反向 import
- * `engine`，且既有两处已明确「不为 6 行代码新建通用工具库」。
- * ⚠️ 若出现**第四处**，才值得抽到 `src/lib/hash.ts`（届时三处一起换）。
+ * ⚠️ 此处原有的一份私有实现已抽到 `src/lib/hash.ts`：本文件原先的注释写着
+ * 「**若出现第四处，才值得抽**（届时三处一起换）」—— F9 学习者记忆的 AI 条目键
+ * 正是第四处（`docs/learner-memory-design-2026-09.md` §4.2），约定如期兑现。
+ *
+ * **输入拼接格式未变**（`documentId` + `"\u0000"` + `start` + `"\u0000"` + `end`）
+ * → 既有 `ann_*` id 逐字节不变，已落库的批注不会成孤儿（方案 R7）。
  */
-function hashId(input: string): string {
-  let h = 5381;
-  for (let i = 0; i < input.length; i++) h = ((h << 5) + h + input.charCodeAt(i)) | 0;
-  return (h >>> 0).toString(36);
-}
 
 /**
  * 区间派生的稳定 id（同区间 → 同 id）。

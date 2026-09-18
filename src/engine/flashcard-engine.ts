@@ -12,20 +12,18 @@
  */
 import type { CardState, CardStateMap, Chapter, DerivedCard, KeyPointRef, SelfRating } from "../domain";
 import { FLASHCARD_SESSION_CAP } from "../domain";
+import { hashId } from "../lib/hash";
 import { nextReviewInDays } from "./learner-model";
 
 const MS_PER_DAY = 86_400_000;
 
 /**
- * djb2 32bit → base36：确定性、低碰撞、零依赖。
+ * 此处原有的一份私有 `hashId` 已抽到 `src/lib/hash.ts`（F9 学习者记忆是「第四处」
+ * 调用，触发 `domain/annotation.ts` 预留的抽取约定）。
  *
- * 仅在引擎内部用于生成卡片 id（非加密用途）—— 不为 6 行代码新建通用工具库。
+ * **输入拼接格式未变**（`chapterId` + `"\u0000"` + `point`）→ `card_*` id 不变，
+ * 既有卡片调度状态不会成孤儿（方案 R7）。
  */
-function hashId(input: string): string {
-  let h = 5381;
-  for (let i = 0; i < input.length; i++) h = ((h << 5) + h + input.charCodeAt(i)) | 0;
-  return (h >>> 0).toString(36);
-}
 
 /**
  * 卡片稳定 id = `card_` + djb2(`chapterId` + `\u0000` + `point`)。
