@@ -18,6 +18,7 @@ mod backup;
 mod db;
 mod llm;
 mod logging;
+mod memory_doc;
 mod vault;
 
 use db::init_db;
@@ -132,6 +133,11 @@ pub fn run() {
             backup::backup_list,
             backup::backup_read,
             backup::backup_reveal,
+            // 记忆文档文件通道（docs/learner-memory-design-2026-09.md §8.20 / D12-A）
+            memory_doc::memory_doc_dir,
+            memory_doc::memory_doc_save,
+            memory_doc::memory_doc_read,
+            memory_doc::memory_doc_reveal,
             // RAG 存储层（T6）
             db::commands::db_status,
             db::commands::db_list_sections,
