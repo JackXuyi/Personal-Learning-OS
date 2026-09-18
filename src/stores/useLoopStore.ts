@@ -8,9 +8,33 @@ import {
 } from "../engine";
 import { applyEvaluation, applyForgetting, applyRating, nextReviewInDays } from "../engine";
 import { newId } from "../domain";
-import type { Evaluation, LearnerProfile, LearnerState, LearningGoal, SelfRating } from "../domain";
+import type {
+  Evaluation,
+  GeneratedEntry,
+  LearnerProfile,
+  LearnerState,
+  LearningGoal,
+  MemoryDocMeta,
+  SelfRating,
+} from "../domain";
+import { EMPTY_MEMORY_META } from "../domain";
 import type { Messages } from "../i18n/messages/zh";
 import { zh } from "../i18n/messages/zh";
+// F9：记忆的状态入口在 store（设计 §8.14），实现全部委托给服务层。
+// 依赖方向说明：`features/memory/*` **不** import 本模块（服务层的 `store` 参数是
+// 注入的 `StorageAdapter`，可脱离 store 直测），故此处是真单向、无环。
+import type { MemorySignals } from "../features/memory/memory-signals";
+import type { MemoryTexts, RefreshOptions } from "../features/memory/memory-service";
+import {
+  applyAiEntries,
+  clearMemoryDoc,
+  loadMemory,
+  refreshFromFacts,
+  restoreDismissed,
+  saveUserDoc,
+  useSystemVersion,
+} from "../features/memory/memory-service";
+import type { MergeStats } from "../features/memory/memory-doc-merge";
 
 /**
  * 整个应用唯一的存储实例。默认由 localStorage 支撑
@@ -70,6 +94,33 @@ interface LoopStoreState {
   ) => Promise<SubmitResult>;
   /** 撤销窗口内的回滚（保存提交前的状态快照）。返回是否成功撤销。 */
   undoReview: (unitId: string, m?: Messages) => Promise<boolean>;
+
+  // ===== 学习者记忆（F9）=====
+  /**
+   * 记忆文档正文（markdown 真源）。**不随 `refresh` 重算** ——
+   * 记忆按 D2 不进入任何计划 / 难度 / 配额的输入，故它不是计划快照的一部分（§4.4）。
+   */
+  memoryDoc: string;
+  /** 记忆元数据（`lastWritten` / `dismissed` / 整理时刻）。同样不随 refresh 重算。 */
+  memoryMeta: MemoryDocMeta;
+  /**
+   * 通道 A 整理（打开 `/memory` 时调用）：零外发，只可能改动「系统写过且用户没动过」的行。
+   * 返回本轮动作报告供页面如实展示（更新 N 条 / 保留你改写的 M 条）。
+   */
+  refreshMemory: (signals: MemorySignals, opts: RefreshOptions) => Promise<MergeStats>;
+  /** 用户手动编辑：**原样落库、完全不过合并器**（用户文本必须逐字节保存）。 */
+  saveMemoryDoc: (doc: string) => Promise<void>;
+  /** 通道 B 结果落库（用户点「写进文档」后调用）。 */
+  applyMemoryAi: (
+    entries: readonly GeneratedEntry[],
+    opts: MemoryTexts & { now: number },
+  ) => Promise<MergeStats>;
+  /** 清空全部记忆（含手写区与墓碑；需 UI 二次确认）。 */
+  clearMemory: () => Promise<void>;
+  /** 恢复被删的记忆（清空墓碑 → 下次整理写回）。 */
+  restoreMemory: () => Promise<void>;
+  /** 「用系统的版本」：把某一行的控制权交回系统（见服务层注释的两种入口差异）。 */
+  useSystemMemoryVersion: (key: string, currentLine: string) => Promise<void>;
 }
 
 /** 撤销窗口（毫秒）。 */
@@ -86,6 +137,10 @@ export const useLoopStore = create<LoopStoreState>((set, get) => ({
   profile: undefined,
   loading: false,
   error: undefined,
+  // F9：记忆初始为空态。**刻意不在 refresh 里读它**（见字段注释）；`/memory` 页
+  // 打开时调 `refreshMemory` 才会从 storage 拉齐。
+  memoryDoc: "",
+  memoryMeta: EMPTY_MEMORY_META,
 
   refresh: async (m?: Messages) => {
     set({ loading: true, error: undefined });
@@ -187,4 +242,53 @@ export const useLoopStore = create<LoopStoreState>((set, get) => ({
     await get().refresh(m);
     return true;
   },
+
+  // ===== 学习者记忆（F9）=====
+  // 全部动作的形态一致：服务层**注入 `storage`** → 落库 → 回读一次把 doc+meta 同步进 store。
+  // 「回读」而不是「拼装返回值」是刻意的：storage 是唯一真源，拼装等于在这里再算一遍 doc
+  //（「两把尺子」）。回读成本是两次 localStorage 读，可忽略。
+  // ⚠️ 一律**不调 `refresh()`**：记忆不是计划输入（D2），调了会白算一遍计划快照。
+
+  refreshMemory: async (signals, opts) => {
+    const stats = await refreshFromFacts(storage, signals, opts);
+    await syncMemory(set);
+    return stats;
+  },
+
+  saveMemoryDoc: async (doc) => {
+    await saveUserDoc(storage, doc);
+    await syncMemory(set);
+  },
+
+  applyMemoryAi: async (entries, opts) => {
+    const stats = await applyAiEntries(storage, entries, opts);
+    await syncMemory(set);
+    return stats;
+  },
+
+  clearMemory: async () => {
+    await clearMemoryDoc(storage);
+    await syncMemory(set);
+  },
+
+  restoreMemory: async () => {
+    await restoreDismissed(storage);
+    await syncMemory(set);
+  },
+
+  useSystemMemoryVersion: async (key, currentLine) => {
+    await useSystemVersion(storage, key, currentLine);
+    await syncMemory(set);
+  },
 }));
+
+/**
+ * 把 storage 里的记忆文档/元数据同步进 store（**回读**，不拼装）。
+ *
+ * 为什么每次变更后都回读而不是直接用返回值：服务层的返回是 stats（动作计数），
+ * 不是最终文档；若在这里按 stats 拼文档，就等于把合并算法实现第二遍。
+ */
+async function syncMemory(set: (partial: Partial<LoopStoreState>) => void): Promise<void> {
+  const { doc, meta } = await loadMemory(storage);
+  set({ memoryDoc: doc, memoryMeta: meta });
+}
