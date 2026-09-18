@@ -39,6 +39,7 @@ import { extractRestatementFeedback } from "../../ai/restatement";
 import { applyKeyPointRating } from "../../engine";
 import { storage } from "../../stores/useLoopStore";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
+import { loadMemoryEntries } from "../memory/memory-service";
 import { locateQuote } from "./evidence-anchor";
 
 /** 复述长度下限 / 上限（UI 与服务层共用同一常量，避免两处口径漂移）。 */
@@ -94,6 +95,8 @@ export async function checkRestatement(input: CheckRestatementInput): Promise<Re
     const body = doc.textPreview.slice(chapter.contentRef.start, chapter.contentRef.end);
     const truncated = body.length > PIPELINE_LIMITS.restatementBodyChars;
     const profile = await store.getProfile();
+    // F9：记忆在调用侧读（`ai/` 不得 import `features/`）；空文档 → 不加该键。
+    const memory = await loadMemoryEntries(store);
     const draft = await extractRestatementFeedback(provider, {
       chapterTitle: chapter.title,
       documentTitle: doc.title,
@@ -101,6 +104,7 @@ export async function checkRestatement(input: CheckRestatementInput): Promise<Re
       body,
       restatement: text,
       ...(profile ? { learner: profile } : {}),
+      ...(memory.length > 0 ? { memory } : {}),
     });
     const anchored = anchorRestatement(draft, body, text);
     const coverage = coverageOf(anchored);

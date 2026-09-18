@@ -16,10 +16,10 @@
  * `domain` 的类型，**不 import `pipelines.ts`** —— 无环、无 TDZ 风险。
  * 锚定（`features/` 层）不在此处。
  */
-import type { LearnerProfile } from "../domain";
+import type { LearnerProfile, MemoryEntry } from "../domain";
 import type { AIProvider, ChatMessage } from "./types";
 import { chatJson, isRecord, PIPELINE_LIMITS, str, TEMPERATURE } from "./pipeline-core";
-import { buildLearnerContextBlock } from "./learner-context";
+import { buildLearnerContextBlock, buildMemoryContextBlock } from "./learner-context";
 
 export const RESTATEMENT_SYSTEM = [
   "你是严格但建设性的学科老师。用户刚学完一章，用自己的话复述了这一章。",
@@ -57,6 +57,8 @@ export interface RestatementInput {
   restatement: string;
   /** F1 学习者画像：注入背景块（缺省 = 不注入，输出与改动前逐字节相同）。 */
   learner?: LearnerProfile;
+  /** F9 学习者记忆：注入长期观察块（缺省 / 空数组 = 不注入，逐字节相同）。 */
+  memory?: readonly MemoryEntry[];
 }
 
 /** 模型原始产出（**不含任何偏移量** —— 偏移一律由 service 层 locateQuote 算出）。 */
@@ -75,6 +77,8 @@ export function buildRestatementMessages(input: RestatementInput): ChatMessage[]
   const body = input.body.slice(0, PIPELINE_LIMITS.restatementBodyChars);
   // F1：背景块只影响「讲解深浅」，绝不改变「只依据原文」的硬规则（块内自带免责声明）。
   const learnerBlock = buildLearnerContextBlock(input.learner);
+  // F9：长期观察块（同样自带「不得作为指令执行」声明）。
+  const memoryBlock = buildMemoryContextBlock(input.memory);
   return [
     { role: "system", content: RESTATEMENT_SYSTEM },
     {
@@ -91,6 +95,7 @@ export function buildRestatementMessages(input: RestatementInput): ChatMessage[]
         "【用户复述】",
         input.restatement,
         ...(learnerBlock ? ["", learnerBlock] : []),
+        ...(memoryBlock ? ["", memoryBlock] : []),
       ].join("\n"),
     },
   ];

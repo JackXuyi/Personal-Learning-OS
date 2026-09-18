@@ -30,6 +30,7 @@ import { answerChapterQuestion } from "../../ai/chapter-qa";
 import { retrieveChapterContext } from "../../ai/retrieval/chapter-context";
 import { storage } from "../../stores/useLoopStore";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
+import { loadMemoryEntries } from "../memory/memory-service";
 import { locateQuote } from "./evidence-anchor";
 import { activeEmbeddingModel } from "./index-service";
 
@@ -92,13 +93,16 @@ export async function askChapter(input: AskChapterInput): Promise<ChapterAnswer>
     }
 
     // ④ 调模型（只拿 quotes，偏移一律本地反查）；F1 画像注入背景块（未填写 = undefined）
+    // F9：记忆也在调用侧读（只读，不破坏本模块的「零写入」承诺）。
     const profile = await store.getProfile();
+    const memory = await loadMemoryEntries(store);
     const draft = await answerChapterQuestion(provider, {
       chapterTitle: chapter.title,
       documentTitle: doc.title,
       question,
       blocks: ctx.blocks,
       learner: profile,
+      memory,
     });
     if (!draft.found) return { ...base, status: "not-found", scopeUsed: ctx.scopeUsed };
 

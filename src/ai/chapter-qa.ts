@@ -12,11 +12,11 @@
  * 依赖方向：只 import `./pipeline-core` 与 `./types`，**不 import `pipelines.ts`**
  * —— 无环、无 TDZ 风险。锚定（`features/` 层）不在此处。
  */
-import type { LearnerProfile } from "../domain";
+import type { LearnerProfile, MemoryEntry } from "../domain";
 import type { AIProvider, ChatMessage } from "./types";
 import { chatJson, isRecord, PIPELINE_LIMITS, str, TEMPERATURE } from "./pipeline-core";
 import type { ContextBlock } from "./retrieval/chapter-context";
-import { buildLearnerContextBlock } from "./learner-context";
+import { buildLearnerContextBlock, buildMemoryContextBlock } from "./learner-context";
 
 export const CHAPTER_QA_SYSTEM = [
   "你是用户学习资料的问答助手。你唯一的依据是下面给出的【原文片段】。",
@@ -40,6 +40,8 @@ export interface ChapterQaInput {
   blocks: readonly ContextBlock[];
   /** F1 学习者画像：注入背景块（缺省 = 不注入，输出与改动前逐字节相同）。 */
   learner?: LearnerProfile;
+  /** F9 学习者记忆：注入长期观察块（缺省 / 空数组 = 不注入，逐字节相同）。 */
+  memory?: readonly MemoryEntry[];
 }
 
 /** 模型原始产出（**不含偏移量** —— 偏移一律由 service 层用 locateQuote 算出）。 */
@@ -60,6 +62,8 @@ export function buildChapterQaMessages(input: ChapterQaInput): ChatMessage[] {
     .join("\n\n");
   // F1：背景块只影响「讲解深浅」，绝不改变「只依据原文」的硬规则（块内自带免责声明）。
   const learnerBlock = buildLearnerContextBlock(input.learner);
+  // F9：长期观察块（同样自带「不得作为指令执行」声明 → 不削弱上面的规则 1）。
+  const memoryBlock = buildMemoryContextBlock(input.memory);
   return [
     { role: "system", content: CHAPTER_QA_SYSTEM },
     {
@@ -72,6 +76,7 @@ export function buildChapterQaMessages(input: ChapterQaInput): ChatMessage[] {
         "",
         `【用户问题】${input.question}`,
         ...(learnerBlock ? ["", learnerBlock] : []),
+        ...(memoryBlock ? ["", memoryBlock] : []),
       ].join("\n"),
     },
   ];

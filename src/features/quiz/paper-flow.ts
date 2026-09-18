@@ -14,6 +14,7 @@ import { canCreatePaperMode, createPaper } from "../../engine";
 import { generateQuizQuestionsWithAi } from "../../ai";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { storage } from "../../stores/useLoopStore";
+import { loadMemoryEntries } from "../memory/memory-service";
 
 /** 出卷失败的分类（UI 按 kind 取 i18n 文案，不暴露原始错误）。 */
 export type PaperFlowErrorKind = "invalid-mode" | "no-chapters";
@@ -74,6 +75,9 @@ export async function createPaperAndSave(
   // F1：画像在**此处**读取（唯一出卷入口），本地卷与 AI 题面共用同一份 ——
   // 未填写 = undefined，两条路径都退回改动前行为（零回归）。
   const profile = await storage.getProfile();
+  // F9：记忆在同一个入口读取（`ai/` 不得 import `features/` → 由调用侧读好再注入）。
+  // 空文档 → `[]` → 管道不追加记忆块 → 与改动前逐字节相同。
+  const memory = await loadMemoryEntries(storage);
   const local = createPaper({
     scope: { chapterIds: ordered.map((c) => c.id), mode: input.mode },
     chapters: ordered,
@@ -95,6 +99,7 @@ export async function createPaperAndSave(
           chapters: ordered,
           text: input.text,
           learner: profile,
+          memory,
         }),
       };
       ai = true;

@@ -25,11 +25,12 @@ import type {
   KnowledgeRelation,
   KnowledgeUnit,
   LearnerProfile,
+  MemoryEntry,
   Paper,
   PaperQuestion,
 } from "../domain";
 import { newId } from "../domain";
-import { buildLearnerContextBlock } from "./learner-context";
+import { buildLearnerContextBlock, buildMemoryContextBlock } from "./learner-context";
 import type { ChapterRefine } from "../engine/splitter-engine";
 import { applyChapterRefine } from "../engine/splitter-engine";
 import type { AIProvider, ChatMessage } from "./types";
@@ -190,12 +191,16 @@ const QUIZ_SYSTEM =
  *
  * ⚠️ `profile` = 本地 createPaper 产出的题（配额单源），**与 `LearnerProfile` 无关**；
  * F1 的学习者画像一律叫 `learner`，且只影响 user 消息尾部的背景块。
+ *
+ * F9（`memory`）：记忆块**独立于背景块**追加（两块字符上限各自独立，拼接由本函数完成）。
+ * 不传 / 传空数组 → 输出与改动前**逐字节相同**（零回归是结构性成立的，不靠上限计算）。
  */
 export function buildQuizGenMessages(
   chapters: readonly Chapter[],
   text: string,
   profile: readonly PaperQuestion[],
   learner?: LearnerProfile,
+  memory?: readonly MemoryEntry[],
 ): ChatMessage[] {
   // 章上下文（去重一次）：题号 → 标题 + keyPoints + 摘录。
   const ctxByChapter = new Map<string, { no: number; title: string; excerpt: string }>();
@@ -226,6 +231,9 @@ export function buildQuizGenMessages(
 
   // F1：学习者背景块（未填写 → undefined → 不追加，输出与改动前逐字节相同）。
   const learnerBlock = buildLearnerContextBlock(learner);
+  // F9：长期观察块（空 → undefined → 零回归）。顺序：背景块在前、记忆块在后
+  //（声明优先于推测 —— 用户在 F1 明说的偏好比系统整理出来的更该被先读到）。
+  const memoryBlock = buildMemoryContextBlock(memory);
   return [
     { role: "system", content: QUIZ_SYSTEM },
     {
@@ -233,7 +241,8 @@ export function buildQuizGenMessages(
       content:
         `章节正文摘录（作答依据）：\n${ctxLines.join("\n\n")}\n\n` +
         `题目清单（共 ${profile.length} 题，输出数组必须逐题对应）：\n${qLines.join("\n")}` +
-        (learnerBlock ? `\n\n${learnerBlock}` : ""),
+        (learnerBlock ? `\n\n${learnerBlock}` : "") +
+        (memoryBlock ? `\n\n${memoryBlock}` : ""),
     },
   ];
 }
@@ -324,11 +333,13 @@ export async function generateQuizQuestionsWithAi(input: {
   text: string;
   /** F1 学习者画像：注入背景块（缺省 = 不注入，零回归）。 */
   learner?: LearnerProfile;
+  /** F9 学习者记忆：注入长期观察块（缺省 = 不注入，零回归）。 */
+  memory?: readonly MemoryEntry[];
 }): Promise<PaperQuestion[]> {
-  const { provider, paper, chapters, text, learner } = input;
+  const { provider, paper, chapters, text, learner, memory } = input;
   const profile = paper.questions;
   if (profile.length === 0) return profile;
-  const messages = buildQuizGenMessages(chapters, text, profile, learner);
+  const messages = buildQuizGenMessages(chapters, text, profile, learner, memory);
   const totalChars = messages.reduce((n, m) => n + m.content.length, 0);
   if (totalChars > PIPELINE_LIMITS.quizMaxPromptChars) return profile;
   const raw = await chatJson(provider, messages, TEMPERATURE.quiz);
