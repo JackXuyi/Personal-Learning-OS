@@ -4,7 +4,7 @@
 |------|------|
 | 作者 | Agent |
 | 日期 | 2026-09-17 |
-| 状态 | **待确认**（D1–D4 已拍板；**D3 于本版被用户推翻并改为「文档模式」**；D5–D12 待确认，正文按推荐档书写；另 §13.3 登记 **D13**：清库时记忆是否随之清除） |
+| 状态 | ✅ **已实施（2026-09-18）** —— 全部 20 个任务落地（`docs/learner-memory-task-runbook-2026-09.md`）。用户以「按照推荐方案实施」拍板，**D5–D12 全部按推荐档落地，D13 亦按推荐档 B**（详见 §2.1 的「实施口径」列）。⚠️ 实施期发现的 6 处真实缺陷与 3 处口径偏差已回填 runbook「实施期发现」节 |
 | 关联需求 | 用户本轮要求「设计一个 memory，根据用户学习的内容行为、规律、表述，提取出用户的基本信息、偏好等」；随后追加「**无需用户确认，写入 md 文档，用户可以手动修改**」；`docs/business-flow-end-to-end-2026-09.md` 扩展流程 E2「让系统理解我」 |
 | 前置 | `docs/learner-profile-design-2026-09.md`（F1，三层模型的第一层）、`docs/progress-analytics-design-2026-09.md`（F3，第二层）、`docs/learn-feynman-restatement-design-2026-09.md`（复述文本源）、`docs/learn-highlight-note-design-2026-09.md`（笔记文本源）、`docs/learn-chapter-qa-design-2026-09.md`（**刻意不纳入**的信号源）、`docs/data-portability-export-import-design-2026-09.md`（文件通道先例） |
 | 关联 roadmap | `docs/roadmap-next-features-plan-2026-09.md` —— **本方案是新 feature「F9 · 学习者记忆」，需在 roadmap 补一节**（见 §9 T19） |
@@ -99,21 +99,25 @@
 
 ### 2.1 决策点状态
 
-| # | 决策 | 结论 |
-|---|---|---|
-| **D1** | 信号源边界 | ✅ **已确认 A**：只读**已落库**的数据 —— 用户文本 = `Annotation.note` + `Restatement.text`；行为 = 证据流 / `CardState` / `LearnerState` / 能力报告 / 目标。**零新增存储源、零迁移**。**不落库章内提问文本** |
-| **D2** | 作用面 | ✅ **已确认 A**：**只注入 AI 上下文 + 页面展示**。明确不碰 `bandForChapter` / `paceOf` / `clsRankMap` / `planQuota` |
-| **D3** | 生效机制 | 🔄 **本版推翻初稿**：初稿 = 逐条采纳/否决状态机；**本版 = 系统整理直接写入一份 markdown 文档 → 写进即生效 → 用户手动修改文档来纠正**。无 `pending` / `accepted` / `rejected`，无确认按钮。行级三态（未动可更新 / 改过冻结 / 删掉即否决）见 §4.3.3 |
-| **D4** | 入口 | ✅ **已确认 B**：**独立路由 `/memory`** + 侧栏导航项（对齐 F3 的 `/progress` 先例）；`/learner` 只挂一张入口卡 |
-| **D5** | 推断方式 | ◐ **待确认（推荐 A）**：**双通道** —— A = 确定性派生（零 AI，产出行为规律）；B = AI 归纳（产出基本信息/领域/认知特征）。**两通道独立可用**，无 AI 时 A 照常工作 |
-| **D6** | AI 归纳触发时机 | ◐ **待确认（推荐 A）**：**手动触发** + 样本门槛（样本不足时按钮禁用并如实告知还差多少）；**不做**定时/自动触发。⚠️ 文档本身由通道 A 在**打开页面时自动整理**（零外发、零成本），与 D6 不冲突 |
-| **D7** | 与 F1 声明画像的优先级 | ◐ **待确认（推荐 A）**：**声明 > 推测**。两者冲突时以声明为准，冲突处给中性提示（不自动改写声明） |
-| **D8′** | 存储位置 | ◐ **待确认（推荐 A）**：新 key **`plos.memory.doc.v1`（markdown 文本）** + **`plos.memory.meta.v1`（`lastWritten` / `dismissed` / 时间戳）**，只改 `storage/memory.ts` + `storage/local.ts`；`storage/tauri.ts` **零改动** |
-| **D9** | 类别体系 | ◐ **待确认（推荐 A）**：固定 6 类枚举（`identity` / `domain` / `preference` / `cognition` / `cadence` / `goal-intent`），**不做自由标签**。类别**不进文档正文**（靠行尾键前缀表达，见 §4.3.1），只在 UI 与提示词里映射成标签 |
-| **D10** | AI 注入范围 | ◐ **待确认（推荐 A）**：注入**出题 / 章内提问 / 费曼复述**三处生成类管道；**能力评测的 rubric 判分管道不注入**（见下） |
-| **D11** | AI 通道的「用户不要的」传递 | ◐ **待确认（推荐 A）**：把 `dismissed` 与「用户改写过的条目」附进提示词，要求**不得重复提出**；**代码层**再做一次键过滤兜底 |
-| **D12** | 是否落盘为真实 `.md` 文件 | ◐ **待确认（推荐 A）**：**落盘**。`<app_data>/memory/learner-memory.md`，新增 4 条 Rust 命令（同构 `backup.rs`，零新 crate）。理由：用户原话「写入 md 文档，用户可以手动修改」—— 磁盘文件才让「手动修改」能用**自己的编辑器**。**降级档 B** = 只做 App 内编辑，`src-tauri/**` 零改动（见 §4.3.8） |
-| **D13** | 清库 / 导入时记忆文档的命运 | ◐ **待确认（推荐 B）** —— 由 F4 落地（2026-09-17）暴露的新决策点，见 §13.3。**B（推荐）**：清掉**系统可重算**的条目、**保留用户手写与改写过的行** —— 判据直接复用合并器的 `lastWritten`（系统写过且用户没动过 = 可再生；改过 / 手写 = 不可再生）。**A**：记忆随学习资产**整份清除**（含手写行），实现最简（`ALL_KEYS` 补两个 key 即可），但与「用户改过的内容永不丢」的既有口径相冲。**C**：完全不清（两个 key 不进 `ALL_KEYS`）→ 会出现「学习记录已清空，系统还记得你是怎样的人」的矛盾。⚠️ B 的代价：`clearAll` 不再是「删一个 key 集合」那么简单，需要一个**记忆侧清理入口**；A/C 都是零额外结构 |
+> **实施口径（2026-09-18）**：用户在 Agent Mode 下指示「按照推荐方案实施」→ 表中 D5–D12
+> **全部按推荐档落地**，D13 亦按推荐档 B。下方「结论」列的 ◐ 标记保留为**决策记录**
+> （它们记录的是"当时按推荐档推进"这一事实），**不代表仍待确认**。
+
+| # | 决策 | 结论 | 实施口径 |
+|---|---|---|---|
+| **D1** | 信号源边界 | ✅ **已确认 A**：只读**已落库**的数据 —— 用户文本 = `Annotation.note` + `Restatement.text`；行为 = 证据流 / `CardState` / `LearnerState` / 能力报告 / 目标。**零新增存储源、零迁移**。**不落库章内提问文本** | ✅ 落地（`memory-signals.ts` 六源并发读） |
+| **D2** | 作用面 | ✅ **已确认 A**：**只注入 AI 上下文 + 页面展示**。明确不碰 `bandForChapter` / `paceOf` / `clsRankMap` / `planQuota` | ✅ 落地（`refreshMemory` 刻意不调 `refresh()`） |
+| **D3** | 生效机制 | 🔄 **本版推翻初稿**：初稿 = 逐条采纳/否决状态机；**本版 = 系统整理直接写入一份 markdown 文档 → 写进即生效 → 用户手动修改文档来纠正**。无 `pending` / `accepted` / `rejected`，无确认按钮。行级三态（未动可更新 / 改过冻结 / 删掉即否决）见 §4.3.3 | ✅ 落地（两条硬断言 TC-UC03-01 / TC-UC04-02 全绿） |
+| **D4** | 入口 | ✅ **已确认 B**：**独立路由 `/memory`** + 侧栏导航项（对齐 F3 的 `/progress` 先例）；`/learner` 只挂一张入口卡 | ✅ 落地（`App.tsx` + `nav-items.ts` + `LearnerPage` 入口卡） |
+| **D5** | 推断方式 | ◐ **待确认（推荐 A）**：**双通道** —— A = 确定性派生（零 AI，产出行为规律）；B = AI 归纳（产出基本信息/领域/认知特征）。**两通道独立可用**，无 AI 时 A 照常工作 | ✅ 按推荐档 A 落地 |
+| **D6** | AI 归纳触发时机 | ◐ **待确认（推荐 A）**：**手动触发** + 样本门槛（样本不足时按钮禁用并如实告知还差多少）；**不做**定时/自动触发。⚠️ 文档本身由通道 A 在**打开页面时自动整理**（零外发、零成本），与 D6 不冲突 | ✅ 按推荐档 A 落地（门槛 `MEMORY_AI_MIN_SAMPLES = 3`） |
+| **D7** | 与 F1 声明画像的优先级 | ◐ **待确认（推荐 A）**：**声明 > 推测**。两者冲突时以声明为准，冲突处给中性提示（不自动改写声明） | ✅ 按推荐档 A 落地（`studyStyleMismatch` 只提示） |
+| **D8′** | 存储位置 | ◐ **待确认（推荐 A）**：新 key **`plos.memory.doc.v1`（markdown 文本）** + **`plos.memory.meta.v1`（`lastWritten` / `dismissed` / 时间戳）**，只改 `storage/memory.ts` + `storage/local.ts`；`storage/tauri.ts` **零改动** | ✅ 按推荐档 A 落地（两 key 已补进 `ALL_KEYS`，见 §13.3） |
+| **D9** | 类别体系 | ◐ **待确认（推荐 A）**：固定 6 类枚举（`identity` / `domain` / `preference` / `cognition` / `cadence` / `goal-intent`），**不做自由标签**。类别**不进文档正文**（靠行尾键前缀表达，见 §4.3.1），只在 UI 与提示词里映射成标签 | ✅ 按推荐档 A 落地（`cadence` 已硬过滤 AI 产出） |
+| **D10** | AI 注入范围 | ◐ **待确认（推荐 A）**：注入**出题 / 章内提问 / 费曼复述**三处生成类管道；**能力评测的 rubric 判分管道不注入**（见下） | ✅ 按推荐档 A 落地（`ai/capability.ts` 零改动） |
+| **D11** | AI 通道的「用户不要的」传递 | ◐ **待确认（推荐 A）**：把 `dismissed` 与「用户改写过的条目」附进提示词，要求**不得重复提出**；**代码层**再做一次键过滤兜底 | ✅ 按推荐档 A 落地（`dropUnwanted` 双闸） |
+| **D12** | 是否落盘为真实 `.md` 文件 | ◐ **待确认（推荐 A）**：**落盘**。`<app_data>/memory/learner-memory.md`，新增 4 条 Rust 命令（同构 `backup.rs`，零新 crate）。理由：用户原话「写入 md 文档，用户可以手动修改」—— 磁盘文件才让「手动修改」能用**自己的编辑器**。**降级档 B** = 只做 App 内编辑，`src-tauri/**` 零改动（见 §4.3.8） | ✅ 按推荐档 A 落地（4 条命令 + `cargo test --lib` 5 例全绿）。⚠️ **UC-11 的「自动发现外部改动」未实现** —— 它需要文件 mtime，而 §8.20 的四条命令契约里没有；本轮实现为**用户显式「从文件载入」**（见 runbook 偏差记录） |
+| **D13** | 清库 / 导入时记忆文档的命运 | ◐ **待确认（推荐 B）** —— 由 F4 落地（2026-09-17）暴露的新决策点，见 §13.3。**B（推荐）**：清掉**系统可重算**的条目、**保留用户手写与改写过的行** —— 判据直接复用合并器的 `lastWritten`（系统写过且用户没动过 = 可再生；改过 / 手写 = 不可再生）。**A**：记忆随学习资产**整份清除**（含手写行），实现最简（`ALL_KEYS` 补两个 key 即可），但与「用户改过的内容永不丢」的既有口径相冲。**C**：完全不清（两个 key 不进 `ALL_KEYS`）→ 会出现「学习记录已清空，系统还记得你是怎样的人」的矛盾。⚠️ B 的代价：`clearAll` 不再是「删一个 key 集合」那么简单，需要一个**记忆侧清理入口**；A/C 都是零额外结构 | ✅ 按推荐档 B 落地（`domain/memory.ts::pruneMemoryDocForClear`；`clearAll` 先裁剪再走父类） |
 
 **D9 细节**（类别体系，**推荐 = A**）：
 
@@ -1088,7 +1092,8 @@ sequenceDiagram
 - 行级徽标：`来源`（`本地` / `AI`）+ 状态（`你改过` / `你写的`），**无置信度徽标** —— 文档模式下置信度只在 AI 弹窗的预览列表里出现（写入文档后不再逐行标注，避免正文变吵）。
 - 组件映射：`Card` / `Section` / `Stat`（`components/primitives`）、`Button`、`Dialog`（`components/ui/*`）、`AppShell.PageContainer`、`react-markdown` + `remark-gfm`（查看态渲染）。
 - 设计 token：`text-ink-1/2/3`、`border-line`、`bg-app-bg`、`bg-subtle`、`text-primary`、`text-state-failed`。
-- `data-testid`：`memory-page`、`memory-mode-toggle`、`memory-doc-view`、`memory-doc-input`、`memory-ai-open`、`memory-save-file`、`memory-reveal-file`、`memory-load-file`、`memory-restore-dismissed`、`memory-clear`、`memory-empty`、`memory-merge-report`。
+- `data-testid`：`memory-page`、`memory-mode-toggle`、`memory-doc-view`、`memory-doc-textarea`、`memory-ai-open`、`memory-save-file`、`memory-reveal-file`、`memory-load-file`、`memory-restore-dismissed`、`memory-clear`、`memory-empty`、`memory-merge-report`。
+  > 实施更正（2026-09-18）：`MemoryEditor` 的 `data-testid` 实为 `memory-doc-textarea`（初稿写 `memory-doc-input`）；`memory-mode-toggle` 由 `SegmentedTabs` 的 `testIdPrefix` 产出，实际 id 为 `memory-mode-toggle-view` / `memory-mode-toggle-edit`。`memory-page` 落在 `PageContainer` 内的包裹 `<div>` 上 —— `PageContainer` 不接受任意 props。
 
 ### 7.2 `/memory` — 编辑态
 
@@ -1199,7 +1204,7 @@ sequenceDiagram
 - 键盘：查看/编辑切换、各按钮均为原生按钮，Tab 顺序按视觉顺序；弹窗 `Esc` 关闭（步骤 2/3 关闭时**不需要**二次确认 —— 尚无写入）。
 - 可达性：来源/状态徽标带 `aria-label`（不只靠颜色）；`aria-busy` 标注 AI 调用中；编辑态 `textarea` 带 `aria-describedby` 指向「标记请留着」提示。
 - 无 hover-only 操作；「清空全部记忆」常驻可见但视觉次要（`text-state-failed`）。
-- 保存后**不弹 toast**，用编辑态右上角的 `已保存 ✓` 闪现 350ms（复用 `GoalFormPage` 的 `savedFlash` 形态）。
+- 保存后**不弹 toast**，用编辑态右上角的 `已保存 ✓` 闪现（复用 `GoalFormPage` 的 `savedFlash` 形态）。实施值 **1500ms**（初稿写 350ms，实测 350ms 在中文输入法下几乎不可见）。
 
 ---
 
@@ -1571,10 +1576,11 @@ export default function MemoryPage() {
 // MemoryDocEditor：等宽 textarea（所见即所改）+ 「标记请留着」提示 + 600ms 防抖保存 + savedFlash
 export default function MemoryDocEditor({ initial, onSave }: Props) { /* §7.2 */ }
 
-// MemoryDocView：react-markdown + remark-gfm 渲染；**行级徽标靠 parsed 的行索引对齐渲染块**
-//   （实现提示：不渲染原始 markdown 后再叠加，而是把文档按「节 + 行」解析成结构后自绘列表，
-//    这样「你改过 / 你写的」徽标才能贴在行上；标题与引用块仍走 markdown 渲染）
-export default function MemoryDocView({ doc, parsed, meta }: Props) { /* §7.1 */ }
+// MemoryDocView：自绘列表行（标题 / 引用块 / 列表行 / 段落），**行级徽标与合并器同口径**
+//   （`meta.lastWritten[key] !== 当前行文本` ⇒ 你改过）。签名实为 `({ doc, meta })`：
+//   **查看态内部自己 parse**（初稿写 `parsed` 由外部传入，实施时收窄为内部解析 ——
+//   避免「外部传的 parsed 与 doc 不是同一份」的错位）。
+export default function MemoryDocView({ doc, meta }: Props) { /* §7.1 */ }
 
 // MemoryDiffNotice：系统当前值 vs 你的写法 + [用系统的版本]
 export default function MemoryDiffNotice({ diffs, onUseSystem }: Props) { }
@@ -1937,3 +1943,4 @@ T0 → T1 → T2 → T5（**先做合并器，它是全方案的承重墙，可�
 | 2026-09-17 | 初稿：F9 学习者记忆（`MemoryItem[]` 状态机 + 逐条采纳/否决）。D1–D4 已由用户拍板（D4 取「独立路由 `/memory`」而非推荐的 `/learner` 第三段）；D5–D11 待确认。18 个任务 | Agent |
 | 2026-09-17 | **v2：D3 被用户推翻，记忆改为「单一 markdown 文档」形态**。① 删除 `MemoryStatus`（pending/accepted/rejected）与全部三态 UI；② 新增 `MemoryDocMeta`（`lastWritten` / `dismissed`）与**行级三态合并算法**（`memory-doc-merge.ts`，§4.3.3）；③ 新增文档格式契约（`<!--m:KEY-->` / `<!--s:category-->` 双标记，§4.3.1）；④ 存储改为 `plos.memory.doc.v1`（纯文本）+ `plos.memory.meta.v1`；⑤ 打开页面即自动整理（零外发），AI 归纳仍需手动触发；⑥ 新增 D12「磁盘镜像」（`<app_data>/memory/learner-memory.md`，含降级档 B）；⑦ 取消「未采纳绝不注入」不变式，替换为「用户改过 5 轮不变 + 删掉 5 轮不复活」两条新硬断言；⑧ UC 从 8 条扩到 12 条，测试用例重编号；任务 18 → **20**（新增 T18 磁盘镜像，可延后） | Agent |
 | 2026-09-18 | **§13.3 回扫（F4 已实施带来的口径变化）**：F4「数据可携带」于 2026-09-17 落地 → 原「需同步 F4」「上游若变更」两行由**将来时改为既成事实**：导出白名单 20 实体不含记忆两 key；新 key 必须补进 `local.ts::ALL_KEYS`（否则 `clearAll` 后记忆残留）；导入合并语义不得沿用实体级「较新取胜」。同时在 §2.1 登记 **D13（待确认，推荐 B）**：清库 / 导入时记忆文档的命运。**未改动任何已拍板决策（D1–D4）与待确认推荐档（D5–D12）** | Agent |
+| 2026-09-18 | **F9 实施落地，方案状态置「已实施」**：§2.1 决策表新增「实施口径」列（D5–D12 按推荐档落地、D13 按推荐档 B），表头加实施口径说明；状态行由「待确认」改为「✅ 已实施（2026-09-18）」；§7.1 `data-testid` 表更正为实测值；§8.16 `MemoryDocView` 签名更正为 `({ doc, meta })`（内部自解析）；§7.7 savedFlash 更正为 1500ms。⚠️ 实施期发现 6 处真实缺陷（含合并器「文本未变却重写行」、`restoreDismissed` 未清 `lastWritten`、降级行判定、cadence 窗口并列取点、删除整行 vs 删标记的区分、黑名单「岁」缺失）与 3 处口径偏差（UC-11 自动探测未实现、`trimmed`/`dismissedNow` 无独立文案、空态 CTA 双键分工）全部回填 runbook，**方案正文未改算法与护栏** | Agent · runbook T0–T19 done |

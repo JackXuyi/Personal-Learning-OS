@@ -407,7 +407,7 @@ never depend on a network call.
 Every capability the project intends to ship — this doubles as the roadmap.
 `[x]` = shipped · `[ ]` = not yet · `P0` / `P1` / `P2` = priority of the unshipped items.
 
-**35 shipped · 10 not yet.**
+**36 shipped · 10 not yet.**
 
 ### 📥 Ingestion
 
@@ -459,6 +459,7 @@ Every capability the project intends to ship — this doubles as the roadmap.
 - [x] Résumé import — parse a PDF or pasted résumé into a background summary + a level suggestion (PII is masked on-device before sending; the raw text is never stored)
 - [x] Time-aware planning — with a deadline set, "N min suggested today · M items" and a today / this week / later split of the queue; a behind-schedule warning on home, **without touching planner priority**
 - [x] Progress & trends — activity heatmap (daily buckets, with the actual record coverage range and trimming notice), mastery trend curve (grading-time snapshots, drillable per chapter), weak-point ranking (mastery gap + paper errors + misconception count), and a goal progress timeline against the deadline; all **read-only derived** — mastery is never touched and no state is written
+- [x] Learner memory — one system-written markdown document about you (active hours, review discipline, study mode, output habits), editable by hand, and fed into quiz generation, in-chapter Q&A and restatement feedback so examples and depth fit you. The merge is **line-level**: lines you rewrote are never overwritten, lines you deleted never come back. The deterministic channel runs locally with **zero AI**; the AI channel is manual, shows the masked text that will leave your machine before sending, and writes nothing until you confirm. Desktop builds also mirror it to `<app_data>/memory/learner-memory.md` so you can edit it in your own editor
 
 ### 🔍 Retrieval
 
