@@ -26,6 +26,7 @@ import type {
   LearnerProfile,
   LearnerState,
   LearningGoal,
+  MemoryDocMeta,
   Paper,
   PaperAnswers,
   PaperResult,
@@ -33,7 +34,7 @@ import type {
   Section,
   SourceDocument,
 } from "../domain";
-import { sortChaptersByOrder } from "../domain";
+import { pruneMemoryDocForClear, sortChaptersByOrder } from "../domain";
 import type { RetrievalScope, StorageAdapter } from "./types";
 
 /**
@@ -74,6 +75,10 @@ export class InMemoryStorage implements StorageAdapter {
   protected capabilityRuns = new Map<string, CapabilityRun>();
   /** 能力报告（F6，append-only）。key = CapabilityReport.id。 */
   protected capabilityReports = new Map<string, CapabilityReport>();
+  /** 学习者记忆文档（F9）。真源是**一段 markdown 文本**，不是实体集合。 */
+  protected memoryDoc = "";
+  /** 记忆文档元数据（F9）：`lastWritten` / `dismissed` / 时间戳。 */
+  protected memoryMeta: MemoryDocMeta = { lastWritten: {}, dismissed: [], lastMergedAt: 0 };
 
   // RAG 存储层：Section / Chunk / Knowledge / Relation / Embedding
   protected sections = new Map<string, Section>();
@@ -365,6 +370,10 @@ export class InMemoryStorage implements StorageAdapter {
   async saveRestatement(record: Restatement): Promise<void> {
     this.restatements.set(record.id, record);
   }
+  /** 全量复述（F9 跨章聚合用）：与 `listRestatements` 同排序口径（`createdAt` 降序）。 */
+  async listAllRestatements(): Promise<Restatement[]> {
+    return [...this.restatements.values()].sort((a, b) => b.createdAt - a.createdAt);
+  }
   async deleteRestatement(id: string): Promise<void> {
     this.restatements.delete(id);
   }
@@ -386,6 +395,10 @@ export class InMemoryStorage implements StorageAdapter {
   }
   async listAnnotations(documentId: string): Promise<Annotation[]> {
     return [...this.annotations.values()].filter((a) => a.documentId === documentId).sort(byStart);
+  }
+  /** 全量批注（F9 跨资料聚合用）：与 `listAnnotations` 同排序口径（`start` 全序升序）。 */
+  async listAllAnnotations(): Promise<Annotation[]> {
+    return [...this.annotations.values()].sort(byStart);
   }
   async saveAnnotation(annotation: Annotation): Promise<void> {
     this.annotations.set(annotation.id, annotation);
@@ -486,8 +499,14 @@ export class InMemoryStorage implements StorageAdapter {
    * （含 `learnerState = { byUnit: {} }`、`profile = undefined`、
    * `activeGoalId = undefined`、`evidenceLog = []`），避免将来新增字段时
    * 漏清一处而无人发现。字段清单与构造函数一一对应。
+   *
+   * ⚠️ **唯一例外：学习者记忆（F9 / D13-B）** —— 清库清的是「可再生的学习资产」，
+   * 而记忆文档里**用户手写与改写过的行不可再生**。故先经
+   * `pruneMemoryDocForClear` 裁掉系统可重算的条目、留下用户自己的字
+   * （在清掉整库后，那些派生的「你常在深夜学习」就失去了依据，留着即错误）。
    */
   async clearAll(): Promise<void> {
+    const keptMemory = pruneMemoryDocForClear(this.memoryDoc, this.memoryMeta);
     this.documents = new Map();
     this.chaptersByDocument = new Map();
     this.papers = new Map();
@@ -510,6 +529,30 @@ export class InMemoryStorage implements StorageAdapter {
     this.knowledgeUnits = new Map();
     this.knowledgeRelations = new Map();
     this.embeddings = new Map();
+    this.memoryDoc = keptMemory.doc;
+    this.memoryMeta = keptMemory.meta;
+  }
+
+  // ===== 学习者记忆（F9）=====
+  async getMemoryDoc(): Promise<string> {
+    return this.memoryDoc;
+  }
+  async saveMemoryDoc(doc: string): Promise<void> {
+    this.memoryDoc = doc;
+  }
+  /**
+   * `lastWritten` / `dismissed` **深一层的浅拷贝**：调用方拿到独立对象，
+   * 改它不会污染存储内部状态（与 `listCardStates` 同形态）。
+   */
+  async getMemoryMeta(): Promise<MemoryDocMeta> {
+    return {
+      ...this.memoryMeta,
+      lastWritten: { ...this.memoryMeta.lastWritten },
+      dismissed: [...this.memoryMeta.dismissed],
+    };
+  }
+  async saveMemoryMeta(meta: MemoryDocMeta): Promise<void> {
+    this.memoryMeta = meta;
   }
 }
 

@@ -22,6 +22,7 @@ import type {
   LearnerProfile,
   LearnerState,
   LearningGoal,
+  MemoryDocMeta,
   Paper,
   PaperAnswers,
   PaperResult,
@@ -60,6 +61,16 @@ const KEY_EVIDENCE = "plos.evidence";
 const KEY_CAPABILITY_ITEMS = "plos.capability-items";
 const KEY_CAPABILITY_RUNS = "plos.capability-runs";
 const KEY_CAPABILITY_REPORTS = "plos.capability-reports";
+/**
+ * 学习者记忆（F9）：两个新 key，无旧数据 → 零迁移。
+ *
+ * ⚠️ `plos.memory.doc.v1` 的值是**纯 markdown 文本**，不是 JSON —— 落盘时
+ * **绝不 `JSON.stringify`**（会多一层引号与转义，且 `\n` 变 `\\n`，用户拿编辑器
+ * 打开磁盘镜像时会看到一行 `\n` 字面量）。这是本适配器唯一一处偏离「实体一律 JSON」
+ * 的存储点，见方案 §4.3.4。
+ */
+const KEY_MEMORY_DOC = "plos.memory.doc.v1";
+const KEY_MEMORY_META = "plos.memory.meta.v1";
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -125,6 +136,13 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     this.capabilityReports = new Map(
       load<CapabilityReport[]>(KEY_CAPABILITY_REPORTS, []).map((r) => [r.id, r]),
     );
+    // 学习者记忆（F9）
+    this.memoryDoc = load<string>(KEY_MEMORY_DOC, "");
+    this.memoryMeta = load<MemoryDocMeta>(KEY_MEMORY_META, {
+      lastWritten: {},
+      dismissed: [],
+      lastMergedAt: 0,
+    });
   }
 
   /**
@@ -187,6 +205,9 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
       KEY_CAPABILITY_REPORTS,
       JSON.stringify([...this.capabilityReports.values()]),
     );
+    // 学习者记忆（F9）：文档是纯文本 → **直接 setItem，不 JSON.stringify**（见 key 处注释）
+    localStorage.setItem(KEY_MEMORY_DOC, this.memoryDoc);
+    localStorage.setItem(KEY_MEMORY_META, JSON.stringify(this.memoryMeta));
   }
 
   override async saveDocument(doc: SourceDocument): Promise<void> {
@@ -387,6 +408,16 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     this.persist();
   }
 
+  // ===== 学习者记忆（F9）写操作 override =====
+  override async saveMemoryDoc(doc: string): Promise<void> {
+    await super.saveMemoryDoc(doc);
+    this.persist();
+  }
+  override async saveMemoryMeta(meta: MemoryDocMeta): Promise<void> {
+    await super.saveMemoryMeta(meta);
+    this.persist();
+  }
+
   /**
    * 本适配器负责的全部 key（清库真源）。
    *
@@ -418,15 +449,22 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     KEY_CAPABILITY_ITEMS,
     KEY_CAPABILITY_RUNS,
     KEY_CAPABILITY_REPORTS,
+    KEY_MEMORY_DOC,
+    KEY_MEMORY_META,
   ];
 
   /**
    * 清空整库（replace 导入用）。
    *
    * 内存侧走基类的重建，落盘侧**逐个 `removeItem`** —— 刻意不调 `persist()`：
-   * 那会把 22 个 key 写成 `"[]"` 垃圾值（且 `profile` 分支走 removeItem，
+   * 那会把 24 个 key 写成 `"[]"` 垃圾值（且 `profile` 分支走 removeItem，
    * 同一方法里两种语义混淆）。清完就是「这台机器上没安装过数据」的状态，
    * 与 `load()` 的 `raw ? … : fallback` 回落语义一致。
+   *
+   * ⚠️ **F9 / D13-B（记忆例外）**：两个记忆 key 在 `ALL_KEYS` 里（不留在盘上成为
+   * 「清不掉」的脏 key），但基类已把 `memoryDoc` / `memoryMeta` 裁成
+   * 「只剩用户手写与改写过的行」—— 故 removeItem 之后**再把这份残留写回去**。
+   * 顺序不能反（先写后删 = 白写）。
    */
   override async clearAll(): Promise<void> {
     await super.clearAll();
@@ -436,6 +474,16 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
       } catch {
         /* 隐私模式 / 配额异常：内存已清空，落盘残留不阻塞主流程 */
       }
+    }
+    try {
+      const hasKeptDoc = this.memoryDoc !== "";
+      const hasIntent = this.memoryMeta.dismissed.length > 0;
+      if (hasKeptDoc) localStorage.setItem(KEY_MEMORY_DOC, this.memoryDoc);
+      if (hasKeptDoc || hasIntent) {
+        localStorage.setItem(KEY_MEMORY_META, JSON.stringify(this.memoryMeta));
+      }
+    } catch {
+      /* 同上：记忆是派生数据，写失败不阻塞清库（内存侧已正确） */
     }
   }
 }

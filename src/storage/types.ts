@@ -27,6 +27,7 @@ import type {
   LearnerProfile,
   LearnerState,
   LearningGoal,
+  MemoryDocMeta,
   Paper,
   PaperAnswers,
   PaperResult,
@@ -169,6 +170,14 @@ export interface StorageAdapter {
   // ===== 章级复述（F5；决策 D1-A：落库；不参与掌握度）=====
   /** 某章的全部复述记录（createdAt 降序）。 */
   listRestatements(chapterId: string): Promise<Restatement[]>;
+  /**
+   * **全量**复述（F9 记忆的跨章聚合用）。
+   *
+   * 为什么需要：`listRestatements` 按章取，而「你的复述通常覆盖到 N%」是**跨章**结论；
+   * 逐章遍历要求调用方先读全部 Chapter[]（本方法让记忆模块只需一个数字 `chapterCount`）。
+   * 与其他 `list*` 一致按 `createdAt` 降序；只读，无副作用。
+   */
+  listAllRestatements(): Promise<Restatement[]>;
   /** 按 id upsert（先落文本、后回填 feedback 均为本方法）。 */
   saveRestatement(record: Restatement): Promise<void>;
   deleteRestatement(id: string): Promise<void>;
@@ -189,6 +198,13 @@ export interface StorageAdapter {
   listAnnotationsByChapter(chapterId: string): Promise<Annotation[]>;
   /** 某资料的全部批注（按 `start` 升序；重切分后重定位用）。 */
   listAnnotations(documentId: string): Promise<Annotation[]>;
+  /**
+   * **全量**批注（F9 记忆的划线密度/笔记占比用）。
+   *
+   * 同 `listAllRestatements`：跨资料聚合不该要求调用方先遍历文档列表。
+   * 排序与 `listAnnotations` 一致（`start` 升序、同起点 `end` 兜底）。
+   */
+  listAllAnnotations(): Promise<Annotation[]>;
   /** 按 id upsert（新建 / 改笔记均为本方法）。 */
   saveAnnotation(annotation: Annotation): Promise<void>;
   /** 单条删除（用户手动删除）。幂等（删不存在的 id 不抛错）。 */
@@ -239,8 +255,27 @@ export interface StorageAdapter {
    * （Keychain）、**不碰**内部迁移标记（`plos.rag.migrated.v1` /
    * `plos.graph.migrated.v2`）与 Rust 侧日志配置。幂等。
    *
+   * ⚠️ **例外（F9 / D13-B）**：学习者记忆**不整份清除** —— 系统可重算的条目丢掉，
+   * 但**用户手写与改写过的行保留**（见 `domain/memory.ts::pruneMemoryDocForClear`）。
+   * 理由：清库是清「可再生的学习资产」，而用户自己写的字不可再生。
+   *
    * ⚠️ 新增实体时：本方法、导出白名单、导入写入顺序**三处必须同步** ——
    * 漏一处就是「导出带走了、恢复时被丢」的静默数据丢失。
    */
   clearAll(): Promise<void>;
+
+  // ===== 学习者记忆（F9；缺省 = 空串 / 空元数据，绝不自动生成）=====
+  /**
+   * 记忆文档正文（markdown）。**未接入时返回 `""`**（调用方据此走空分支，零回归）。
+   *
+   * ⚠️ 这是**真源**：页面展示、AI 注入、磁盘镜像全部由它派生。
+   * 解析一律走 `domain/memory.ts::parseMemoryDoc`（`ai/` 与 `features/` 共用）。
+   */
+  getMemoryDoc(): Promise<string>;
+  /** 全量覆盖写入（文档是单个字符串，天然全量）。 */
+  saveMemoryDoc(doc: string): Promise<void>;
+
+  /** 文档侧元数据（`lastWritten` / `dismissed` / 时间戳）。缺省 = 空对象。 */
+  getMemoryMeta(): Promise<MemoryDocMeta>;
+  saveMemoryMeta(meta: MemoryDocMeta): Promise<void>;
 }
