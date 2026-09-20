@@ -100,7 +100,9 @@ async function main() {
   });
 
   await check("TC-UC02-02 mastery>0 而 attempts=0 仍算「有证据」", () => {
-    // applyRating 会移动 mastery 但不增 attempts —— 只看 attempts 会误判为无证据。
+    // `mastery>0` 而 `attempts=0` 是 `applyRating` 时代的数据形状（自评曾移动 mastery）。
+    // 2026-09-20 起自评一律走 `applyKeyPointRating`，不再产生它；但**存量数据仍在**，
+    // 只看 attempts 会把有证据的章误判为无证据。
     const unit = { mastery: 0.5, attempts: 0 } as never;
     assert.equal(bandForChapter(unit, profileOf("advanced")), 2);
   });
