@@ -6,7 +6,12 @@ import {
   type ChapterLoopSnapshot,
   type LoopSnapshot,
 } from "../engine";
-import { applyEvaluation, applyForgetting, applyRating, nextReviewInDays } from "../engine";
+import {
+  applyEvaluation,
+  applyForgetting,
+  applyKeyPointRating,
+  nextReviewInDays,
+} from "../engine";
 import { newId } from "../domain";
 import type {
   Evaluation,
@@ -213,7 +218,12 @@ export const useLoopStore = create<LoopStoreState>((set, get) => ({
     let nextState: LearnerState;
     let intervalDays: number;
     if ("rating" in evidence) {
-      nextState = applyRating(prevState, unitId, evidence.rating, Date.now());
+      // 四档自评**只做调度、不动掌握度**（V2 双证据原则：章 mastery 的唯一写方是
+      // 卷面）。与 `ChapterReaderPage::markReviewed` 同一口径 —— 修前这里误用
+      // `applyRating`（比 `applyKeyPointRating` 多一行 `mastery += step`），造成
+      // 「同一个自评动作、两个入口、两种掌握度后果」。因此本分支的
+      // `masteryDelta` 恒为 0，`DeltaBadge` 会显示中性态（见该组件注释）。
+      nextState = applyKeyPointRating(prevState, unitId, evidence.rating, Date.now());
       intervalDays = nextReviewInDays(evidence.rating);
     } else {
       // 测评对错：以启发式间隔表达「答对 4 天后再见 / 答错 1 天后重来」。
