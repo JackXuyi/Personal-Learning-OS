@@ -23,6 +23,7 @@ import { notifyDocsChanged } from '../../../components/layout/AppShell';
 import { buildActiveProvider } from '../../../stores/useSettingsStore';
 import { useAiReady } from '../../../hooks/useAiReady';
 import { analyzeConceptsNow, analyzeKeyPointsNow } from '../analyze-service';
+import { keyPointCoverage } from '../keypoint-coverage';
 import { peekCardStats } from '../flashcard-service';
 import { MarkdownInline } from '../render/markdown-core';
 import GraphView from '../../knowledge/GraphView';
@@ -66,7 +67,14 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
   }, [graph, allUnitIds]);
 
   const extracted = chapters.filter((c) => (c.unitIds?.length ?? 0) > 0).length;
-  const withRefs = chapters.filter((c) => (c.keyPointRefs?.length ?? 0) > 0).length;
+  /**
+   * 要点原文引用的覆盖度 —— 派生自章节数据本身（`M/N 章`）。
+   *
+   * 要点落库改成**逐章增量**后，「跑到哪了」只能从章节读出来；而「仅补齐缺失」的
+   * 选目标用的是**同一个判据**，故统一走 `keypoint-coverage.ts`（一把尺子，方案 D3）。
+   * 此前这里是一段内联 `filter`，与服务层各数一遍同一条件。
+   */
+  const coverage = useMemo(() => keyPointCoverage(chapters), [chapters]);
 
   /**
    * 资料级自测卡计数（F5 第 4 条）—— 只读（`peekCardStats` 零写入），
@@ -81,7 +89,7 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
     return () => {
       alive = false;
     };
-  }, [doc.id, chapters.length, withRefs]);
+  }, [doc.id, chapters.length, coverage.withRefs]);
 
   const masteryMap = useMemo(() => {
     if (!learner) return {};
@@ -108,14 +116,24 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
       ? t.learn.detail.analyze.busyBlock(i, n, blk.block, blk.blocks ?? 1)
       : t.learn.detail.knowledge.extracting(i, n, ch.title);
 
-  const analyzePoints = () => {
+  /**
+   * 要点分析。`onlyMissing=true` 即「仅补齐缺失」：只对尚无原文引用的章发起调用，
+   * 已完成的章不重复消耗 AI。服务层同一开关见 `AnalyzeKeyPointsOptions.onlyMissing`。
+   *
+   * ⚠️ 调用方必须**显式传参** —— `onClick={analyzePoints}` 会把 MouseEvent 当
+   * `onlyMissing`（恒真）传进去，等于悄悄换成了「仅补齐」。
+   */
+  const analyzePoints = (onlyMissing: boolean) => {
     if (chapters.length === 0 || !aiReady || pointsTask.running || conceptsTask.running) return;
+    // 双保险：按钮已按 `coverage.incomplete` 置灰，这里再挡一道（无缺失时零成本返回）
+    if (onlyMissing && !coverage.incomplete) return;
     const provider = buildActiveProvider();
     setSummary(undefined);
     void pointsTask.run(async (report, done) => {
       const result = await analyzeKeyPointsNow(doc, chapters, {
         storage,
         provider,
+        onlyMissing,
         onProgress: (i, n, ch, blk) =>
           // 数值进度随文案一并进任务记录（F7），重挂后微进度条可恢复
           report(progressText(i, n, ch, blk), n > 0 ? i / n : undefined),
@@ -234,14 +252,28 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
           >
             {t.learn.reader.cards.startAll(cardStats?.total ?? 0, cardStats?.due ?? 0)}
           </Button>
+          {/* 续跑入口（方案 D2）：只对尚无原文引用的章发起调用，可分多次会话补齐。
+              仓库第 2 处 onlyMissing 入口（第 1 处 features/settings/VectorIndexCard.tsx）——
+              未达「≥10 行 × ≥3 处」的强制抽取线，本次不抽，按 AGENTS.md 声明「待抽」：
+              出现第 3 处时必须抽成公共组件。 */}
           <Button
             size="sm"
             variant="outline"
-            onClick={analyzePoints}
+            onClick={() => analyzePoints(true)}
+            disabled={!aiReady || pointsTask.running || conceptsTask.running || !coverage.incomplete}
+            data-testid="keypoints-backfill"
+          >
+            {t.learn.detail.knowledge.onlyMissingPoints}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => analyzePoints(false)}
             loading={pointsTask.running}
             disabled={conceptsTask.running || !aiReady || chapters.length === 0}
+            data-testid="keypoints-analyze"
           >
-            {withRefs > 0
+            {coverage.withRefs > 0
               ? t.learn.detail.knowledge.reExtractPoints
               : t.learn.detail.knowledge.extractPoints}
           </Button>
@@ -257,7 +289,7 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
           </p>
         )}
         <p className="mt-2 text-xs text-ink-3">
-          {t.learn.detail.knowledge.pointsDone(withRefs, chapters.length)}
+          {t.learn.detail.knowledge.pointsDone(coverage.withRefs, coverage.total)}
         </p>
       </div>
 
