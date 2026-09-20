@@ -769,7 +769,11 @@ failedItem: (title: string, reason: string) => `${title}: ${reason}`,
 failedUnknown: "Analysis failed (no reason returned)",
 ```
 
-> 既有 `extractDone`（概念成功文案）/ `pointsDone`（要点成功文案）保持不动；本次只加**失败维度**的文案。
+> 既有 `extractDone`（概念成功文案）/ `pointsDone`（覆盖度行「已带原文引用 M/N 章」）——
+> ⚠️ **口径后补（2026-09-20）**：① 原句把 `pointsDone` 写成「要点成功文案」有误，它是**覆盖度**行，
+> 不是完成汇总；② `extractDone` 已于同日**更名为 `conceptsAnalysisDone`**，并新增
+> `pointsAnalysisDone` —— 两条管道共用一块汇总 UI，原先共用一个键导致要点跑完报「概念分析完成」。
+> 见 `docs/library-keypoint-persist-design-2026-09.md` §8.4 / §12.4。本次（F-ai 分析）只加**失败维度**的文案，与上述更名无冲突。
 
 ### 8.10 `package.json`（修改）
 

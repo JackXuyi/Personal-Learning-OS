@@ -1571,6 +1571,11 @@ learn: {
 ```
 
 > `en.ts` 同步英文；`tests/i18n-alignment.test.ts` 校验 zh/en key 对齐（`npm run test:i18n`）。
+>
+> ⚠️ **口径后补（2026-09-20）**：上图 `knowledge.extractDone` 已**更名 `conceptsAnalysisDone`**，
+> 并新增 `pointsAnalysisDone` —— 要点与概念共用同一块完成汇总 UI，原先共用一个键会让要点分析
+> 跑完也报「概念分析完成」。上图是 2026-09 初稿示意，键名以代码与
+> `docs/library-keypoint-persist-design-2026-09.md` §8.4 / §12.4 为准。
 
 ### 8.19 `package.json`（修改）
 

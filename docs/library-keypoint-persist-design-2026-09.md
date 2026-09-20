@@ -3,7 +3,7 @@
 | 项 | 内容 |
 |---|---|
 | 日期 | 2026-09-20 |
-| 状态 | ✅ **已实施**（2026-09-20；T1–T6 全部落地，18 例新用例绿、17 条测试链全绿、`typecheck` 零新增。实施期偏差见 §13） |
+| 状态 | ✅ **已实施**（2026-09-20；T1–T6 全部落地，**21 例**新用例绿、17 条测试链全绿、`typecheck` 零新增。实施期偏差见 §13；同日另案收口汇总文案错配，见 §12.4） |
 | 性质 | **缺陷修复**（非新特性）→ README / roadmap 复选框不变 |
 | 触发 | `docs/library-keypoint-empty-fix-2026-09.md` §八 遗留 1：「这份 PDF 全部 44 章 `keyPointRefs` 为 0 —— AI 结果从未落库（属另一条根因，D4 决定单独排查）」 |
 | 上游文档 | `docs/ai-chapter-mapreduce-design-2026-09.md`（本管道即由该方案建立） |
@@ -512,15 +512,22 @@ const analyzePoints = (onlyMissing: boolean) => {
   故**撤销**该键（§13 偏差 ①）。
 - 文案与设置页 `VectorIndexCard.onlyMissing`（「仅补齐缺失」/「Fill missing only」）逐字一致；
   两处命名空间不同是该仓库既有惯例（各 area 自带键）。
-- 既有 `extractPoints` / `reExtractPoints` / `pointsDone` / `pointsUnanchored` / `extractDone`
-  等键**不动**。
+- 既有 `extractPoints` / `reExtractPoints` / `pointsDone` / `pointsUnanchored` 等键**不动**。
 
-> ⚠️ 顺带发现、**本次刻意不动**（登记备查）：要点路径的汇总文案复用了
+> ✅ **同日另案收口（2026-09-20）**：要点路径的汇总文案原先复用
 > `learn.detail.knowledge.extractDone`，而该键的中文是「**概念**分析完成：成功 N 章 · 失败 M 章」——
-> 跑完要点分析后 UI 会显示「概念分析完成」。属既有文案错配，与本次落库缺陷无关；
-> 修它要拆键或改成中性措辞，会牵动概念路径的既有文案与断言，故另案。
+> 跑完要点分析后 UI 显示「概念分析完成」。已按管道**拆成两键**：
+>
+> | key | zh | en |
+> |---|---|---|
+> | `conceptsAnalysisDone(ok, failed)`（原 `extractDone` 更名） | `概念分析完成：…` | `Concept analysis done: …` |
+> | `pointsAnalysisDone(ok, failed)`（**新增**） | `要点分析完成：…` | `Key-points analysis done: …` |
+>
+> 键名自带主语，防止再被另一条路径复用。`KnowledgeTab` 的汇总状态同步补上**必需**字段
+> `kind: 'points' \| 'concepts'`（两条管道共用同一块汇总 UI，不记来源就只能互相借用文案）；
+> 回归锁 `TC-KP-WIRE-07/08` + `TC-KP-REG-06`（见 §12.4）。
 
-### 8.5 `tests/keypoint-persist.test.ts`（新增）—— **实施后形态（18 例全绿）**
+### 8.5 `tests/keypoint-persist.test.ts`（新增）—— **实施后形态（18 例；同日增至 21 例）**
 
 见 §12（用例编号已按实施调整）。形态：**纯函数直跑 + 源码级接线断言**；不 import `.tsx`、
 不 import `features/learn/analyze-service.ts`（它依赖 storage/provider 实例）。
@@ -562,7 +569,7 @@ const analyzePoints = (onlyMissing: boolean) => {
 | T2 | `analyze-service.ts`：`onlyMissing` + 逐章增量写；同步头注释 | T1 | `typecheck` 零新增；源码级断言过 | ✅ 循环内写 chapter、循环外写 `keyPointsAt`；头注释已写明增量口径；`ok/failed` 分母改 `targets.length` |
 | T3 | i18n 双语新键 | — | `test:i18n` 绿；键在两个字典中都存在 | ✅ 只加 `onlyMissingPoints`（`pointsCoverage` 撤销，§13 偏差 ①） |
 | T4 | `KnowledgeTab.tsx`：覆盖度行 + 「仅补齐缺失」按钮 | T2、T3 | `typecheck` 零新增 | ✅ 覆盖度行沿用既有 `pointsDone` + `keyPointCoverage`（替换内联 filter）；新增按钮 + 2 个 `data-testid` |
-| T5 | 测试套件补齐 + `package.json` 串链 | T1–T4 | `test:keypersist` 全绿；`test:library` 全绿 | ✅ **18 例**全绿；`test:keypersist` 串入 `test:library`（末位仍 `test:portability`） |
+| T5 | 测试套件补齐 + `package.json` 串链 | T1–T4 | `test:keypersist` 全绿；`test:library` 全绿 | ✅ **18 例**全绿（同日另案增至 **21 例**，见 §12.4）；`test:keypersist` 串入 `test:library`（末位仍 `test:portability`） |
 | T6 | 文档同步（§8.7 + §8.8） | T1–T5 | 两文档与实测一致 | ✅ 另更正了 §8.7 的「更正方向」（§13 偏差 ③） |
 
 ## 10. 实施步骤
@@ -594,7 +601,7 @@ const analyzePoints = (onlyMissing: boolean) => {
 
 ### 11.3 通过标准（全部实测通过）
 
-- [x] `npm run test:keypersist` 全绿 —— **18/18**
+- [x] `npm run test:keypersist` 全绿 —— **21/21**（实施时 18/18，同日另案 +3）
 - [x] `npm run test:library` 全链全绿（末位仍 `test:portability`）
 - [x] `npm run typecheck` 零**新增**错误（仅 3 条既存 `AIModelsSection` 债）
 - [x] 逐提交可编译抽查与基线持平（worktree + `tsc --noEmit` 数 error）
@@ -643,6 +650,19 @@ const analyzePoints = (onlyMissing: boolean) => {
 > 初稿的 `TC-KP-REG-01~03` 原打算用假 provider 跑真实管道，实施时否决并**归并进 TGT/WIRE 两组**
 > —— 覆盖同一批不变量，但不与管道的错误语义耦合（§8.5）。
 
+### 12.4 汇总文案归属（同日另案，TC-KP-WIRE-07~08 + TC-KP-REG-06）
+
+要点与概念**共用同一块完成汇总 UI**，故「这块 UI 的文案归谁」必须能被断言锁住。
+
+| ID | 断言 | 防的是什么 |
+|---|---|---|
+| TC-KP-WIRE-07 | `analyzePoints` 块内必须出现 `pointsAnalysisDone(` 且**不得**出现 `conceptsAnalysisDone(`；`extractAll` 块内反向 | 要点跑完报「概念分析完成」的文案错配复发 |
+| TC-KP-WIRE-08 | `summary` 状态类型含**必需**字段 `kind: 'points' \| 'concepts'`；`summaryHeadline` 分派器读 `.kind ===` 且两个文案键都在其中；两路径 `setSummary` 都带 `kind` | 状态不记来源（可选字段 = 下次又会忘了带）；也防覆盖度行 `pointsDone` 被误并进完成汇总 |
+| TC-KP-REG-06 | 两条完成文案中英都存在、**互不相同**、主语真的是各自的管道名（`要点`/`概念`、`point`/`concept`），且 `ok`/`failed` 两个数都如实上报 | 拆了键却复制同一句话（等于又变成一个键）；只报成功数、把失败吞掉 |
+
+> 手法同 §12.2：`codeOf()` 先剥注释再断言；分派器用 `bracedBlockOf` 取块，**只锁「按 kind 选主语」这个不变量，不锁局部变量名**。
+> 实测提醒：初版断言写成 `summary.kind ===`（锁了形参名），分派器形参叫 `s` 就红了 —— 断言越界会把测试变成代码的复印件（`skills/package-docs-driven-change` §5.2）。
+
 ---
 
 ## 13. 实施期偏差与结果（2026-09-20）
@@ -666,7 +686,7 @@ const analyzePoints = (onlyMissing: boolean) => {
 - **单章「全块失败但未抛错」时旧 `keyPointRefs` 会被清空**：既有「单一真源」语义（初稿 §5.2 / UC-03 已登记），本次不改。
 - **不做取消按钮 / 不做并发**：无 abort 基建、本地模型单实例（初稿非目标）。
 - **概念分析管道同构缺陷不动**：无实证受害（D4），且要额外处理 `saveGraph` 的整图替换语义。
-- **要点路径汇总文案错配**：`extractDone` 中文为「概念分析完成…」，要点跑完也用它（§8.4 备注），另案。
+- **要点路径汇总文案错配** —— ✅ **已修（2026-09-20 同日）**：`extractDone` 中文为「概念分析完成…」，要点跑完也用它（§8.4 备注）。已按管道拆成 `conceptsAnalysisDone` / `pointsAnalysisDone`，并给汇总状态补上必需字段 `kind`；回归锁 TC-KP-WIRE-07/08 + TC-KP-REG-06（§12.4）。
 
 ## 变更记录
 
@@ -674,3 +694,4 @@ const analyzePoints = (onlyMissing: boolean) => {
 |---|---|---|
 | 2026-09-20 | 初稿：四路取证（真实快照 / 日志完成行缺失 / 中断现场 / 耗时波动）、D1–D4 定案（全取推荐档）、D3 措辞修正登记；文件级伪代码、6 项任务、5+4+5 用例 | Agent |
 | 2026-09-20 | 实施完毕（T1–T6）：新增 `keypoint-coverage.ts`（3 导出）、`analyze-service` 逐章增量落库 + `onlyMissing`、i18n 1 键、`KnowledgeTab` 续跑入口、`tests/keypoint-persist.test.ts`（**18 例全绿**）、`test:keypersist` 串链；同步 `library-keypoint-empty-fix`（归因更正）与 `ai-chapter-mapreduce-design`（D7/D8）。回填实施期三处偏差（§13）与实施后新事实（§13.1） | Agent |
+| 2026-09-20 | **同日另案收口：汇总文案错配**。`extractDone`（中文「概念分析完成」）被要点路径复用 → 拆成 `conceptsAnalysisDone`（更名）+ `pointsAnalysisDone`（新增）；`KnowledgeTab` 汇总状态补**必需**字段 `kind`，`summaryHeadline` 分派主语。锁 = TC-KP-WIRE-07/08 + TC-KP-REG-06（§12.4，套件 18 → **21 例**）。同步回扫三份提到旧键名的文档（本文 §8.4/§13.2、`ai-analysis-summary-fix-design` §8.9、`library-module-design` §i18n 示意） | Agent |
