@@ -44,6 +44,17 @@ interface FailedItem {
   reason: string;
 }
 
+/**
+ * 完成汇总的状态。要点与概念**两条管道共用这一块 UI**，故 `kind` 是必需字段
+ * （完成文案是分键的：`pointsAnalysisDone` / `conceptsAnalysisDone`，见 §汇总渲染）。
+ */
+interface AnalysisSummary {
+  kind: 'points' | 'concepts';
+  ok: number;
+  failed: FailedItem[];
+  extra?: string;
+}
+
 /** 概念 / 要点两路径共用：service 已逐章采集 reason，此前被 UI 丢弃（只渲染标题）。 */
 const toFailedItems = (failed: readonly { title: string; reason: string }[]): FailedItem[] =>
   failed.map((f) => ({ title: f.title, reason: f.reason }));
@@ -54,8 +65,21 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
   // 要点/概念两条 AI 任务走全局注册表（切页/切 Tab 重挂后按同 id 恢复 loading 与进度）。
   const pointsTask = useAiTask(`keypoints:${doc.id}`);
   const conceptsTask = useAiTask(`concepts:${doc.id}`);
-  /** 完成汇总（富结构，组件内渲染）；重挂后的简化终态经 task.message 展示。 */
-  const [summary, setSummary] = useState<{ ok: number; failed: FailedItem[]; extra?: string }>();
+  /**
+   * 完成汇总（富结构，组件内渲染）；重挂后的简化终态经 task.message 展示。
+   *
+   * ⚠️ `kind` 是**必需**字段，不是显示细节：要点与概念两条管道共用这一块汇总 UI，
+   * 而完成文案是**按管道分键**的。原先不记来源、一律渲染同一个键，
+   * 导致要点分析跑完也报「概念分析完成」。
+   */
+  const [summary, setSummary] = useState<AnalysisSummary>();
+
+  /** 汇总主句 —— 按 `kind` 选主语，两条管道各报各的，绝不互相借用文案。 */
+  const summaryHeadline = (s: AnalysisSummary): string => {
+    return s.kind === 'points'
+      ? t.learn.detail.knowledge.pointsAnalysisDone(s.ok, s.failed.length)
+      : t.learn.detail.knowledge.conceptsAnalysisDone(s.ok, s.failed.length);
+  };
 
   // 全局 AI 配置（响应式）：替代原 ai/active 的恒 null stub（B2 修复）
   const aiReady = useAiReady();
@@ -149,13 +173,12 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
         ]
           .filter(Boolean)
           .join(" ") || undefined;
-      setSummary({ ok: result.ok, failed: toFailedItems(result.failed), extra });
+      // `kind: 'points'` —— 汇总 UI 与任务终态都必须报「要点分析完成」
+      const head = t.learn.detail.knowledge.pointsAnalysisDone(result.ok, result.failed.length);
+      setSummary({ kind: 'points', ok: result.ok, failed: toFailedItems(result.failed), extra });
       // 终态摘要同步进任务记录（重挂后仍可见简化版）
       done(
-        [
-          t.learn.detail.knowledge.extractDone(result.ok, result.failed.length),
-          extra,
-        ]
+        [head, extra]
           .filter(Boolean)
           .join(" "),
       );
@@ -164,6 +187,7 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
     }).catch((e) => {
       // 分析恒由 AI 执行：失败如实抛出，不静默降级（E2）
       setSummary({
+        kind: 'points',
         ok: 0,
         failed: chapters.map((c) => ({ title: c.title, reason: t.learn.detail.knowledge.failedUnknown })),
         extra: e instanceof Error ? e.message : String(e),
@@ -187,21 +211,17 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
         result.skippedBlocks > 0
           ? t.learn.detail.analyze.skippedBlocks(result.skippedBlocks)
           : undefined;
-      setSummary({ ok: result.ok, failed: toFailedItems(result.failed), extra });
-      done(
-        [
-          t.learn.detail.knowledge.extractDone(result.ok, result.failed.length),
-          extra,
-        ]
-          .filter(Boolean)
-          .join(" "),
-      );
+      // `kind: 'concepts'` —— 与要点路径**分键**，两条管道各报各的
+      const head = t.learn.detail.knowledge.conceptsAnalysisDone(result.ok, result.failed.length);
+      setSummary({ kind: 'concepts', ok: result.ok, failed: toFailedItems(result.failed), extra });
+      done([head, extra].filter(Boolean).join(" "));
       notifyDocsChanged();
       await onChanged();
     }).catch((e) => {
       // 原实现只 console.error → 用户只看到「失败 N 章」却不知为何；现补总体原因 + 逐章占位
       console.error('Failed to analyze concepts:', e);
       setSummary({
+        kind: 'concepts',
         ok: 0,
         failed: chapters.map((c) => ({ title: c.title, reason: t.learn.detail.knowledge.failedUnknown })),
         extra: e instanceof Error ? e.message : String(e),
@@ -410,9 +430,7 @@ export default function KnowledgeTab({ doc, chapters, graph, learner, onChanged 
       {/* 完成汇总（本次会话富结构渲染） */}
       {summary && (
         <div className="rounded-lg border border-line bg-surface p-3">
-          <p className="text-xs text-ink-2">
-            {t.learn.detail.knowledge.extractDone(summary.ok, summary.failed.length)}
-          </p>
+          <p className="text-xs text-ink-2">{summaryHeadline(summary)}</p>
           {summary.extra && <p className="mt-1 text-xs text-ink-3">{summary.extra}</p>}
           {summary.failed.length > 0 && (
             <ul className="mt-2 space-y-1 text-xs text-ink-3">

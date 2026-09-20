@@ -1301,12 +1301,16 @@ export const zh = {
         pointsNoAi: "配置 AI 模型后可解析要点并定位原文。",
         pointsDone: (done: number, total: number) => `已带原文引用 ${done}/${total} 章`,
         pointsUnanchored: (n: number) => `其中 ${n} 条未能在原文定位，已丢弃（宁可少一条，也不给假出处）。`,
+        pointsAnalysisDone: (ok: number, failed: number) =>
+          failed > 0 ? `要点分析完成：成功 ${ok} 章 · 失败 ${failed} 章` : `要点分析完成：${ok} 章`,
         refLabel: "原文",
         goSource: "原文 →",
         extractAll: "AI 分析概念",
         reExtract: "重新分析概念",
         extracting: (i: number, n: number, t: string) => `正在分析 ${i}/${n} · ${t}`,
-        extractDone: (ok: number, failed: number) =>
+        // 完成汇总**按管道分键**：原先两条路径共用一个 `extractDone`（文案写「概念分析
+        // 完成」），要点分析跑完也会报「概念分析完成」。键名自带主语，防止再被复用。
+        conceptsAnalysisDone: (ok: number, failed: number) =>
           failed > 0 ? `概念分析完成：成功 ${ok} 章 · 失败 ${failed} 章` : `概念分析完成：${ok} 章`,
         graphStats: (done: number, total: number, units: number, rels: number) =>
           `已分析 ${done}/${total} 章 · ${units} 个概念 · ${rels} 条关系`,

@@ -1326,12 +1326,17 @@ export const en: Messages = {
         pointsDone: (done: number, total: number) => `${done}/${total} chapters have source quotes`,
         pointsUnanchored: (n: number) =>
           `${n} quote(s) could not be located in the source and were dropped — better no quote than a fake one.`,
+        pointsAnalysisDone: (ok: number, failed: number) =>
+          failed > 0 ? `Key-points analysis done: ${ok} ok · ${failed} failed` : `Key-points analysis done: ${ok} chapters`,
         refLabel: "Source",
         goSource: "Source →",
         extractAll: "AI analyze concepts",
         reExtract: "Re-analyze concepts",
         extracting: (i: number, n: number, t: string) => `Analyzing ${i}/${n} · ${t}`,
-        extractDone: (ok: number, failed: number) =>
+        // Completion summary is keyed **per pipeline**: both paths used to share one
+        // `extractDone` ("Concept analysis done"), so a points run reported concepts.
+        // The key name carries its subject so it cannot be reused by the other path.
+        conceptsAnalysisDone: (ok: number, failed: number) =>
           failed > 0 ? `Concept analysis done: ${ok} ok · ${failed} failed` : `Concept analysis done: ${ok} chapters`,
         graphStats: (done: number, total: number, units: number, rels: number) =>
           `${done}/${total} chapters analyzed · ${units} concepts · ${rels} relations`,
