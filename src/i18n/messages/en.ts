@@ -854,9 +854,21 @@ export const en: Messages = {
     loading: "Reviewing…",
     dataLine: (notes: number, restatements: number, evidence: number, days: number) =>
       `${notes} notes · ${restatements} restatements · ${evidence} records · spanning ${days} days`,
-    report: (updated: number, added: number, keptMine: number) =>
-      `This pass: ${updated} updated · ${added} added · ${keptMine} of your edits kept`,
+    /*
+     * Pass report: **only list what actually happened** ("0 updated · 0 added" is noise).
+     * When all three are zero the caller shows `reportNone`, so this never returns an empty line.
+     */
+    report: (updated: number, added: number, keptMine: number) => {
+      const parts: string[] = [];
+      if (updated > 0) parts.push(`updated ${updated}`);
+      if (added > 0) parts.push(`added ${added}`);
+      if (keptMine > 0) parts.push(`kept ${keptMine} you rewrote`);
+      return `This pass: ${parts.join(" · ")}`;
+    },
     reportNone: "Nothing changed this pass.",
+    /* These two are not the same kind of action as update/add (a burial vs a cap eviction). */
+    reportDismissedNow: (n: number) => `${n} you deleted won't come back.`,
+    reportTrimmed: (n: number) => `Trimmed ${n} older entries (the document is full).`,
     lastMerged: (v: string) => `Last reviewed: ${v}`,
     /* Human-readable review lag (building blocks for `MemoryFactTexts.latency`). */
     latencyMinutes: (n: number) => `${n} min`,
@@ -959,6 +971,15 @@ export const en: Messages = {
       "Replace the in-app document with the file on disk? Lines you edited or wrote in the app will be overwritten (the in-app document is the source of truth; the file is only a copy).",
     fileSaved: "Synced to file",
     fileUnavailable: "Could not write the file — memory keeps working inside the app; nothing else is affected.",
+    /*
+     * UC-11: the file on disk was edited externally. **Notice only, never auto-load** —
+     * auto-loading would let an outside file silently overwrite lines you changed here.
+     */
+    fileChangedAt: (v: string) => `The memory file on disk was modified externally at ${v}.`,
+    fileChangedNote:
+      "The in-app document is the source of truth, so nothing is replaced automatically — click Load to use the version on disk.",
+    fileChangedLoad: "Load",
+    fileChangedIgnore: "Ignore",
     err: {
       saveFailed: "Save failed: local storage rejected the write (likely out of space). The document was not changed.",
       invalidDoc: "Invalid document content — this edit was ignored.",

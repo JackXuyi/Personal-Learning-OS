@@ -836,9 +836,21 @@ export const zh = {
     loading: "正在整理……",
     dataLine: (notes: number, restatements: number, evidence: number, days: number) =>
       `${notes} 条笔记 · ${restatements} 次复述 · ${evidence} 条学习记录 · 覆盖 ${days} 天`,
-    report: (updated: number, added: number, keptMine: number) =>
-      `本轮整理：更新 ${updated} 条 · 新增 ${added} 条 · 保留你改写的 ${keptMine} 条`,
+    /*
+     * 页头动作报告：**只列真正发生过的动作**（「更新 0 条 · 新增 0 条」是噪声）。
+     * 三项全零时由调用侧改显示 `reportNone`，故本函数不返回空句。
+     */
+    report: (updated: number, added: number, keptMine: number) => {
+      const parts: string[] = [];
+      if (updated > 0) parts.push(`更新 ${updated} 条`);
+      if (added > 0) parts.push(`新增 ${added} 条`);
+      if (keptMine > 0) parts.push(`保留你改写的 ${keptMine} 条`);
+      return `本轮整理：${parts.join(" · ")}`;
+    },
     reportNone: "本轮没有变化。",
+    /* 这两项与「更新 / 新增」不是同一类动作（一个是殡葬、一个是满额淘汰），故各自成句。 */
+    reportDismissedNow: (n: number) => `你删掉的 ${n} 条不会再写回来。`,
+    reportTrimmed: (n: number) => `清理了 ${n} 条较早的条目（文档已满）。`,
     lastMerged: (v: string) => `最后整理：${v}`,
     /* 复习滞后时长的人类可读化（`MemoryFactTexts.latency` 的拼装件）。 */
     latencyMinutes: (n: number) => `${n} 分钟`,
@@ -944,6 +956,14 @@ export const zh = {
       "用磁盘文件的内容替换 App 内的文档？你在 App 里改过或手写的行会被这份文件覆盖（App 内的文档才是真源，文件只是副本）。",
     fileSaved: "已同步到文件",
     fileUnavailable: "没能落盘 —— 记忆仍在 App 内正常工作，不影响任何功能。",
+    /*
+     * UC-11：磁盘副本被外部编辑器改过。**只提示，不自动载入** ——
+     * 自动载入等于让外部文件静默覆盖你在 App 里改过的行。
+     */
+    fileChangedAt: (v: string) => `磁盘上的记忆文档在 ${v} 被外部修改过。`,
+    fileChangedNote: "App 内的文档才是真源，所以这里不会自动替换 —— 想用磁盘上的版本就点「载入」。",
+    fileChangedLoad: "载入",
+    fileChangedIgnore: "忽略",
     err: {
       saveFailed: "保存失败：本地存储写入被拒绝（可能是空间不足）。文档没有被改动。",
       invalidDoc: "文档内容非法，已忽略这次修改。",
