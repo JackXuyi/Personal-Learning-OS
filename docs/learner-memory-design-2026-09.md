@@ -116,7 +116,7 @@
 | **D9** | 类别体系 | ◐ **待确认（推荐 A）**：固定 6 类枚举（`identity` / `domain` / `preference` / `cognition` / `cadence` / `goal-intent`），**不做自由标签**。类别**不进文档正文**（靠行尾键前缀表达，见 §4.3.1），只在 UI 与提示词里映射成标签 | ✅ 按推荐档 A 落地（`cadence` 已硬过滤 AI 产出） |
 | **D10** | AI 注入范围 | ◐ **待确认（推荐 A）**：注入**出题 / 章内提问 / 费曼复述**三处生成类管道；**能力评测的 rubric 判分管道不注入**（见下） | ✅ 按推荐档 A 落地（`ai/capability.ts` 零改动） |
 | **D11** | AI 通道的「用户不要的」传递 | ◐ **待确认（推荐 A）**：把 `dismissed` 与「用户改写过的条目」附进提示词，要求**不得重复提出**；**代码层**再做一次键过滤兜底 | ✅ 按推荐档 A 落地（`dropUnwanted` 双闸） |
-| **D12** | 是否落盘为真实 `.md` 文件 | ◐ **待确认（推荐 A）**：**落盘**。`<app_data>/memory/learner-memory.md`，新增 4 条 Rust 命令（同构 `backup.rs`，零新 crate）。理由：用户原话「写入 md 文档，用户可以手动修改」—— 磁盘文件才让「手动修改」能用**自己的编辑器**。**降级档 B** = 只做 App 内编辑，`src-tauri/**` 零改动（见 §4.3.8） | ✅ 按推荐档 A 落地（4 条命令 + `cargo test --lib` 5 例全绿）。⚠️ **UC-11 的「自动发现外部改动」未实现** —— 它需要文件 mtime，而 §8.20 的四条命令契约里没有；本轮实现为**用户显式「从文件载入」**（见 runbook 偏差记录） |
+| **D12** | 是否落盘为真实 `.md` 文件 | ◐ **待确认（推荐 A）**：**落盘**。`<app_data>/memory/learner-memory.md`，新增 4 条 Rust 命令（同构 `backup.rs`，零新 crate）。理由：用户原话「写入 md 文档，用户可以手动修改」—— 磁盘文件才让「手动修改」能用**自己的编辑器**。**降级档 B** = 只做 App 内编辑，`src-tauri/**` 零改动（见 §4.3.8） | ✅ 按推荐档 A 落地（**5 条命令** + `cargo test --lib` 7 例全绿）。UC-11 的「自动发现外部改动」由第 5 条只读命令 `memory_doc_mtime` 补齐（**2026-09-20**，见 §8.20 的理由）—— **只提示，不自动载入**；⚠️ **写盘改为用户显式触发**（不做「落库后自动写盘」，理由见 §4.3.8 的实施口径更正） |
 | **D13** | 清库 / 导入时记忆文档的命运 | ◐ **待确认（推荐 B）** —— 由 F4 落地（2026-09-17）暴露的新决策点，见 §13.3。**B（推荐）**：清掉**系统可重算**的条目、**保留用户手写与改写过的行** —— 判据直接复用合并器的 `lastWritten`（系统写过且用户没动过 = 可再生；改过 / 手写 = 不可再生）。**A**：记忆随学习资产**整份清除**（含手写行），实现最简（`ALL_KEYS` 补两个 key 即可），但与「用户改过的内容永不丢」的既有口径相冲。**C**：完全不清（两个 key 不进 `ALL_KEYS`）→ 会出现「学习记录已清空，系统还记得你是怎样的人」的矛盾。⚠️ B 的代价：`clearAll` 不再是「删一个 key 集合」那么简单，需要一个**记忆侧清理入口**；A/C 都是零额外结构 | ✅ 按推荐档 B 落地（`domain/memory.ts::pruneMemoryDocForClear`；`clearAll` 先裁剪再走父类） |
 
 **D9 细节**（类别体系，**推荐 = A**）：
@@ -791,9 +791,17 @@ const MEMORY_FILE_NAME: &str = "learner-memory.md";
 
 | 动作 | 时机 | 说明 |
 |---|---|---|
-| 写盘 | 每次整理/编辑落库**之后**（防抖 1s） | 失败**不影响**任何本地功能（只记日志 + UI 上把「已同步到文件」标记为灰色） |
-| 读盘 | **仅当用户点「从文件载入」** | ⚠️ **不做自动双向同步** —— 自动读盘会在「App 内改」与「编辑器里改」之间产生不可判定的覆盖 |
-| 外部改动检测 | 打开 `/memory` 时读一次文件 mtime，与 `meta.lastSavedAt` 比对 | 盘上更新 → 页头一条**可关闭**提示「磁盘上的记忆文档在 X 时被外部修改过 → [载入]」。**不自动载入**（本仓库「诚实例外」惯例） |
+| 写盘 | **用户点「保存到文件」**（实施口径，见下） | 失败**不影响**任何本地功能（只记日志 + UI 上如实说「没能落盘」） |
+| 读盘 | **仅当用户点「从文件载入」**（或从外部改动提示里点「载入」） | ⚠️ **不做自动双向同步** —— 自动读盘会在「App 内改」与「编辑器里改」之间产生不可判定的覆盖 |
+| 外部改动检测 | 打开 `/memory` 时读一次文件 mtime，与 `meta.lastSavedAt` 比对 | 盘上更新 → 页头一条**可关闭**提示「磁盘上的记忆文档在 X 时被外部修改过 → [载入] / [忽略]」。**不自动载入**（本仓库「诚实例外」惯例） |
+
+> **⚠️ 实施口径更正（2026-09-20）：写盘是显式的，不是「落库后自动写盘」。**
+> 初稿把写盘定为「每次整理/编辑落库之后（防抖 1s）」，实施时改为**只在用户点「保存到文件」时写**。理由：
+> 自动写盘会让 App 在**用户用外部编辑器改完之后**（用户回到页面 → 自动整理 → 自动写盘）**静默覆盖**那些改动。
+> 本 feature 最核心的承诺是「用户写下的字不被覆盖」，这条承诺在**文件这一层同样成立** —— 所以两个方向都交给用户显式触发。
+> 代价是磁盘副本可能落后于 App 内文档；那是**可见**的（mtime 落后于基线时**不**提示，如实代表「磁盘上没有更新」），而不是被悄悄抹平。
+
+> **UC-11 的判定为什么要求「基线存在」**（2026-09-20 实施定稿）：`lastSavedAt` 由**用户成功落盘**后才写下，且两个方向成功后都会把它对齐到磁盘 mtime。基线缺失（从未落盘过）时**不提示** —— 「磁盘文件比基线新」在数学上恒成立（当作 0），但那是**假设**，会让第一次打开页面的用户看到一条无从解释的提示。另外基线取的是磁盘 mtime 而非 `Date.now()`：用本地时钟做基线可能让刚写的那份文件在下次打开时被误判成「外部改过」。
 
 ### 4.4 状态与副作用
 
@@ -1090,10 +1098,12 @@ sequenceDiagram
 
 - 布局：`PageContainer` + 页头 `Section`（与 `/progress` 一致）+ 三段 `Card`（统计 / 文档 / 提示与折叠）。
 - 行级徽标：`来源`（`本地` / `AI`）+ 状态（`你改过` / `你写的`），**无置信度徽标** —— 文档模式下置信度只在 AI 弹窗的预览列表里出现（写入文档后不再逐行标注，避免正文变吵）。
+- **UC-11 磁盘外部改动提示**（仅桌面端，2026-09-20 补）：落在页头统计 `Card` 内、`[保存到文件] / [显示] / [从文件载入]` 三个按钮**之前** —— 它比「手动同步」这类常态动作更需要被先看到。形态是一条带底色的行（`bg-state-weak/15`）+ `[载入] / [忽略]`，**不做弹窗**：弹窗会强迫用户当场决定，而这里允许「先不管」（忽略只对**这一次**改动生效，文件再被改还会提示）。
 - 组件映射：`Card` / `Section` / `Stat`（`components/primitives`）、`Button`、`Dialog`（`components/ui/*`）、`AppShell.PageContainer`、`react-markdown` + `remark-gfm`（查看态渲染）。
 - 设计 token：`text-ink-1/2/3`、`border-line`、`bg-app-bg`、`bg-subtle`、`text-primary`、`text-state-failed`。
-- `data-testid`：`memory-page`、`memory-mode-toggle`、`memory-doc-view`、`memory-doc-textarea`、`memory-ai-open`、`memory-save-file`、`memory-reveal-file`、`memory-load-file`、`memory-restore-dismissed`、`memory-clear`、`memory-empty`、`memory-merge-report`。
+- `data-testid`：`memory-page`、`memory-mode-toggle`、`memory-doc-view`、`memory-doc-textarea`、`memory-ai-open`、`memory-save-file`、`memory-reveal-file`、`memory-load-file`、`memory-file-changed`、`memory-file-changed-load`、`memory-file-changed-ignore`、`memory-restore-dismissed`、`memory-clear`、`memory-empty`、`memory-merge-report`。
   > 实施更正（2026-09-18）：`MemoryEditor` 的 `data-testid` 实为 `memory-doc-textarea`（初稿写 `memory-doc-input`）；`memory-mode-toggle` 由 `SegmentedTabs` 的 `testIdPrefix` 产出，实际 id 为 `memory-mode-toggle-view` / `memory-mode-toggle-edit`。`memory-page` 落在 `PageContainer` 内的包裹 `<div>` 上 —— `PageContainer` 不接受任意 props。
+  > 实施更正（2026-09-20）：`memory-file-changed` 三件套为 UC-11 补齐（初稿只有「载入」按钮，没有「忽略」与提示容器）。
 
 ### 7.2 `/memory` — 编辑态
 
@@ -1634,6 +1644,7 @@ memory: {
   title, subtitle, dataLine(notes, restatements, evidence, days),
   report: { updated(n), added(n), keptMine(n), dismissedNow(n), trimmed(n), none },
   lastMerged(v), revealFile, saveFile, loadFile, fileSaved, fileStale(at), fileUnavailable,
+  fileChangedAt(v), fileChangedNote, fileChangedLoad, fileChangedIgnore,   // UC-11 外部改动提示（可关闭）
   mode: { view, edit }, editHint, saved,
   usageNote,                                   // 「以上内容会在出题、提问、复述时一并交给模型…」
   rowBadge: { derived, ai, edited, manual },
@@ -1673,9 +1684,12 @@ const MEMORY_FILE_NAME: &str = "learner-memory.md";
 #[tauri::command] pub fn memory_doc_save(app: AppHandle, contents: String) -> Result<String, String>;  // 先 .tmp 再 rename
 #[tauri::command] pub fn memory_doc_read(app: AppHandle) -> Result<String, String>;                    // 不存在 → Ok("")，不是 Err
 #[tauri::command] pub fn memory_doc_reveal(app: AppHandle) -> Result<(), String>;                      // macOS `open -R`
+#[tauri::command] pub fn memory_doc_mtime(app: AppHandle) -> Result<Option<u64>, String>;              // 不存在 → Ok(None)；UC-11 探测
 ```
 
-`lib.rs` 的 `generate_handler!` 追加 4 条。单测（`#[cfg(test)]`）覆盖：① 目录不存在时自动创建；② 落盘后无残留 `.tmp`；③ `read` 在文件不存在时返回 `Ok("")`；④ 覆盖写同一文件（rename 在 Windows 上的兼容分支）。
+`lib.rs` 的 `generate_handler!` 追加 5 条。单测（`#[cfg(test)]`）覆盖：① 目录不存在时自动创建；② 落盘后无残留 `.tmp`；③ `read` 在文件不存在时返回 `Ok("")`；④ 覆盖写同一文件（rename 在 Windows 上的兼容分支）；⑤ 文件不存在时 `mtime` 为 `None`；⑥ 落盘后 `mtime` 可读且覆盖写**不回退**。
+
+> **第 5 条命令的理由（2026-09-20 补，UC-11）**：外部改动探测需要 mtime，但**不能**改 `memory_doc_read` 的返回形态 —— 它的契约（不存在 → `Ok("")`，TC-UC11-02）与「用户显式载入」的语义已被单测锁死，且**探测失败应当静默降级**（拿不到 mtime 只是少一条提示），而 `read` 失败是要让用户看见的。两件事的失败语义相反 → 拆成两条命令。这也是本模块唯一「为探测而存在」的只读命令。
 
 ### 8.21 `src/features/memory/desktop-memory-doc.ts`（新增）—— **仅 D12-A**
 
@@ -1685,6 +1699,7 @@ export function isDesktopFileAvailable(): boolean;
 export async function memoryDocDir(): Promise<string>;
 export async function saveMemoryDocToFile(doc: string): Promise<string | undefined>;   // 失败 → undefined（**不抛**，不影响本地功能）
 export async function readMemoryDocFromFile(): Promise<string | undefined>;            // 不存在 / 失败 → undefined
+export async function memoryDocMtime(): Promise<number | undefined>;                   // UC-11：磁盘 mtime；无副本 / 失败 → undefined
 export async function revealMemoryDoc(): Promise<void>;
 ```
 
@@ -1853,6 +1868,13 @@ T0 → T1 → T2 → T5（**先做合并器，它是全方案的承重墙，可�
 | TC-UC10-01 | UC-10 | `clearMemoryDoc()` 后 | 文档 `""`；meta 为空态；`plos.annotations` / `plos.restatements` / `plos.learner` / `plos.evidence` **逐字节不变** | 单元 |
 | TC-UC11-01 | UC-11 | `readMemoryDocFromFile()` 在浏览器（`isTauri() === false`） | 返回 `undefined`，**不抛错** | 单元 |
 | TC-UC11-02 | UC-11 | `memory_doc_read` 在文件不存在时（Rust） | 返回 `Ok("")`，不是 `Err` | Rust 单元 |
+| TC-UC11-03 | UC-11 | `externalChangeAt(mtime, meta)` 判定表（磁盘更新 / 相等 / 落后 / 无副本 / **无基线**） | 只在 `mtime > meta.lastSavedAt` 时返回该时刻；**无基线不猜** → `undefined` | 单元 |
+| TC-UC11-04 | UC-11 | `markFileSaved(store, at)` | 只改 `lastSavedAt`；文档与 `lastWritten` / `dismissed` / `lastMergedAt` **逐字节不变** | 单元 |
+| TC-UC11-05 | UC-11 | 记过基线后再跑一轮 `refreshFromFacts` | `lastSavedAt` **被合并器透传**（否则提示会在用户什么都没干时重新出现） | 单元 |
+| TC-UC11-06 | UC-11 | `memoryDocMtime()` 在浏览器（`isTauri() === false`） | 返回 `undefined`，**不抛错**（探测静默降级） | 单元 |
+| TC-UC11-07 | UC-11 | `mtime_ms_in` 在文件不存在时（Rust） | `Ok(None)`，不是 `Err` | Rust 单元 |
+| TC-UC11-08 | UC-11 | 落盘 → 再覆盖写（Rust） | 两次都能读到 mtime（`> 0`），且第二次**不回退** | Rust 单元 |
+| TC-RPT-01 | §8.19 | `reportLinesOf(stats, m)`：主句三项全零 / 仅殡葬 / 仅淘汰 / 混合 / 全零 / `stats` 未就绪（中英同构） | 主句不出零项；殡葬与淘汰**各自成句**；全零 → `reportNone`；未就绪 → `[]` | 单元 |
 | TC-UC12-01 | UC-12 | 合并后 `LearnerState` / `Annotation[]` / `Restatement[]` | 三者**逐字节不变** | 单元 |
 | TC-UC12-02 | UC-12 | T0 后 `deriveChapterCards(chapter)` 的卡 id | 与改动前**数值相同** | 单元 |
 | TC-UC12-03 | UC-12 | T0 后 `annotationId(doc, s, e)` | 与改动前相同 | 单元 |
@@ -1944,3 +1966,4 @@ T0 → T1 → T2 → T5（**先做合并器，它是全方案的承重墙，可�
 | 2026-09-17 | **v2：D3 被用户推翻，记忆改为「单一 markdown 文档」形态**。① 删除 `MemoryStatus`（pending/accepted/rejected）与全部三态 UI；② 新增 `MemoryDocMeta`（`lastWritten` / `dismissed`）与**行级三态合并算法**（`memory-doc-merge.ts`，§4.3.3）；③ 新增文档格式契约（`<!--m:KEY-->` / `<!--s:category-->` 双标记，§4.3.1）；④ 存储改为 `plos.memory.doc.v1`（纯文本）+ `plos.memory.meta.v1`；⑤ 打开页面即自动整理（零外发），AI 归纳仍需手动触发；⑥ 新增 D12「磁盘镜像」（`<app_data>/memory/learner-memory.md`，含降级档 B）；⑦ 取消「未采纳绝不注入」不变式，替换为「用户改过 5 轮不变 + 删掉 5 轮不复活」两条新硬断言；⑧ UC 从 8 条扩到 12 条，测试用例重编号；任务 18 → **20**（新增 T18 磁盘镜像，可延后） | Agent |
 | 2026-09-18 | **§13.3 回扫（F4 已实施带来的口径变化）**：F4「数据可携带」于 2026-09-17 落地 → 原「需同步 F4」「上游若变更」两行由**将来时改为既成事实**：导出白名单 20 实体不含记忆两 key；新 key 必须补进 `local.ts::ALL_KEYS`（否则 `clearAll` 后记忆残留）；导入合并语义不得沿用实体级「较新取胜」。同时在 §2.1 登记 **D13（待确认，推荐 B）**：清库 / 导入时记忆文档的命运。**未改动任何已拍板决策（D1–D4）与待确认推荐档（D5–D12）** | Agent |
 | 2026-09-18 | **F9 实施落地，方案状态置「已实施」**：§2.1 决策表新增「实施口径」列（D5–D12 按推荐档落地、D13 按推荐档 B），表头加实施口径说明；状态行由「待确认」改为「✅ 已实施（2026-09-18）」；§7.1 `data-testid` 表更正为实测值；§8.16 `MemoryDocView` 签名更正为 `({ doc, meta })`（内部自解析）；§7.7 savedFlash 更正为 1500ms。⚠️ 实施期发现 6 处真实缺陷（含合并器「文本未变却重写行」、`restoreDismissed` 未清 `lastWritten`、降级行判定、cadence 窗口并列取点、删除整行 vs 删标记的区分、黑名单「岁」缺失）与 3 处口径偏差（UC-11 自动探测未实现、`trimmed`/`dismissedNow` 无独立文案、空态 CTA 双键分工）全部回填 runbook，**方案正文未改算法与护栏** | Agent · runbook T0–T19 done |
+| 2026-09-20 | **补齐 runbook「未做」两项（UC-11 外部改动探测 + 动作报告逐项文案）**。① §8.20 新增**第 5 条只读命令** `memory_doc_mtime`（`Ok(None)` = 无副本）—— 刻意**不改** `memory_doc_read` 的返回形态（它的「不存在 → `Ok("")`」契约与「显式载入」语义已被 TC-UC11-02 锁死，且探测失败要静默、`read` 失败要让用户看见，两种失败语义相反）；§8.21 加 `memoryDocMtime()`；新 `meta.lastSavedAt` **基线**由用户成功落盘后写下（`markFileSaved`），判定收成纯函数 `externalChangeAt`（无基线**不猜**，故首次打开不会凭空提示）。② §4.3.8 **实施口径更正**：写盘由「落库后自动（防抖 1s）」改为**用户显式点「保存到文件」** —— 自动写盘会在用户用外部编辑器改完后**静默覆盖**那些改动，与「用户写下的字不被覆盖」的核心承诺在文件层冲突。③ §8.19 补 `reportDismissedNow(n)` / `reportTrimmed(n)` 与 `fileChanged*` 四键；页头动作报告改为**只列发生过的动作**（选取规则收进 `memory-texts.ts::reportLinesOf`）。④ §7.1 补提示的位置与形态（带底色的行 + 载入/忽略，**不做弹窗**）；§12 补 TC-UC11-03~08 与 TC-RPT-01。**未改动任何算法、护栏与既有决策** | Agent · runbook T20/T21 |
