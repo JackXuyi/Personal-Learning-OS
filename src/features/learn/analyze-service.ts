@@ -11,6 +11,9 @@
  *   与 contentRef → learnerState 与试卷范围在分析前后完全稳定，可安全重跑；
  * - ③ 要点分析额外写 `Chapter.keyPointRefs`（要点 ↔ 原文引用）与概念
  *   `KnowledgeUnit.evidence`；两者都只写**由代码定位**的字符区间。
+ *   其中要点分析的章节落库是**逐章增量**（每章锚定成功即写），不是整轮一次 ——
+ *   长资料上一轮可能跑几十分钟，中断不得把已完成章一起丢掉（详见
+ *   `analyzeKeyPointsNow` 的头注释）。
  * - ④ 概览（整篇级）：AI 读正文出导读，写 `doc.overview`；**不依赖切分**
  *   （无章节时按段落分块），因此不像 ①②③ 那样要求已切分。
  */
@@ -27,6 +30,7 @@ import { summarizeDocumentWithAi } from "../../ai/overview-pipeline";
 import { applyChapterRefine } from "../../engine/splitter-engine";
 import { replaceChapterConcepts } from "../../engine/graph-engine";
 import { anchorToDocument } from "./evidence-anchor";
+import { keyPointsTargets } from "./keypoint-coverage";
 import { aiErrPreview, aiLog } from "../../ai/log";
 
 export type AnalyzeErrorKind =
@@ -117,6 +121,13 @@ export interface AnalyzeKeyPointsOptions {
   storage: StorageAdapter;
   provider: AIProvider;
   model?: string;
+  /**
+   * true = 只补「还没有原文引用」的章（续跑：跳过已完成的章，不重复消耗 AI）；
+   * false（默认）= 全部重新分析（覆盖旧引用）。与
+   * `AnalyzeConceptsOptions.onlyMissing` 同口径，默认值也一致 ——
+   * 既有调用行为逐字节不变。
+   */
+  onlyMissing?: boolean;
   /** 进度回调；第 4 参数为块级进度（同概念分析）。 */
   onProgress?: (
     i: number,
@@ -274,12 +285,23 @@ export async function analyzeConceptsNow(
 
 /**
  * ③ 要点分析执行序：逐章（串行、单章失败不阻断）抽取「要点 + 原文摘录」，
- * 用 `anchorToDocument` 把摘录锚定成文档绝对区间，最后一次性写库。
+ * 用 `anchorToDocument` 把摘录锚定成文档绝对区间，**每章成功即增量落库**。
  *
  * 与概念分析的两点差异：
  * - 要点**必须**带原文出处，`parseKeyPointDrafts` 已把无 quote 的条目过滤掉；
  * - 锚定失败的条目直接丢弃（只计数，不算失败）——宁可少一条要点，也不给一条
  *   跳过去找不到原文的「引用」（P0-3 不伪造内容）。
+ *
+ * 为什么是逐章增量（docs/library-keypoint-persist-design-2026-09.md §1.3）：
+ * 逐章调用 + 本地模型单次生成实测 9s ~ 891s ⇒ 42 章一轮要跑几十分钟到数小时。
+ * 原实现把唯一的 `saveChapters` 放在循环**之外** ⇒ 任何中断（关窗 / 崩溃 /
+ * 放弃）都等于零收获：本机实测 `doc-3a3025f2`（42 章）与 `doc-b577e2b8` 的
+ * `keyPointRefs` 全为 0，而两者从未出现过「要点分析完成」日志。改为逐章写库后，
+ * 中断只损失当前章；配合 `onlyMissing` 可分多次会话收敛到 N/N。
+ *
+ * `keyPointsAt` **只在整轮结束后**写（语义 =「最近一次跑完的时间」）：跑一半
+ * 就写它是谎报，故 `saveDocument` 刻意留在循环之外（`tests/keypoint-persist.test.ts`
+ * 有源码级断言钉住「循环内写 chapter / 循环外写 keyPointsAt」这两条位置）。
  *
  * 单一真源：`keyPoints` 与 `keyPointRefs[].point` 同步写入。但当某章
  * **一条都没锚上**时保留原有 `keyPoints`，避免把代码切分产出的要点抹成空。
@@ -289,7 +311,7 @@ export async function analyzeKeyPointsNow(
   chapters: readonly Chapter[],
   opts: AnalyzeKeyPointsOptions,
 ): Promise<AnalyzeKeyPointsResult> {
-  const { storage, provider, model, onProgress, now = Date.now() } = opts;
+  const { storage, provider, model, onlyMissing = false, onProgress, now = Date.now() } = opts;
   if (!provider.isConfigured()) {
     throw new AnalyzeServiceError("not-configured", "AI 未配置。");
   }
@@ -301,6 +323,11 @@ export async function analyzeKeyPointsNow(
     throw new AnalyzeServiceError("no-body", "这份资料没有正文。");
   }
 
+  // 选目标：`onlyMissing` 只挑「尚无原文引用」的章（续跑）。判据与 UI 覆盖度
+  // 共用 `keypoint-coverage.ts::hasKeyPointRefs`（一把尺子，见该模块头注释）。
+  // `onlyMissing=false` 时 targets === chapters，与改造前逐字节等价。
+  const targets = keyPointsTargets(chapters, onlyMissing);
+
   const failed: AnalyzeKeyPointsResult["failed"] = [];
   const touched = new Map<string, Chapter>();
   const startedAt = Date.now();
@@ -309,9 +336,9 @@ export async function analyzeKeyPointsNow(
   let skippedBlocks = 0;
   let mergeFallbacks = 0;
 
-  for (let i = 0; i < chapters.length; i++) {
-    const c = chapters[i];
-    onProgress?.(i + 1, chapters.length, c);
+  for (let i = 0; i < targets.length; i++) {
+    const c = targets[i];
+    onProgress?.(i + 1, targets.length, c);
     try {
       const body = text.slice(c.contentRef.start, c.contentRef.end);
       // 章内 map-reduce：长章自动分块 → 逐块提炼 → 引用式归并。
@@ -322,7 +349,7 @@ export async function analyzeKeyPointsNow(
         // 锚定回调：纯 AI 层不依赖 features，由本层注入（闭包持有章的绝对偏移）。
         anchor: (quote) => anchorToDocument(body, quote, c.contentRef.start),
         onBlock: (k, K) =>
-          onProgress?.(i + 1, chapters.length, c, K > 1 ? { block: k, blocks: K } : undefined),
+          onProgress?.(i + 1, targets.length, c, K > 1 ? { block: k, blocks: K } : undefined),
       });
 
       touched.set(c.id, {
@@ -335,6 +362,12 @@ export async function analyzeKeyPointsNow(
       unanchored += out.unanchored;
       skippedBlocks += out.skippedBlocks;
       if (out.mergeFallback) mergeFallbacks++;
+
+      // ★ 每章成功即增量落库 —— 中断只损失当前章（见本函数头注释）。
+      // `saveChapters` 的契约就是「写这份文档的整章列表」，故回写全量：已处理的章
+      // 带新 refs，未处理的章原样带回 ⇒ 天然幂等，无需新增单章写接口。
+      // 42 章 = 42 次 JSON 写入，相对秒级~分钟级的 AI 调用可忽略。
+      await storage.saveChapters(doc.id, chapters.map((x) => touched.get(x.id) ?? x));
     } catch (err) {
       // 排查日志：每章失败都可见（UI 只显示汇总，控制台保留逐章原因）。
       aiLog("warn", "analyze", "章要点分析失败", {
@@ -350,14 +383,19 @@ export async function analyzeKeyPointsNow(
     }
   }
 
+  // 收尾 flush：循环内已逐章写过，这里保留一次（防御性，成本 1 次写入）。
+  // `keyPointsAt` **只在这里写** —— 它是「最近一次跑完的时间」，中断时不写。
   await storage.saveChapters(doc.id, chapters.map((c) => touched.get(c.id) ?? c));
   await storage.saveDocument({
     ...doc,
     analysis: { ...doc.analysis, ...(model ? { model } : {}), keyPointsAt: now },
   });
+  // ⚠️ `ok` / `failed` 的分母是 `targets.length`（不是 `chapters.length`）：
+  // `onlyMissing` 下只处理了缺引用的章，若按总章数报会在 UI 上显示
+  // 「42 章里 30 章失败」这种假象。`onlyMissing=false` 时两者相等，行为不变。
   aiLog("info", "analyze", "要点分析完成", {
     doc: doc.id,
-    ok: chapters.length - failed.length,
+    ok: targets.length - failed.length,
     failed: failed.length,
     refs,
     unanchored,
@@ -366,7 +404,7 @@ export async function analyzeKeyPointsNow(
     ms: Date.now() - startedAt,
   });
   return {
-    ok: chapters.length - failed.length,
+    ok: targets.length - failed.length,
     failed,
     refs,
     unanchored,
