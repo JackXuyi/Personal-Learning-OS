@@ -33,6 +33,8 @@ export const zh = {
     delta: {
       nextReview: (d: number) => `下次复习：约 ${d} 天后`,
       heuristic: "启发式估计",
+      /** 增量恰为 0 —— 自评只做调度、不动掌握度，不能渲染成绿色的「+0%」。 */
+      unchanged: "掌握度不变",
     },
     /** Mermaid 图表块（docs/library-mermaid-render-design-2026-09.md §8.5）。 */
     mermaid: {

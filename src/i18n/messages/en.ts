@@ -29,6 +29,8 @@ export const en: Messages = {
     delta: {
       nextReview: (d: number) => `Next review: ~${d} days`,
       heuristic: "Heuristic estimate",
+      /** Delta is exactly 0 — self-rating only reschedules; must not render as a green "+0%". */
+      unchanged: "Mastery unchanged",
     },
     /** Mermaid diagram block (docs/library-mermaid-render-design-2026-09.md §8.5). */
     mermaid: {
