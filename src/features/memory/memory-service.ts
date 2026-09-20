@@ -155,6 +155,43 @@ export async function clearMemoryDoc(store: StorageAdapter): Promise<void> {
   await persist(store, "", EMPTY_MEMORY_META);
 }
 
+/**
+ * 记录「文档已落盘到磁盘」的时刻（UC-11 的**基线**）。**只改 meta，不碰文档**。
+ *
+ * 为什么需要基线：外部改动探测只能靠「磁盘 mtime > 基线」判定，而「基线」必须由
+ * App 自己写下 —— 没有它就无法区分「磁盘上的是我们刚写的」与「别人改过的」。
+ *
+ * ⚠️ 只在**用户显式落盘成功后**调用。不做「落库后自动写盘 + 自动记基线」：
+ * 那会让 App 在用户用外部编辑器改完之后**静默覆盖**那些改动（本模块最核心的承诺
+ * 是「用户写下的字不被覆盖」，文件级同样适用）。显式写盘把决定权留给用户。
+ */
+export async function markFileSaved(store: StorageAdapter, at: number): Promise<void> {
+  const meta = await store.getMemoryMeta();
+  await saveMeta(store, { ...meta, lastSavedAt: at });
+}
+
+/**
+ * 磁盘副本是否领先于 App 的基线（UC-11 的判定）。
+ *
+ * 返回**外部改动时刻**；无法判定 → `undefined`。两条「不猜」：
+ * - 没有磁盘副本（`mtime === undefined`）→ `undefined`；
+ * - **从未落盘过**（`meta.lastSavedAt === undefined`）→ `undefined`。
+ *   基线缺失时「磁盘文件比基线新」在数学上成立（当作 0），但那是**假设**，
+ *   而它会让第一次打开页面的用户看到一条无从解释的提示 —— 本仓库的「诚实例外」惯例。
+ *
+ * ⚠️ 收成纯函数放在这里（而不是写在页面里）：判定与 mtime 读取的**语义**都属记忆域，
+ * 页面只负责渲染；也让它能被 `node` 单测直跑（页面是 `.tsx`，strip-types 下测不了）。
+ */
+export function externalChangeAt(
+  mtime: number | undefined,
+  meta: MemoryDocMeta,
+): number | undefined {
+  if (mtime === undefined) return undefined;
+  const baseline = meta.lastSavedAt;
+  if (baseline === undefined) return undefined;
+  return mtime > baseline ? mtime : undefined;
+}
+
 /** 「恢复被删的记忆」（UC-09）：清空墓碑 → 下次整理即可写回。只改 meta。 */
 export async function restoreDismissed(store: StorageAdapter): Promise<void> {
   const meta = await store.getMemoryMeta();

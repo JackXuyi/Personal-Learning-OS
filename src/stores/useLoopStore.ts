@@ -29,6 +29,7 @@ import {
   applyAiEntries,
   clearMemoryDoc,
   loadMemory,
+  markFileSaved,
   refreshFromFacts,
   restoreDismissed,
   saveUserDoc,
@@ -121,6 +122,11 @@ interface LoopStoreState {
   restoreMemory: () => Promise<void>;
   /** 「用系统的版本」：把某一行的控制权交回系统（见服务层注释的两种入口差异）。 */
   useSystemMemoryVersion: (key: string, currentLine: string) => Promise<void>;
+  /**
+   * 记录文档已落盘的时刻（UC-11 的基线）。**只改 meta**，返回后 store 回读一次。
+   * ⚠️ 只应在**用户显式落盘成功后**调用 —— 见服务层 `markFileSaved` 的理由。
+   */
+  markMemoryFileSaved: (at: number) => Promise<void>;
 }
 
 /** 撤销窗口（毫秒）。 */
@@ -278,6 +284,11 @@ export const useLoopStore = create<LoopStoreState>((set, get) => ({
 
   useSystemMemoryVersion: async (key, currentLine) => {
     await useSystemVersion(storage, key, currentLine);
+    await syncMemory(set);
+  },
+
+  markMemoryFileSaved: async (at) => {
+    await markFileSaved(storage, at);
     await syncMemory(set);
   },
 }));

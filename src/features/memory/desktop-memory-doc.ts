@@ -8,6 +8,7 @@
  * 三条硬边界：
  * 1. **单向镜像**：磁盘文件是 App 内文档的一份副本，真源始终是 `plos.memory.doc.v1`。
  *    外部编辑**不会**自动载入 —— 由用户在页头显式点「从文件载入」（见 UC-11 的口径说明）。
+ *    探测到外部改动也**只给一条可关闭的提示**，绝不自动覆盖 App 内的文档。
  * 2. **失败即降级**：任何失败返回 `undefined`，**不抛错、不影响 App 内功能**
  *    （一个可选的镜像能力不该让主流程变脆）。
  * 3. **复用既有降级件**：纯浏览器走 `downloadText`（**直接 import，不复制第二份**）。
@@ -56,6 +57,23 @@ export async function readMemoryDocFromFile(): Promise<string | undefined> {
   if (!isTauri()) return undefined;
   try {
     return await invoke<string>("memory_doc_read");
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 磁盘副本的修改时刻（epoch 毫秒）；**没有磁盘副本 / 失败 / 非桌面端 → `undefined`**。
+ *
+ * 供 UC-11 的外部改动探测使用（与 `meta.lastSavedAt` 比对）。⚠️ 探测失败一律静默：
+ * 拿不到 mtime 的后果只是「少一条提示」，不该让页面出现错误 —— 故这里的失败语义
+ * 与 `readMemoryDocFromFile` 一致（都返回 `undefined`），由调用侧区分用途。
+ */
+export async function memoryDocMtime(): Promise<number | undefined> {
+  if (!isTauri()) return undefined;
+  try {
+    const value = await invoke<number | null>("memory_doc_mtime");
+    return typeof value === "number" ? value : undefined;
   } catch {
     return undefined;
   }
