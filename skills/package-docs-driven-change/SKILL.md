@@ -53,9 +53,20 @@ This repo has **no Vitest runner**. Pure-logic unit tests live in `tests/*.test.
 
 If the user forbids new test files, put cases in the reply or an existing plan doc.
 
+### 5.1 回归缺陷：加「源码级断言」锁写方
+
+当缺陷形态是「**同一动作、两个入口、两种后果**」（某处调了错的函数），行为测试很难覆盖所有入口 —— 补 **源码级断言**：读取生产文件文本，断言错函数名不再出现、正确判据必须存在。已落地样件：`tests/session-rating.test.ts`（TC-RATE-01~09）。
+
+⚠️ **含 `stripComments()` 剥注释再正则**。注释里常出现**反面引用**（如「禁用 `delta >= 0`」把错误判据原样写进注释），会被正则命中造成假失败。断言目标只能是代码，不是注释。
+
+### 5.2 断言只锁方案要求，不给生产代码加束缚
+
+断言范围超出方案要求时，会诱导下一次改动去改生产代码来「喂测试」。只锁本次真正要保证的不变量。
+
 ## 6. Verification
 
 - [ ] Docs read match the resolved area
 - [ ] Behavior matches updated requirement bullets
 - [ ] Visual changes respect existing tokens
 - [ ] Tests or a manual checklist cover the regression risk
+- [ ] 分层提交时**逐提交可编译**抽查：`git worktree add --detach $WT <sha>` + `ln -s` 主仓 `node_modules` + `npx tsc --noEmit` 数 `error TS` 条数，逐条与基线（改动前的 sha）持平 = 零新增；查完 `git worktree remove --force $WT`
