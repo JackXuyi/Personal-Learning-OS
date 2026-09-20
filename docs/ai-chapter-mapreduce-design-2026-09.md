@@ -47,6 +47,8 @@
 | **D4** | 单章要点条数上限 | **统一 8 条** | 保持 5 条（单块）／8 条（多块） | 长章合并后 8 块 × 2–5 条 = 16–40 条，砍到 5 会损失大部分内容；统一口径比「单块 5 / 多块 8」更易解释。**代价：`tests/library-keypoint.test.ts` 的 TC-KP-04 断言需同步修改** |
 | **D5** | 精修分批的边界处是否允许 `mergeIntoPrevious` | **允许** | 每批首项强制 false | `applyChapterRefine` 按全局 index 顺序统一执行，跨批合并语义天然正确；且「是否过碎」只看本章自身，不需要看上一章 |
 | **D6** | 归并失败的退路 | **回退代码级合并结果** | 整章判失败 | 8 块已成功产出合规数据，不该因一次归并失败全废 |
+| **D7** | 章节落库粒度（2026-09-20 补） | **每章锚定成功即增量写** | 每 N 章一次 / 整轮一次 | 本管道把单章耗时从「超限即跳过」变成「一定能跑」（map-reduce），但**逐章调用 × 42 章**的一轮总耗时仍可能是几十分钟到数小时（实测单次生成 9s~891s）。原实现唯一的 `saveChapters` 在循环**之外** ⇒ 任何中断都等于零收获。实测两份资料 44 章 `keyPointRefs` **连字段都不存在**（要点分析从未成功写回任何一章）。详见 `docs/library-keypoint-persist-design-2026-09.md` |
+| **D8** | 要点分析的续跑能力（2026-09-20 补） | **补 `onlyMissing` + UI「仅补齐缺失」入口** | 只补服务层 / 不做 | 概念分析与向量索引都有该开关，要点分析独缺 ⇒ 每次重跑全量，「越跑越跑不完」。判据统一走 `features/learn/keypoint-coverage.ts::hasKeyPointRefs`（与 UI 覆盖度共用一把尺子） |
 
 ## 3. 项目现状
 
@@ -259,7 +261,7 @@ export const PIPELINE_LIMITS = {
 7. 调一次 AI 归并（输入为「编号 + 表述」清单，**不含也要求 AI 输出 quote**）→ 得到 `AiKeyPointMergeItem[]`；
 8. 代码侧回填：逐条校验 `sourceIndex` 合法 → 产出 `KeyPointRef`，`quote/start/end` 从候选继承；非法条目丢弃；
 9. **归并调用失败** → 直接采用第 6 步的代码级合并结果（D6）；
-10. 全章处理完 → 一次性 `saveChapters` + `saveDocument`；
+10. **每章处理完 → 立即 `saveChapters`**（逐章增量，D7）→ 全部章处理完后 `saveDocument`（写 `keyPointsAt`）；
 11. UI 汇总：成功章数、失败章列表、`skippedBlocks` 数。
 
 ### 5.2 分支与异常流程
@@ -853,3 +855,4 @@ refine:  { noSuggestion: "本次未产生精修建议，可稍后重试" }
 |------|------|------|
 | 2026-09-13 | 初稿；范围（概念+要点+精修）、归并策略（代码合并 + AI 归并）、分块粒度（自适应 3k–12k / ≤8 块）已确认 | Agent |
 | 2026-09-13 | 要点解析补「质量门」（`hasMeaningfulText`）：纯符号 point（如 README 图片残留的 `!`）在 parseKeyPointDrafts / parseKeyPointMerge 一律丢弃；同时在导入管道入口对 markdown 来源剥离图片语法与链接 URL（`import/normalize-text.ts`） | Agent |
+| 2026-09-20 | 补 **D7**（要点章节落库改为**逐章增量**，中断只损失当前章）与 **D8**（补 `onlyMissing` + 「仅补齐缺失」入口）；§5.1 第 10 步同步。根因：本管道解决了「单章一定能跑」，但「42 章一轮跑不完」这一层从未处理 —— 实测 44 章 `keyPointRefs` 字段全缺、`keyPointsAt` 从未写过。改动落在 `features/learn/`（`analyze-service` / 新增 `keypoint-coverage` / `KnowledgeTab`）+ i18n，**本管道 `ai/**` 零改动**。详见 `docs/library-keypoint-persist-design-2026-09.md` | Agent |
