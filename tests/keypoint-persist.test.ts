@@ -17,6 +17,9 @@
  *      UI 不许再内联数第二遍、两个按钮必须显式传参 —— 这些是
  *      `analyzeKeyPointsNow` 与 `.tsx` 里的接线事实，行为测试覆盖不到全部入口，
  *      故读源码 + 正则（本仓库处理「UI 层不变量」的既有惯例）。
+ *   ③ **文案归属层**（TC-KP-WIRE-07/08 + TC-KP-REG-06）：要点与概念共用同一块
+ *      完成汇总 UI，原先也共用一个 `extractDone`（中文写「概念分析完成」）→
+ *      要点跑完报概念。现按管道分键，并断言两条路径**不得互借**对方的键。
  *
  * ⚠️ 刻意**不**构造假 provider 去跑真实 AI 管道：`extractKeyPointsMapped` 在
  * 单块失败时是「计入 skippedBlocks 而非抛错」，用假 provider 反推 `failed[]`
@@ -267,7 +270,73 @@ async function main() {
     );
   });
 
-  /* ---------- ④ 边界与回归 ---------- */
+  /* ---------- ④ 汇总文案归属：两条管道不得互借 ---------- */
+
+  await check("TC-KP-WIRE-07 要点路径只报「要点分析完成」，不得复用概念键", () => {
+    const src = codeOf(KT);
+    const points = bracedBlockOf(src, "const analyzePoints =");
+    assert.ok(
+      /pointsAnalysisDone\s*\(/.test(points),
+      "要点路径必须用 pointsAnalysisDone",
+    );
+    assert.ok(
+      !/conceptsAnalysisDone\s*\(/.test(points),
+      "要点分析跑完不得报「概念分析完成」—— 这正是本次修的文案错配",
+    );
+
+    const concepts = bracedBlockOf(src, "const extractAll =");
+    assert.ok(
+      /conceptsAnalysisDone\s*\(/.test(concepts),
+      "概念路径必须用 conceptsAnalysisDone",
+    );
+    assert.ok(
+      !/pointsAnalysisDone\s*\(/.test(concepts),
+      "概念路径不得借用要点文案",
+    );
+  });
+
+  await check("TC-KP-WIRE-08 共用一块汇总 UI ⇒ 必须记来源（`kind` 是必需字段）", () => {
+    const src = codeOf(KT);
+    assert.ok(
+      /kind:\s*['"]points['"]\s*\|\s*['"]concepts['"]/.test(src),
+      "summary 状态类型必须把 kind 声明为**必需**字段（可选字段 = 下次又会忘了带）",
+    );
+    // 分派器：读 `kind` 且两个键都出现在同一处（不锁局部变量名，只锁「按 kind 选主语」）
+    const dispatch = bracedBlockOf(src, "const summaryHeadline =");
+    assert.ok(
+      /\.kind\s*===\s*['"]points['"]/.test(dispatch),
+      "汇总主句必须按 kind 分派主语",
+    );
+    assert.ok(
+      /pointsAnalysisDone\s*\(/.test(dispatch) && /conceptsAnalysisDone\s*\(/.test(dispatch),
+      "分派器必须同时给出两条管道的文案键",
+    );
+    assert.ok(/kind:\s*['"]points['"]/.test(src), "要点路径 setSummary 必须带 kind");
+    assert.ok(/kind:\s*['"]concepts['"]/.test(src), "概念路径 setSummary 必须带 kind");
+    // 覆盖度行仍是 pointsDone（「已带原文引用 M/N 章」），别与完成汇总混成一个键
+    assert.ok(/pointsDone\s*\(/.test(src), "覆盖度行必须仍在渲染");
+  });
+
+  /* ---------- ⑤ 边界与回归 ---------- */
+
+  await check("TC-KP-REG-06 两条完成文案：中英都有、主语不同、ok/failed 都上报", () => {
+    for (const lang of ["zh", "en"] as const) {
+      const dict = lang === "zh" ? zh : en;
+      const p = dict.learn.detail.knowledge.pointsAnalysisDone(3, 1);
+      const c = dict.learn.detail.knowledge.conceptsAnalysisDone(3, 1);
+      assert.ok(p.length > 0 && c.length > 0, `${lang} 两条完成文案都不得为空`);
+      assert.notEqual(p, c, `${lang} 两条管道必须是两句不同的话（否则等于又变成一个键）`);
+    }
+    // 主语必须真的是各自的管道名（换个语言也得换对词）
+    assert.match(zh.learn.detail.knowledge.pointsAnalysisDone(3, 0), /要点/);
+    assert.match(zh.learn.detail.knowledge.conceptsAnalysisDone(3, 0), /概念/);
+    assert.match(en.learn.detail.knowledge.pointsAnalysisDone(3, 0), /point/i);
+    assert.match(en.learn.detail.knowledge.conceptsAnalysisDone(3, 0), /concept/i);
+    // ok / failed 两个数都要如实进文案，不许只报一个
+    const withFail = zh.learn.detail.knowledge.pointsAnalysisDone(3, 1);
+    assert.match(withFail, /3/);
+    assert.match(withFail, /1/);
+  });
 
   await check("TC-KP-REG-04 端点规模：两个被改文件均 ≤700 行", () => {
     for (const f of [SVC, KT]) {
