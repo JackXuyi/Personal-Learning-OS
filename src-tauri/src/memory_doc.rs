@@ -16,6 +16,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::UNIX_EPOCH;
 
 use tauri::{AppHandle, Manager};
 
@@ -80,6 +81,32 @@ pub fn exists_in(dir: &Path) -> bool {
     memory_path_in(dir).is_file()
 }
 
+/// 磁盘副本的修改时刻（epoch 毫秒）。**文件不存在 → `Ok(None)`**（正常状态，同 `read_in`）。
+///
+/// 用途（UC-11）：打开 `/memory` 时与 `meta.lastSavedAt` 比对，判断磁盘副本是否被
+/// **外部编辑器**改过 —— 是则页头给一条**可关闭**提示，且**不自动载入**
+/// （自动载入等于让外部文件静默覆盖用户在 App 内改过的行，正是本 feature 的核心承诺）。
+///
+/// ⚠️ 为什么是独立的第 5 条命令，而不是让 `read` 返回 `(正文, mtime)`：
+/// `memory_doc_read` 的契约（不存在 → `Ok("")`，TC-UC11-02）与「用户显式载入」的语义
+/// 都已被单测锁死；把一次**只读探测**塞进 `read` 会迫使所有既有调用方改签名，
+/// 而探测本身失败时应当**静默降级**（没有提示 ≠ 出错）—— 两件事的失败语义相反。
+pub fn mtime_ms_in(dir: &Path) -> Result<Option<u64>, String> {
+    let path = memory_path_in(dir);
+    match fs::metadata(&path) {
+        Ok(md) => {
+            let modified = md
+                .modified()
+                .map_err(|e| format!("读取记忆文件修改时间失败：{e}"))?;
+            // 系统时钟早于 epoch 的极端情况 → 视为「不可判定」（None），不报错：
+            // 它只影响一条提示，不该把「读文件信息」变成用户可见的错误。
+            Ok(modified.duration_since(UNIX_EPOCH).ok().map(|d| d.as_millis() as u64))
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("读取记忆文件信息失败：{e}")),
+    }
+}
+
 // ===== Tauri 命令 =====
 
 /// 记忆目录绝对路径（不存在则创建）→ UI 展示 + 「在文件管理器中显示」。
@@ -100,6 +127,12 @@ pub fn memory_doc_save(app: AppHandle, contents: String) -> Result<String, Strin
 #[tauri::command]
 pub fn memory_doc_read(app: AppHandle) -> Result<String, String> {
     read_in(&memory_dir_of(&app)?)
+}
+
+/// 磁盘副本的修改时刻（epoch 毫秒；不存在 → `null`）—— UC-11 的外部改动探测。
+#[tauri::command]
+pub fn memory_doc_mtime(app: AppHandle) -> Result<Option<u64>, String> {
+    mtime_ms_in(&memory_dir_of(&app)?)
 }
 
 /// 在系统文件管理器中显示该文件（macOS `open -R`，与 `backup.rs::backup_reveal` 同范式）。
@@ -204,6 +237,31 @@ mod tests {
         save_in(&dir, "").unwrap();
         assert!(exists_in(&dir));
         assert_eq!(read_in(&dir).unwrap(), "");
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn mtime_of_missing_file_is_none() {
+        // UC-11：没有磁盘副本 → 无可比对的时刻，且**不是错误**。
+        let dir = temp_dir("mtime-missing");
+        assert_eq!(mtime_ms_in(&dir).unwrap(), None);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn mtime_exists_after_save_and_never_moves_backwards() {
+        // UC-11 的判定基础：落盘后能读到 mtime；覆盖写后 mtime 不回退。
+        let dir = temp_dir("mtime-save");
+        assert_eq!(mtime_ms_in(&dir).unwrap(), None);
+
+        save_in(&dir, "v1").unwrap();
+        let first = mtime_ms_in(&dir).unwrap().expect("落盘后必须能读到 mtime");
+        assert!(first > 0, "epoch 毫秒不可能是 0（读到 0 说明走了兜底分支）");
+
+        save_in(&dir, "v2").unwrap();
+        let second = mtime_ms_in(&dir).unwrap().unwrap();
+        // 文件系统时间戳精度可能只到秒 → 只断言「不回退」，不断言严格递增。
+        assert!(second >= first, "覆盖写后 mtime 回退了：{second} < {first}");
         fs::remove_dir_all(&dir).unwrap();
     }
 }

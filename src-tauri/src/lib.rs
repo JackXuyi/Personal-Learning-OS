@@ -138,6 +138,8 @@ pub fn run() {
             memory_doc::memory_doc_save,
             memory_doc::memory_doc_read,
             memory_doc::memory_doc_reveal,
+            // UC-11：外部改动探测（读 mtime，不碰 read 的既有契约）
+            memory_doc::memory_doc_mtime,
             // RAG 存储层（T6）
             db::commands::db_status,
             db::commands::db_list_sections,
