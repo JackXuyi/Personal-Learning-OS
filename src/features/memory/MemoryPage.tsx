@@ -34,12 +34,13 @@ import { countChapters, loadMemorySignals } from "./memory-signals";
 import type { MergeStats } from "./memory-doc-merge";
 import { memoryDiffs } from "./memory-doc-merge";
 import { deriveAllFacts, spanDays, studyStyleMismatch } from "./memory-facts";
-import { factTextsOf, lastMergedPrefixOf, scaffoldOf } from "./memory-texts";
+import { factTextsOf, lastMergedPrefixOf, reportLinesOf, scaffoldOf } from "./memory-texts";
 import type { MemoryErrorKind } from "./memory-service";
-import { MemoryError } from "./memory-service";
+import { MemoryError, externalChangeAt } from "./memory-service";
 import { MEMORY_AI_MIN_SAMPLES, prepareAiRun } from "./memory-import";
 import {
   isDesktopFileAvailable,
+  memoryDocMtime,
   readMemoryDocFromFile,
   revealMemoryDoc,
   saveMemoryDocToFile,
@@ -63,6 +64,7 @@ export default function MemoryPage() {
   const clearMemory = useLoopStore((s) => s.clearMemory);
   const restoreMemory = useLoopStore((s) => s.restoreMemory);
   const useSystemMemoryVersion = useLoopStore((s) => s.useSystemMemoryVersion);
+  const markMemoryFileSaved = useLoopStore((s) => s.markMemoryFileSaved);
 
   const [signals, setSignals] = useState<MemorySignals>();
   const [profile, setProfile] = useState<LearnerProfile>();
@@ -73,6 +75,14 @@ export default function MemoryPage() {
   const [confirmLoad, setConfirmLoad] = useState(false);
   /** 磁盘镜像的一次性反馈（成功 / 失败都如实说；**不弹 toast**，§7.7）。 */
   const [fileMsg, setFileMsg] = useState<string>();
+  /**
+   * UC-11：磁盘副本被外部改过（有待处理的改动）→ 存**该次改动的时刻**；否则 undefined。
+   * 存时刻而不是布尔值，是为了让「忽略」只对**这一次**改动生效：文件再被改一次
+   * （mtime 变了）就应当重新提示，否则用户会以为提示被永久关掉了。
+   */
+  const [fileAhead, setFileAhead] = useState<number>();
+  /** 已被用户「忽略」的改动时刻（本次会话内不再提示同一个时刻）。 */
+  const [ignoredAhead, setIgnoredAhead] = useState<number>();
   const [loaded, setLoaded] = useState(false);
   const [pageErr, setPageErr] = useState<MemoryErrorKind>();
   /** StrictMode 下 effect 会跑两次；不拦的话第二轮整理会报告「本轮没有变化」（报告失真）。 */
@@ -103,11 +113,28 @@ export default function MemoryPage() {
       setSignals(s);
       setProfile(prof);
       setStats(await refreshMemory(s, refreshOpts()));
+      // UC-11：探测必须在**整理之后**（合并器会透传 `lastSavedAt`，顺序反了就是在
+      // 拿整理前的 meta 判断）。失败静默 —— 少一条提示 ≠ 出错。
+      await probeExternalChange();
     } catch (err) {
       setPageErr(err instanceof MemoryError ? err.kind : "save-failed");
     } finally {
       setLoaded(true);
     }
+  }
+
+  /**
+   * UC-11：磁盘副本是否领先于 App 的基线（外部编辑器改过）。
+   *
+   * ⚠️ 从 `storage` **重读** meta 而不是用渲染闭包里的 `memoryMeta`：`load()` 刚跑完
+   * 一轮整理，闭包里的那份是整理前的（`lastSavedAt` 虽被合并器透传，但用刚写的值
+   * 才是唯一真源）。判定本身收在服务层的 `externalChangeAt`（可单测）。
+   */
+  async function probeExternalChange() {
+    if (!desktopFile) return;
+    const [mtime, meta] = await Promise.all([memoryDocMtime(), storage.getMemoryMeta()]);
+    const at = externalChangeAt(mtime, meta);
+    setFileAhead(at !== undefined && at !== ignoredAhead ? at : undefined);
   }
 
   function refreshOpts() {
@@ -201,10 +228,8 @@ export default function MemoryPage() {
   }
 
   /* ── 有内容：查看 / 编辑 + 差异 + 折叠区 + 清空 ── */
-  const reportText =
-    stats && stats.updated + stats.added + stats.keptMine > 0
-      ? m.memory.report(stats.updated, stats.added, stats.keptMine)
-      : m.memory.reportNone;
+  /** 页头动作报告的各行（0–3 行；选取规则在 `memory-texts.ts`，可单测）。 */
+  const reportLines = reportLinesOf(stats, m);
   const notesWithNote = signals ? signals.annotations.filter((a) => a.note.trim()).length : 0;
   const days = signals ? spanDays(signals.evidence) : 0;
   const stale = signals !== undefined && signals.evidence.length >= EVIDENCE_LOG_MAX;
@@ -234,13 +259,47 @@ export default function MemoryPage() {
           <p className="text-xs leading-relaxed text-ink-2" data-testid="memory-merge-report">
             {m.memory.dataLine(notesWithNote, signals?.restatements.length ?? 0, signals?.evidence.length ?? 0, days)}
           </p>
-          <p className="text-xs text-ink-3">{reportText}</p>
+          {reportLines.map((line, i) => (
+            <p key={i} className="text-xs text-ink-3">
+              {line}
+            </p>
+          ))}
           {memoryMeta.lastMergedAt > 0 ? (
             <p className="text-xs text-ink-3">
               {m.memory.lastMerged(formatMemoryTimestamp(memoryMeta.lastMergedAt))}
             </p>
           ) : null}
           {stale ? <p className="text-xs text-state-weak">{m.memory.staleEvidenceNote}</p> : null}
+          {/* UC-11：磁盘副本被外部改过 —— **可关闭**的提示，绝不自动载入。 */}
+          {fileAhead !== undefined ? (
+            <div
+              data-testid="memory-file-changed"
+              className="flex flex-wrap items-center gap-2 rounded-lg bg-state-weak/15 px-3 py-2"
+            >
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-xs text-ink-1">
+                  {m.memory.fileChangedAt(formatMemoryTimestamp(fileAhead))}
+                </p>
+                <p className="text-xs text-ink-3">{m.memory.fileChangedNote}</p>
+              </div>
+              <button
+                type="button"
+                data-testid="memory-file-changed-load"
+                className={cn(buttonVariants({ variant: "default", size: "sm" }), "shrink-0")}
+                onClick={() => void loadFromFile()}
+              >
+                {m.memory.fileChangedLoad}
+              </button>
+              <button
+                type="button"
+                data-testid="memory-file-changed-ignore"
+                className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "shrink-0")}
+                onClick={ignoreExternalChange}
+              >
+                {m.memory.fileChangedIgnore}
+              </button>
+            </div>
+          ) : null}
           {/* D12-A：磁盘镜像（**单向副本**；外部编辑不自动载入，由用户显式「从文件载入」） */}
           {desktopFile ? (
             <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -464,13 +523,39 @@ export default function MemoryPage() {
   /**
    * 落盘 + 读盘（D12-A）。
    *
-   * ⚠️ 「从文件载入」**必须由用户点**（两次），不做自动载入，理由：真源是 App 内的文档，
-   * 自动载入等于让一个外部文件**静默覆盖**用户在 App 里改过的行 —— 那正是本 feature
-   * 最核心的承诺（改过的不被覆盖）。载入走 `saveMemoryDoc`（逐字节、不过合并器）。
+   * ⚠️ 「从文件载入」**必须由用户点**（两次，或从外部改动提示里点「载入」），
+   * 不做自动载入，理由：真源是 App 内的文档，自动载入等于让一个外部文件**静默覆盖**
+   * 用户在 App 里改过的行 —— 那正是本 feature 最核心的承诺（改过的不被覆盖）。
+   * 载入走 `saveMemoryDoc`（逐字节、不过合并器）。
+   *
+   * 两个方向成功后都要**把基线对齐到磁盘**（`markMemoryFileSaved`）：否则「磁盘比基线新」
+   * 会一直成立，提示永远挂着 —— 用户会觉得那个按钮没反应。
    */
   async function saveToFile() {
     const path = await saveMemoryDocToFile(memoryDoc);
-    setFileMsg(path ? m.memory.fileSaved : m.memory.fileUnavailable);
+    if (path === undefined) {
+      setFileMsg(m.memory.fileUnavailable);
+      return;
+    }
+    setFileMsg(m.memory.fileSaved);
+    try {
+      await markMemoryFileSaved(await savedBaseline());
+      setFileAhead(undefined);
+    } catch (err) {
+      // 基线没记上不影响「文件已写好」这个事实，但下次打开会多一条提示 —— 如实说。
+      setPageErr(err instanceof MemoryError ? err.kind : "save-failed");
+    }
+  }
+
+  /**
+   * 落盘后的基线时刻：**优先取磁盘 mtime**，取不到才回退本地时钟。
+   *
+   * 取 mtime 是为了与后续比对**同一把尺子**（文件系统时间戳与 `Date.now()` 可能有
+   * 亚秒级偏差 —— 用本地时钟做基线，可能让刚写的那份文件在下次打开时被误判成
+   * 「外部改过」，一条凭空的提示会直接消耗掉用户对这个功能的信任）。
+   */
+  async function savedBaseline(): Promise<number> {
+    return (await memoryDocMtime()) ?? Date.now();
   }
 
   async function loadFromFile() {
@@ -482,9 +567,18 @@ export default function MemoryPage() {
     setPageErr(undefined);
     try {
       await saveMemoryDoc(text);
+      // 载入即对齐：App 内的文档现在与磁盘一致，外部改动已处理完毕。
+      await markMemoryFileSaved(await savedBaseline());
+      setFileAhead(undefined);
       setFileMsg(m.memory.fileSaved);
     } catch (err) {
       setPageErr(err instanceof MemoryError ? err.kind : "save-failed");
     }
+  }
+
+  /** UC-11 的「忽略」：只对**这一次**改动静默（文件再被改还会提示）。 */
+  function ignoreExternalChange() {
+    setIgnoredAhead(fileAhead);
+    setFileAhead(undefined);
   }
 }

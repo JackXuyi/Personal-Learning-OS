@@ -12,6 +12,7 @@
 import type { MemoryDocScaffold, MemoryCategory } from "../../domain";
 import type { Messages } from "../../i18n/types";
 import type { MemoryFactTexts } from "./memory-facts";
+import type { MergeStats } from "./memory-doc-merge";
 
 /** 「会写进用户 markdown 文档」的骨架文案。 */
 export function scaffoldOf(m: Messages): MemoryDocScaffold {
@@ -41,7 +42,8 @@ export function lastMergedPrefixOf(m: Messages): string {
 }
 
 /** 通道 A 的句子模板（这些句子同样会落进用户文档）。 */
-export function factTextsOf(m: Messages): MemoryFactTexts {  return {
+export function factTextsOf(m: Messages): MemoryFactTexts {
+  return {
     cadenceWindow: (window, minutes) => m.memory.factCadenceWindow(window, minutes),
     cadenceWindowOnly: (window) => m.memory.factCadenceWindowOnly(window),
     reviewOnTime: () => m.memory.factReviewOnTime,
@@ -69,4 +71,30 @@ export function factTextsOf(m: Messages): MemoryFactTexts {  return {
     outputDensity: (per) => m.memory.factOutputDensity(per),
     outputNoteRatio: (pct) => m.memory.factOutputNoteRatio(pct),
   };
+}
+
+/**
+ * 页头动作报告的各行文案（0–3 行）—— **只列真正发生过的动作**。
+ *
+ * 为什么收在这里（而不是写在 `MemoryPage` 里拼）：它是 i18n 文本的**选取规则**，
+ * 与 `scaffoldOf` / `factTextsOf` 同类；放在页面里就只能靠肉眼看，而 strip-types
+ * 跑不了 `.tsx`。
+ *
+ * 三条判据：
+ * 1. `updated + added + keptMine` 全零 → **不显示主句**（「更新 0 条 · 新增 0 条」是噪声）；
+ * 2. `dismissedNow`（用户删掉的、不再写回）与 `trimmed`（文档满额淘汰最旧系统行）
+ *    与「更新 / 新增」不是同一类动作，用户对它们的关心程度也不同 → **各自成句**；
+ * 3. 全零时显示 `reportNone` 而**不是**静默：用户重进页面需要知道系统确实跑过了
+ *    （一张永远沉默的页头更让人困惑）。
+ *
+ * `stats === undefined`（本轮还没跑完）→ `[]`，调用侧什么都不渲染。
+ */
+export function reportLinesOf(stats: MergeStats | undefined, m: Messages): string[] {
+  if (!stats) return [];
+  const { updated, added, keptMine, dismissedNow, trimmed } = stats;
+  const lines: string[] = [];
+  if (updated + added + keptMine > 0) lines.push(m.memory.report(updated, added, keptMine));
+  if (dismissedNow > 0) lines.push(m.memory.reportDismissedNow(dismissedNow));
+  if (trimmed > 0) lines.push(m.memory.reportTrimmed(trimmed));
+  return lines.length > 0 ? lines : [m.memory.reportNone];
 }
