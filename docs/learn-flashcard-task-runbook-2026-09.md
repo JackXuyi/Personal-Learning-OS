@@ -13,6 +13,7 @@
 1. **零伪造引用（D2-b=A）**：成卡充要条件 = 要点有原文出处（`quote` 非空且 `end > start`）。无出处的要点**不成卡**，UI 如实提示去跑「AI 分析要点」；绝不生成「正面=要点、背面=同句」的空卡。
 2. **零 AI 依赖（D2=A）**：不调用 `provider.chat`、不 import `src/ai/*`。卡面 100% 从既有 `Chapter.keyPoints` / `keyPointRefs` 派生；无模型时全链路可用。
 3. **不碰掌握度（D1/D6=A）**：mastery 唯一写方仍是卷面 `applyPaperResult`。卡片评分走独立 `applyCardRating`（只写 `CardState`），**绝不经过 `useLoopStore.submitAnswer`**（其 `applyRating` 会移动 mastery）；`useLoopStore.ts` 在本次 diff 中保持**零改动**（`TC-REG-01`）。
+   > ⚠️ 2026-09-20 更新：`useLoopStore::submitAnswer` 的自评分支已改走 `applyKeyPointRating`（不再移动 mastery）。不过本条的「绝不经过它」仍是**刻意的**：卡片走**卡级** `CardState` 调度，与章级 `nextReviewAt` 互不干扰，故 `TC-REG-01` 的源码级断言**继续有效**。
 
 ## Context
 
@@ -29,7 +30,7 @@
 |---|---|
 | 章要点唯一真源 | `src/domain/chapter.ts:74` `keyPoints: string[]`；`:55-62` `KeyPointRef { point; quote; start; end }`，`quote` 空串 = 定位失败；`start/end` 为 `doc.textPreview` 绝对偏移 |
 | 四档间隔（只读复用） | `src/engine/learner-model.ts:28-33` `RATING_INTERVAL_DAYS = { forget:1, hard:2, good:4, easy:7 }`；`:43` `nextReviewInDays(rating)` **已导出** |
-| 只调度不改掌握度的先例 / 禁用入口 | `learner-model.ts:219` `applyKeyPointRating`（只写 confidence/lastReviewedAt/nextReviewAt）；`:248` `applyRating`（**会移动 mastery，本方案禁用**） |
+| 只调度不改掌握度的先例 / 禁用入口 | `learner-model.ts:219` `applyKeyPointRating`（只写 confidence/lastReviewedAt/nextReviewAt）；`:248` `applyRating`（**会移动 mastery，本方案禁用**；⚠️ 2026-09-20 起 `useLoopStore::submitAnswer` 也不再用它 —— 见 `learning-system-v2-design-2026-09.md` 文首补齐说明） |
 | ⚠️ `chapterId` 参数已被概念模式占用 | `src/features/study/ReviewSession.tsx:40-41` `chapterParam = params.get("chapterId"); const conceptMode = chapterParam !== null;` → **卡片 URL 带 `chapterId` 会误入概念分支**；解法 = 模式判定优先级（§4.4）：`cardMode = mode==="cards" && documentId≠null` **优先**，`conceptMode = !cardMode && chapterId≠null`；判定抽为 `src/features/study/session-mode.ts` 纯函数（JSX 进不了单测） |
 | `/study/session` 既有入口（零回归对照） | `ChapterGraphPage.tsx:186` `?chapterId=&unit=`、`GraphView.tsx:214` `?unit=`、`CommandPalette.tsx:315` `?unit=` —— 三者均无 `mode=cards`，`TC-REG-04` 断言改前改后判定结果一致 |
 | `ReviewSession` 可复用资产 | 键盘 `Space/1-4/Enter/Esc`（`:245-273`）、5s 撤销（`:276-286`）、四档按钮（`:422-434`）、`SummaryView`（`:490`）、「固定会话队列」口径（`:153-163`） |

@@ -2,6 +2,7 @@
 
 > 状态：**设计稿 v0.2（章节建模决策已定，可开工 N0）** · 2026-09-07
 > 实施状态：V2 核心 N 系列已落地（2026-09-07~09-08：章级学→测→判→计划闭环、遗忘衰减/到期复习、补考卷调度、AI 判分回填、概念层回归 `27ae610`）；其后 i18n / UI Workbench 为独立轨道，见对应文档
+> ⚠️ **补齐（2026-09-20）**：§5.3 / T3 的「`applyKeyPointRating` 替换 `applyRating`」当时**只切了 `ChapterReaderPage::markReviewed`，漏了 `useLoopStore::submitAnswer` 的 rating 分支** —— 于是「同一自评动作、两个入口、两种掌握度后果」的状态持续了约 3 个月，「双证据原则」在自评这条路径上并未真正成立。已补齐（两种会话模式统一走 `applyKeyPointRating` + 证据 `delta: 0`），回归锁 `tests/session-rating.test.ts`（9 项）；`DeltaBadge` 同步新增**中性态**（增量为 0 时不再渲染绿色的「+0%」）。
 > 关联：`docs/interaction-design-research-2026-09.md`（P0/P1/P2 建议）、`docs/interaction-design-spec-2026-09.md`（S0-S6 文字原型）、`docs/business-logic-review-2026-09.md`（业务逻辑评审 P0-P2）
 > 定位：在既有 Phase 0 基座（五核心对象 + 七引擎 + 存储/AI 抽象）之上，把学习闭环从「概念级自评复习」升级为「**章节级 学 → 考 → 判 → 计划**」的考试驱动模式；本版明确**章节长期建模方案**，并给出原设计资产的完整融合去向。
 
@@ -10,6 +11,7 @@
 2. 保住复用红利的方式从「复用类型」改为「**复用算法**」：引擎只依赖 `MasterySubject` 接口（chapter 与 concept 皆可实现）→ learner-model / mastery-engine / 遗忘曲线 / planner 算法零重复。
 3. 新增 **§2 原设计资产融合矩阵**：S0-S6 交互规格、评审 P0-1/2/3、五核心对象与七引擎逐一标注 V2 去向。
 4. 掌握度写入收敛为「**双证据原则**」：章掌握度唯一写入方 = 卷面成绩；四档自评保留为章内要点复习，只刷新复习调度与置信度、不再移动 mastery（一并修正 `applyRating` 的 attempts 污染，P1）。
+   > ⚠️ 2026-09-20 补齐：本条「不再移动 mastery」当时只落到 `ChapterReaderPage::markReviewed`，`useLoopStore::submitAnswer` 仍走 `applyRating` —— 详见文首实施状态。
 
 ---
 
@@ -223,6 +225,9 @@ export function applyKeyPointRating(
   state: LearnerState, chapterId: string, rating: SelfRating, now: number,
 ): LearnerState;   // 只写 nextReviewAt + 微调 confidence；不动 mastery / attempts / correctCount
                    //（替代原 applyRating 的 mastery+attempts 副作用；ReviewSession 同批切换）
+                   // ⚠️ 实施回填（2026-09-20）：ReviewSession 的这次「同批切换」**当时漏做了** ——
+                   //    它经 `useLoopStore::submitAnswer`，而该函数 rating 分支仍调 `applyRating`。
+                   //    已补齐（两种会话模式统一 `applyKeyPointRating` + 证据 `delta: 0`）。
 ```
 
 > 注意：v0.1 曾以 `KnowledgeUnit.kind = "chapter"` 作为推荐方案，本版已否决。遗留影响：原 `KnowledgeUnit` 的 `sourceDocumentId` 字段可保留（概念级证据链），Chapter 用独立 `documentId`。
@@ -326,6 +331,7 @@ N5  概念层回归（单独立项，不阻塞 V2 主链路）
 **已定决策（v0.2）**
 1. **章节建模：独立 Chapter 实体（方案 B）+ 引擎接口化（MasterySubject）**——理由见 §5.1 决策记录。原 v0.1 的「kind="chapter" 最小改动」作废。落地节奏：N0/T1 建实体与接口，N5 概念层回归时零迁移。
 2. **掌握度双证据原则**：章 mastery 唯一写方 = 卷面（applyPaperResult）；自评仅作要点复习（applyKeyPointRating：调度 + confidence）。
+   > ⚠️ 该原则直到 **2026-09-20** 才全量成立 —— 此前 `useLoopStore::submitAnswer` 的自评分支仍会移动 mastery。存量数据里被自评推高的 mastery **不做迁移**（没有来源标记，无法区分「自评推高」与「卷面推高」），由后续卷面自然覆盖；`bandForChapter` 的「`mastery > 0` 即视为有证据」判据因此**保持不变**。
 
 **待确认问题（默认值即推荐项，如无异议按默认推进）**
 3. 四档自评在 V2 的定位：**保留为章内「要点卡复习」（推荐）** / 移除 / 仅对 mastery≥0.8 章开放

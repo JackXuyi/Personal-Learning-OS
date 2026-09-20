@@ -439,12 +439,12 @@ flowchart LR
 
 | # | 问题 | 位置 | 影响 |
 |---|---|---|---|
-| 1 | `submitAnswer` 调 `applyRating`（会改 mastery），应调 `applyKeyPointRating` | `stores/useLoopStore.ts:123` | **同一复习动作两个入口产生两种掌握度后果**，破坏"章 mastery 唯一写方 = 卷面"的双证据原则；正确参照 `ChapterReaderPage.tsx:116 markReviewed` |
-| 2 | planner 两处注释互相矛盾 | `engine/learning-planner.ts:9-11` vs `:154` | 代码实为「测已学章(3) 优先于到期复习(4)」，注释写反，会误导后续改动 |
+| 1 | ~~`submitAnswer` 调 `applyRating`（会改 mastery），应调 `applyKeyPointRating`~~ ✅ **已修（2026-09-20）** | `stores/useLoopStore.ts:216`（原引 `:123` 已漂移） | **同一复习动作两个入口产生两种掌握度后果**，破坏"章 mastery 唯一写方 = 卷面"的双证据原则；正确参照 `ChapterReaderPage.tsx:243 markReviewed`。已改调 `applyKeyPointRating`（章内概念复习 + 全局快照**两种会话模式统一**）＋ 证据 `delta: 0`；`DeltaBadge` 增**中性态**（增量为 0 不再渲染绿色「+0%」）；死代码 `applyRating` / `ratingStep` 保留但注释标明**零消费方**；回归锁 `tests/session-rating.test.ts`（9 项）。⚠️ 副作用：`/learner` 的 `avgDelta` 分母含 review 记录，会被稀释 —— **刻意不改口径**，见 §四 末 |
+| 2 | ~~planner 两处注释互相矛盾~~ ✅ **已修（2026-09-20）** | `engine/learning-planner.ts:161` | ⚠️ 实测与本文原判断**相反**：写反的是 **`:161`**（旧文把「到期复习」排在「测已学章」之前），**`:9-10` 才是对的**；本文原先归责 `:9-11` 且引行号 `:154`（已漂移）。已改正 `:161`，并补记实测档位（`0` 重学弱章 / `1` 补考 / `2` 复习要点 / **`3` 测已学章 / `4` 到期复习** / `5` 推进未学章） |
 | 3 | ~~`generateAssessment` / `evaluateAnswer` 废弃契约未清理~~ ✅ **已清理（2026-09-15，F6 T13）** | 原位置：`openai-compatible.ts` · `builtin.ts` · `registry.ts` · **`active.ts`（方案曾漏记）** | 实测 **4 处** provider 实现全部只抛 `not-implemented` 且零调用方。已从 `AIProvider` 接口整体删除（含 `AssessmentContext`），9 个测试假 provider 同步清理；`engine/assessment-engine.ts` 止损为纯本地确定性引擎（`provider` 形参一并移除） |
 | 4 | ~~README 过度承诺~~ ✅ **已兑现（2026-09-17，F4）** | `README.md` 产品原则 #1 | 保留原表述，由 F4 提供实际能力：全量导出 / 导入 / 单章 Markdown 已落地（`docs/data-portability-export-import-design-2026-09.md`），README 功能清单两条 `P0` 已勾选 |
 
-> 第 1 条建议**立即修**：它污染掌握度数据，且修复面极小（改一个函数调用 + 一处单测）。
+> 第 1 条已于 **2026-09-20 修**（它污染掌握度数据，修复面确实极小：一处函数调用 + 一处单测 + `DeltaBadge` 中性态）。第 2 条同批修（纯注释）。⚠️ 两条的**归责描述本文原先都写错了**（第 1 条行号漂移、第 2 条把责任方写反），已按实测更正。
 
 ---
 

@@ -33,7 +33,7 @@
 | 展示侧同口径要求 | `features/learn/paper-advice.ts:54 :86`（文件头注释要求复用 `bandOfMastery`） |
 | 计划排序 cls 语义 | `engine/learning-planner.ts:273` `buildChapterPlan`；排序 `:299-307`；cls 见 `:154`（0 重学弱章 > 1 补考 > 2 复习要点 > 3 测已学章 > 4 到期复习 > 5 推进未学章） |
 | 耗时估计硬编码 350 | `features/plan/chapter-action.ts:102-116`（`:113` `chars/350`，clamp 5–40） |
-| **掌握度证据判据** | `engine/learner-model.ts:219` `applyKeyPointRating` **不移动** mastery/attempts；`:248` `applyRating` **移动 mastery 不增 attempts** → 「有证据」必须 `mastery > 0 \|\| attempts > 0`，**只看 attempts 会误判**（TC-UC02-02） |
+| **掌握度证据判据** | `engine/learner-model.ts:219` `applyKeyPointRating` **不移动** mastery/attempts；`:248` `applyRating` **移动 mastery 不增 attempts** → 「有证据」必须 `mastery > 0 \|\| attempts > 0`，**只看 attempts 会误判**（TC-UC02-02）。⚠️ **2026-09-20 起 UI 自评不再产生该形状**（一律走 `applyKeyPointRating`）→ 只剩存量数据；判据本身不变 |
 | 存储层无 profile 方法 | `storage/types.ts:151-153`；`local.ts:27-42` 15 个 `plos.*` key、`:104` `persist()` 全量回写 |
 | `tauri` 继承 localStorage | `storage/tauri.ts:1-17`（LearnerState / Goal / Evidence 同层先例）→ **profile 同样零迁移** |
 | store 装配点 | `stores/useLoopStore.ts:19` `export const storage`；`:79-103` `refresh()`；`:110-113` `saveGoal` |

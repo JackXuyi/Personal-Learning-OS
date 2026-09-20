@@ -68,7 +68,7 @@ Evidence 理想链: Source → Knowledge → Question → Answer → Evaluation 
 | Graph 构建 | GraphEngine 纯函数可用 | 无编辑 UI（列表只读） | ✗ | demo 预置图谱 |
 | Learning Goal | 模型 OK | 无创建/切换（恒取 goals[0]） | ◐ | demo 单目标 |
 | 缺口识别 / 计划 | planner ✅（依赖优先+瓶颈+reasons） | ✅ 队列页 | ✅ **主演示路径** | |
-| 复习自评（四档）→ applyRating | ✅ 含 5s 撤销/键盘/完成汇总 | ✅ ReviewSession | ✅ **主演示路径** | 未提交工作区正在收尾 |
+| 复习自评（四档）→ `applyKeyPointRating` | ✅ 含 5s 撤销/键盘/完成汇总 | ✅ ReviewSession | ✅ **主演示路径** | ⚠️ **2026-09-20 更正**：本行原写 `applyRating`；自评实际已改走 `applyKeyPointRating`（不再移动 mastery），见 `docs/learning-system-v2-design-2026-09.md` 文首 |
 | 测评（对错）→ applyEvaluation | engine 在 | 占位页 | ✗ | docs P0-3/T4；落地前需先解决 P0-3 判分契约 |
 | 遗忘衰减 | 逻辑在（30d 半衰期） | — | ◐ 仅提交时触发 | 见 P0-2 |
 | 复习到期调度 | **未建模** | — | ✗ | 见 P0-1 |
