@@ -43,6 +43,7 @@ import { capabilityItemId } from "../src/domain/capability.ts";
 import { hashId } from "../src/lib/hash.ts";
 import { deriveChapterCards } from "../src/engine/flashcard-engine.ts";
 import { InMemoryStorage } from "../src/storage/memory.ts";
+import type { MergeStats } from "../src/features/memory/memory-doc-merge.ts";
 import { mergeMemoryDoc, memoryDiffs } from "../src/features/memory/memory-doc-merge.ts";
 import type { MemoryFactTexts } from "../src/features/memory/memory-facts.ts";
 import {
@@ -64,15 +65,17 @@ import { collectSamples } from "../src/features/memory/memory-samples.ts";
 import {
   applyAiEntries,
   clearMemoryDoc,
+  externalChangeAt,
   loadMemory,
   loadMemoryEntries,
+  markFileSaved,
   refreshFromFacts,
   restoreDismissed,
   saveUserDoc,
   useSystemVersion,
 } from "../src/features/memory/memory-service.ts";
 import { parseMemoryDraft } from "../src/ai/memory-pipeline.ts";
-import { lastMergedPrefixOf, scaffoldOf } from "../src/features/memory/memory-texts.ts";
+import { lastMergedPrefixOf, reportLinesOf, scaffoldOf } from "../src/features/memory/memory-texts.ts";
 import { zh } from "../src/i18n/messages/zh.ts";
 import { en } from "../src/i18n/messages/en.ts";
 import {
@@ -1355,6 +1358,97 @@ async function run() {
       "identity",
       "preference",
     ]);
+  });
+
+  /* ═══════════ T20：UC-11 磁盘外部改动探测 ═══════════ */
+
+  await check("TC-UC11-03 外部改动判定只看「磁盘 mtime > 基线」，缺任一项即不判", () => {
+    const withBase = metaOf({ lastSavedAt: 1_000 });
+    assert.equal(externalChangeAt(2_000, withBase), 2_000, "磁盘更新 → 报该时刻");
+    assert.equal(externalChangeAt(1_000, withBase), undefined, "相等 = 我们自己刚写的那份");
+    assert.equal(externalChangeAt(500, withBase), undefined, "磁盘落后（App 内改过、还没落盘）");
+    assert.equal(externalChangeAt(undefined, withBase), undefined, "没有磁盘副本");
+    assert.equal(
+      externalChangeAt(2_000, metaOf()),
+      undefined,
+      "从未落盘过 → 基线缺失时不猜（否则首次打开就会凭空一条提示）",
+    );
+  });
+
+  await check("TC-UC11-04 记基线只改 lastSavedAt（文档与其余 meta 逐字节不变）", async () => {
+    const store = new InMemoryStorage();
+    const doc = "# 学习者记忆\n\n- 我手写的一行。\n";
+    await store.saveMemoryDoc(doc);
+    await store.saveMemoryMeta(
+      metaOf({
+        lastWritten: { "pref-study-mode": "旧值" },
+        dismissed: ["cadence-window"],
+        lastMergedAt: 7,
+      }),
+    );
+
+    await markFileSaved(store, 42);
+
+    const meta = await store.getMemoryMeta();
+    assert.equal(meta.lastSavedAt, 42);
+    assert.equal(meta.lastMergedAt, 7, "记基线不是「又整理了一轮」");
+    assert.deepEqual(meta.dismissed, ["cadence-window"]);
+    assert.deepEqual(meta.lastWritten, { "pref-study-mode": "旧值" });
+    assert.equal(await store.getMemoryDoc(), doc, "文档必须零改动");
+  });
+
+  await check("TC-UC11-05 整理一轮不丢基线（lastSavedAt 被合并器透传）", async () => {
+    const store = new InMemoryStorage();
+    await store.saveMemoryMeta(metaOf({ lastSavedAt: 12_345 }));
+    await refreshFromFacts(store, signalsFixture({ evidence: lateNightEvidence() }), {
+      now: NOW,
+      facts: FACTS,
+      ...TEXTS,
+    });
+    // 丢了它 → 提示会在用户什么都没干的情况下重新出现（基线被整理「顺手清掉」）
+    assert.equal((await store.getMemoryMeta()).lastSavedAt, 12_345);
+  });
+
+  await check("TC-UC11-06 非桌面端不触碰磁盘通道（探测返回 undefined 而非抛错）", async () => {
+    const desktop = await import("../src/features/memory/desktop-memory-doc.ts");
+    assert.equal(desktop.isDesktopFileAvailable(), false);
+    assert.equal(await desktop.memoryDocMtime(), undefined);
+    assert.equal(await desktop.readMemoryDocFromFile(), undefined);
+  });
+
+  /* ═══════════ T21：页头动作报告逐项成句 ═══════════ */
+
+  await check("T21 报告只列发生过的动作，殡葬/淘汰各自成句（中英同构）", () => {
+    const stats = (o: Partial<MergeStats>): MergeStats => ({
+      updated: 0,
+      added: 0,
+      keptMine: 0,
+      skippedDismissed: 0,
+      dismissedNow: 0,
+      trimmed: 0,
+      ...o,
+    });
+
+    // 主句只在三项有非零时出现 →「更新 0 条」不再可能被打印出来
+    assert.deepEqual(reportLinesOf(stats({ updated: 2 }), zh), ["本轮整理：更新 2 条"]);
+    assert.deepEqual(reportLinesOf(stats({ added: 3, keptMine: 1 }), zh), [
+      "本轮整理：新增 3 条 · 保留你改写的 1 条",
+    ]);
+    // 只有殡葬 / 淘汰时：不出主句，但**也不静默**（各成一句）
+    assert.deepEqual(reportLinesOf(stats({ dismissedNow: 1 }), zh), ["你删掉的 1 条不会再写回来。"]);
+    assert.deepEqual(reportLinesOf(stats({ trimmed: 4 }), zh), ["清理了 4 条较早的条目（文档已满）。"]);
+    // 混合：主句 + 两句追加
+    assert.equal(reportLinesOf(stats({ added: 1, dismissedNow: 2, trimmed: 1 }), zh).length, 3);
+    // 全零：如实说「没有变化」而不是留一张空白页头（P2 的取舍）
+    assert.deepEqual(reportLinesOf(stats({}), zh), [zh.memory.reportNone]);
+    // 还没跑完 → 什么都不渲染
+    assert.deepEqual(reportLinesOf(undefined, zh), []);
+
+    // 英文侧同构（键成对 + 同一套选取规则）
+    assert.deepEqual(reportLinesOf(stats({ updated: 2 }), en), ["This pass: updated 2"]);
+    assert.deepEqual(reportLinesOf(stats({ dismissedNow: 1 }), en), [en.memory.reportDismissedNow(1)]);
+    assert.deepEqual(reportLinesOf(stats({ trimmed: 4 }), en), [en.memory.reportTrimmed(4)]);
+    assert.deepEqual(reportLinesOf(stats({}), en), [en.memory.reportNone]);
   });
 
   console.log(results.join("\n"));
