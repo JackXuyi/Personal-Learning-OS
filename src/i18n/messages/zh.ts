@@ -1296,6 +1296,8 @@ export const zh = {
         goRead: "去阅读 →",
         extractPoints: "AI 分析要点",
         reExtractPoints: "重新分析要点",
+        // 续跑入口：只对「尚无原文引用」的章发起调用（与设置页向量索引同文案口径）
+        onlyMissingPoints: "仅补齐缺失",
         pointsNoAi: "配置 AI 模型后可解析要点并定位原文。",
         pointsDone: (done: number, total: number) => `已带原文引用 ${done}/${total} 章`,
         pointsUnanchored: (n: number) => `其中 ${n} 条未能在原文定位，已丢弃（宁可少一条，也不给假出处）。`,

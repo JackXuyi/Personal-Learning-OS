@@ -1320,6 +1320,8 @@ export const en: Messages = {
         goRead: "Open reader →",
         extractPoints: "AI analyze points",
         reExtractPoints: "Re-analyze points",
+        // Resume entry: only chapters without source quotes are re-sent to the model
+        onlyMissingPoints: "Fill missing only",
         pointsNoAi: "Configure an AI model to extract points and locate them in the source.",
         pointsDone: (done: number, total: number) => `${done}/${total} chapters have source quotes`,
         pointsUnanchored: (n: number) =>
