@@ -157,6 +157,10 @@ C 项与 §2.1 的取证逐条吻合 → 过滤范围既不多也不少。
 
 零改动区（未触碰）：`src-tauri/**`、`src/storage/**`、`src/domain/**`、`src/stores/**`、i18n 双语字典。
 
+> 以上是 **2026-09-16 那次修复**的清单。2026-09-20 的后续修复（§八 遗留 1）改的是另一组文件
+> （`analyze-service.ts` / 新增 `keypoint-coverage.ts` / `KnowledgeTab.tsx` / **i18n 新增 1 键** /
+> 新增 `tests/keypoint-persist.test.ts`），清单见 `docs/library-keypoint-persist-design-2026-09.md` §8。
+
 ## 变更记录
 
 | 日期 | 内容 | 作者 |
