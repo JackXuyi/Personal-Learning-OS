@@ -44,7 +44,13 @@ export function nextReviewInDays(rating: SelfRating): number {
   return RATING_INTERVAL_DAYS[rating];
 }
 
-/** 自评 → 掌握度增量（供 UI 预览「忘记→1 天…」与 DeltaBadge）。 */
+/**
+ * 自评 → 掌握度增量。
+ *
+ * ⚠️ **当前零消费方**（2026-09-20 实测）：UI 预览用的是 `nextReviewInDays`，而
+ * `DeltaBadge` 显示的是**实际提交结果**而非预估增量。保留导出供引擎侧对照与测试；
+ * 旧注释称「供 UI 预览与 DeltaBadge」是错的，别再按它去找调用方。
+ */
 export function ratingStep(rating: SelfRating): number {
   return RATING_STEP[rating];
 }
@@ -239,8 +245,13 @@ export function applyKeyPointRating(
 }
 
 /**
- * 概念层复习的四档自评（遗留入口：卷面闭环接入前，概念级演示仍靠自评
- * 移动 mastery；接入后 UI 改调 applyKeyPointRating）。
+ * 概念层复习的四档自评（**遗留入口**：会移动 mastery）。
+ *
+ * ⚠️ **2026-09-20 起零 UI 消费方** —— 自评一律改走 `applyKeyPointRating`
+ * （只做调度、不动 mastery；V2 双证据原则：章 mastery 唯一写方是卷面）。
+ * 修前 `useLoopStore::submitAnswer` 误用本函数，与 `ChapterReaderPage::markReviewed`
+ * 形成「同一自评动作、两个入口、两种掌握度后果」。保留本实现作为**对照**，
+ * 以及「`mastery>0` 而 `attempts=0`」这一存量数据形状的来源说明。
  *
  * 修正（P1 attempts 污染）：自评不是「对错」证据，不再 attempts + 1 /
  * correctCount 累加，避免稀释正确率、压置信度。写入 nextReviewAt（P0-1）。

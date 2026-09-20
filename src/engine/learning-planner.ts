@@ -158,7 +158,12 @@ export interface ChapterPlanInput {
   now?: number;
 }
 
-/** 队列类型序号：越小越前（重学弱章 > 补考 > 复习要点 > 到期复习 > 测已学章 > 推进未学章）。 */
+/**
+ * 队列类型序号：越小越前（重学弱章 > 补考 > 复习要点 > **测已学章 > 到期复习** >
+ * 推进未学章）。实测档位：`0` 重学弱章 · `1` 补考 · `2` 复习要点 · **`3` 测已学章 ·
+ * `4` 到期复习** · `5` 推进未学章。⚠️ 本行在 2026-09-20 前**写反**（旧文把到期复习
+ * 排在测已学章之前），与文件头注释自相矛盾 —— 以本行为准。
+ */
 type ChapterActionSpec = {
   kind: "learn-chapter" | "chapter-quiz" | "retake-quiz" | "review-points";
   cls: number;
