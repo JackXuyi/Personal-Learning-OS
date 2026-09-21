@@ -34,6 +34,9 @@ import type {
   SourceDocument,
 } from "../../../domain";
 
+import { isPlainObject, shapeMatches } from "./field-shape";
+import type { FieldShape } from "./field-shape";
+
 /** 导出包标识：防「导入了一个别的 JSON」。 */
 export const BACKUP_KIND = "plos.backup" as const;
 
@@ -129,9 +132,6 @@ export type BackupErrorKind =
   | "version-newer"
   | "unsupported-version"
   | "corrupt";
-
-/** 字段形态：数组 / 键值集合 / 单体对象。 */
-type FieldShape = "array" | "record" | "object";
 
 interface FieldSpec {
   key: keyof BackupData;
@@ -247,8 +247,13 @@ function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
 
-/** `YYYYMMDD-HHmmss`（**本地时间**：文件名是给人看的，不是审计时间戳）。 */
-function stamp(now: number): string {
+/**
+ * `YYYYMMDD-HHmmss`（**本地时间**：文件名是给人看的，不是审计时间戳）。
+ *
+ * 导出给 `pack-format.ts::defaultPackName` 复用 —— 知识包与备份的文件名时间戳
+ * 必须是**同一把尺子**（各写一份就会出现两种补零 / 时区写法）。
+ */
+export function stamp(now: number): string {
   const d = new Date(now);
   const date = `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`;
   const time = `${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
@@ -286,14 +291,8 @@ export function humanBytes(bytes: number): string {
   return `${(mb / 1024).toFixed(1)} GB`;
 }
 
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
-function shapeMatches(v: unknown, shape: FieldShape): boolean {
-  if (shape === "array") return Array.isArray(v);
-  return isPlainObject(v);
-}
+// ⚠️ `isPlainObject` / `shapeMatches` / `FieldShape` 已抽到 `./field-shape.ts`
+// —— F4 备份与 F10 知识包共用同一份形态判定（复制一份＝同一规则两处实现）。
 
 /**
  * 导入前校验（纯函数，可单测）。**绝不抛错** —— 回判别式结果。
