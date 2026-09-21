@@ -29,10 +29,8 @@ import { Select } from "../../../components/ui/select";
 import { Spinner } from "../../../components/ui/spinner";
 import { Textarea } from "../../../components/ui/textarea";
 import { useI18n } from "../../../i18n";
-import type { Messages } from "../../../i18n";
 import { storage, useLoopStore } from "../../../stores/useLoopStore";
 import { useIndexStore } from "../../../stores/useIndexStore";
-import type { PackCounts } from "../../../domain";
 import type { ImportedPackRecord } from "../../../storage/types";
 import { decodeBytes } from "../../learn/import/decode";
 import { humanBytes } from "./backup-format";
@@ -40,13 +38,14 @@ import { backupSave, downloadText, isDesktopBackupAvailable } from "./desktop-ba
 import { buildPack } from "./pack-export-service";
 import type { PackSelection, PackWarning } from "./pack-export-service";
 import { defaultPackName, parsePack } from "./pack-format";
-import type { KnowledgePackFile, PackErrorKind, PackLicense } from "./pack-format";
+import type { KnowledgePackFile, PackLicense } from "./pack-format";
 import { importPack } from "./pack-import-service";
-import type { PackImportErrorKind, PackImportStats } from "./pack-import-service";
+import type { PackImportStats } from "./pack-import-service";
 import { PackRemoteError, fetchPackText, parsePackUrl } from "./pack-remote";
-import type { PackRemoteErrorKind } from "./pack-remote";
 import { findExisting, packRowsOf, recordOfPack } from "./pack-registry";
 import type { PackRow } from "./pack-registry";
+import { errorText, packCountsText, warningText } from "./pack-texts";
+import type { PackUiErrorKind } from "./pack-texts";
 
 /** 设置页传入的可打包资料（标题由设置页与计数**同源**读出）。 */
 export interface PackCandidate {
@@ -104,8 +103,6 @@ interface Exported {
   path?: string;
   warnings: PackWarning[];
 }
-
-type PackUiErrorKind = PackErrorKind | PackImportErrorKind | PackRemoteErrorKind | "unknown";
 
 interface PackUiError {
   kind: PackUiErrorKind;
@@ -678,74 +675,3 @@ export default function KnowledgePackCard({ docs, onDataChanged }: Props) {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* 纯辅助                                                              */
-/* ------------------------------------------------------------------ */
-
-type PackTexts = Messages["settings"]["storage"]["data"]["pack"];
-type DataTexts = Messages["settings"]["storage"]["data"];
-
-/** 展示用的 6 个实体计数（顺序 = 展示顺序）；`chars` 是正文规模，不在此列。 */
-const PACK_COUNT_KEYS = [
-  "documents",
-  "chapters",
-  "sections",
-  "chunks",
-  "knowledgeUnits",
-  "knowledgeRelations",
-] as const;
-
-/** 条数串：`资料 3 · 章节 44 · …`；0 值不展示（与 F4 `countsText` 同一规则与同一文案源）。 */
-function packCountsText(d: DataTexts, counts: Partial<PackCounts>): string {
-  return PACK_COUNT_KEYS.filter((k) => (counts[k] ?? 0) > 0)
-    .map((k) => `${d.countLabels[k]} ${counts[k] ?? 0}`)
-    .join(" · ");
-}
-
-/** 导出警告分类 → 文案（服务层只回分类，这里是唯一的映射点）。 */
-function warningText(p: PackTexts, w: PackWarning): string {
-  switch (w.kind) {
-    case "too-large":
-      return p.warnTooLarge;
-    case "doc-without-body":
-      return p.warnNoBody(w.count);
-    case "doc-without-chunks":
-      return p.warnNoChunks(w.count);
-    case "orphan-units":
-      return p.warnOrphanUnits(w.count);
-    case "orphan-relations":
-      return p.warnOrphanRelations(w.count);
-  }
-}
-
-/** 错误分类 → 文案（服务层只回分类，这里是唯一的映射点）。 */
-function errorText(kind: PackUiErrorKind, p: PackTexts): string {
-  switch (kind) {
-    case "not-json":
-      return p.errNotJson;
-    case "not-pack":
-      return p.errNotPack;
-    case "version-newer":
-      return p.errVersionNewer;
-    case "unsupported-version":
-      return p.errUnsupportedVersion;
-    case "corrupt":
-      return p.errCorrupt;
-    case "too-large":
-      return p.errTooLarge;
-    case "empty":
-      return p.errEmpty;
-    case "too-large-for-store":
-      return p.errTooLargeForStore;
-    case "write-failed":
-      return p.errWriteFailed;
-    case "quota":
-      return p.errQuota;
-    case "invalid":
-      return p.errInvalidUrl;
-    case "network":
-      return p.errNetwork;
-    default:
-      return p.errUnknown;
-  }
-}
