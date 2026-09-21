@@ -125,6 +125,27 @@ export interface StorageAdapter {
   listEvidence(): Promise<EvidenceEntry[]>;
   listEvidenceBySubject(subjectId: string): Promise<EvidenceEntry[]>;
   appendEvidence(entry: EvidenceEntry): Promise<void>;
+  /**
+   * **原子**的「查重后追加」：`predicate` 命中既有条目则跳过，返回 `false`。
+   *
+   * 为什么要由存储层提供、而不是调用方自己 `listEvidence()` → `some()` →
+   * `appendEvidence()`：那三步跨两次 `await`，并发调用会**双双读到「尚无」再双双写入**。
+   * 实测（2026-09-21）：`QuizReportPage` 在 `<React.StrictMode>` 下的 effect 双执行
+   * 让每份判卷都落了 **2 条内容完全相同**的 assessment 证据（`at` 精确到毫秒相同），
+   * 直接导致 `/progress` 热力图活动量虚增一倍、首页「最近证据」出现重复行。
+   *
+   * 本方法把「查」与「写」放进**同一段同步代码**：单线程 JS 下这就是临界区，
+   * 实现内部在此之后不得出现 `await`（见 `InMemoryStorage.appendEvidenceUnless`）。
+   *
+   * @param predicate 幂等判据（由调用方给出逻辑键，如 `kind === "assessment" &&
+   *   sourceId === paperId`）。刻意**不由存储层猜键** —— 不同 kind 的幂等语义不同：
+   *   `assessment` 按试卷唯一，而 `card` 同一张卡可以反复评分，不能按 `sourceId` 去重。
+   * @returns 真正追加返回 `true`；被 `predicate` 挡下返回 `false`。
+   */
+  appendEvidenceUnless(
+    entry: EvidenceEntry,
+    predicate: (existing: EvidenceEntry) => boolean,
+  ): Promise<boolean>;
 
   // ===== 全文搜索（FTS5，P0 MVP）=====
   /**

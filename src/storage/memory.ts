@@ -492,6 +492,25 @@ export class InMemoryStorage implements StorageAdapter {
   }
 
   /**
+   * 原子「查重后追加」（契约见 `StorageAdapter.appendEvidenceUnless`）。
+   *
+   * ⚠️ **临界区**：`some()` 与 `appendEvidence()` 之间**不得插入任何 `await`** ——
+   * 单线程 JS 下这段同步路径就是原子的，一 `await` 就会让并发的第二次调用重新
+   * 读到「尚无」并重复写入（这正是本方法要消灭的缺陷）。
+   *
+   * `this.appendEvidence` 走**动态派发**：`LocalStorageAdapter` 覆写了它，因而
+   * 命中时也会落盘，本层无需再写一份上限/落盘逻辑（避免「两把尺子」）。
+   */
+  async appendEvidenceUnless(
+    entry: EvidenceEntry,
+    predicate: (existing: EvidenceEntry) => boolean,
+  ): Promise<boolean> {
+    if (this.evidenceLog.some(predicate)) return false;
+    await this.appendEvidence(entry);
+    return true;
+  }
+
+  /**
    * 清空整库（replace 导入用，见
    * docs/data-portability-export-import-design-2026-09.md §4.3.2）。
    *
