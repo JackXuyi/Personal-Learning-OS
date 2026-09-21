@@ -17,6 +17,9 @@
  *      strip-types 直跑会拖入 React；`DeltaBadge` 是 `.tsx`，根本跑不了。
  *      这两处的口径因此用与 `flashcard.test.ts::TC-REG-01` **同一手法**锁死
  *      （读源码 + 正则）—— 本仓库处理「UI 层不变量」的既有惯例。
+ *   ③ **死代码口径**：`ratingStep` / 会移动掌握度的 `applyRating` 零消费方。
+ *   ④ **已推翻事实的残留**：卡片三处注释不得再把「该入口会移动 mastery」当现行
+ *      禁用理由（2026-09-20 改档时漏回扫的就是这一类 —— 见 TC-RATE-10）。
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -28,6 +31,7 @@ import {
   nextReviewInDays,
   ratingStep,
 } from "../src/engine/learner-model.ts";
+import { en } from "../src/i18n/messages/en.ts";
 import { zh } from "../src/i18n/messages/zh.ts";
 
 const results: string[] = [];
@@ -160,6 +164,48 @@ async function main() {
     assert.ok(/当前零消费方/.test(raw), "ratingStep / applyRating 的注释须写明零消费方");
     for (const f of ["src/stores/useLoopStore.ts", "src/components/DeltaBadge.tsx"]) {
       assert.ok(!/\bratingStep\s*\(/.test(codeOf(f)), `${f} 不应调用 ratingStep`);
+    }
+  });
+
+  /* ---------- ④ 已推翻事实的残留（防止后人按旧理由去改别处代码） ---------- */
+
+  await check("TC-RATE-10 卡片三处注释不得再把「该入口会移动 mastery」当现行禁用理由", () => {
+    // 2026-09-20 的改档只回扫了 useLoopStore / DeltaBadge 与部分文档，**漏了其它模块
+    // 头注释里给出的「禁用理由」**——那三处理由当时就被推翻，若不锁，下一个人会据此
+    // 推出错误结论（例如「卡片经 submitAnswer 就会污染掌握度」）。
+    // ⚠️ 只锁**旧短语本身**，不锁新措辞 —— 断言新写法会误伤正常重构。
+    // 旧文本有两种形态（改前实测：flashcard-service 命中形态 ①，
+    // ReviewSession / CardSession 命中形态 ②）。
+    const STALE = [
+      /`useLoopStore\.submitAnswer`[\s\S]{0,12}`applyRating`/,
+      /`submitAnswer`\s*\/\s*`applyRating`/,
+    ];
+    for (const f of [
+      "src/features/learn/flashcard-service.ts",
+      "src/features/study/ReviewSession.tsx",
+      "src/features/study/CardSession.tsx",
+    ]) {
+      // 展平注释符与换行后再匹配（旧句子跨了行）。
+      const flat = readFileSync(f, "utf8")
+        .replace(/\s*\*\s*/g, " ")
+        .replace(/\s+/g, " ");
+      for (const [i, re] of STALE.entries()) {
+        assert.ok(!re.test(flat), `${f} 第 ${i + 1} 形态命中：仍把该入口当会移动 mastery 的入口（该事实已推翻）`);
+      }
+    }
+  });
+
+  await check("TC-RATE-11 概念层两条用户文案不得再称「自评即掌握度证据」", () => {
+    // 用户可见文案同样属于改档回扫清单（「i18n 键」那一项）—— 2026-09-20 那次漏了这两条：
+    // 自评已改走 applyKeyPointRating，概念单元的 mastery 只由 applyEvaluation（测评对错）写。
+    const pairs: [string, string][] = [
+      ["zh.review.conceptDoneSubtitle", zh.review.conceptDoneSubtitle],
+      ["en.review.conceptDoneSubtitle", en.review.conceptDoneSubtitle],
+      ["zh.knowledge.chapterGraph.hint", zh.knowledge.chapterGraph.hint],
+      ["en.knowledge.chapterGraph.hint", en.knowledge.chapterGraph.hint],
+    ];
+    for (const [where, s] of pairs) {
+      assert.ok(!/掌握度证据|mastery evidence/i.test(s), `${where} 仍在宣称自评即掌握度证据（该口径已推翻）`);
     }
   });
 }
