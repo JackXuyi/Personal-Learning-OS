@@ -240,7 +240,7 @@ clearAll(): Promise<void>;
 |------|----------|
 | `InMemoryStorage` | 逐个重建内存结构（`documents = new Map()` … `learnerState = { byUnit: {} }`；`profile = undefined`；`activeGoalId = undefined`；`evidenceLog = []`）。⚠️ 用「重建」而非 `clear()`，保证与构造函数初值**逐字段同形** |
 | `LocalStorageAdapter` | `super.clearAll()` + **`removeItem` 全部 22 个 key**（含 `plos.active-goal` 这个不随 `persist()` 走的独立 key）。⚠️ **不要**靠 `persist()` 写空数组，那会留下 22 个 `"[]"` 垃圾 key；也**不要**碰 `plos:settings:v1` / `plos:lang:v1` / 迁移 flag |
-| `TauriStorage` | `await trySqlite("db_clear_rag", {})` **成功后**才 `super.clearAll()`（即父类的清内存 + 删 localStorage key）；SQLite 失败 → **抛错并中止 clearAll**（不降级），由导入服务转成 `sqlite-blocked` 分类让 UI 明说「本机数据库未清空，已取消替换导入」。⚠️ 理由：RAG 五类的真源在 SQLite，只清 localStorage 会留下旧 chunk/section/向量 → FTS 检索返回**已被用户删掉的段落**，属于「静默错数据」，比报错严重 |
+| `TauriStorage` | `await invoke("db_clear_library", {})` **成功后**才 `super.clearAll()`（即父类的清内存 + 删 localStorage key）；SQLite 失败 → **抛错并中止 clearAll**（不降级），由导入服务转成 `sqlite-blocked` 分类让 UI 明说「本机数据库未清空，已取消替换导入」。⚠️ 理由：RAG 五类的真源在 SQLite，只清 localStorage 会留下旧 chunk/section/向量 → FTS 检索返回**已被用户删掉的段落**，属于「静默错数据」，比报错严重 |
 
 #### 4.3.3 读取/写入必须注意的 4 个「没有全量接口」的坑
 
@@ -1110,6 +1110,7 @@ note: "导出/导入与整库替换都在上方卡片里。整库清空只作为
 | §12 / §11.1 | TC-UC02-01「断言构造 Blob 的调用被断言一次；不调用 `invoke`」 | 改为断言守卫语义：`isDesktopBackupAvailable() === false` 且 `backupList() === []` | node 侧没有 Tauri/DOM 上下文，无法观测 `invoke` 是否被调用；真正的浏览器落盘行为本就不在自动验证范围（§12.2） |
 | §12 TC-EDGE-05 | 「断言 22 个 key 全不存在」 | 用最小 localStorage 替身跑 `LocalStorageAdapter`，断言「非 `plos:` 前缀且非迁移 flag 的 plos key 全空」+ 偏好与迁移标记仍在 | node 无 localStorage；且 `KEY_ACTIVE_GOAL` 只在 `setActiveGoal` 时写入，样本不写它 → 实际写入 21 个 key，「22」是上界而非固定值 |
 | §11.1 | 单测另覆盖 `collectSnapshot` 的遍历完整性 | 用「导出 → 导入 → **再导出**，两次 `BackupData` 逐字段深比较」覆盖 | 同一个断言同时锁住遍历完整性与写入完整性（比手写 20 个实体读取函数更强也更省） |
+| §4.3.2 `TauriStorage.clearAll`（**v5 起 · 非本表时点**） | 命令名 `db_clear_rag`（清 **7** 表） | 改名 **`db_clear_library`**（事务清 **9** 表，含新增的 `documents` / `chapters`） | F10 把 Document / Chapter 下沉 SQLite 后，「清 RAG 7 表」不再等于「清整库」—— 名字里的 `rag` 会让调用方以为文档不必清，换机重装后旧文档残留（F10 D15）。本行是**后续版本**的追加记录，供读者对照，非 2026-09-17 实施时的偏差 |
 
 ---
 

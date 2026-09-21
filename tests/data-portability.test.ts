@@ -33,6 +33,7 @@ import type { BackupData, BackupFile } from "../src/features/data/portability/ba
 import { exportBackup } from "../src/features/data/portability/export-service.ts";
 import { importBackup } from "../src/features/data/portability/import-service.ts";
 import { chapterBodyOf, chapterToMarkdown } from "../src/features/data/portability/markdown-export.ts";
+import { installFakeLocalStorage } from "./fake-local-storage.ts";
 
 const results: string[] = [];
 let failures = 0;
@@ -550,37 +551,10 @@ function parseOk(json: string): BackupFile {
 }
 
 /**
- * 最小 localStorage 替身（仅 TC-EDGE-05 用）。
- *
- * 本仓库禁起浏览器，而 `LocalStorageAdapter.clearAll()` 的契约（22 个 key 全清、
- * 偏好与迁移标记保留）只在这一个后端上有意义 → 用替身换来确定性覆盖。
+ * 最小 localStorage 替身 —— 已抽到 `tests/fake-local-storage.ts`（与 F10 的
+ * `storage-documents.test.ts` 共用；两处各抄一份就是脚手架层面的两把尺子）。
+ * 本文件的断言**一字未改**，只换了来源。
  */
-function installFakeLocalStorage(): { keys: () => Iterable<string>; uninstall: () => void } {
-  const map = new Map<string, string>();
-  const fake = {
-    getItem: (k: string): string | null => (map.has(k) ? (map.get(k) as string) : null),
-    setItem: (k: string, v: string): void => void map.set(k, String(v)),
-    removeItem: (k: string): void => void map.delete(k),
-    clear: (): void => map.clear(),
-    key: (i: number): string | null => [...map.keys()][i] ?? null,
-    get length(): number {
-      return map.size;
-    },
-  };
-  const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
-  Object.defineProperty(globalThis, "localStorage", {
-    value: fake,
-    configurable: true,
-    writable: true,
-  });
-  return {
-    keys: () => map.keys(),
-    uninstall: () => {
-      if (original) Object.defineProperty(globalThis, "localStorage", original);
-      else delete (globalThis as Record<string, unknown>).localStorage;
-    },
-  };
-}
 
 /* ================================================================== */
 /* TC-UC01 · 导出                                                      */

@@ -114,6 +114,8 @@
 
 `src/storage/index.ts` 的 `detectBestBackend()`：`isTauri()` → `"tauri"`，否则探测 localStorage → `"local"` / `"memory"`。`TauriStorage extends LocalStorageAdapter`，RAG 五类实体走 `db_*` 命令、其余沿用 localStorage；任一命令失败即静默回退父类同名方法（只告警一次）。
 
+> ⚠️ **v5 更新（2026-09 · F10 前置，见 `docs/community-knowledge-pack-design-2026-09.md`）**：上文「其余沿用 localStorage」在 v5 后**已不成立** —— `Document` / `Chapter` 已一并下沉 SQLite（`documents` / `chapters` 两表 + `migrate_v5` + `migrateLegacyDocuments()` 一次性搬迁）。且这两类的降级策略与 RAG 五类**相反**：失败**不静默回退**，直接抛 `StorageUnavailableError`（静默写回冻结快照会被下一次迁移**反向覆盖**，比报错严重）。RAG 五类的静默回退不变。
+
 **入库时点更正**：`TauriStorage` 本体（`src/storage/tauri.ts`，515 行）随 `e93f4a5` 入库，但**工厂接线漏在同一批之外** —— `e93f4a5`/`ec721ab` 的 `index.ts` 里既无 `TauriStorage` 导入也无 `isTauri()` 分支，所以那段时间桌面端实际仍走 localStorage，TauriStorage 是「写好但从未被实例化」的死代码。`39e96fa` 补齐了三处：
 
 | 文件 | 改动 |
@@ -234,7 +236,7 @@ node scripts/migrate-rag-to-sqlite.mjs --in export.json --stats
 |----|------|------|------|----------|
 | F1 | **FTS5 中文子串检索失效** | 已修复（2026-09-10，方案 A） | 默认 `unicode61` 分词器把连续中文整段当成**一个** token。实测："编码器由六层堆叠而成" 里 `MATCH '编码器'` 命中 0 条；`MATCH '编码器*'`（前缀）与整句才命中 | ✅ 已修复：schema.sql 切 trigram + db/mod.rs::migrate v1→v2 重建重灌 + commands.db_fts_search 查询路由（≥3 字 MATCH / <3 字 LIKE 兜底）；设计见 docs/storage-architecture-rag-fts-fix-design-2026-09.md |
 | F2 | 降级态新写入的 RAG 数据不回迁 | 低 | 迁移是一次性标记制，见 T9「已知边界」 | 改为记录迁移时间戳做增量搬迁 |
-| F3 | Documents / Chapters 仍在 localStorage | 中 | T5 刻意不为这两张表建表，避免迁移期双写 | 待 F1 一起做，届时把两张表纳入 SQLite 并升 schema v2 |
+| ~~F3~~ | ~~Documents / Chapters 仍在 localStorage~~ | ✅ **已关闭**（2026-09 · F10 前置） | 原缓冲理由「避免迁移期双写」已过窗口期 | 实际随 F10 前置一次性完成：`documents` / `chapters` 两表 + `migrate_v5` + `migrateLegacyDocuments()` 惰性搬迁。⚠️ 原计划写「升 schema **v2**」，实际一次性升到 **v5**（见 `docs/community-knowledge-pack-design-2026-09.md` §8.19） |
 | **F4** | **Tauri IPC 契约不成立**：① 7 个命令未注册（前端报 `Command db_get_section not found`）；② 嵌套 `*Input` 字段缺 camelCase 重命名（前端发 camelCase、Rust 按 snake_case 反序列化）→ 静默 `undefined`；③ 工厂未接线，`TauriStorage` 从未被实例化 | **高**（桌面端 RAG 全链路不可用；②属静默失败，最难发现） | T6 未逐一对照 `StorageAdapter` 签名建命令；`#[tauri::command]` 只转换**顶层**参数名、嵌套结构体字段不转；T7 标注完成时只入库了 `tauri.ts` 本体 | ✅ **已修复 `39e96fa`**：补齐 7 命令 + `*Input`/`*Row`/`*Out` 统一 `#[serde(rename_all = "camelCase")]`（含 4 项 Rust 契约单测）+ 工厂接线 + `local.ts` 的 `name: string` 标注 |
 
 **F4 的教训（写给后续 Tauri IPC 改动）**：`rules`/`skills` 里的 tauri-ipc 契约要求「Rust 侧 `Result<T,String>` + serde 镜像 + lib.rs 注册」三步齐全，本次缺的是第 2、3 步的**可验证性** —— 前端 `invoke` 是字符串字面量，命令没注册、字段名写错都不会在 `tsc` 或 `cargo check` 阶段报错。`cargo check` 通过 ≠ IPC 可用；新增/改名命令后应至少跑一次 Rust 契约单测（`cargo test`）并核对 `lib.rs` 注册集合 == 前端 `invoke` 引用集合。
