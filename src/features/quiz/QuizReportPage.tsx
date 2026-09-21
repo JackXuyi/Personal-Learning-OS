@@ -80,16 +80,19 @@ const UNANSWERED_MARKER = "（未作答）";
  * - 主章 = 卷内掌握度净变化 |Δ| 最大的一章（与 U1 首页临时组装同口径）；
  * - 幂等：sourceId = 试卷 id，重复打开报告页不重复落；
  * - verdict = 该章是否达标（≥ MASTERY_THRESHOLD → pass）。
+ *
+ * ⚠️ **幂等必须走 `appendEvidenceUnless`（原子），不能自己 `listEvidence()` → `some()`
+ * → `appendEvidence()`**：那三步跨两次 `await`，本页 effect 在 `<React.StrictMode>`
+ * 下双执行时两个调用会双双读到「尚无」再双双写入。实测（2026-09-21）真实库里每份
+ * 判卷都正好落了 **2 条内容完全相同**的 assessment 证据（`at` 精确到毫秒相同），
+ * 后果是 `/progress` 热力图活动量虚增一倍、首页「最近证据」出现重复行。
+ * 回归锁见 `tests/evidence-once.test.ts`（TC-EV-02 直接跑并发用例）。
  */
 async function logAssessmentEvidence(
   result: PaperResult,
   paperId: string,
 ): Promise<void> {
   try {
-    const existing = await storage.listEvidence();
-    if (existing.some((e) => e.kind === "assessment" && e.sourceId === paperId)) {
-      return;
-    }
     let bestId: string | undefined;
     let bestDelta = 0;
     let bestMastery = 0;
@@ -102,14 +105,17 @@ async function logAssessmentEvidence(
       }
     }
     if (!bestId) return;
-    await storage.appendEvidence({
-      at: Date.now(),
-      kind: "assessment",
-      subjectId: bestId,
-      verdict: bestMastery >= MASTERY_THRESHOLD ? EVIDENCE_VERDICT_PASS : EVIDENCE_VERDICT_FAIL,
-      delta: bestDelta,
-      sourceId: paperId,
-    });
+    await storage.appendEvidenceUnless(
+      {
+        at: Date.now(),
+        kind: "assessment",
+        subjectId: bestId,
+        verdict: bestMastery >= MASTERY_THRESHOLD ? EVIDENCE_VERDICT_PASS : EVIDENCE_VERDICT_FAIL,
+        delta: bestDelta,
+        sourceId: paperId,
+      },
+      (e) => e.kind === "assessment" && e.sourceId === paperId,
+    );
   } catch {
     /* 证据落库失败不阻塞报告页主流程。 */
   }
