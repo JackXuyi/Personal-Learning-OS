@@ -407,7 +407,7 @@ never depend on a network call.
 Every capability the project intends to ship — this doubles as the roadmap.
 `[x]` = shipped · `[ ]` = not yet · `P0` / `P1` / `P2` = priority of the unshipped items.
 
-**36 shipped · 10 not yet.**
+**37 shipped · 9 not yet.**
 
 ### 📥 Ingestion
 
@@ -473,7 +473,7 @@ Every capability the project intends to ship — this doubles as the roadmap.
 - [x] Append-only evidence stream (`EvidenceEntry`)
 - [x] Full export / import / backup `P0` — one `.plosbak.json` holding documents, chapters, notes, progress and evidence; merge or replace on restore
 - [x] Markdown export of a single chapter `P0`
-- [ ] Community knowledge packs `P2`
+- [x] Community knowledge packs `P2` — export the knowledge assets of chosen documents (text, chapters, key points, concept graph) into one `.ploskp.json`, import from a local file or an https link; no personal learning data and no AI calls on import
 - [ ] Encrypted sync *(pro tier)* `P2`
 
 ---

@@ -412,7 +412,7 @@ Ollama、llama.cpp、LM Studio 以及 OpenAI 兼容端点（OpenAI、Anthropic�
 项目打算交付的全部能力，同时充当路线图。
 `[x]` = 已实现 · `[ ]` = 未实现 · `P0` / `P1` / `P2` = 未实现项的优先级。
 
-**已实现 36 项 · 未实现 10 项。**
+**已实现 37 项 · 未实现 9 项。**
 
 ### 📥 资料接入
 
@@ -478,7 +478,7 @@ Ollama、llama.cpp、LM Studio 以及 OpenAI 兼容端点（OpenAI、Anthropic�
 - [x] append-only 证据流（`EvidenceEntry`）
 - [x] 全量导出 / 导入 / 备份 `P0` —— 一个 `.plosbak.json` 装下资料、章节、笔记、进度与证据；恢复时可选合并或替换
 - [x] 单章 Markdown 导出 `P0`
-- [ ] 社区知识包 `P2`
+- [x] 社区知识包 `P2` —— 把选中资料的知识资产（正文、章节、要点、概念图谱）打成一份 `.ploskp.json` 分享；可从本地文件或 https 链接导入；导入不带任何个人学习数据、也不触发任何 AI 调用
 - [ ] 加密同步 *（Pro 层）* `P2`
 
 ---
