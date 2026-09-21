@@ -1222,6 +1222,9 @@ export const zh = {
       missingTitle: "资料不存在",
       missingDesc: "它可能已被删除。",
       loading: "加载中…",
+      /** 溯源行（F10）：这份资料是从别人分享的社区知识包里导入的（仅在有记录时渲染）。 */
+      fromPack: (title: string, author?: string) =>
+        `来自社区知识包《${title}》${author ? ` · ${author}` : ""}`,
       tabs: { overview: "概览", content: "资料内容", split: "章节列表", knowledge: "关键知识点", papers: "章节测评试卷" },
       /** 资料 ⇄ 目标双向接线（评审 M1-1）。 */
       linkGoals: "关联目标",

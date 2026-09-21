@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/button';
 import { Tabs, TabsList, TabsTab, TabsPanel, TabsIndicator } from '../../components/ui/tabs';
 import { ChevronLeft } from 'lucide-react';
 import type { SourceDocument, Chapter, KnowledgeGraph, LearnerState } from '../../domain';
+import type { ImportedPackRecord } from '../../storage/types';
 
 import ContentTab from './detail/ContentTab';
 import SplitTab from './detail/SplitTab';
@@ -43,9 +44,27 @@ export default function DocumentDetailPage() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [graph, setGraph] = useState<KnowledgeGraph | null>(null);
   const [learner, setLearner] = useState<LearnerState | null>(null);
+  /** 溯源（F10）：这份资料来自哪个已导入的社区知识包（没有 = undefined）。 */
+  const [origin, setOrigin] = useState<ImportedPackRecord>();
   /** 关联目标弹窗开关（资料 ⇄ 目标双向接线）。 */
   const [linkOpen, setLinkOpen] = useState(false);
   const { m: t } = useI18n();
+
+  /**
+   * 反查来源记录（F10 溯源行）。
+   *
+   * 记录里的 `documentIds` 是**累积**事实（同一份包导两次只记一条、id 累积），
+   * 所以「这份资料来自哪个包」= 线性扫一遍找包含该 id 的那条。
+   * ⚠️ 读失败**静默降级**：溯源是锦上添花，不该因为读不到记录就让详情页报错。
+   */
+  async function loadOrigin(id: string): Promise<ImportedPackRecord | undefined> {
+    try {
+      const packs = await storage.listImportedPacks();
+      return packs.find((r) => r.documentIds.includes(id));
+    } catch {
+      return undefined;
+    }
+  }
 
   // 加载数据
   useEffect(() => {
@@ -67,6 +86,7 @@ export default function DocumentDetailPage() {
         setGraph(g);
         const ls = await storage.getLearnerState();
         setLearner(ls);
+        setOrigin(await loadOrigin(docId));
       } catch (e) {
         console.error('Failed to load document:', e);
         navigate('/learn');
@@ -100,6 +120,7 @@ export default function DocumentDetailPage() {
       setGraph(g);
       const ls = await storage.getLearnerState();
       setLearner(ls);
+      setOrigin(await loadOrigin(doc.id));
     } catch (e) {
       console.error('Failed to refresh:', e);
     }
@@ -136,6 +157,12 @@ export default function DocumentDetailPage() {
                 new Date(doc.importedAt)
               )}
             </p>
+            {/* 溯源行（F10）：只在确实来自某个社区知识包时渲染。 */}
+            {origin ? (
+              <p data-testid="doc-origin-pack" className="truncate text-xs text-ink-3">
+                {t.learn.detail.fromPack(origin.title, origin.author)}
+              </p>
+            ) : null}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">

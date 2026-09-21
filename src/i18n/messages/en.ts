@@ -1241,6 +1241,9 @@ export const en: Messages = {
       missingTitle: "Document not found",
       missingDesc: "It may have been deleted.",
       loading: "Loading…",
+      /* Provenance line (F10): imported from someone else's community knowledge pack. */
+      fromPack: (title: string, author?: string) =>
+        `From community pack “${title}”${author ? ` · ${author}` : ""}`,
       tabs: { overview: "Overview", content: "Content", split: "Chapters", knowledge: "Key points", papers: "Papers" },
       /* Document ⇄ goal wiring (review M1-1). */
       linkGoals: "Link goals",

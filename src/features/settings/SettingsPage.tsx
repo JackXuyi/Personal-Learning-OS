@@ -16,6 +16,8 @@ import {
 } from "../../lib/desktop-log";
 import AIModelsSection from "./AIModelsSection";
 import DataPortabilityCard from "../data/portability/DataPortabilityCard";
+import KnowledgePackCard from "../data/portability/KnowledgePackCard";
+import type { PackCandidate } from "../data/portability/KnowledgePackCard";
 
 /**
  * 设置（docs/settings-top-tab-layout-design-2026-09.md：外层分区改顶部横向 Tab；
@@ -61,9 +63,16 @@ export default function SettingsPage() {
 
   const [section, setSection] = useState<SectionKey>("ai");
   const [counts, setCounts] = useState<StorageCounts | undefined>();
+  /**
+   * 可打包资料（F10 社区知识包卡片）。
+   *
+   * ⚠️ 与 `counts` **同源读取**（下面同一个循环里产出）—— 分成两次读库就是「两把尺子」：
+   * 两次 `listDocuments()` 之间可能夹着一次导入 / 删除，卡片列出的资料与计数对不上。
+   */
+  const [packCandidates, setPackCandidates] = useState<PackCandidate[] | undefined>();
 
   // Storage 分区计数：一次读取（docs/chapters 需逐文档；本地规模小）。
-  // 抽成函数而非内联 effect：导入（数据可携带卡）换掉整库后需要重算一次。
+  // 抽成函数而非内联 effect：导入（数据可携带卡 / 知识包卡）换掉整库后需要重算一次。
   const reloadCounts = () => {
     void (async () => {
       try {
@@ -76,6 +85,8 @@ export default function SettingsPage() {
         let chapters = 0;
         for (const d of docs) chapters += (await storage.listChapters(d.id)).length;
         setCounts({ docs: docs.length, chapters, papers: papers.length, goals: goals.length, evidence: evidence.length });
+        // 同一份 `docs` 既出计数也出候选列表（见上面 packCandidates 的注释）。
+        setPackCandidates(docs.map((x) => ({ id: x.id, title: x.title })));
       } catch {
         /* 计数失败保持 undefined（Storage 分区显示占位）。 */
       }
@@ -119,6 +130,7 @@ export default function SettingsPage() {
         ) : section === "storage" ? (
           <StorageSection
             counts={counts}
+            packCandidates={packCandidates}
             st={st}
             loading={m.common.loading}
             onDataChanged={reloadCounts}
@@ -160,14 +172,17 @@ function SectionShell({ title, desc, children }: { title: string; desc?: string;
 
 function StorageSection({
   counts,
+  packCandidates,
   st,
   loading,
   onDataChanged,
 }: {
   counts: StorageCounts | undefined;
+  /** 可打包资料（与 `counts` 同源；未就绪 = `undefined`）。 */
+  packCandidates: PackCandidate[] | undefined;
   st: Messages["settings"];
   loading: string;
-  /** 导入换掉整库后通知父级重算计数（数据可携带卡回调）。 */
+  /** 导入换掉整库后通知父级重算计数（数据可携带卡 / 知识包卡共用）。 */
   onDataChanged: () => void;
 }) {
   const sg = st.storage;
@@ -196,6 +211,10 @@ function StorageSection({
       {/* 数据可携带（F4）：导出 / 导入 / 单章 Markdown。同屏有「我这库有多大」的语境。 */}
       <div className="mt-3">
         <DataPortabilityCard counts={counts} onDataChanged={onDataChanged} />
+      </div>
+      {/* 社区知识包（F10）：把选中资料打成一份可分享的 .ploskp.json，或导入别人的包。 */}
+      <div className="mt-3">
+        <KnowledgePackCard docs={packCandidates} onDataChanged={onDataChanged} />
       </div>
     </SectionShell>
   );
