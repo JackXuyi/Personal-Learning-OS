@@ -81,6 +81,14 @@ Following those claims cost a whole detour.) Before planning, quoting, or "fixin
 - **Rescan across modules, not just the changed one.** A口径 change invalidates reasoning
   *elsewhere*; the two classes most often missed are **"why this API is banned" comments**
   and **user-facing copy**.
+- **Aggregate sections don't update themselves.** A "conclusions-first" doc has two layers:
+  per-feature detail (touched when the feature ships) and the **summary layer** (§0 judgements,
+  status tables, mermaid, "key facts" list). The summary is the most-read and least-maintained —
+  here it still called the learning half "no active-processing actions at all, the biggest
+  product gap" *after* all four shipped, and still counted `buildActiveProvider` at 6 call
+  sites (actually 17). **Rescan the summary in the same batch as any detail edit.** Treat every
+  **count** (N call sites / N writers / N readers) as the first thing to rot: re-measure on the
+  spot, or rewrite it as drift-proof phrasing ("as measured").
 
 ### 2. Locate concrete code
 
