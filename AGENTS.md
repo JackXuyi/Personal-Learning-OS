@@ -64,7 +64,7 @@ Cursor / Claude 系工具会按 frontmatter 自动注入：`alwaysApply: true` �
 
 ## Skills：按任务类型按需加载
 
-**原则：不要全量加载**（共 15 个）。改代码类任务以 `tiered-change-workflow` 为入口，或在任务开头用 `task-preflight-skill-match` 扫描 `skills/*/SKILL.md` 的 `description` 做窄匹配。
+**原则：不要全量加载**（共 17 个）。改代码类任务以 `tiered-change-workflow` 为入口，或在任务开头用 `task-preflight-skill-match` 扫描 `skills/*/SKILL.md` 的 `description` 做窄匹配。
 
 | Skill | 何时加载 | 一句话职责 |
 |-------|----------|-----------|
@@ -83,6 +83,7 @@ Cursor / Claude 系工具会按 frontmatter 自动注入：`alwaysApply: true` �
 | tauri-ipc | 涉及 `invoke`/命令注册/事件/`db_*` | vault/llm/db 命令契约、lib.rs 注册、serde 镜像、isTauri 守卫、`trySqlite` 降级与迁移自等待陷阱 |
 | **文档与变更配套** | | |
 | package-docs-driven-change | 功能/重构按文档驱动 | 按 area 读 docs → 对齐实现 → 产出测试（node tests/manual；浏览器级需用户显式要求） |
+| context-memory-distillation | `.workbuddy/memory/MEMORY.md` 被截断/明显膨胀/要再添不变量 | 逐节实测 → 已在 docs 有全文的机制改为**经 grep 验证**的指针 → 只留「改了会出事」的红线 → 重测所有计数 |
 | **测试** | | |
 | webapp-testing | **仅用户显式要求**的浏览器级校验/截图/调试 | 起 `npm run dev`(1420) + Python Playwright 脚本（受 no-headless-browser-validation 约束，默认禁用） |
 | playwright-test-ids | E2E 可测性 / data-testid（写 testid 不启动浏览器） | 交互元素加稳定 `data-testid`，重构成熟后保持稳定 |
