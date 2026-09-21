@@ -339,15 +339,20 @@ F1 画像 ✅  →  F7 章节编辑（快赢，1~2 天）  →  F4 导出 ✅（
 
 **一句话**：降低"第一分钟"的摩擦。
 
-**现状证据**
+**现状证据**（2026-09-21 实测更正）
 
-- `features/learn/import/pdf.ts` 仅 pdfjs 提取文本，**无 OCR** → 扫描件 / 纯图片 PDF 返回 0 字符，走进"仅保存文档不写章节"分支（`pipeline.ts:124`），用户看到"导入成功但没有章节"
-- `import/` 下无 DOCX / EPUB 解析器
-- 无 URL 抓取入口
+- ~~`features/learn/import/pdf.ts` 仅 pdfjs 提取文本，**无 OCR** → 扫描件 / 纯图片 PDF 返回 0 字符，走进"仅保存文档不写章节"分支（`pipeline.ts:124`），用户看到"导入成功但没有章节"~~
+  ⚠️ **本条已过时（2026-09-21 实测）**：`extractPdfText` 在文本为空时抛 `PdfNoTextError`（`import/pdf.ts:83`），
+  经 `local-files.ts:74` 映射为 `pdf-no-text`，UI 取 `t.err.pdfNoText` 提示「这份 PDF 抽不出文字（可能是扫描件），
+  请改用「粘贴文本」」——**0 字符 PDF 不会再静默落成"没有章节的文档"**（范围 1 已实现）。
+  仍成立的部分只有「**无 OCR**」本身：抽不出文字依旧无兜底，区别是现在会明确告诉用户。
+- `import/` 下无 DOCX / EPUB 解析器 ✅ **实测为真**（目录仅 md / txt / pdf / github 四路；`package.json` 无 mammoth / epub / readability 类依赖）
+- 无 URL 抓取入口 ✅ **实测为真**
 
 **范围**（每条独立，可增量交付）
 
-1. **0 字符检测 + 明确提示** —— 最小改动，**建议立即做**：解析结果为空时直接告诉用户"疑似扫描件，当前不支持 OCR"
+1. ~~**0 字符检测 + 明确提示**~~ ✅ **已实现（2026-09-21 实测）** —— 空文本即抛 `PdfNoTextError` → `pdf-no-text` → UI 提示；
+   `profile` 侧的简历导入走同一 kind（`resume-import.ts:76` 按 `err.name` 判定，不 `instanceof`）。**无需再做**。
 2. **OCR 兜底**：Tauri 侧接本地 OCR（如系统 Vision / tesseract）
 3. **DOCX 解析** → 复用既有 md 标题提升逻辑
 4. **EPUB 解析**

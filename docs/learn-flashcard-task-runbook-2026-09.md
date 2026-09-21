@@ -12,8 +12,8 @@
 
 1. **零伪造引用（D2-b=A）**：成卡充要条件 = 要点有原文出处（`quote` 非空且 `end > start`）。无出处的要点**不成卡**，UI 如实提示去跑「AI 分析要点」；绝不生成「正面=要点、背面=同句」的空卡。
 2. **零 AI 依赖（D2=A）**：不调用 `provider.chat`、不 import `src/ai/*`。卡面 100% 从既有 `Chapter.keyPoints` / `keyPointRefs` 派生；无模型时全链路可用。
-3. **不碰掌握度（D1/D6=A）**：mastery 唯一写方仍是卷面 `applyPaperResult`。卡片评分走独立 `applyCardRating`（只写 `CardState`），**绝不经过 `useLoopStore.submitAnswer`**（其 `applyRating` 会移动 mastery）；`useLoopStore.ts` 在本次 diff 中保持**零改动**（`TC-REG-01`）。
-   > ⚠️ 2026-09-20 更新：`useLoopStore::submitAnswer` 的自评分支已改走 `applyKeyPointRating`（不再移动 mastery）。不过本条的「绝不经过它」仍是**刻意的**：卡片走**卡级** `CardState` 调度，与章级 `nextReviewAt` 互不干扰，故 `TC-REG-01` 的源码级断言**继续有效**。
+3. **不碰掌握度（D1/D6=A）**：mastery 唯一写方仍是卷面 `applyPaperResult`。卡片评分走独立 `applyCardRating`（只写 `CardState`），**绝不经过 `useLoopStore.submitAnswer`** —— 理由是**调度层级**：卡片写**卡级** `CardState`（每张卡自己的 `nextReviewAt`），而那个入口写**章级** `byUnit[chapterId]` 的 `confidence` / `nextReviewAt` 并触发整轮闭环重算，走它会用「同一张卡的第 N 次评分」冒充「这一章复习了一次」；`useLoopStore.ts` 在本次 diff 中保持**零改动**（`TC-REG-01`）。
+   > ⚠️ 2026-09-20 更新：本行原先的理由是「其 `applyRating` 会移动 mastery」—— 该入口现已改走 `applyKeyPointRating`，**旧理由不再成立**；「绝不经过它」这一结论与 `TC-REG-01` 的源码级断言**继续有效**（换成了上面的调度层级理由）。
 
 ## Context
 

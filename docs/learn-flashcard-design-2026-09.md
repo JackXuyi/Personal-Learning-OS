@@ -67,7 +67,7 @@ F5「主动学习工具」共四条范围，按依赖序推进：**① 章内提
 | `nextReviewAt` 挂在 **subject** 上 | `src/domain/learner.ts:36`（`UnitMastery.nextReviewAt`）；`:117` `isDueReview(unit, now)` |
 | 复习会话（可复用 UI 资产） | `src/features/study/ReviewSession.tsx`：四档按钮（`:422-434`）、`Space` 揭晓 / `1-4` 评分 / `Enter` 下一项 / `Esc` 退出（`:245-273`）、5s 撤销（`:276-286`）、完成汇总（`SummaryView` `:490`）；参考要点来自**概念** `unit.summary`（`:167-176`） |
 | 复习会话入口 | `src/App.tsx:61` `/study/session`；调用方 `ChapterGraphPage.tsx:186`、`GraphView.tsx:214`、`CommandPalette.tsx:315` |
-| ⚠️ 已知不一致 ① | `src/stores/useLoopStore.ts:155` `submitAnswer({rating})` 调 `applyRating`（**会移动掌握度**）→ **卡片评分不得复用此入口**（见 §13 D6） |
+| ⚠️ 已知不一致 ① | ~~`src/stores/useLoopStore.ts:155` `submitAnswer({rating})` 调 `applyRating`（**会移动掌握度**）→ **卡片评分不得复用此入口**~~ ✅ **已修（2026-09-20，独立立项，见 §13 D6）**：改走 `applyKeyPointRating`（只写调度 + confidence）。**但「卡片评分不得复用此入口」这一结论不变** —— 理由换成**调度层级**：卡片写**卡级** `CardState`，该入口写**章级** `byUnit[chapterId]` 的 `confidence` / `nextReviewAt` 并触发整轮闭环重算 |
 | 要点卡渲染（入口落点） | `src/features/learn/detail/KnowledgeTab.tsx:232-255`（`keyPointRefs` 分支）/ `:256-265`（老数据回退） |
 | 阅读页第 3 区（入口落点） | `src/features/learn/ChapterReaderPage.tsx:274-312`（`Section` 带 `action` 插槽，已有「打开本章概念图谱」先例） |
 | 存储四后端契约 | `src/storage/types.ts` / `memory.ts` / `local.ts`，`tauri.ts` 继承 `LocalStorageAdapter`（新方法零改动继承） |
