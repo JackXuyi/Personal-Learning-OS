@@ -218,7 +218,8 @@ export interface TrendPoint {
 
 export interface TrendChapterSeries {
   id: string;
-  title: string;
+  /** 章标题；**解析不到时为 `undefined`**（章已随资料删除）—— 兜底文案由 UI 决定。 */
+  title?: string;
   /** 该章的掌握度快照序列（≥2 点才可画线）。 */
   points: { at: number; mastery: number }[];
 }
@@ -350,7 +351,7 @@ export function buildTimeline(
 | 有目标但范围内无判卷 | 范围内 `perChapter` 从未命中 | 时间线块显示引导 | 「该目标范围内还没有试卷记录」 |
 | 范围内章全部被删 | `goal.chapterIds` 与现存章无交集 | 时间线不渲染（`required === 0` 视为无效） | 块级引导（复用「范围内没有试卷记录」） |
 | 危险字符 / 超长章标题 | 标题含 `<`、引号或极长 | SVG 中标题走 React 文本节点（自动转义）；`titleOf` 结果为纯字符串 | 超长标题截断显示（`truncate`） |
-| 章 id 解析不出标题 | 章已删但 `byUnit` 残留 | 与 `/learner` 一致：**不可解析的主体不入榜** | 不出现在弱点榜（避免脏 key 入视图） |
+| 章 id 解析不出标题 | 章已删但 `byUnit` 残留 | **弱点榜**：与 `/learner` 一致 —— 不可解析的主体不入榜；**趋势**：历史序列保留（`id` + `points` 都在，仍可下钻），但 `title` 留空、由 UI 显示兜底文案 | 弱点榜不出现该章；趋势下拉显示「章节已不存在」而非裸 id（2026-09-21 口径修正） |
 
 ### 5.3 时序图
 
@@ -702,7 +703,7 @@ export function buildTrend(
   return {
     points,
     chapters: [...series.entries()]
-      .map(([id, pts]) => ({ id, title: titleOf(id) ?? id, points: pts }))
+      .map(([id, pts]) => ({ id, title: titleOf(id), points: pts }))   // 解析不到 → 留 undefined，**不回落 id**
       .filter((c) => c.points.length > 0),
     paperCount: ordered.length,
   };
@@ -1185,6 +1186,7 @@ progress: {                                            // 新增整段（双语�
 | TC-UC02-02 | UC-02 | 1 | 输入降序的 results | 输出 `points` 按 `at` 升序 | 单元 |
 | TC-UC02-03 | UC-02 | 1 | 同一章在两份卷里 mastery 0.3 → 0.5 | 该章 series 有 2 点；`snapshot` 取后者 | 单元 |
 | TC-UC02-04 | UC-02 | 1 | 1 份卷 | `points.length === 1`（页面据此画单点） | 单元 |
+| TC-UC02-05 | UC-02 | 1 | 试卷里的章已删（`titleOf` 返回 `undefined`） | **序列与历史点都保留**（`chapters.length === 1`、`points.length === 1`），但 `title === undefined` —— **不得回落成 `id`** | 单元 |
 | TC-UC03-01 | UC-03 | 1 | 章 A：mastery 0.2 / 卷面 0.3 / 0 误解；章 B：mastery 0.2 / 无卷 / 3 误解 | 手算：A = .5×0.667+.3×0.7+.2×0 = .5435；B = .5×0.667+0+0.2 = .5335 → **A 排在 B 前** | 单元 |
 | TC-UC03-02 | UC-03 | 1 | `limit = 5`，有 8 个候选 | 返回 5 条，且 `score` 非升序 | 单元 |
 | TC-UC03-03 | UC-03 | 1 | 某章 `titleOf` 返回 `undefined` | 不入榜 | 单元 |
@@ -1267,6 +1269,8 @@ progress: {                                            // 新增整段（双语�
 
 唯一被修正的是**测试自身**：`TC-REG-02` 原断言「趋势的 `chapters` 不含脏 key」，但趋势读的是**试卷历史**（章删了历史仍在 → 用 `id` 兜底），脏 key 过滤只属弱点榜（读 `byUnit`）。已改为只断言弱点榜，并新增 `TC-UC02-05` 显式锁定两种口径的差别（见 runbook T3 记录）。
 
+**2026-09-21 口径修正（真实库取证）**：上句「用 `id` 兜底」只对「**数据保留**」成立，对「**显示**」是错的 —— `titleOf(id) ?? id` 让 `/progress` 趋势下拉**真的渲染出** `chp-1e79433b`（本机实测：该章随资料 `doc-418a4116` 删除后，仍留在 2 份卷的 `perChapter` 里）。现改为：趋势序列照旧保留（`id` + `points`，仍可下钻），`TrendChapterSeries.title` 变为**可选**，解析不到就留空，由 `ProgressPage` 显示 `units.subjectGone`。同批把命令面板与能力评测的 3 处同族兜底（`|| chunk.id`、`?? s.itemId`、`?? itemId`）一并收口，并加 `tests/no-rawid-label.test.ts`（7 例）锁死。详见 `docs/raw-id-label-fix-2026-09.md`。
+
 ### 13.5 待人工核对（受 `rules/no-headless-browser-validation.mdc` 约束未起浏览器）
 
 - `/progress` 四块在真实数据下的视觉与色阶可读性；
@@ -1283,3 +1287,4 @@ progress: {                                            // 新增整段（双语�
 | 2026-09-15 | 初稿：D1–D4 四项决策定案（全取推荐），12 章完成 | Agent |
 | 2026-09-16 | roadmap §F3 状态同步：正文与总表标 ◐「方案已出，待确认」；标注两处被方案否决的前提（范围第 5 条 / Done 标准第 3 条）；补 D1 路由改档与「1 万条」前提不成立说明。**README 双语暂不改**（T9 排在实施后 → 32/13） | Agent |
 | 2026-09-16 | **实施完成**（T1–T9 全部 done）：新增 `/progress` 四块视图（热力图 / 掌握度趋势 / 弱点排行 / 目标进度时间线）；`EVIDENCE_LOG_MAX` 500 → 5000。补 **§13 实施结果**（交付物 / 六项验收 / **4 处伪代码偏离登记** / 待人工核对项）；表头状态改 ✅；§9 T9 的「方案 §14」更正为 §13 | Agent |
+| 2026-09-21 | **口径修正**：`TrendChapterSeries.title` 由必填改**可选**，`buildTrend` 不再 `?? id` 兜底（章已删时历史序列保留、标题留空，由 UI 显示 `units.subjectGone`）；同步 §6.2 类型定义 / §7 伪代码 / §5.2 异常表 / §12 补 TC-UC02-05 行 / §13.4 补修正说明。真实库取证见 `docs/raw-id-label-fix-2026-09.md` | Agent |

@@ -181,19 +181,24 @@ const kept = scopeIds ? chapters.filter((c) => scopeIds.has(c.id)) : chapters;
 | 孤儿试卷 id | 3（`paper-eb0984ba` / `paper-c6ab7436` / `paper-84471971`） | 只作为 `plos.evidence[].sourceId` 存在，试卷本体已删 |
 | 孤儿掌握度 | 1（`chp-fe61221e`，`mastery=0.585`） | `plos.learner.byUnit` |
 
-**已有的防呆**：`features/progress/analytics.ts::buildWeakness` 明确处理了
-「章已删但 byUnit 残留 → 不可解析的主体不入榜」；`buildTrend` 的逐章序列则用
-`titleOf(id) ?? id` ⇒ **图表图例会显示 `chp-1e79433b` 这种裸 id**（与 §4 同族问题，
-消费方不同、本次未动）。
+**已有的防呆与后续收口**：`features/progress/analytics.ts::buildWeakness` 明确处理了
+「章已删但 byUnit 残留 → 不可解析的主体不入榜」；`buildTrend` 的逐章序列原先用
+`titleOf(id) ?? id` ⇒ **趋势下拉会显示 `chp-1e79433b` 这种裸 id**（与 §4 同族问题，
+消费方不同）。✅ **2026-09-21 已修**：序列照旧保留、`title` 改为可选留空，由 UI 显示
+`units.subjectGone`；同批收口命令面板与能力评测的 3 处同族兜底 —— 详见
+`docs/raw-id-label-fix-2026-09.md`。
 
-**未决**：是否要（a）给 `deleteDocumentCascade` 补证据流/学习者状态的清理；
-（b）做一次性孤儿清理迁移；（c）维持「证据流是 append-only 历史，允许悬空」的现状。
-三者语义不同，需单独拍板。
+**未决 → 2026-09-21 部分拍板**：用户选定 **(b) 做一次性孤儿清理**并已执行，但范围
+**收窄到试卷侧** —— 删 `chapterId` 已失效的题 + 连带删因此变空的卷与它的草稿/判卷结果，
+口径**跟随 `memory.ts::deletePaper`**（唯一真源）：`plos.papers` 8 → 1、
+`plos.paper-drafts` 3 → 1 键、`plos.paper-results` 3 → 1 条，其余 20 个 key 逐字节不变。
+证据流与 `learner.byUnit` 仍维持 **(c) append-only**（悬空的 `subjectId` / `byUnit` 残留
+没有用户可见症状，要清需另一次拍板）；`deleteDocumentCascade` 也尚未补证据流清理。
 
 ### 7.2 其他
 
-- `plos.paper-drafts` 有 3 个**空对象** `{}`（对应 3 份已判卷的 done 试卷）——判卷后未清草稿，
-  属存储占用而非用户可见问题。
+- `plos.paper-drafts` 原有 3 个**空对象** `{}`（对应 3 份已判卷的 done 试卷）——判卷后未清草稿，
+  属存储占用而非用户可见问题。2026-09-21 清理孤儿卷时已连带删掉 2 个（只剩 `paper-be3d6e6f`）。
 - `plos.knowledge-units` / `-relations` / `chunks` / `embeddings` / `sections` 在 localStorage
   里为空是**预期**：RAG 五类已迁 SQLite，localStorage 只承载其余实体。
 - `doc-b577e2b8` 无 `analysis` 字段而 `doc-3a3025f2` 只有 `chaptersAt` —— `analysis` 全部

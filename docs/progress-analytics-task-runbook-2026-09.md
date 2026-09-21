@@ -42,7 +42,7 @@ evidence 上限常量 500 → 5000。
 ### T3 — `tests/progress-analytics.test.ts` + `test:progress` 脚本
 - **Status:** done
 - **Outcome:** 新增 `tests/progress-analytics.test.ts`（**35 条断言全绿**）；`package.json` 新增 `test:progress` 并挂到 `test:library` 链尾。验证：`npm run test:progress` → **ALL PASS**（目标 ≥24）。
-- **Notes:** 实施期修掉一处**测试自身的**过头断言：TC-REG-02 原同时断言 `buildTrend.chapters` 不含脏 key，但趋势读的是**试卷历史**（章删了历史仍在 → 用 id 兜底），脏 key 过滤只属弱点榜（读 `byUnit`）。已修正并用 TC-UC02-05 显式锁定两种口径的差别。
+- **Notes:** 实施期修掉一处**测试自身的**过头断言：TC-REG-02 原同时断言 `buildTrend.chapters` 不含脏 key，但趋势读的是**试卷历史**（章删了历史仍在 → 用 id 兜底），脏 key 过滤只属弱点榜（读 `byUnit`）。已修正并用 TC-UC02-05 显式锁定两种口径的差别。⚠️ **2026-09-21 修正**：其中「用 id 兜底」的说法**已被推翻** —— 「历史序列保留」是对的，但 `title` 回落成 `id` 是显示层缺陷（真实库实测 `/progress` 下拉渲染出 `chp-1e79433b`）。序列照旧保留、`title` 改为可选留空，文案由 UI 兜底。详见 `docs/raw-id-label-fix-2026-09.md`。
 
 ### T4 — `features/progress/charts.tsx`：三个手写 SVG 组件
 - **Status:** done
