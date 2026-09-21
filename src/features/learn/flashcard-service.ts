@@ -5,8 +5,14 @@
  * - **零 AI**：本模块不 import `src/ai/*`，不触发任何模型调用。
  * - **卡面不落库**（D4-A）：`DerivedCard` 每次现场派生；持久化的只有 `CardState`。
  * - **不碰掌握度**（D1-A / D6-A）：评分只写 `CardState` + 一条 `kind="card"`、
- *   `delta=0` 的证据；**绝不经过 `useLoopStore.submitAnswer`**（那里的 `applyRating`
- *   会移动 mastery）。本模块不 import `applyRating` / `saveLearnerState`。
+ *   `delta=0` 的证据；**绝不经过 `useLoopStore.submitAnswer`** —— 理由是**调度层级**
+ *   不同：卡片写**卡级** `CardState`（每张卡自己的 `nextReviewAt`），而那个入口写
+ *   **章级** `byUnit[chapterId]` 的 `confidence` / `nextReviewAt` 并触发整轮闭环重算；
+ *   走它会用「同一张卡的第 N 次评分」冒充「这一章复习了一次」。
+ *   ⚠️ 2026-09-20 更正：本行原先的理由是「`submitAnswer` 会移动 mastery」——
+ *   该入口已改走 `applyKeyPointRating`（只写调度 + confidence），旧理由不再成立；
+ *   **「不得经过它」本身不变**，变的只是理由（见 `src/stores/useLoopStore.ts` 的
+ *   rating 分支注释）。本模块不 import 会移动掌握度的 `applyRating` / `saveLearnerState`。
  * - **未评分路径零写入**：`peekCardStats` 纯只读；`collectCards` 的**唯一**写点是
  *   孤儿清理（`pruned > 0` 时才写）。
  * - **孤儿清理必须限定 scope**：只清理本次 scope（章 / 资料）内的孤儿状态 ——

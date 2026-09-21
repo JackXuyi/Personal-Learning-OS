@@ -38,8 +38,11 @@ interface SessionItem {
  * 判定逻辑与「为什么卡片模式必须优先于概念模式」见 `session-mode.ts`。
  *
  * 采用**委托**而非在本组件内加分支：既有会话体（`SessionBody`）因此**零改动** ——
- * 卡片模式根本不经过它的 hooks 与数据流，`snapshot` / `submitAnswer` /
- * `applyRating` 全都碰不到（卡片**不移动掌握度**）。
+ * 卡片模式根本不经过它的 hooks 与数据流，`snapshot` / `submitAnswer` 都碰不到。
+ * 卡片**不移动掌握度**：评分走独立的 `applyCardRating`，只写卡级 `CardState`。
+ * ⚠️ 2026-09-20 更正：本行原先还写「`applyRating` 碰不到」作为不移动掌握度的理由，
+ * 但那次改档后 `submitAnswer` 已不再调它（改走 `applyKeyPointRating`）—— 理由换成
+ * 调度层级（卡级 vs 章级），**结论不变**。
  */
 export default function ReviewSession() {
   const [params] = useSearchParams();

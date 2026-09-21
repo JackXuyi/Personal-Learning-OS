@@ -3,7 +3,7 @@
  *
  * 与同目录 `ReviewSession`（概念层 / 全局闭环快照）的关系：**独立组件**，由
  * `ReviewSession` 按 URL 模式**委托**渲染（见 `session-mode.ts`）。这样既有会话体
- * 零改动 —— 卡片模式不经过 `snapshot` / `submitAnswer` / `applyRating`，
+ * 零改动 —— 卡片模式不经过 `snapshot` / `submitAnswer`，评分只写卡级 `CardState`，
  * 因此**不会移动掌握度**（决策 D1-A / D6-A）。
  *
  * 交互骨架（`Space` 揭晓 / `1-4` 评分 / `Enter` 下一项 / `Esc` 退出 / 5s 撤销 /
