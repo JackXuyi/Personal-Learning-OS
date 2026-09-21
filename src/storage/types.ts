@@ -48,6 +48,24 @@ export interface RetrievalScope {
 export interface StorageAdapter {
   readonly name: string;
 
+  /**
+   * 单次导入的**可写容量**（UTF-8 字节）—— 体积前置判定的**唯一依据**（F10 / D7 第 ③ 层）。
+   *
+   * ⚠️ 这是**后端能力**，不是策略，所以放在适配器上而不是写死一个数字：
+   * - `InMemoryStorage`（含 `local`）：`PACK_LOCAL_STORE_BUDGET_BYTES`（4 MiB）
+   *   —— 宿主 localStorage 配额是硬的；
+   * - `TauriStorage`：**`undefined`** —— 文档 / 章节已下沉 SQLite（D12），本后端
+   *   **不设应用层容量上限** → 该层判定整体跳过。
+   *
+   * ⚠️ **可选属性是刻意的**：`undefined` 的语义是「这条线不存在」，判定处写成
+   * `capacity !== undefined && bytes > capacity`，读代码即知。**不要**改回
+   * `Number.POSITIVE_INFINITY` —— `Infinity` 参与 `JSON.stringify` 会变 `null`、
+   * 参与算术会污染成 `NaN`，是个会走火的值。
+   *
+   * ⚠️ 子类**必须显式覆写**才能拿到 `undefined`：父类有值，不覆写就是**继承 4 MiB**。
+   */
+  readonly storeCapacityBytes?: number;
+
   // ===== 文档（知识库）=====
   listDocuments(): Promise<SourceDocument[]>;
   /** 单份资料（详情页按 id 取；不存在返回 undefined）。 */

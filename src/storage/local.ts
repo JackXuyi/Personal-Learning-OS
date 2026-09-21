@@ -157,12 +157,30 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     return [...this.embeddings.values()].map(({ vector: _vector, ...meta }) => meta);
   }
 
-  private persist() {
+  /**
+   * 只写「文档 / 章节」两个 key。
+   *
+   * 为什么拆出来：`TauriStorage` 需要在 **RAG 降级兜底** 路径上重写 localStorage
+   * （如 `super.saveSection()` → `persist()`），但文档 / 章节**已下沉 SQLite**
+   * （D12）—— 再写一次 `KEY_DOCUMENTS` 会：
+   * ① 击穿配额（那是整库正文，正是下沉要躲的那堵墙）；
+   * ② 让「冻结的迁移快照」变得新鲜可信 → 变成**假灾备**（看着有副本，其实过时）。
+   */
+  protected persistDocuments(): void {
     localStorage.setItem(KEY_DOCUMENTS, JSON.stringify([...this.documents.values()]));
     localStorage.setItem(
       KEY_CHAPTERS,
       JSON.stringify(Object.fromEntries(this.chaptersByDocument)),
     );
+  }
+
+  /**
+   * 其余 key（22 个）。逐行原样搬自原 `persist()` —— **不改任何一行**。
+   *
+   * 与 `persistDocuments()` 的边界是「是否属于已下沉 SQLite 的实体」：
+   * 将来再有实体下沉时，从这里移出去即可，`persist()` 本身不用动。
+   */
+  protected persistRest(): void {
     // RAG 存储层持久化
     localStorage.setItem(KEY_SECTIONS, JSON.stringify([...this.sections.values()]));
     localStorage.setItem(KEY_CHUNKS, JSON.stringify([...this.chunks.values()]));
@@ -208,6 +226,11 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     // 学习者记忆（F9）：文档是纯文本 → **直接 setItem，不 JSON.stringify**（见 key 处注释）
     localStorage.setItem(KEY_MEMORY_DOC, this.memoryDoc);
     localStorage.setItem(KEY_MEMORY_META, JSON.stringify(this.memoryMeta));
+  }
+
+  protected persist() {
+    this.persistDocuments();
+    this.persistRest();
   }
 
   override async saveDocument(doc: SourceDocument): Promise<void> {

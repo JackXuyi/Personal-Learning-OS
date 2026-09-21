@@ -1,16 +1,22 @@
 /**
- * Tauri SQLite 后端 —— RAG 存储层的生产实现（T7）。
+ * Tauri SQLite 后端 —— 存储层的生产实现。
  *
- * 分层：Section / Chunk / KnowledgeUnit / KnowledgeRelation / Embedding 五类实体
- * 走 `db_*` 命令落到 `app_data_dir/plos.db`；Document / Chapter / Paper / Goal /
- * LearnerState / Evidence 仍由父类（localStorage）承载——迁移期避免双写，
- * 待 T9 迁移工具上线后由 SQLite 全量接管。
+ * 分层（v5 起）：
+ * - 走 `db_*` 命令落到 `app_data_dir/plos.db`：**Document / Chapter**（v5 下沉 ·
+ *   D12，见 docs/community-knowledge-pack-design-2026-09.md §8.19）+ 原 RAG 五类
+ *   （Section / Chunk / KnowledgeUnit / KnowledgeRelation / Embedding）；
+ * - 仍由父类（localStorage）承载：Paper / Goal / LearnerState / LearnerProfile /
+ *   Evidence / Restatement / CardState / Annotation / Capability* / MemoryDoc。
  *
- * 降级（RAG Spec §45）：SQLite 命令抛错（命令未注册 / 建库失败 / 查询异常）时
- * 静默回退到父类同名方法，保证桌面端永不因存储故障而不可用。
+ * ⚠️ 降级策略**按实体分档**（这不是不一致，是刻意的）：
+ * - **RAG 五类是可重算的派生数据** → SQLite 命令抛错时静默回退父类同名方法
+ *   （最坏是「索引旧了」），保证桌面端永不因存储故障而不可用；
+ * - **Document / Chapter 是不可再生的原始资产**（且 `textPreview` 是所有字符偏移
+ *   的基准）→ **失败必须抛 `StorageUnavailableError`**，绝不落 localStorage。
+ *   半写会让库**脑裂**（SQLite 一半 + localStorage 一半），比直接报错难排查得多。
  *
- * T9 迁移：首次确认 SQLite 可用时，把 localStorage 侧的遗留 RAG 数据一次性
- * 搬进 SQLite（`migrateLegacyRagData()`），幂等且失败不影响主流程。
+ * 迁移：首次确认 SQLite 可用时，把 localStorage 侧的遗留数据一次性搬进 SQLite
+ * （RAG 五类 / 概念图 blob / 文档 + 章节），三段串行、各自幂等、互不影响。
  *
  * 序列化约定与 Rust `src-tauri/src/db/models.rs` 严格镜像：
  * - 顶层参数用 camelCase（`#[tauri::command]` 默认 ArgumentCase::Camel）；
@@ -18,7 +24,11 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  Chapter,
+  ChapterStatus,
   Chunk,
+  DocumentFormat,
+  DocumentStatus,
   Embedding,
   EmbeddingTargetType,
   EmbeddingVector,
@@ -26,7 +36,9 @@ import type {
   KnowledgeRelation,
   KnowledgeUnit,
   Section,
+  SourceDocument,
 } from "../domain";
+import { sortChaptersByOrder } from "../domain";
 import {
   diffIds,
   fromRelationDto,
@@ -37,8 +49,19 @@ import {
   toUnitDto,
 } from "./graph-split";
 import type { KnowledgeRelationDto, KnowledgeUnitDto } from "./graph-split";
+import { StorageUnavailableError } from "./errors";
 import { LocalStorageAdapter } from "./local";
 import type { RetrievalScope, StorageAdapter } from "./types";
+
+/**
+ * `invoke` 的最小结构类型。
+ *
+ * 可注入 → node 单测能直跑本类新增的四条硬逻辑（迁移次序 / 镜像载入 / 失败抛错 /
+ * 清库次序）。这四条**与 Tauri 运行时无关**，但恰是本次最容易写错的地方。
+ * 与 `features/learn/import/github.ts` 的 `FetchLike` 注入**同一条范式**
+ * （不引 mock 框架、不改生产接线 —— `createStorage()` 仍是无参 `new TauriStorage()`）。
+ */
+export type InvokeLike = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 
 // ===== DTO：Rust db/models.rs 的 TS 镜像（字段名 camelCase）=====
 
@@ -86,6 +109,138 @@ interface EmbeddingVectorDto {
   model: string;
   dim: number;
   vector: number[];
+}
+
+// ===== DTO：SourceDocument / Chapter（v5 下沉 · D12）=====
+//
+// ⚠️ `ord` ↔ `order` 的映射点**只有 toChapterDto / fromChapterDto 两处**
+// （SQL 列名避开保留字 `order`，同 `sections.idx` 先例）。别在别处再出现一次 `ord`。
+
+interface DocumentDto {
+  id: string;
+  title: string;
+  format: string;
+  status: string;
+  path?: string;
+  uri?: string;
+  source?: string;
+  importedAt: number;
+  rawSizeBytes?: number;
+  /** 正文快照 —— 最大的一列（100 MiB 量级知识包的主体就在这）。 */
+  textPreview?: string;
+  goalIds?: string[];
+  analysis?: SourceDocument["analysis"];
+  overview?: SourceDocument["overview"];
+}
+
+interface ChapterDto {
+  id: string;
+  documentId: string;
+  /** SQL 列名 `ord`；TS 领域字段是 `Chapter.order`。 */
+  ord: number;
+  title: string;
+  contentRefStart: number;
+  contentRefEnd: number;
+  status: string;
+  createdAt: number;
+  keyPoints: string[];
+  keyPointRefs?: Chapter["keyPointRefs"];
+  unitIds: string[];
+}
+
+/**
+ * 领域对象 → DTO。可选字段**缺省时不写键**（而非写 `undefined`）：
+ * Rust 侧 `#[serde(default)]` 收到「键不存在」→ `None` → SQL NULL。
+ */
+function toDocumentDto(d: SourceDocument): DocumentDto {
+  return {
+    id: d.id,
+    title: d.title,
+    format: d.format,
+    status: d.status,
+    importedAt: d.importedAt,
+    ...(d.path !== undefined ? { path: d.path } : {}),
+    ...(d.uri !== undefined ? { uri: d.uri } : {}),
+    ...(d.source !== undefined ? { source: d.source } : {}),
+    ...(d.rawSizeBytes !== undefined ? { rawSizeBytes: d.rawSizeBytes } : {}),
+    ...(d.textPreview !== undefined ? { textPreview: d.textPreview } : {}),
+    ...(d.goalIds !== undefined ? { goalIds: d.goalIds } : {}),
+    ...(d.analysis !== undefined ? { analysis: d.analysis } : {}),
+    ...(d.overview !== undefined ? { overview: d.overview } : {}),
+  };
+}
+
+/**
+ * DTO → 领域对象。
+ *
+ * ⚠️ 用 `!= null`（而非 `!== undefined`）是有意的双保险：Rust 侧 `DocumentOut`
+ * 已带 `skip_serializing_if`，缺省字段不会出现在 JSON 里；但假 `invoke` 或将来
+ * 有人给 DTO 加回 `null` 时，`null` 一旦落进领域对象，下次 round-trip 的深比较
+ * 就会因 `null !== undefined` 失败且 typecheck 查不出来。
+ */
+function fromDocumentDto(d: DocumentDto): SourceDocument {
+  return {
+    id: d.id,
+    title: d.title,
+    format: d.format as DocumentFormat,
+    status: d.status as DocumentStatus,
+    importedAt: d.importedAt,
+    ...(d.path != null ? { path: d.path } : {}),
+    ...(d.uri != null ? { uri: d.uri } : {}),
+    ...(d.source != null ? { source: d.source } : {}),
+    ...(d.rawSizeBytes != null ? { rawSizeBytes: d.rawSizeBytes } : {}),
+    ...(d.textPreview != null ? { textPreview: d.textPreview } : {}),
+    ...(d.goalIds != null ? { goalIds: d.goalIds } : {}),
+    ...(d.analysis != null ? { analysis: d.analysis } : {}),
+    ...(d.overview != null ? { overview: d.overview } : {}),
+  };
+}
+
+function toChapterDto(c: Chapter): ChapterDto {
+  return {
+    id: c.id,
+    documentId: c.documentId,
+    ord: c.order,
+    title: c.title,
+    contentRefStart: c.contentRef.start,
+    contentRefEnd: c.contentRef.end,
+    status: c.status,
+    createdAt: c.createdAt,
+    keyPoints: c.keyPoints,
+    ...(c.keyPointRefs !== undefined ? { keyPointRefs: c.keyPointRefs } : {}),
+    unitIds: c.unitIds,
+  };
+}
+
+function fromChapterDto(d: ChapterDto): Chapter {
+  return {
+    id: d.id,
+    documentId: d.documentId,
+    order: d.ord,
+    title: d.title,
+    contentRef: { start: d.contentRefStart, end: d.contentRefEnd },
+    keyPoints: d.keyPoints ?? [],
+    ...(d.keyPointRefs != null ? { keyPointRefs: d.keyPointRefs } : {}),
+    unitIds: d.unitIds ?? [],
+    status: d.status as ChapterStatus,
+    createdAt: d.createdAt,
+  };
+}
+
+/**
+ * 镜像重建：章节按 `documentId` 分组。
+ *
+ * ⚠️ **组内不再排序** —— SQL 侧 `ORDER BY document_id ASC, ord ASC` 已保证有序，
+ * 这里再排一次就是「同一口径两处实现」（将来改了排序规则会有一处漏改）。
+ */
+function groupChaptersByDocument(rows: ChapterDto[]): Map<string, Chapter[]> {
+  const out = new Map<string, Chapter[]>();
+  for (const row of rows) {
+    const list = out.get(row.documentId);
+    if (list) list.push(fromChapterDto(row));
+    else out.set(row.documentId, [fromChapterDto(row)]);
+  }
+  return out;
 }
 
 // ===== 领域对象 ↔ DTO 映射 =====
@@ -201,10 +356,22 @@ const RAG_MIGRATION_FLAG = "plos.rag.migrated.v1";
  */
 const GRAPH_MIGRATION_FLAG = "plos.graph.migrated.v2";
 
+/**
+ * 遗留文档 / 章节迁移标记（v5 / D12）。
+ *
+ * ⚠️ **必须新开 v3 号**：存量用户升级前 RAG 迁移已把 v1 置位 —— 复用 v1 会让
+ * 文档迁移被「已迁移」**短路**，整库资料永远进不了 SQLite（且症状是「看起来
+ * 一切正常，只是没搬」，比报错难发现得多）。与 `GRAPH_MIGRATION_FLAG` 同一条教训。
+ */
+const DOCS_MIGRATION_FLAG = "plos.docs.migrated.v3";
+
 /** `db_status` 返回体（健康探针）。 */
 export interface DbStatus {
   ready: boolean;
   counts: {
+    /** v5 起：资料与章节也落库（排障区确认「文档真的进去了」的唯一证据）。 */
+    documents: number;
+    chapters: number;
     sections: number;
     chunks: number;
     knowledgeUnits: number;
@@ -229,6 +396,22 @@ type SqliteResult<T> = { ok: true; value: T } | { ok: false };
 export class TauriStorage extends LocalStorageAdapter implements StorageAdapter {
   override readonly name = "tauri";
 
+  /**
+   * 注入式 IPC，默认即真 `invoke`（见 `InvokeLike` 的注释）。
+   *
+   * ⚠️ **刻意不写成 TS 参数属性**（`constructor(private readonly call: …)`）：
+   * 本仓库单测用 `node --experimental-strip-types` 直跑，而 strip-only 模式
+   * **不支持参数属性**（`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`）。任何**间接**
+   * import 到本文件的测试（如 `tests/chapter-edit.test.ts`）都会当场炸，
+   * 且报错指向这一行、与测试意图毫无关系 —— 排查成本极高。显式字段等价且安全。
+   */
+  private readonly call: InvokeLike;
+
+  constructor(call: InvokeLike = invoke) {
+    super();
+    this.call = call;
+  }
+
   /** null = 未探测；true = 可用；false = 已降级。 */
   private sqliteReady: boolean | null = null;
   /** 降级告警只打一次，用独立标记（避免与 sqliteReady 的流分析互相干扰）。 */
@@ -236,10 +419,27 @@ export class TauriStorage extends LocalStorageAdapter implements StorageAdapter 
   /** 一次性迁移任务（并发去重）；null = 尚未开始。 */
   private migration: Promise<number> | null = null;
 
+  /** 文档镜像是否已从 SQLite 载入（D12：一次性，会话内常驻）。 */
+  private docsHydrated = false;
+
+  /**
+   * 本后端**不设应用层容量上限**（D16）。
+   *
+   * ⚠️ 这一行**不是冗余**：父类（`InMemoryStorage`）随后就会给出
+   * `PACK_LOCAL_STORE_BUDGET_BYTES` 的值，**不覆写就是继承 4 MiB** —— 那会让
+   * 「文档已下沉 SQLite、装得下任意大小」这个结论在代码层失效。下一轮重构请勿
+   * 把它当「漏写的默认值」删掉。
+   *
+   * ⚠️ 此处暂无 `override` 修饰符：`StorageAdapter` 的该字段是**可选**的，父类
+   * 当下还没给值（基类赋值随「已导入知识包记录」一并落地，见 F10 方案 §8.8 / T7）。
+   * 基类给了值之后，这里要补回 `override` —— 否则 subclass 会静默继承父类的 4 MiB。
+   */
+  readonly storeCapacityBytes?: number = undefined;
+
   /** 探测 SQLite 是否就绪（并刷新内部状态）。 */
   async probe(): Promise<boolean> {
     try {
-      await invoke<DbStatus>("db_status");
+      await this.call<DbStatus>("db_status");
       const firstSuccess = this.sqliteReady !== true;
       this.sqliteReady = true;
       if (firstSuccess) await this.ensureMigration();
@@ -250,7 +450,154 @@ export class TauriStorage extends LocalStorageAdapter implements StorageAdapter 
     }
   }
 
-  // ===== T9 · localStorage → SQLite 一次性迁移 =====
+  // ===== 文档 / 章节（v5 下沉 · D12）=====
+
+  /**
+   * 保证「先迁移、后使用」，并按需把文档镜像从 SQLite 载入（一次性）。
+   *
+   * ⚠️ **所有**文档 / 章节方法（**读或写**）的第一步都必须是它。
+   * 只给读方法加是不够的：若先走一次写（`saveDocument` → `db_save_documents`）
+   * 再触发迁移，迁移就会拿 localStorage 的**旧快照**去覆盖刚写进去的数据
+   * （`db_save_documents` 是 upsert 语义，同 id 直接覆盖）。
+   *
+   * ⚠️ 载入失败**抛错**，不静默降级为空库、也不返回旧快照 ——
+   * 静默的旧数据比报错危险（用户以为看到的是全部资料）。
+   */
+  private async ensureDocs(): Promise<void> {
+    if (this.docsHydrated) return;
+    await this.ensureMigration();
+    const docs = await this.trySqlite<DocumentDto[]>("db_list_documents", {});
+    const chapters = await this.trySqlite<ChapterDto[]>("db_list_chapters_all", {});
+    if (!docs.ok || !chapters.ok) throw new StorageUnavailableError("db_list_documents");
+    this.documents = new Map(docs.value.map((d) => [d.id, fromDocumentDto(d)]));
+    this.chaptersByDocument = groupChaptersByDocument(chapters.value);
+    this.docsHydrated = true;
+  }
+
+  override async listDocuments(): Promise<SourceDocument[]> {
+    await this.ensureDocs();
+    return [...this.documents.values()];
+  }
+
+  override async getDocument(id: string): Promise<SourceDocument | undefined> {
+    await this.ensureDocs();
+    return this.documents.get(id);
+  }
+
+  /**
+   * ⚠️ 失败**抛错**，不落 localStorage —— 见类头「降级策略按实体分档」。
+   * 文档是不可再生的原始资产，兜底会产出脑裂库。
+   */
+  override async saveDocument(doc: SourceDocument): Promise<void> {
+    await this.ensureDocs();
+    const r = await this.trySqlite("db_save_documents", { documents: [toDocumentDto(doc)] });
+    if (!r.ok) throw new StorageUnavailableError("db_save_documents");
+    this.rememberDocument(doc); // 基类纯内存方法（§8.19.2）
+  }
+
+  /** 一条命令的事务内删 `documents` + 其全部 `chapters`。 */
+  override async deleteDocument(id: string): Promise<void> {
+    await this.ensureDocs();
+    const r = await this.trySqlite("db_delete_document", { id });
+    if (!r.ok) throw new StorageUnavailableError("db_delete_document");
+    this.forgetDocument(id); // 含批注级联
+  }
+
+  override async listChapters(documentId: string): Promise<Chapter[]> {
+    await this.ensureDocs();
+    return sortChaptersByOrder(this.chaptersByDocument.get(documentId) ?? []);
+  }
+
+  /** 语义 = **整批替换该资料的章节集**（与内存侧 `rememberChapters` 严格同构）。 */
+  override async saveChapters(documentId: string, chapters: Chapter[]): Promise<void> {
+    await this.ensureDocs();
+    const list = sortChaptersByOrder(chapters);
+    const r = await this.trySqlite("db_save_chapters", {
+      documentId,
+      chapters: list.map(toChapterDto),
+    });
+    if (!r.ok) throw new StorageUnavailableError("db_save_chapters");
+    this.rememberChapters(documentId, list);
+  }
+
+  /**
+   * 文档 / 章节不再落 localStorage（真源 = SQLite · D12）。
+   *
+   * ⚠️ 空实现**不是漏写**：`plos.documents` / `plos.chapters` 冻结为迁移时的
+   * 快照，只在 `clearAll` 时被清掉。补上它会：① 击穿配额（整库正文，正是下沉
+   * 要躲的那堵墙）；② 让快照变得新鲜可信 → 变成**假灾备**。
+   *
+   * 触发场景（都是 RAG 侧的降级兜底路径，父类 `persist()` 会调到这里）：
+   * `super.saveSection()` / `super.saveChunk()` / … 失败回退时。
+   */
+  protected override persistDocuments(): void {
+    /* 见方法注释：刻意空实现 */
+  }
+
+  // ===== 迁移工具（`tauri.ts` 旧注释里的「T9 迁移工具」= 本条 + RAG / 图两条）=====
+
+  /**
+   * 把父类（localStorage）侧的遗留文档 / 章节搬进 SQLite。
+   *
+   * ⚠️ 必须用**裸 `this.call`** 而非 `trySqlite`：本方法由 `ensureMigration`
+   * 调用，而 `trySqlite` 首次成功时会回头 `await ensureMigration()` →
+   * **自等待死锁**（`migrateLegacyGraph` 已踩过同一条坑并在注释里写明）。
+   *
+   * ⚠️ 章节按「资料」为单位迁（`db_save_chapters` 是资料级替换语义）——
+   * 不为此另造一条 bulk 命令：**一个语义只留一条命令**。
+   *
+   * 只增不删、**不清源**：localStorage 侧保留为灾备 + 浏览器预览数据源。
+   *
+   * @returns 搬移的实体总数（资料数 + 章节数）；-1 = 失败（**不写标记**，下次重试）。
+   */
+  async migrateLegacyDocuments(): Promise<number> {
+    if (this.readDocsFlag()) return 0;
+    try {
+      // 直接读父类内存镜像：LocalStorageAdapter 构造时已把两个 key 载入，
+      // 且此刻 `ensureDocs` 尚未替换镜像（它先 await 迁移再载入）。
+      const docs = [...this.documents.values()];
+      const groups = [...this.chaptersByDocument.entries()].filter(([, list]) => list.length > 0);
+      const total = docs.length + groups.reduce((n, [, list]) => n + list.length, 0);
+      if (total === 0) {
+        this.writeDocsFlag();
+        return 0;
+      }
+
+      if (docs.length > 0) {
+        await this.call("db_save_documents", { documents: docs.map(toDocumentDto) });
+      }
+      for (const [documentId, list] of groups) {
+        await this.call("db_save_chapters", {
+          documentId,
+          chapters: sortChaptersByOrder(list).map(toChapterDto),
+        });
+      }
+      this.writeDocsFlag();
+      console.info(`[storage] 遗留文档 / 章节已迁入 SQLite：${docs.length} 份资料`);
+      return total;
+    } catch (err) {
+      console.warn("[storage] 遗留文档 / 章节迁移失败，下次启动重试", err);
+      return -1;
+    }
+  }
+
+  private readDocsFlag(): boolean {
+    try {
+      return localStorage.getItem(DOCS_MIGRATION_FLAG) === "1";
+    } catch {
+      return false; // localStorage 不可用 → 当作未迁移
+    }
+  }
+
+  private writeDocsFlag(): void {
+    try {
+      localStorage.setItem(DOCS_MIGRATION_FLAG, "1");
+    } catch {
+      // 同 writeMigrationFlag：写入幂等，写失败只是下次重来。
+    }
+  }
+
+  // ===== localStorage → SQLite 一次性迁移 =====
 
   /**
    * 把父类（localStorage）侧的遗留 RAG 数据搬进 SQLite。
@@ -292,19 +639,19 @@ export class TauriStorage extends LocalStorageAdapter implements StorageAdapter 
 
       // 顺序：先本体后关联（无外键约束，仅为排障时日志可读）。
       if (sections.length > 0) {
-        await invoke("db_save_sections", { sections: sections.map(toSectionDto) });
+        await this.call("db_save_sections", { sections: sections.map(toSectionDto) });
       }
       if (units.length > 0) {
-        await invoke("db_save_knowledge_units", { units: units.map(toUnitDto) });
+        await this.call("db_save_knowledge_units", { units: units.map(toUnitDto) });
       }
       if (relations.length > 0) {
-        await invoke("db_save_relations", { relations: relations.map(toRelationDto) });
+        await this.call("db_save_relations", { relations: relations.map(toRelationDto) });
       }
       if (chunks.length > 0) {
-        await invoke("db_save_chunks", { chunks: chunks.map(toChunkDto) });
+        await this.call("db_save_chunks", { chunks: chunks.map(toChunkDto) });
       }
       if (embeddings.length > 0) {
-        await invoke("db_save_embeddings", { embeddings: embeddings.map(toEmbeddingDto) });
+        await this.call("db_save_embeddings", { embeddings: embeddings.map(toEmbeddingDto) });
       }
 
       this.writeMigrationFlag();
@@ -319,14 +666,20 @@ export class TauriStorage extends LocalStorageAdapter implements StorageAdapter 
   /**
    * 首次确认 SQLite 可用后触发一次性迁移（并发安全）。
    *
-   * 两段迁移串行且各自幂等：RAG 五类实体（v1 flag）→ 概念图 blob（v2 flag）。
-   * 前一段失败不影响后一段尝试（反之亦然）。
+   * **三段**迁移串行且各自幂等：RAG 五类实体（v1 flag）→ 概念图 blob（v2 flag）
+   * → 文档 / 章节（v3 flag）。前一段失败不影响后一段尝试（反之亦然）。
+   *
+   * ⚠️ 顺序不可调：文档迁移必须**最后**跑。前两段走 `trySqlite` 之外的裸 `this.call`，
+   * 但它们读写的是 `sections` / `chunks` / `graph` 这些**未下沉**的镜像 —— 与文档
+   * 无关；反过来把文档放前面也一样安全。放在最后只是为了让日志顺序与
+   * 「先 RAG、后文档」的心智模型一致。
    */
   private ensureMigration(): Promise<number> {
     this.migration ??= (async () => {
       const rag = await this.migrateLegacyRagData();
       const graph = await this.migrateLegacyGraph();
-      return Math.max(rag, 0) + Math.max(graph, 0);
+      const docs = await this.migrateLegacyDocuments();
+      return Math.max(rag, 0) + Math.max(graph, 0) + Math.max(docs, 0);
     })();
     return this.migration;
   }
@@ -336,7 +689,7 @@ export class TauriStorage extends LocalStorageAdapter implements StorageAdapter 
    *
    * 只增不删、**不清源**：blob 保留为灾备 + 浏览器预览数据源。
    *
-   * 注意：这里必须用**裸 `invoke`** 而非 `trySqlite` —— 本方法由 `ensureMigration`
+   * 注意：这里必须用**裸 `this.call`** 而非 `trySqlite` —— 本方法由 `ensureMigration`
    * 调用，而 `trySqlite` 首次成功时会回头 await `ensureMigration()`，形成自等待死锁。
    *
    * @returns 搬移的实体总数；-1 = 失败（不写标记，下次启动重试）。
@@ -351,10 +704,10 @@ export class TauriStorage extends LocalStorageAdapter implements StorageAdapter 
         return 0;
       }
       if (units.length > 0) {
-        await invoke("db_save_knowledge_units", { units });
+        await this.call("db_save_knowledge_units", { units });
       }
       if (relations.length > 0) {
-        await invoke("db_save_relations", { relations });
+        await this.call("db_save_relations", { relations });
       }
       this.writeGraphFlag();
       console.info(
@@ -419,7 +772,7 @@ export class TauriStorage extends LocalStorageAdapter implements StorageAdapter 
   ): Promise<SqliteResult<T>> {
     if (this.sqliteReady === false) return { ok: false };
     try {
-      const value = await invoke<T>(cmd, args);
+      const value = await this.call<T>(cmd, args);
       const firstSuccess = this.sqliteReady !== true;
       this.sqliteReady = true;
       // 首次握手成功即触发遗留数据迁移（失败也不影响本次读取结果）。
@@ -729,7 +1082,7 @@ export class TauriStorage extends LocalStorageAdapter implements StorageAdapter 
    * 失败时**抛错中止**，由导入服务转成 `sqlite-blocked` 分类让 UI 明说
    * 「本机数据库未清空，已取消」。
    *
-   * 这里刻意用**裸 `invoke`** 而非 `trySqlite`：后者的 `sqliteReady === false`
+   * 这里刻意用**裸 `this.call`** 而非 `trySqlite`：后者的 `sqliteReady === false`
    * 是「本会话此前失败过」的短路缓存，不是「库里没有数据」的事实 —— 拿缓存当
    * 许可去跳过清库，正是上面那种静默错数据的入口。清库要么真清，要么明确失败。
    *
@@ -739,7 +1092,7 @@ export class TauriStorage extends LocalStorageAdapter implements StorageAdapter 
    */
   override async clearAll(): Promise<void> {
     try {
-      await invoke("db_clear_library");
+      await this.call("db_clear_library");
     } catch (err) {
       throw new Error(`db_clear_library failed: ${String(err)}`);
     }

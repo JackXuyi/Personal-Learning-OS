@@ -87,16 +87,21 @@ export class InMemoryStorage implements StorageAdapter {
   protected knowledgeRelations = new Map<string, KnowledgeRelation>();
   protected embeddings = new Map<string, Embedding>();
 
-  async listDocuments(): Promise<SourceDocument[]> {
-    return [...this.documents.values()];
-  }
-  async getDocument(id: string): Promise<SourceDocument | undefined> {
-    return this.documents.get(id);
-  }
-  async saveDocument(doc: SourceDocument): Promise<void> {
+  // ===== 文档 / 章节的内存镜像维护（protected 纯方法；两个子类共用 · D12）=====
+  //
+  // 抽出来的理由：`LocalStorageAdapter` 需要「写内存 → persist()」，`TauriStorage`
+  // 需要「写内存 → 写 SQLite」。**内存那一半必须只有一份实现** —— 尤其
+  // `forgetDocument` 里「删资料级联删批注」这条规则，抄两份就是两把尺子。
+  //
+  // 这三个方法**只碰内存**，不落盘、不做 IO，也不 await（因此可以在临界区里用）。
+
+  /** 记住一份资料（纯内存）。 */
+  protected rememberDocument(doc: SourceDocument): void {
     this.documents.set(doc.id, doc);
   }
-  async deleteDocument(id: string): Promise<void> {
+
+  /** 忘掉一份资料（纯内存）：资料本体 + 其章节 + 归属它的批注。 */
+  protected forgetDocument(id: string): void {
     this.documents.delete(id);
     // 级联清理：删除文档时一并移除其章节，保持数据一致性。
     this.chaptersByDocument.delete(id);
@@ -106,11 +111,29 @@ export class InMemoryStorage implements StorageAdapter {
     }
   }
 
+  /** 整批替换某资料的章节（纯内存；排序口径唯一 = `sortChaptersByOrder`）。 */
+  protected rememberChapters(documentId: string, chapters: Chapter[]): void {
+    this.chaptersByDocument.set(documentId, sortChaptersByOrder(chapters));
+  }
+
+  async listDocuments(): Promise<SourceDocument[]> {
+    return [...this.documents.values()];
+  }
+  async getDocument(id: string): Promise<SourceDocument | undefined> {
+    return this.documents.get(id);
+  }
+  async saveDocument(doc: SourceDocument): Promise<void> {
+    this.rememberDocument(doc);
+  }
+  async deleteDocument(id: string): Promise<void> {
+    this.forgetDocument(id);
+  }
+
   async listChapters(documentId: string): Promise<Chapter[]> {
     return sortChaptersByOrder(this.chaptersByDocument.get(documentId) ?? []);
   }
   async saveChapters(documentId: string, chapters: Chapter[]): Promise<void> {
-    this.chaptersByDocument.set(documentId, sortChaptersByOrder(chapters));
+    this.rememberChapters(documentId, chapters);
   }
 
   // ===== Section 层 =====
