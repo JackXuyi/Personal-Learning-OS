@@ -143,8 +143,9 @@ export default function CapabilityRunPage() {
   }
 
   const { run, stage, paper } = loaded;
+  /** 项标签：快照里找不到 → 兜底文案（**绝不显示裸 itemId**）。 */
   const labelOf = (itemId: string) =>
-    run.items.find((i: CapabilityItemSnapshot) => i.id === itemId)?.label ?? itemId;
+    run.items.find((i: CapabilityItemSnapshot) => i.id === itemId)?.label ?? c.itemGone;
   const shortTaskIds = run.tasks.filter(
     (t) => (answers[t.id] ?? "").trim().length < CAPABILITY_LIMITS.answerMinChars,
   );

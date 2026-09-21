@@ -258,7 +258,8 @@ export default function CommandPalette() {
         const snippet = chunk.content.slice(0, CONTENT_SNIPPET_CHARS);
         list.push({
           id: `s-content-${chunk.id}`,
-          label: `${m.cmd.typeContent} · ${chapterTitle || docTitle || chunk.id}`,
+          // 章节与资料都已不存在（资料被删）→ 兜底文案，**绝不显示裸 chunk id**。
+          label: `${m.cmd.typeContent} · ${chapterTitle || docTitle || m.cmd.contentGone}`,
           hint: docTitle,
           section: "search",
           search: `${chapterTitle} ${docTitle} ${snippet}`,

@@ -91,7 +91,7 @@ export function CapabilityReportView({
           return (
             <ReportRow
               key={s.itemId}
-              label={snap?.label ?? s.itemId}
+              label={snap?.label ?? c.itemGone}
               threshold={snap?.threshold ?? 0}
               score={s.score}
               verdict={s.verdict}
