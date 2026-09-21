@@ -422,6 +422,8 @@ RECENT EVIDENCE（折叠态）
 
 > 约束：以上全部向后兼容——无新数据时各页面按现有逻辑回退，绝不因 UI 里程碑引入数据迁移风险（7.2 仅在 schemaVersion 钩子补 default seed，无破坏性变更）。
 
+> ⚠️ **7.1 写入幂等契约（2026-09-21 补）**：需要幂等的写点（如 `assessment` 按 `sourceId = 试卷 id`）**必须走 `storage.appendEvidenceUnless(entry, predicate)`**，不得在调用方自己 `listEvidence()` → `some()` → `appendEvidence()` —— 那三步跨两次 `await`，并发调用会双双读到「尚无」再双双写入。实测：`QuizReportPage` 的 effect 在 `<React.StrictMode>` 下双执行，让每份判卷都落了 2 条完全相同的证据，导致热力图活动量虚增一倍、首页「最近证据」重复行。存储层刻意**不替调用方猜幂等键**（不同 kind 的语义不同：`card` 的同一张卡可反复评分）。详见 `docs/evidence-log-idempotency-fix-2026-09.md`。
+
 ---
 
 ## 8. 路线图与并行策略

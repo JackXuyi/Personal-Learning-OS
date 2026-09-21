@@ -1748,6 +1748,7 @@ const deadProvider: AIProvider = { ...fakeProvider("{}"), isConfigured: () => fa
 - **A（采）**：`EvidenceEntry` 加可选 `subjectKind?: "chapter" | "goal"`（缺省 `"chapter"` → 旧数据零回归）。
 - B：把 goal 主体也塞进 `subjectId` 而不区分 —— 会让 `HomePage` 显示裸 id（拒绝）。
 - ⚠️ 能力评测**写**证据流（`kind:"capability"`，`delta:0`）。若后续决定**不写**，删除 §8.11 第 ⑩ 步即可，其余不受影响。
+- ⚠️ **口径补齐（2026-09-21）**：本决策立的是「**主体解析不到就绝不显示裸 id**」，但实施时只落在 **goal 侧**（`HomePage::logToView` 的 `capability.evidenceFallback`），**章侧漏了** —— 解析不到就直落 `entry.subjectId`。真实库取证：`doc-418a4116` 删除后，最近 6 行证据里有 4 行显示 `chp-1e79433b` 这种裸 id。已同批补齐（`units.subjectGone`），并顺手修掉一个更隐蔽的成因：主体解析原先走 `ChapterLoopSnapshot.chaptersByDoc`，而它在目标带 `requiredChapterIds` 时**按范围裁剪**（`engine/loop.ts:270`）→ 范围外的**活章**也会被误判为「不存在」。现改用 `loadChapterIndex(plan.docs)` 的全量索引。详见 `docs/evidence-log-idempotency-fix-2026-09.md`。
 
 ### D8 — 阶段 1 回程方式（**已确认 A**）
 - **A（采）**：`CapabilityRunPage` 在 mount / 窗口聚焦时查 `listPaperResults()` 判定阶段 1 完成 —— **零改动 quiz 模块**。
