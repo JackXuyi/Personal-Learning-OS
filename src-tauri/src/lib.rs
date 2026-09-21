@@ -142,6 +142,12 @@ pub fn run() {
             memory_doc::memory_doc_mtime,
             // RAG 存储层（T6）
             db::commands::db_status,
+            // 资料 / 章节（v5 下沉 · D12）
+            db::commands::db_list_documents,
+            db::commands::db_list_chapters_all,
+            db::commands::db_save_documents,
+            db::commands::db_save_chapters,
+            db::commands::db_delete_document,
             db::commands::db_list_sections,
             db::commands::db_get_section,
             db::commands::db_sections_by_range,
@@ -170,7 +176,10 @@ pub fn run() {
             db::commands::db_delete_embedding,
             db::commands::db_delete_embeddings_by_target,
             // 整库清空（replace 导入；⚠️ 注册遗漏 = 运行时 Command not found）
-            db::commands::db_clear_rag,
+            // v5 起由 db_clear_rag 改名为 db_clear_library（清 **9** 表，含
+            // documents / chapters）—— 与前端 `tauri.ts::clearAll` 的调用点同一批改，
+            // 否则中间态就是运行时 Command not found。
+            db::commands::db_clear_library,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the Personal Learning OS shell");

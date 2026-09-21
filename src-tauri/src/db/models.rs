@@ -1,4 +1,4 @@
-//! db 数据模型 —— 与 `src/domain/{section,chunk,knowledge,embedding}.ts` 镜像。
+//! db 数据模型 —— 与 `src/domain/{document,chapter,section,chunk,knowledge,embedding}.ts` 镜像。
 //!
 //! 分两类结构：
 //! - `*Row`：sqlx `FromRow` 直接映射的列结构（多值字段为 JSON 文本）；
@@ -14,6 +14,226 @@
 //! TS/Rust 两侧同改，勿单向漂移（skills/tauri-ipc §Payload）。
 
 use serde::{Deserialize, Serialize};
+
+// ========== JSON 列编解码（documents / chapters 六处共用）==========
+//
+// 抽出来的理由：本文件里「JSON 列」从一个（knowledge_units.tags）涨到七个，
+// 每处各写一份 `serde_json::to_string(...).unwrap_or_else(...)` 就是同一规则
+// 散在多处 —— 那正是本仓库反复踩过的「两把尺子」根因。
+//
+// 硬口径：**`None` 保持 SQL NULL，绝不写 `"null"` 字符串**。写成字符串后
+// 读回是 `Some(Value::Null)`，与「字段缺省」再也分不开。
+
+/// 编码可空 JSON 列：`None` → SQL NULL。
+pub fn json_col<T: Serialize>(value: &Option<T>) -> Result<Option<String>, String> {
+    match value {
+        None => Ok(None),
+        Some(v) => serde_json::to_string(v).map(Some).map_err(|e| e.to_string()),
+    }
+}
+
+/// 解码可空 JSON 列：NULL / 坏值 → `None`（老数据或手改过的库不炸）。
+pub fn from_json_col<T: serde::de::DeserializeOwned>(raw: Option<String>) -> Option<T> {
+    raw.and_then(|s| serde_json::from_str::<T>(&s).ok())
+}
+
+/// 编码 NOT NULL JSON 列（`chapters.key_points` / `unit_ids`）：失败兜底为 `fallback`。
+pub fn json_col_required<T: Serialize>(value: &T, fallback: &str) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| fallback.to_string())
+}
+
+/// 解码 NOT NULL 的 JSON 数组列：坏值 → 空数组（显示为空，不中断读路径）。
+pub fn from_json_array<T: serde::de::DeserializeOwned>(raw: &str) -> Vec<T> {
+    serde_json::from_str::<Vec<T>>(raw).unwrap_or_default()
+}
+
+// ========== SourceDocument（v5 下沉 · D12）==========
+
+/// 写入用的资料。
+///
+/// `analysis` / `overview` 用 `serde_json::Value` 而不拆列：两者是随领域演进的
+/// 嵌套结构（`DocumentOverview` 已有 9 个字段），拆列会让每次字段增删都要动
+/// schema；它们是「资料自带的附带信息」，SQL 侧不需要按内部字段查询。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentInput {
+    pub id: String,
+    pub title: String,
+    pub format: String,
+    pub status: String,
+    #[serde(default)]
+    pub path: Option<String>,
+    #[serde(default)]
+    pub uri: Option<String>,
+    #[serde(default)]
+    pub source: Option<String>,
+    pub imported_at: i64,
+    #[serde(default)]
+    pub raw_size_bytes: Option<i64>,
+    /// 正文快照 —— **最大的一列**（社区知识包 100 MiB 量级的主体就在这）。
+    #[serde(default)]
+    pub text_preview: Option<String>,
+    #[serde(default)]
+    pub goal_ids: Option<Vec<String>>,
+    #[serde(default)]
+    pub analysis: Option<serde_json::Value>,
+    #[serde(default)]
+    pub overview: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct DocumentRow {
+    pub id: String,
+    pub title: String,
+    pub format: String,
+    pub status: String,
+    pub path: Option<String>,
+    pub uri: Option<String>,
+    pub source: Option<String>,
+    pub imported_at: i64,
+    pub raw_size_bytes: Option<i64>,
+    pub text_preview: Option<String>,
+    pub goal_ids: Option<String>,
+    pub analysis: Option<String>,
+    pub overview: Option<String>,
+}
+
+/// 对外返回的资料。
+///
+/// `skip_serializing_if`：字段缺省时**整个键不出现**（而非 `"path": null`）。
+/// 这与 TS 侧 `path?: string` 的语义严格对齐 —— 否则前端把 `null` 存进领域对象，
+/// 下一次 round-trip 的深比较就会因 `null !== undefined` 失败。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentOut {
+    pub id: String,
+    pub title: String,
+    pub format: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uri: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    pub imported_at: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw_size_bytes: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_preview: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub goal_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub analysis: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub overview: Option<serde_json::Value>,
+}
+
+impl From<DocumentRow> for DocumentOut {
+    fn from(row: DocumentRow) -> Self {
+        DocumentOut {
+            id: row.id,
+            title: row.title,
+            format: row.format,
+            status: row.status,
+            path: row.path,
+            uri: row.uri,
+            source: row.source,
+            imported_at: row.imported_at,
+            raw_size_bytes: row.raw_size_bytes,
+            text_preview: row.text_preview,
+            goal_ids: from_json_col(row.goal_ids),
+            analysis: from_json_col(row.analysis),
+            overview: from_json_col(row.overview),
+        }
+    }
+}
+
+// ========== Chapter（v5 下沉 · D12）==========
+
+/// 要点 ↔ 原文引用（`Chapter.keyPointRefs` 的元素；与 domain/chapter.ts 的
+/// `KeyPointRef` 逐字段对齐）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyPointRefDto {
+    pub point: String,
+    pub quote: String,
+    pub start: i64,
+    pub end: i64,
+}
+
+/// 写入用的章节。
+///
+/// ⚠️ **刻意不含 `document_id`** —— 它由命令参数给出。行内再带一份就有
+/// 「参数与行内不一致」的可能，而这类错只在运行时才暴露（写进别人的资料下）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChapterInput {
+    pub id: String,
+    /// 章序号 1..n（TS 侧 `Chapter.order`；SQL 列名 `ord` 避开保留字）。
+    pub ord: i64,
+    pub title: String,
+    pub content_ref_start: i64,
+    pub content_ref_end: i64,
+    pub status: String,
+    pub created_at: i64,
+    #[serde(default)]
+    pub key_points: Vec<String>,
+    #[serde(default)]
+    pub key_point_refs: Option<Vec<KeyPointRefDto>>,
+    #[serde(default)]
+    pub unit_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct ChapterRow {
+    pub id: String,
+    pub document_id: String,
+    pub ord: i64,
+    pub title: String,
+    pub content_ref_start: i64,
+    pub content_ref_end: i64,
+    pub status: String,
+    pub created_at: i64,
+    pub key_points: String,
+    pub key_point_refs: Option<String>,
+    pub unit_ids: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChapterOut {
+    pub id: String,
+    pub document_id: String,
+    pub ord: i64,
+    pub title: String,
+    pub content_ref_start: i64,
+    pub content_ref_end: i64,
+    pub status: String,
+    pub created_at: i64,
+    pub key_points: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_point_refs: Option<Vec<KeyPointRefDto>>,
+    pub unit_ids: Vec<String>,
+}
+
+impl From<ChapterRow> for ChapterOut {
+    fn from(row: ChapterRow) -> Self {
+        ChapterOut {
+            id: row.id,
+            document_id: row.document_id,
+            ord: row.ord,
+            title: row.title,
+            content_ref_start: row.content_ref_start,
+            content_ref_end: row.content_ref_end,
+            status: row.status,
+            created_at: row.created_at,
+            key_points: from_json_array(&row.key_points),
+            key_point_refs: from_json_col(row.key_point_refs),
+            unit_ids: from_json_array(&row.unit_ids),
+        }
+    }
+}
 
 // ========== Section ==========
 
@@ -453,6 +673,110 @@ mod tests {
             assert!(v.get(key).is_some(), "缺少 camelCase 字段 {key}：{v}");
         }
         assert!(v.get("evidence_start").is_none(), "不应出现 snake_case：{v}");
+    }
+
+    #[test]
+    fn document_input_accepts_camel_case_and_optional_fields() {
+        // v5：documents 下沉后，字段名必须与 TS DocumentDto 的 camelCase 对齐。
+        let json = serde_json::json!({
+            "id": "d1", "title": "检索增强生成", "format": "pdf", "status": "ready",
+            "importedAt": 42, "rawSizeBytes": 1024, "textPreview": "正文…",
+            "goalIds": ["g1"], "analysis": { "chaptersAt": 7 },
+            "overview": { "gist": "一句话" }
+        });
+        let d: DocumentInput = serde_json::from_value(json).expect("camelCase DocumentInput");
+        assert_eq!(d.imported_at, 42);
+        assert_eq!(d.raw_size_bytes, Some(1024));
+        assert_eq!(d.goal_ids.as_deref(), Some(["g1".to_string()].as_slice()));
+        assert_eq!(d.analysis.as_ref().and_then(|a| a.get("chaptersAt")).and_then(|v| v.as_i64()), Some(7));
+
+        // 全可选字段缺省（老数据 / 刚导入未解析）也必须能反序列化。
+        let bare = serde_json::json!({
+            "id": "d2", "title": "t", "format": "txt", "status": "imported", "importedAt": 1
+        });
+        let d2: DocumentInput = serde_json::from_value(bare).expect("可选字段可整体缺省");
+        assert!(d2.text_preview.is_none());
+        assert!(d2.goal_ids.is_none());
+        assert!(d2.analysis.is_none());
+    }
+
+    #[test]
+    fn document_out_omits_absent_fields_instead_of_nulling_them() {
+        // ⚠️ 这条锁的是「TS 侧 `path?: string` 的语义」：缺省字段必须**整个键不出现**。
+        // 若序列化成 `"path": null`，前端会把 null 存进领域对象，下一次 round-trip
+        // 的深比较就会因 `null !== undefined` 失败（且 typecheck 查不出来）。
+        let out = DocumentOut {
+            id: "d1".into(),
+            title: "t".into(),
+            format: "pdf".into(),
+            status: "ready".into(),
+            path: None,
+            uri: None,
+            source: None,
+            imported_at: 42,
+            raw_size_bytes: None,
+            text_preview: None,
+            goal_ids: None,
+            analysis: None,
+            overview: None,
+        };
+        let v = serde_json::to_value(&out).expect("serialize DocumentOut");
+        assert_eq!(v.get("importedAt").and_then(|x| x.as_i64()), Some(42), "camelCase 缺失：{v}");
+        for key in ["path", "uri", "source", "rawSizeBytes", "textPreview", "goalIds", "analysis", "overview"] {
+            assert!(v.get(key).is_none(), "缺省字段不该出现（更不该是 null）：{key} / {v}");
+        }
+        assert!(v.get("imported_at").is_none(), "不应出现 snake_case：{v}");
+    }
+
+    #[test]
+    fn chapter_dto_uses_ord_and_parses_json_columns() {
+        // TS 侧字段名是 `order`，SQL 列名是 `ord`（避开保留字）——
+        // 映射点只有 toChapterDto / fromChapterDto 两处，DTO 这一层不出现 `order`。
+        let json = serde_json::json!({
+            "id": "c1", "ord": 2, "title": "Reranking",
+            "contentRefStart": 0, "contentRefEnd": 120,
+            "status": "not-started", "createdAt": 7,
+            "keyPoints": ["a"], "unitIds": ["u1"],
+            "keyPointRefs": [{ "point": "a", "quote": "原文", "start": 3, "end": 9 }]
+        });
+        let c: ChapterInput = serde_json::from_value(json).expect("camelCase ChapterInput");
+        assert_eq!(c.ord, 2);
+        assert_eq!(c.key_point_refs.as_ref().map(|r| r.len()), Some(1));
+
+        let row = ChapterRow {
+            id: "c1".into(),
+            document_id: "d1".into(),
+            ord: 2,
+            title: "Reranking".into(),
+            content_ref_start: 0,
+            content_ref_end: 120,
+            status: "not-started".into(),
+            created_at: 7,
+            key_points: "[\"a\"]".into(),
+            key_point_refs: None,
+            unit_ids: "[]".into(),
+        };
+        let out = ChapterOut::from(row);
+        assert_eq!(out.key_points, vec!["a".to_string()]);
+        assert!(out.key_point_refs.is_none());
+        let v = serde_json::to_value(&out).expect("serialize ChapterOut");
+        assert!(v.get("documentId").is_some(), "缺少 camelCase documentId：{v}");
+        assert!(v.get("keyPoints").is_some());
+        assert!(v.get("keyPointRefs").is_none(), "缺省字段不该出现：{v}");
+        assert!(v.get("ord").is_some());
+    }
+
+    #[test]
+    fn json_cols_keep_none_as_sql_null_and_survive_bad_input() {
+        // None 必须编成 SQL NULL —— 绝不能变成字符串 "null"。
+        assert_eq!(json_col::<Vec<String>>(&None).unwrap(), None);
+        assert_eq!(json_col(&Some(vec!["a".to_string()])).unwrap(), Some("[\"a\"]".to_string()));
+        // 解码侧：NULL / 坏值 / 类型不符一律回落，不抛错。
+        assert_eq!(from_json_col::<Vec<String>>(None), None);
+        assert_eq!(from_json_col::<Vec<String>>(Some("not json".into())), None);
+        assert_eq!(from_json_array::<String>("not json"), Vec::<String>::new());
+        assert_eq!(from_json_array::<String>("[]"), Vec::<String>::new());
+        assert_eq!(json_col_required(&Vec::<String>::new(), "[]"), "[]");
     }
 
     #[test]

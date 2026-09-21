@@ -1,9 +1,15 @@
 -- PLOS RAG 存储层 DDL（SQLite / sqlx）
 --
--- 范围说明：本脚本只建 RAG 五层中的「新增表」——sections / chunks /
--- chunk_knowledge / knowledge_units / knowledge_relations / embeddings。
--- documents 与 chapters 仍是 localStorage 侧的 source of truth（迁移期避免
--- 双写），待迁移工具稳定后由下一版 schema 接管。
+-- 范围说明：本脚本建 RAG 五层中的「新增表」——sections / chunks /
+-- chunk_knowledge / knowledge_units / knowledge_relations / embeddings，
+-- 以及 v5 起接管的 documents / chapters 两张表。
+--
+-- ⚠️ v5 变更：`documents` / `chapters` 由 localStorage 侧迁入本库（D12）。
+-- 原头部那句「documents 与 chapters 仍是 localStorage 侧的 source of truth」
+-- 在 v5 落地后**已不成立** —— 真源改为 SQLite，localStorage 侧冻结为迁移时的
+-- 快照（只在 clearAll 时被清掉，见 src/storage/tauri.ts）。
+-- 存量数据的一次性搬迁由 TS 侧 `migrateLegacyDocuments()` 完成 —— Rust 看不见
+-- 宿主 localStorage，故本脚本只负责建表（见 db/mod.rs::migrate_v5）。
 --
 -- 约定：
 -- - 字段名 snake_case，与 Rust models.rs 的 FromRow 结构一一对应；
@@ -142,10 +148,57 @@ CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
 -- 显式同步跨版本行为一致，且逻辑集中在代码里可测。
 -- 对应实现见 src-tauri/src/db/commands.rs。
 
+-- ===== 资料（SourceDocument；v5 下沉 · D12）=====
+-- 为什么现在建这一版：v1 的 schema 头部就写着「documents 与 chapters 仍是
+-- localStorage 侧的 source of truth（迁移期避免双写），待迁移工具稳定后由下一版
+-- schema 接管」—— 本版即是那一版。
+--
+-- 体积：text_preview 是正文真源（也是社区知识包的体积大头）。SQLite 单列上限
+-- 约 1 GB（SQLITE_MAX_LENGTH），实际以磁盘为准 —— **这正是本表存在的理由**：
+-- localStorage 的 5–10 MB 配额装不下知识包（D7 / D16）。
+--
+-- JSON 列（goal_ids / analysis / overview）走 TEXT，同 knowledge_units.tags 先例；
+-- NULL 表示「字段缺省」，**不写** "null" 字符串。
+CREATE TABLE IF NOT EXISTS documents (
+  id             TEXT PRIMARY KEY,  -- ULID / nanoid，TS 侧生成
+  title          TEXT NOT NULL,
+  format         TEXT NOT NULL,     -- DocumentFormat
+  status         TEXT NOT NULL,     -- DocumentStatus
+  path           TEXT,              -- 本机文件路径（可空）
+  uri            TEXT,              -- 远程 URI（可空）
+  source         TEXT,              -- 自由来源引用（可空）
+  imported_at    INTEGER NOT NULL,  -- epoch ms
+  raw_size_bytes INTEGER,           -- 原始大小字节（可空）
+  text_preview   TEXT,              -- 纯文本快照（正文真源；可空）
+  goal_ids       TEXT,              -- JSON array 文本（可空）
+  analysis       TEXT,              -- JSON object 文本（可空）
+  overview       TEXT               -- JSON object 文本（可空）
+);
+
+-- ===== 章节（Chapter；v5 下沉 · D12）=====
+-- 语义：`db_save_chapters` 是**整批替换该资料的章节集**（含 diff-delete），
+-- 与内存侧 `rememberChapters` 严格同构 —— 章节编辑（F7-a）会删章 / 合并章，
+-- 只 upsert 会把被删的章节永远留在表里。
+CREATE TABLE IF NOT EXISTS chapters (
+  id                TEXT PRIMARY KEY,
+  document_id       TEXT NOT NULL,
+  ord               INTEGER NOT NULL,  -- 章序号 1..n；列名避开保留字 order（同 sections.idx 先例）
+  title             TEXT NOT NULL,
+  content_ref_start INTEGER NOT NULL,  -- contentRef.start（含）
+  content_ref_end   INTEGER NOT NULL,  -- contentRef.end（不含）
+  status            TEXT NOT NULL,     -- ChapterStatus
+  created_at        INTEGER NOT NULL,  -- epoch ms
+  key_points        TEXT NOT NULL,     -- JSON array（必填；空集写 "[]"）
+  key_point_refs    TEXT,              -- JSON array 文本（可空：老数据本就没这个字段）
+  unit_ids          TEXT NOT NULL      -- JSON array（必填；V2 首版恒 "[]"）
+);
+CREATE INDEX IF NOT EXISTS idx_chapters_document ON chapters(document_id);
+
 -- ===== schema 版本 =====
--- 结构变更时 +1，并在 Rust 侧补对应的迁移步骤；当前版本 = 4。
+-- 结构变更时 +1，并在 Rust 侧补对应的迁移步骤；当前版本 = 5。
 -- v1 = 初版（embeddings 仅元数据）；v2 = chunks_fts 改 trigram；v3 = embeddings 加 vector；
--- v4 = knowledge_units 加 evidence 四列（概念原文出处不再在往返中丢失）。
+-- v4 = knowledge_units 加 evidence 四列（概念原文出处不再在往返中丢失）；
+-- v5 = documents / chapters 两表接管（Document / Chapter 下沉 SQLite · D12）。
 CREATE TABLE IF NOT EXISTS _schema_version (
   version    INTEGER PRIMARY KEY,
   applied_at INTEGER NOT NULL   -- epoch ms；初始占位的 0 表示「建表时刻未知」
