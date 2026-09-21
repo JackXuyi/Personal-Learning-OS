@@ -53,6 +53,35 @@ Aggregate form is itself evidence, and it's often the cheapest way to separate
   `keyPointRefs` case: `noField=44`, not `refs=0`).
 - **Orphans / dangling ids** after a delete tell you which cleanup paths don't exist.
 
+### 1d. Never trust a doc's own status claim — re-measure it
+
+Planning/design docs in this repo carry "现状证据 / 缺口清单 / 未接线 / 未实现" claims
+that **go stale silently** the moment the feature ships. (Case: `business-flow-end-to-end`
+listed **7 of 11 gaps as open that were already delivered**; `roadmap` §F8's "0-char PDF
+silently saves a doc with no chapters" had already become an explicit error + UI prompt.
+Following those claims cost a whole detour.) Before planning, quoting, or "fixing" one:
+
+- **"no UI / zero call sites"** → grep for the **consumer**, not the definition.
+  Only-hits-the-definition is the real signal; hits in a service/component mean it's wired.
+- **"X moves Y"** → read the **function body**, not the comment. Comments survive the
+  change that invalidated them (3 source headers here still justified a ban by a
+  behaviour that had been removed).
+- **"zero consumers"** → full-repo Grep, not one directory (`cognitiveLevel` was written
+  and aggregated but never read as an input).
+- **User-visible copy** → i18n tests only check zh/en **structure**; a value can stay
+  structurally "valid" and still assert something false.
+- **Fix the claim, keep the conclusion.** When the conclusion still holds, re-state the
+  reason **from zero** — don't write "no longer moves mastery", write what it *is* now
+  (card-level `CardState` vs chapter-level `byUnit[chapterId]`). Deleting the sentence
+  loses the invariant; keeping the old reason keeps the bug.
+- **Lock it by asserting the OLD phrasing** (a negative assertion survives refactors;
+  asserting the new wording will misfire), and **disprove the lock first** — run it against
+  `git show HEAD:<file>`. If one regex only catches 1 of N files, the old text had more
+  than one shape; add a pattern per shape rather than loosening the one.
+- **Rescan across modules, not just the changed one.** A口径 change invalidates reasoning
+  *elsewhere*; the two classes most often missed are **"why this API is banned" comments**
+  and **user-facing copy**.
+
 ### 2. Locate concrete code
 
 - Name **specific files, functions, hooks, configs, or build steps** tied to the failure.
