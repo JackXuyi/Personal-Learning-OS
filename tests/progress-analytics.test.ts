@@ -199,11 +199,17 @@ await check("TC-UC02-04 单份卷 → 1 个点（页面据此画单点）", () =
   assert.equal(t.paperCount, 1);
 });
 
-// ⚠️ 与弱点榜的口径**刻意不同**：趋势读「试卷历史」（章删了历史仍在 → 用 id 兜底），
-// 弱点榜读「当前 byUnit」（不可解析的主体不入视图 —— 见 TC-REG-02）。
-await check("TC-UC02-05 试卷里章已删 → series 用 id 兜底，不崩", () => {
+// ⚠️ 与弱点榜的**数据口径**刻意不同（趋势读「试卷历史」→ 章删了序列仍在；
+// 弱点榜读「当前 byUnit」→ 不可解析的主体不入视图，见 TC-REG-02），但两者在
+// **「解析不到」的呈现**上遵循同一条规矩：**绝不把内部 id 当标题**。
+// 2026-09-21 口径修正：原实现 `titleOf(id) ?? id` 会让 `/progress` 趋势下拉
+// 直接显示 `chp-1e79433b`（真实库取证：已随资料删除的章仍留在 2 份卷的 perChapter）。
+await check("TC-UC02-05 试卷里章已删 → 序列与历史点保留，但 title 留空（不回落裸 id）", () => {
   const t = buildTrend([paper(NOW, { ghost: { score: 0.5, previousMastery: 0, mastery: 0.5 } })], titleOf);
-  assert.equal(t.chapters[0].title, "ghost");
+  assert.equal(t.chapters.length, 1, "历史序列仍保留（仍可下钻看曲线）");
+  assert.equal(t.chapters[0].id, "ghost");
+  assert.equal(t.chapters[0].title, undefined, "解析不到 → 必须留空，不得回落成 id");
+  assert.equal(t.chapters[0].points.length, 1, "历史点不丢");
 });
 
 /* ---------------- UC-03 弱点排行（三因子） ---------------- */
