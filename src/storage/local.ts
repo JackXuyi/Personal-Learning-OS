@@ -31,7 +31,7 @@ import type {
   SourceDocument,
 } from "../domain";
 import { InMemoryStorage } from "./memory";
-import type { StorageAdapter } from "./types";
+import type { ImportedPackRecord, StorageAdapter } from "./types";
 
 const KEY_DOCUMENTS = "plos.documents";
 const KEY_CHAPTERS = "plos.chapters";
@@ -71,6 +71,13 @@ const KEY_CAPABILITY_REPORTS = "plos.capability-reports";
  */
 const KEY_MEMORY_DOC = "plos.memory.doc.v1";
 const KEY_MEMORY_META = "plos.memory.meta.v1";
+/**
+ * 已导入的社区知识包记录（F10）：新 key，无旧数据 → 零迁移。
+ *
+ * ⚠️ **必须进 `ALL_KEYS`** —— 否则 `clearAll()`（replace 导入 / 清库）跑完它还在盘上，
+ * 下次打开会看到「清空了的库里仍列着已导入的包」（F9 的两个记忆 key 踩过同一个坑）。
+ */
+const KEY_IMPORTED_PACKS = "plos.knowledge-packs.v1";
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -143,6 +150,10 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
       dismissed: [],
       lastMergedAt: 0,
     });
+    // 已导入的社区知识包（F10）：数组 → Map（key = contentHash）
+    this.importedPacks = new Map(
+      load<ImportedPackRecord[]>(KEY_IMPORTED_PACKS, []).map((r) => [r.contentHash, r]),
+    );
   }
 
   /**
@@ -226,6 +237,8 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     // 学习者记忆（F9）：文档是纯文本 → **直接 setItem，不 JSON.stringify**（见 key 处注释）
     localStorage.setItem(KEY_MEMORY_DOC, this.memoryDoc);
     localStorage.setItem(KEY_MEMORY_META, JSON.stringify(this.memoryMeta));
+    // 已导入的社区知识包（F10）
+    localStorage.setItem(KEY_IMPORTED_PACKS, JSON.stringify([...this.importedPacks.values()]));
   }
 
   protected persist() {
@@ -441,6 +454,17 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     this.persist();
   }
 
+  // ===== 已导入的社区知识包（F10）写操作 override =====
+  // （`listImportedPacks` 是只读，无需 override —— 落盘只在写点触发。）
+  override async saveImportedPack(record: ImportedPackRecord): Promise<void> {
+    await super.saveImportedPack(record);
+    this.persist();
+  }
+  override async deleteImportedPack(contentHash: string): Promise<void> {
+    await super.deleteImportedPack(contentHash);
+    this.persist();
+  }
+
   /**
    * 本适配器负责的全部 key（清库真源）。
    *
@@ -474,6 +498,7 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     KEY_CAPABILITY_REPORTS,
     KEY_MEMORY_DOC,
     KEY_MEMORY_META,
+    KEY_IMPORTED_PACKS,
   ];
 
   /**

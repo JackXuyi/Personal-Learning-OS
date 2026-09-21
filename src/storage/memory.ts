@@ -34,8 +34,8 @@ import type {
   Section,
   SourceDocument,
 } from "../domain";
-import { pruneMemoryDocForClear, sortChaptersByOrder } from "../domain";
-import type { RetrievalScope, StorageAdapter } from "./types";
+import { PACK_LOCAL_STORE_BUDGET_BYTES, pruneMemoryDocForClear, sortChaptersByOrder } from "../domain";
+import type { ImportedPackRecord, RetrievalScope, StorageAdapter } from "./types";
 
 /**
  * 证据日志上限（超出丢最旧）。
@@ -51,6 +51,19 @@ export const EVIDENCE_LOG_MAX = 5000;
 
 export class InMemoryStorage implements StorageAdapter {
   readonly name: string = "memory";
+
+  /**
+   * 可写容量 = `PACK_LOCAL_STORE_BUDGET_BYTES`（4 MiB）。
+   *
+   * ⚠️ 值取自 **domain**（`domain/knowledge-pack.ts`），**不在本文件重写数字**。
+   * `local` 档继承同一个值（宿主 localStorage 配额是硬的）；`tauri` 档**显式覆写为
+   * `undefined`**（文档 / 章节已下沉 SQLite，不设应用层上限）。
+   *
+   * ⚠️ 声明为**可选属性**（`?`）：子类要能把它覆写成 `undefined`；若声明成 `: number`，
+   * 子类的 `undefined` 会因不满足父类类型而报 TS2416。
+   */
+  readonly storeCapacityBytes?: number = PACK_LOCAL_STORE_BUDGET_BYTES;
+
   protected documents = new Map<string, SourceDocument>();
   protected chaptersByDocument = new Map<string, Chapter[]>();
   protected papers = new Map<string, Paper>();
@@ -79,6 +92,8 @@ export class InMemoryStorage implements StorageAdapter {
   protected memoryDoc = "";
   /** 记忆文档元数据（F9）：`lastWritten` / `dismissed` / 时间戳。 */
   protected memoryMeta: MemoryDocMeta = { lastWritten: {}, dismissed: [], lastMergedAt: 0 };
+  /** 已导入的社区知识包记录（F10）。key = 包内容指纹（`contentHash`）。 */
+  protected importedPacks = new Map<string, ImportedPackRecord>();
 
   // RAG 存储层：Section / Chunk / Knowledge / Relation / Embedding
   protected sections = new Map<string, Section>();
@@ -573,6 +588,8 @@ export class InMemoryStorage implements StorageAdapter {
     this.embeddings = new Map();
     this.memoryDoc = keptMemory.doc;
     this.memoryMeta = keptMemory.meta;
+    // F10：已导入包记录属「可再生的学习资产」（D6）—— 整份清掉，不保留。
+    this.importedPacks = new Map();
   }
 
   // ===== 学习者记忆（F9）=====
@@ -595,6 +612,23 @@ export class InMemoryStorage implements StorageAdapter {
   }
   async saveMemoryMeta(meta: MemoryDocMeta): Promise<void> {
     this.memoryMeta = meta;
+  }
+
+  // ===== 已导入的社区知识包（F10）=====
+  /**
+   * ⚠️ **降序**（`importedAt` 从新到旧）：列表 UI 直接渲染，不在页面里再排一次
+   * —— 排序口径只此一处（与 `listEvidence` 同形态）。
+   */
+  async listImportedPacks(): Promise<ImportedPackRecord[]> {
+    return [...this.importedPacks.values()].sort((a, b) => b.importedAt - a.importedAt);
+  }
+  /** 按 `contentHash` upsert（同一份包重复导入 → 覆盖，天然去重）。 */
+  async saveImportedPack(record: ImportedPackRecord): Promise<void> {
+    this.importedPacks.set(record.contentHash, record);
+  }
+  /** 幂等删除；**不删资料**。 */
+  async deleteImportedPack(contentHash: string): Promise<void> {
+    this.importedPacks.delete(contentHash);
   }
 }
 

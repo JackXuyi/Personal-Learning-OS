@@ -430,11 +430,12 @@ export class TauriStorage extends LocalStorageAdapter implements StorageAdapter 
    * 「文档已下沉 SQLite、装得下任意大小」这个结论在代码层失效。下一轮重构请勿
    * 把它当「漏写的默认值」删掉。
    *
-   * ⚠️ 此处暂无 `override` 修饰符：`StorageAdapter` 的该字段是**可选**的，父类
-   * 当下还没给值（基类赋值随「已导入知识包记录」一并落地，见 F10 方案 §8.8 / T7）。
-   * 基类给了值之后，这里要补回 `override` —— 否则 subclass 会静默继承父类的 4 MiB。
+   * ⚠️ `override` 修饰符**必须保留**：父类（`InMemoryStorage`）已给出
+   * `PACK_LOCAL_STORE_BUDGET_BYTES`（4 MiB），不覆写就是继承它 —— 那会让「文档已
+   * 下沉 SQLite、装得下任意大小」这个结论在代码层失效。下一轮重构请勿把它当
+   * 「漏写的默认值」删掉。
    */
-  readonly storeCapacityBytes?: number = undefined;
+  override readonly storeCapacityBytes?: number = undefined;
 
   /** 探测 SQLite 是否就绪（并刷新内部状态）。 */
   async probe(): Promise<boolean> {

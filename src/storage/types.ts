@@ -28,6 +28,7 @@ import type {
   LearnerState,
   LearningGoal,
   MemoryDocMeta,
+  PackCounts,
   Paper,
   PaperAnswers,
   PaperResult,
@@ -43,6 +44,29 @@ export interface RetrievalScope {
   sectionId?: string;
   knowledgeId?: string;
   goalId?: string;
+}
+
+/**
+ * 已导入的社区知识包记录（F10；D6 —— 本机资产，随 `clearAll` 清除，**不进导出白名单**）。
+ *
+ * 用途只有两个：① 「这个包导入过了」的提示（按 `contentHash` 去重）；
+ * ② 资料详情页的「来自社区包《X》by Y」溯源行。
+ */
+export interface ImportedPackRecord {
+  /** 主键 = 包内容指纹（同一份包只记一条 → 天然去重）。 */
+  contentHash: string;
+  title: string;
+  author?: string;
+  license?: string;
+  sourceUrl?: string;
+  importedAt: number;
+  documentIds: string[];
+  /**
+   * ⚠️ 类型取自 `domain/knowledge-pack.ts`，**不是** `features/.../pack-format.ts`
+   * —— `storage/` 不得 import `features/`（依赖单向）。这正是 `PackCounts` 被下沉到
+   * domain 的原因（与 F9 把 `MemoryDocMeta` 放 `domain/memory.ts` 同源）。
+   */
+  counts: PackCounts;
 }
 
 export interface StorageAdapter {
@@ -317,4 +341,15 @@ export interface StorageAdapter {
   /** 文档侧元数据（`lastWritten` / `dismissed` / 时间戳）。缺省 = 空对象。 */
   getMemoryMeta(): Promise<MemoryDocMeta>;
   saveMemoryMeta(meta: MemoryDocMeta): Promise<void>;
+
+  // ===== 已导入的社区知识包（F10；缺省 = 空数组，绝不自动生成）=====
+  /** 已导入的社区包记录（`importedAt` **降序**）。无记录返回空数组（不抛错）。 */
+  listImportedPacks(): Promise<ImportedPackRecord[]>;
+  /** 按 `contentHash` upsert。 */
+  saveImportedPack(record: ImportedPackRecord): Promise<void>;
+  /**
+   * 按 `contentHash` 删除记录；**不删资料**（资料删除有自己的级联口径）。
+   * 幂等：记录不存在时静默返回。
+   */
+  deleteImportedPack(contentHash: string): Promise<void>;
 }
