@@ -328,8 +328,13 @@ function evidenceKey(entry: {
   return `${entry.at}|${entry.kind}|${entry.subjectId}|${entry.sourceId ?? ""}`;
 }
 
-/** 浏览器预览的 localStorage 配额击穿（各内核写法不一，逐个判名）。 */
-function isQuotaError(err: unknown): boolean {
+/**
+ * 浏览器预览的 localStorage 配额击穿（各内核写法不一，逐个判名）。
+ *
+ * 导出给 `pack-import-service.ts` 复用 —— 知识包导入的 quota 分类必须与备份导入
+ * **同一把尺子**（抄一份就会出现「一边认出、一边认不出」的分叉）。
+ */
+export function isQuotaError(err: unknown): boolean {
   const name = (err as { name?: string } | null)?.name;
   return name === "QuotaExceededError" || name === "NS_ERROR_DOM_QUOTA_REACHED";
 }
