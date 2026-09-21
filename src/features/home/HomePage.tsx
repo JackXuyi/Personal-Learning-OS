@@ -14,7 +14,13 @@ import { Button, buttonVariants } from "../../components/ui/button";
 import { cn } from "../../lib/utils";
 import { Select } from "../../components/ui/select";
 import { MASTERY_THRESHOLD } from "../../domain";
-import type { Chapter, EvidenceEntry, EvidenceKind, NextAction } from "../../domain";
+import type {
+  Chapter,
+  EvidenceEntry,
+  EvidenceKind,
+  NextAction,
+  SourceDocument,
+} from "../../domain";
 import { bandOf, type ChapterLoopSnapshot } from "../../engine";
 import { useI18n, type Messages } from "../../i18n";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
@@ -361,13 +367,31 @@ function timeAgo(at: number, m: Messages): string {
   return m.home.time.daysAgo(days);
 }
 
-/** 章查找（跨文档）。 */
-function chapterIndexOf(plan: ChapterLoopSnapshot, chapterId: string): Chapter | undefined {
-  for (const list of Object.values(plan.chaptersByDoc)) {
-    const found = list.find((c) => c.id === chapterId);
-    if (found) return found;
+/**
+ * 全量章索引（跨文档，**不经目标范围裁剪**）。
+ *
+ * ⚠️ 证据行**不能**用 `ChapterLoopSnapshot` 的 `chaptersByDoc` / `docTitleOf` 解析主体：
+ * `runChapterLoop` 在目标带 `requiredChapterIds` 时会**按范围裁剪**这两者
+ * （`engine/loop.ts:270` 的 `const kept = scopeIds ? chapters.filter(…) : chapters`）。
+ * 主体章只要落在范围外就会被误判为「不存在」—— 而它其实活得好好的。
+ * 故这里按 `plan.docs`（全量文档，未裁剪）重读一次章表，用同一把尺子同时覆盖
+ * 「范围外的活章」与「真被删的章」两种情形。
+ */
+interface ChapterIndex {
+  byId: Map<string, Chapter>;
+  docTitleOf: Record<string, string>;
+}
+
+async function loadChapterIndex(docs: readonly SourceDocument[]): Promise<ChapterIndex> {
+  const byId = new Map<string, Chapter>();
+  const docTitleOf: Record<string, string> = {};
+  for (const d of docs) {
+    for (const c of await storage.listChapters(d.id)) {
+      byId.set(c.id, c);
+      docTitleOf[c.id] = d.title;
+    }
   }
-  return undefined;
+  return { byId, docTitleOf };
 }
 
 /* ------------------------------------------------------------------ */
@@ -399,16 +423,22 @@ function evidenceActionLabel(kind: EvidenceKind, m: Messages): string {
 /**
  * log 行 → 展示行。
  *
- * **主体解析（F6 / 决策 D7-A）**：`subjectKind === "goal"` 时主体是**目标**而非章
- * —— 标题走 `capability.evidenceSubject(goalTitle)`；目标已被删（证据保留）→
- * `capability.evidenceFallback`（**绝不显示裸 goalId**）。
+ * **主体解析（F6 / 决策 D7-A，2026-09-21 补齐章侧）**：
+ * - `subjectKind === "goal"` → 主体是**目标**：标题走 `capability.evidenceSubject(goalTitle)`；
+ *   目标已被删（证据保留）→ `capability.evidenceFallback`（**绝不显示裸 goalId**）。
+ * - 其余（缺省 = chapter）→ 主体是**章**：从 `index`（全量章索引）取标题；
+ *   章已被删 → `units.subjectGone`（**绝不显示裸 subjectId**）。
+ *
+ * ⚠️ 章侧的兜底此前**缺失**：解析不到就直落 `entry.subjectId`，于是资料被删后
+ * 首页会显示 `chp-1e79433b` 这种裸 id（本机实测：最近 6 行里有 4 行是这样）。
+ * D7-A 立的是「主体解析不到就不显示裸 id」，章与目标本应同一条规矩。
  *
  * **零回归（TC-REG-04）**：旧数据没有 `subjectKind`（缺省 = chapter），一律走下方
- * 章分支，行为与改动前逐字节一致。
+ * 章分支，行为与改动前一致。
  */
 function logToView(
   entry: EvidenceEntry,
-  plan: ChapterLoopSnapshot,
+  index: ChapterIndex,
   m: Messages,
   goalTitleOf: ReadonlyMap<string, string>,
 ): EvidenceView {
@@ -424,10 +454,10 @@ function logToView(
         entry.verdict === "fail" ? m.capability.verdict.fail : m.capability.verdict.pass,
     };
   }
-  const chapter = chapterIndexOf(plan, entry.subjectId);
+  const chapter = index.byId.get(entry.subjectId);
   const baseTitle = chapter
-    ? chapterDisplayTitle(chapter, plan.docTitleOf[chapter.id], m)
-    : entry.subjectId;
+    ? chapterDisplayTitle(chapter, index.docTitleOf[chapter.id], m)
+    : m.units.subjectGone;
   const { text, tone } = fmtDelta(entry.delta);
   return {
     at: entry.at,
@@ -437,7 +467,12 @@ function logToView(
   };
 }
 
-/** 最近证据：读 §7.1 evidence log（≤6 行）；log 为空（旧数据）→ 回退从试卷结果组装。 */
+/**
+ * 最近证据：读 §7.1 evidence log（≤6 行）；log 为空（旧数据）→ 回退从试卷结果组装。
+ *
+ * 章主体一律经 `loadChapterIndex(plan.docs)` 解析 —— 用 `plan.docs`（全量）而非
+ * `plan.chaptersByDoc`（按目标范围裁剪），理由见 `ChapterIndex` 的注释。
+ */
 async function loadRecentEvidence(
   plan: ChapterLoopSnapshot,
   m: Messages,
@@ -448,17 +483,18 @@ async function loadRecentEvidence(
       // 目标标题索引（能力评测行需要）：读失败 → 空索引 → 行内回退通用文案。
       const goals = await storage.listGoals().catch(() => []);
       const goalTitleOf = new Map(goals.map((g) => [g.id, g.title] as const));
-      return log.slice(0, 6).map((e) => logToView(e, plan, m, goalTitleOf));
+      const index = await loadChapterIndex(plan.docs);
+      return log.slice(0, 6).map((e) => logToView(e, index, m, goalTitleOf));
     }
   } catch {
     /* log 读取失败 → 走旧组装兜底。 */
   }
-  return assembleLegacyEvidence(plan, m);
+  return assembleLegacyEvidence(plan.docs, m);
 }
 
 /** 旧组装兜底：从最近试卷结果组装证据行（U1 期实现，兼容无 log 的旧数据）。 */
 async function assembleLegacyEvidence(
-  plan: ChapterLoopSnapshot,
+  docs: readonly SourceDocument[],
   m: Messages,
 ): Promise<EvidenceView[]> {
   const [results, papers] = await Promise.all([
@@ -467,6 +503,7 @@ async function assembleLegacyEvidence(
   ]);
   if (results.length === 0) return [];
   const paperById = new Map(papers.map((p) => [p.id, p]));
+  const index = await loadChapterIndex(docs);
   const out: EvidenceView[] = [];
   for (const r of results.slice(0, 5)) {
     // 主章 = 卷内掌握度变化 |Δ| 最大的一章。
@@ -479,10 +516,11 @@ async function assembleLegacyEvidence(
         bestDelta = d;
       }
     }
-    const chapter = bestId ? chapterIndexOf(plan, bestId) : undefined;
+    const chapter = bestId ? index.byId.get(bestId) : undefined;
+    // 章解析不到 → 退到试卷标题；试卷也没了 → 兜底文案（**不落裸 paperId**）。
     const baseTitle = chapter
-      ? chapterDisplayTitle(chapter, plan.docTitleOf[chapter.id], m)
-      : (paperById.get(r.paperId)?.title ?? r.paperId);
+      ? chapterDisplayTitle(chapter, index.docTitleOf[chapter.id], m)
+      : (paperById.get(r.paperId)?.title ?? m.units.subjectGone);
     const { text, tone } = fmtDelta(bestDelta);
     out.push({
       at: r.createdAt,
