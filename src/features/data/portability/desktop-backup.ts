@@ -22,6 +22,17 @@ export interface BackupEntry {
   bytes: number;
   /** 修改时间 epoch ms。 */
   modifiedAt: number;
+  /**
+   * 条目类型（F10）。⚠️ **可选**：旧版本 Rust 不带该字段，此时前端按后缀兜底推断
+   * （`kindOf()`）—— 声明成必填会让旧版本直接反序列化失败。
+   */
+  kind?: "backup" | "pack";
+}
+
+/** `kind` 的兜底推断（旧 Rust 无该字段时按后缀判）。 */
+function kindOf(entry: BackupEntry): "backup" | "pack" {
+  if (entry.kind !== undefined) return entry.kind;
+  return entry.name.endsWith(".ploskp.json") ? "pack" : "backup";
 }
 
 /** 备份落盘能力是否可用（仅桌面端）。 */
@@ -39,10 +50,25 @@ export async function backupSave(name: string, contents: string): Promise<string
   return invoke<string>("backup_save", { name, contents });
 }
 
-/** 备份列表；非桌面端返回空数组（调用方据此走文件选择器路径）。 */
+/**
+ * 备份列表（**只含备份**，过滤掉知识包条目）；非桌面端返回空数组
+ * （调用方据此走文件选择器路径）。
+ *
+ * ⚠️ `backup_list` 这一条命令同时返回备份与知识包（同一个固定目录），过滤必须在
+ * **通道层**做一次 —— 让各页面自己 `filter` 就是「同一规则散在多处」，备份卡与
+ * 包卡迟早会看到对方的东西（方案 §143「列表可分流 / 互为反向白名单」）。
+ */
 export async function backupList(): Promise<BackupEntry[]> {
   if (!isTauri()) return [];
-  return invoke<BackupEntry[]>("backup_list");
+  const all = await invoke<BackupEntry[]>("backup_list");
+  return all.filter((e) => kindOf(e) === "backup");
+}
+
+/** 知识包列表（**只含包**）；非桌面端返回空数组。 */
+export async function packList(): Promise<BackupEntry[]> {
+  if (!isTauri()) return [];
+  const all = await invoke<BackupEntry[]>("backup_list");
+  return all.filter((e) => kindOf(e) === "pack");
 }
 
 /** 按名读取备份内容。 */

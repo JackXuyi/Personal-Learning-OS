@@ -23,8 +23,25 @@ use tauri::{AppHandle, Manager};
 /// 备份文件后缀（双重后缀：`.json` 保证任意编辑器 / 终端可直接查看）。
 const BACKUP_SUFFIX: &str = ".plosbak.json";
 
+/// 知识包后缀（F10；与 `BACKUP_SUFFIX` **严格分离** —— 列表可分流、语义不混淆）。
+///
+/// 两者共用同一条「落盘到固定目录」通道（零新增 capability），但**互为反向白名单**：
+/// 备份列表不认包、包列表不认备份，`BackupKind` 让前端能把它们分成两个列表。
+const PACK_SUFFIX: &str = ".ploskp.json";
+
 /// 备份目录名（位于 `app_data_dir` 下）。
 const BACKUP_DIR_NAME: &str = "backups";
+
+/// 条目类型（前端据此把「最近备份」与「知识包」分成两个列表）。
+///
+/// 序列化为 `"backup"` / `"pack"`。⚠️ 前端把它声明为**可选**（`kind?`）以兼容旧版本
+/// 落盘的条目 —— 那种情况下前端按后缀兜底推断。
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum ExportKind {
+    Backup,
+    Pack,
+}
 
 /// `backup_list` 的元素（前端 `BackupEntry` 的镜像，camelCase）。
 #[derive(Debug, Serialize, PartialEq)]
@@ -35,17 +52,19 @@ pub struct BackupEntry {
     pub bytes: u64,
     /// 修改时间 epoch ms。
     pub modified_at: i64,
+    /// 条目类型（备份 / 知识包）。
+    pub kind: ExportKind,
 }
 
-/// 文件名白名单校验：只允许 `[A-Za-z0-9._-]`，必须以 `.plosbak.json` 结尾，
-/// 且不含 `..`。三个条件缺一不可（`..` 已能被字符集判定拦住，但显式再判一次，
-/// 防将来有人放宽字符集时静默打开路径穿越）。
+/// 文件名白名单校验：只允许 `[A-Za-z0-9._-]`，必须以 `.plosbak.json` **或**
+/// `.ploskp.json` 结尾，且不含 `..`。三个条件缺一不可（`..` 已能被字符集判定拦住，
+/// 但显式再判一次，防将来有人放宽字符集时静默打开路径穿越）。
 ///
-/// 用于**读路径**（`backup_read`）与列表过滤：目录里应当只有备份。
+/// 用于**读路径**（`backup_read`）与列表过滤：目录里应当只有备份与知识包。
 pub fn safe_name(name: &str) -> Result<(), String> {
     safe_chars(name)?;
-    if !name.ends_with(BACKUP_SUFFIX) {
-        return Err(format!("非法备份文件名：{name}"));
+    if !name.ends_with(BACKUP_SUFFIX) && !name.ends_with(PACK_SUFFIX) {
+        return Err(format!("非法备份 / 知识包文件名：{name}"));
     }
     Ok(())
 }
@@ -53,15 +72,16 @@ pub fn safe_name(name: &str) -> Result<(), String> {
 /// 单章 Markdown 导出用的后缀（F4 范围 D6-A 的第 2 条 P0）。
 const MARKDOWN_SUFFIX: &str = ".md";
 
-/// 写路径的白名单：备份后缀 **或** `.md`。
+/// 写路径的白名单：备份后缀 / 知识包后缀 **或** `.md`。
 ///
-/// 为什么允许 `.md`：单章 Markdown 导出与备份共用同一条「落盘到固定目录」通道
-/// （零新增 crate / 零 capabilities 改动）；安全边界是**字符集 + 固定目录 +
-/// 无路径分隔符**，后缀只是防呆，不该拦住一个正当的导出格式。
-/// 读路径与列表仍只认 `.plosbak.json` → `.md` 不会混进「最近备份」。
+/// 为什么允许 `.md` 与 `.ploskp.json`：单章 Markdown 导出与知识包导出都与备份共用
+/// 同一条「落盘到固定目录」通道（零新增 crate / 零 capabilities 改动）；安全边界是
+/// **字符集 + 固定目录 + 无路径分隔符**，后缀只是防呆，不该拦住正当的导出格式。
+/// 读列表仍只认 `.plosbak.json` 与 `.ploskp.json` → `.md` 不会混进任何一个列表。
 pub fn safe_save_name(name: &str) -> Result<(), String> {
     safe_chars(name)?;
-    if !name.ends_with(BACKUP_SUFFIX) && !name.ends_with(MARKDOWN_SUFFIX) {
+    if !name.ends_with(BACKUP_SUFFIX) && !name.ends_with(PACK_SUFFIX) && !name.ends_with(MARKDOWN_SUFFIX)
+    {
         return Err(format!("非法导出文件名：{name}"));
     }
     Ok(())
@@ -106,7 +126,8 @@ pub fn save_in(dir: &Path, name: &str, contents: &str) -> Result<PathBuf, String
     Ok(target)
 }
 
-/// 列举备份（只认 `.plosbak.json`），按修改时间倒序。
+/// 列举备份**与知识包**（收 `.plosbak.json` + `.ploskp.json`，**仍不收** `.md` 与 `.tmp`），
+/// 按修改时间倒序。前端按 `kind` 分成两个列表。
 pub fn list_in(dir: &Path) -> Result<Vec<BackupEntry>, String> {
     let entries = fs::read_dir(dir).map_err(|e| format!("读取备份目录失败：{e}"))?;
     let mut out = Vec::new();
@@ -115,9 +136,14 @@ pub fn list_in(dir: &Path) -> Result<Vec<BackupEntry>, String> {
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
-        if !name.ends_with(BACKUP_SUFFIX) {
-            continue;
-        }
+        // ⚠️ 顺带把 kind 定出来：两个后缀都要收，但语义不同（前端分成两个列表）。
+        let kind = if name.ends_with(BACKUP_SUFFIX) {
+            ExportKind::Backup
+        } else if name.ends_with(PACK_SUFFIX) {
+            ExportKind::Pack
+        } else {
+            continue; // `.md` / `.tmp` / 其它一律不进列表
+        };
         let Ok(meta) = entry.metadata() else { continue };
         if !meta.is_file() {
             continue;
@@ -133,6 +159,7 @@ pub fn list_in(dir: &Path) -> Result<Vec<BackupEntry>, String> {
             path: path.to_string_lossy().to_string(),
             bytes: meta.len(),
             modified_at,
+            kind,
         });
     }
     out.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
@@ -320,5 +347,53 @@ mod tests {
         assert_eq!(read_in(&dir, name).unwrap(), "second");
         assert_eq!(list_in(&dir).unwrap().len(), 1);
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    // ===== F10 知识包后缀（T9）=====
+
+    #[test]
+    fn pack_suffix_accepted_on_both_paths() {
+        // 读路径与写路径都接受 `.ploskp.json`（与备份共用同一条固定目录通道）
+        assert!(safe_name("plos-pack-20260921-090807.ploskp.json").is_ok());
+        assert!(safe_save_name("plos-pack-20260921-090807.ploskp.json").is_ok());
+        // 穿越在包后缀上同样被拒（字符集 + `..` 的检查先于后缀判定）
+        assert!(safe_name("../evil.ploskp.json").is_err());
+        assert!(safe_save_name("a/b.ploskp.json").is_err());
+        // 互为反向白名单：普通 JSON 两条路径都不认
+        assert!(safe_name("x.json").is_err());
+        assert!(safe_save_name("x.json").is_err());
+    }
+
+    #[test]
+    fn list_returns_backups_and_packs_but_not_markdown() {
+        let dir = temp_dir("pack-list");
+        fs::write(dir.join("a.plosbak.json"), "{}").unwrap();
+        fs::write(dir.join("b.ploskp.json"), "{}").unwrap();
+        fs::write(dir.join("c.md"), "# 单章 Markdown").unwrap(); // 不进任何列表
+        fs::write(dir.join("d.ploskp.json.tmp"), "{}").unwrap(); // 半截文件
+        fs::write(dir.join("e.txt"), "x").unwrap();
+
+        let mut listed = list_in(&dir).unwrap();
+        listed.sort_by(|a, b| a.name.cmp(&b.name));
+        assert_eq!(listed.len(), 2);
+        assert_eq!(listed[0].name, "a.plosbak.json");
+        assert_eq!(listed[0].kind, ExportKind::Backup);
+        assert_eq!(listed[1].name, "b.ploskp.json");
+        assert_eq!(listed[1].kind, ExportKind::Pack);
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn pack_name_rejects_traversal_and_wrong_suffix() {
+        // 后缀不完整 / 不是包
+        assert!(safe_save_name("x.ploskp").is_err());
+        assert!(safe_save_name("x.json").is_err());
+        // 含 `..`（穿越特征）
+        assert!(safe_save_name("...ploskp.json").is_err());
+        // Windows 反斜杠穿越
+        assert!(safe_save_name("a\\b.ploskp.json").is_err());
+        // 合法包名
+        assert!(safe_save_name("plos-pack-20260921-090807.ploskp.json").is_ok());
     }
 }
