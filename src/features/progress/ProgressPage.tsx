@@ -206,7 +206,8 @@ export default function ProgressPage() {
                 <option value="">{pg.trendAllChapters}</option>
                 {trend.chapters.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.title}
+                    {/* 章已随资料删除 → 兜底文案（**绝不显示裸 id**，同 D7-A 章侧口径）。 */}
+                    {c.title ?? m.units.subjectGone}
                   </option>
                 ))}
               </select>

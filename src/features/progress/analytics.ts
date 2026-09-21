@@ -65,7 +65,15 @@ export interface TrendPoint {
 
 export interface TrendChapterSeries {
   id: string;
-  title: string;
+  /**
+   * 章标题；**解析不到时为 `undefined`**（章可能已随所属资料一起被删除）。
+   *
+   * ⚠️ 这里**刻意不回落 `id`**（2026-09-21 口径修正）。趋势读的是**试卷历史**，
+   * 历史事实必须保留 —— `id` 与 `points` 一律不动，该章仍可下钻看出曲线；但
+   * 「已不存在的章」不该把内部 id 当标题渲染给用户。兜底**文案**由 UI 决定
+   * （`/progress` 用 `units.subjectGone`），本模块保持零 i18n。
+   */
+  title?: string;
   /** 该章的掌握度快照序列（≥2 点才可画线）。 */
   points: { at: number; mastery: number }[];
 }
@@ -267,6 +275,11 @@ export function buildHeatmap(
  * 口径 = **累积快照**：维护「chapterId → 最新 mastery」的表，每份卷把其覆盖到的章
  * 更新进去，再用**整表均值**作为该时点的纵坐标。这样曲线读作「到此刻为止，我考过的
  * 章平均掌握度」，而不是「这一份卷考得怎么样」。
+ *
+ * **与弱点榜的差别（刻意不同，勿统一）**：趋势读**试卷历史** → 章即使已被删除，
+ * 它的历史序列仍然保留（`id` + `points` 都在，可下钻）；弱点榜读**当前 `byUnit`**
+ * → 不可解析的主体直接不入榜（`buildWeakness`）。两者只在**「解析不到」的呈现**
+ * 上遵循同一条规矩：**绝不把内部 id 当标题显示**。
  */
 export function buildTrend(
   results: readonly PaperResult[],
@@ -298,7 +311,8 @@ export function buildTrend(
   const chapters: TrendChapterSeries[] = [];
   for (const [id, pts] of series) {
     if (pts.length === 0) continue;
-    chapters.push({ id, title: titleOf(id) ?? id, points: pts });
+    // ⚠️ 解析不到 → 留 `undefined`，**不回落到 `id`**（见 `TrendChapterSeries.title`）。
+    chapters.push({ id, title: titleOf(id), points: pts });
   }
 
   return { points, chapters, paperCount: ordered.length };
