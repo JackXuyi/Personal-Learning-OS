@@ -156,6 +156,8 @@ export const en: Messages = {
     typeChapter: "Chapter",
     typeGoal: "Goal",
     typeContent: "Body text",
+    /** Fallback label when the hit's chapter AND document are both gone (never show a raw chunk id). */
+    contentGone: "Source no longer exists",
     emptyNoMatch: (q: string) => `No content matching “${q}”`,
     searchWords: {
       start: "start next learn review quiz today run",
@@ -2165,6 +2167,8 @@ export const en: Messages = {
     evidenceFallback: "Capability assessment",
     evidenceSubject: (title: string) => `Capability assessment · ${title}`,
     runMissing: "This assessment no longer exists (it may have been deleted with its goal).",
+    /** Fallback label when an item snapshot can no longer be matched in the current framework (never show a bare itemId). */
+    itemGone: "Capability item no longer exists",
     err: {
       noAi: "AI is not configured, so items cannot be derived or scored automatically; you can add items manually.",
       goSettings: "Configure AI",

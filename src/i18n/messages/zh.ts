@@ -164,6 +164,8 @@ export const zh = {
     typeChapter: "章节",
     typeGoal: "目标",
     typeContent: "正文",
+    /** 正文命中所属的章节与资料都已不存在时的兜底标签（**绝不显示裸 chunk id**）。 */
+    contentGone: "来源资料已不存在",
     emptyNoMatch: (q: string) => `没有匹配「${q}」的内容`,
     searchWords: {
       start: "开始 下一步 学习 复习 测评 今天 启动",
@@ -2100,6 +2102,8 @@ export const zh = {
     evidenceFallback: "能力评测",
     evidenceSubject: (title: string) => `能力评测 · ${title}`,
     runMissing: "这次评测不存在（可能已随目标删除）。",
+    /** 能力项快照在当前框架里已找不到（项被删 / 框架已变）时的兜底标签 —— **绝不显示裸 itemId**。 */
+    itemGone: "能力项已不存在",
     err: {
       noAi: "未配置 AI，无法自动提炼或评分；你可以手动添加能力项。",
       goSettings: "去设置 AI",
