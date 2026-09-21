@@ -134,7 +134,9 @@ plos-2026-09-15.log:103 章要点分析失败 doc=doc-3a3025f2 chapter=1.5.1 民
 
 ### 3.3 约束与依赖
 
-- **零 `src-tauri/**` 改动**：`TauriStorage extends LocalStorageAdapter`，章节数据（RAG 五类之外）全由父类 localStorage 承载，`saveChapters` 走的正是父类 → 本方案**只改 `features/` 与 i18n**。
+- **零 `src-tauri/**` 改动**：~~`TauriStorage extends LocalStorageAdapter`，章节数据（RAG 五类之外）全由父类 localStorage 承载，`saveChapters` 走的正是父类~~
+  ⚠️ **理由已过时（2026-09-21）**：`Chapter` 已随 F10 前置下沉 SQLite（schema v5），`saveChapters` 现由 `storage/tauri.ts` 覆写。
+  **结论仍成立**：本方案**只改 `features/` 与 i18n** —— 增量写落在 `Chapter.keyPointRefs`、走**既有** `saveChapters` 入口，无需新增命令或改表。
 - **零 `domain/` 改动**（D3 定案）。
 - `ai/` 不得 import `features/`：本方案的增量写发生在 `features/learn/analyze-service.ts`（已有分层），不新增跨界。
 - 单测不得 import `.tsx`：派生计数必须落在 `.ts`（见 §8.2）。

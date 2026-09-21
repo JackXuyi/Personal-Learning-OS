@@ -388,7 +388,8 @@ export interface DbStatus {
 type SqliteResult<T> = { ok: true; value: T } | { ok: false };
 
 /**
- * 桌面端存储适配器：RAG 五类实体落 SQLite，其余沿用 localStorage。
+ * 桌面端存储适配器：RAG 五类实体 **+ Document / Chapter（schema v5 起）** 落 SQLite，
+ * 其余实体（Paper / Goal / LearnerState / LearnerProfile / Evidence / Annotation…）沿用 localStorage。
  *
  * 注意：构造时**不**主动探测 SQLite（避免异步副作用），首次调用 RAG 方法时
  * 惰性探测；也可用 `probe()` 显式探测（迁移工具 / 设置页排障用）。

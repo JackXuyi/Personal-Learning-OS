@@ -31,6 +31,12 @@ README 用中英双语向用户承诺「**数据属于你 —— 随时可以导
 | 能力/权限 | `src-tauri/capabilities/default.json` | 只有 `core:default`；`package.json` 与 `src-tauri/Cargo.toml` **均无** `tauri-plugin-dialog` / `tauri-plugin-fs` |
 | 旧文案 | `src/i18n/messages/zh.ts` `settings.storage.note` | 「重置/迁移数据的能力随 SQLite 后端一起提供（**本里程碑不提供清除按钮**，避免误删本地数据）」——本方案落地后此句必须改写 |
 
+> ⚠️ **本表是 2026-09-17 开工前的时点证据**，其中多行已被 **F10 前置（2026-09-21，schema v5）** 推翻：
+> 「后端分叉」—— `Document` / `Chapter` **也已下沉 SQLite**（不再是「只有 RAG 五类」）；「key 清单」——
+> `plos.documents` / `plos.chapters` 降级为**冻结迁移快照**（`persist()` 拆两半后不再随每次写全量回写）；
+> 「SQLite 表 / 命令」—— 表 7 → **9**，清库命令 `db_clear_rag` → **`db_clear_library`**（9 表单事务）。
+> 现状真源：`src/storage/tauri.ts` 头注释 + `docs/community-knowledge-pack-design-2026-09.md` §8.19。保留原行是为了留住当时的实测口径。
+
 ### 1.3 不做的后果
 
 - 用户一旦想换机 / 想备份 / 想跑「卸载重装」，**唯一的路径是手工拼 `localstorage.sqlite3` 与 `plos.db`** —— 这是开发者路径，不是产品路径。

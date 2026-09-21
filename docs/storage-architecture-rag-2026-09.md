@@ -878,7 +878,7 @@ interface StorageAdapter {
 | ~~**N1（P1）**~~ ✅ **已实施（2026-09-10）** | ~~向量库选型（SQLite vector vs LanceDB）+ Embedding 表补齐；Chunk 级检索引擎~~ → 落地为 `docs/rag-wiring-design-2026-09.md`：不引外部向量库，`embeddings.vector` 直接以 float32 LE BLOB 承载（schema v3）；新增 `engine/chunk-engine`、`ai/retrieval/*`、`features/learn/index-service`，并把写入端接到导入管道与手动切分。实施记录见 `docs/rag-wiring-task-runbook.md` | ~~2 周~~ 已交付 |
 | **N2（P1）** | Knowledge Graph 可视化 + 高级检索（图扩展、重排序） | 3 周 |
 | **N3（P2）** | RAG Context Builder 完整实现；Evidence 链路闭合 | 2 周 |
-| **N4（P2）** | localStorage 下线；Tauri SQLite 生产迁移工具上线 | 1 周 |
+| ~~**N4（P2）**~~ ◐ **部分交付（2026-09-21 · F10 前置）** | ~~localStorage 下线；Tauri SQLite 生产迁移工具上线~~ → **已交付**：`Document` / `Chapter` 下沉 SQLite（schema **v5** 两表）+ `migrate_v5` + `migrateLegacyDocuments()` 惰性迁移 + `db_clear_library`（9 表单事务，原 `db_clear_rag` 改名）；**剩余**：Paper / Goal / LearnerState / Evidence / Annotation 等仍在 localStorage —— 见 `docs/community-knowledge-pack-design-2026-09.md` §8.19 | ~~1 周~~ 前置已落地 |
 
 > N1 落地后的**能力边界**（与本节原设想的两点差异，均已在本方案中显式记录）：
 > ① 未引入向量库扩展（`sqlite-vec` / LanceDB）——个人资料规模下全量载入 + 内存余弦足够；
@@ -892,3 +892,4 @@ interface StorageAdapter {
 |------|------|------|
 | 2026-09-10 | 初稿：五层存储模型 + SQLite DDL + StorageAdapter 扩展 + 迁移路径 | WorkBuddy |
 | 2026-09-10 | §11 标注 N1 已实施（RAG 全链路接线完成，见 `docs/rag-wiring-design-2026-09.md`） | WorkBuddy |
+| 2026-09-21 | §11 N4 标注**部分交付**：`Document` / `Chapter` 已随 F10 前置下沉 SQLite（schema **v5**，`migrate_v5` + `migrateLegacyDocuments()`，清库命令改名 `db_clear_library`）；其余实体仍在 localStorage。⚠️ 本方案写作时「SQLite 只承载 RAG 五类」的现状已变 —— 引用实体分布前先看 `src/storage/tauri.ts` 头注释（真源）与 `docs/community-knowledge-pack-design-2026-09.md` §8.19。配套：同日 `docs/storage-architecture-rag-task-runbook.md` 已有 v5 更新注与遗留表 F3 关闭行（T17） | WorkBuddy |

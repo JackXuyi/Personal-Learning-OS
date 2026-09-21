@@ -200,7 +200,9 @@ const kept = scopeIds ? chapters.filter((c) => scopeIds.has(c.id)) : chapters;
 - `plos.paper-drafts` 原有 3 个**空对象** `{}`（对应 3 份已判卷的 done 试卷）——判卷后未清草稿，
   属存储占用而非用户可见问题。2026-09-21 清理孤儿卷时已连带删掉 2 个（只剩 `paper-be3d6e6f`）。
 - `plos.knowledge-units` / `-relations` / `chunks` / `embeddings` / `sections` 在 localStorage
-  里为空是**预期**：RAG 五类已迁 SQLite，localStorage 只承载其余实体。
+  里为空是**预期**：RAG 五类已迁 SQLite。⚠️ **2026-09-21 起 `Document` / `Chapter` 也已下沉**（schema v5，
+  localStorage 侧只剩**冻结迁移快照**）—— 下半句「localStorage 只承载其余实体」已不完整，现状以
+  `src/storage/tauri.ts` 头注释为准。
 - `doc-b577e2b8` 无 `analysis` 字段而 `doc-3a3025f2` 只有 `chaptersAt` —— `analysis` 全部
   可选（`domain/document.ts:45`），属合法老数据形状。
 
