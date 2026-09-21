@@ -106,6 +106,13 @@ export const zh = {
       card: "自测卡",
       capability: "能力评测",
     },
+    /**
+     * 证据行主体的兜底：主体章已不存在（资料被删 / 重新切分换了 id）时显示。
+     *
+     * 与 F6 决策 D7-A 的 `capability.evidenceFallback` 同口径 —— **绝不显示裸 id**；
+     * 那边兜底的是「目标已删」，这边兜底的是「章已删」。
+     */
+    subjectGone: "章节已不存在",
     /** 计划项按钮动词（去学习 / 去测验 / 生成补考卷 / 去复习）。 */
     actionVerb: {
       learn: "去学习",

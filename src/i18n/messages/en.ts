@@ -101,6 +101,12 @@ export const en: Messages = {
       card: "Flashcards",
       capability: "Capability review",
     },
+    /**
+     * Fallback subject for evidence rows whose chapter no longer exists
+     * (document deleted / re-split with new ids). Mirrors F6 decision D7-A's
+     * `capability.evidenceFallback` — **never show a bare id**.
+     */
+    subjectGone: "Chapter no longer exists",
     actionVerb: {
       learn: "Learn",
       review: "Review",
