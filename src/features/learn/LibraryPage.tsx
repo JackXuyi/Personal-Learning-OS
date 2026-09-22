@@ -62,6 +62,14 @@ export default function LibraryPage() {
   const navigate = useNavigate();
   const [docs, setDocs] = useState<SourceDocument[]>([]);
   const [chaptersByDoc, setChaptersByDoc] = useState<Record<string, Chapter[]>>({});
+  /**
+   * 读库失败（典型：SQLite 不可用 → `listDocuments()` 抛 `StorageUnavailableError`）。
+   *
+   * ⚠️ 与「空库」必须是两件事：`docs` 初值就是 `[]`，失败时不区分就会渲染成
+   * 「还没有资料」—— 与真正的空库是**同一个页面**，用户会以为资料丢了。
+   * 这也是 §12.3 手工验收第 11 条要看的那个状态。
+   */
+  const [loadError, setLoadError] = useState<string>();
   const [learner, setLearner] = useState<LearnerState | undefined>();
   /** 目标过滤候选（仅「已被至少一份资料关联」的目标），titles 供下拉显示。 */
   const [goals, setGoals] = useState<LearningGoal[]>([]);
@@ -87,20 +95,26 @@ export default function LibraryPage() {
   const indexProgress = useIndexStore((s) => s.progress);
 
   const load = async () => {
-    const [ds, ls, gs] = await Promise.all([
-      storage.listDocuments(),
-      storage.getLearnerState(),
-      storage.listGoals(),
-    ]);
-    setGoals(gs);
-    // 读时遗忘衰减（与首页/计划同口径；衰减视图，幂等不写回）。
-    const learner = applyForgetting(ls, Date.now());
-    const withChapters = await Promise.all(
-      ds.map(async (d) => [d.id, sortChaptersByOrder(await storage.listChapters(d.id))] as const),
-    );
-    setDocs(ds);
-    setChaptersByDoc(Object.fromEntries(withChapters));
-    setLearner(learner);
+    try {
+      const [ds, ls, gs] = await Promise.all([
+        storage.listDocuments(),
+        storage.getLearnerState(),
+        storage.listGoals(),
+      ]);
+      setGoals(gs);
+      // 读时遗忘衰减（与首页/计划同口径；衰减视图，幂等不写回）。
+      const learner = applyForgetting(ls, Date.now());
+      const withChapters = await Promise.all(
+        ds.map(async (d) => [d.id, sortChaptersByOrder(await storage.listChapters(d.id))] as const),
+      );
+      setDocs(ds);
+      setChaptersByDoc(Object.fromEntries(withChapters));
+      setLearner(learner);
+      // 全部数据就位后才清错：先清再读会在失败时闪一下空态。
+      setLoadError(undefined);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    }
   };
 
   useEffect(() => {
@@ -265,14 +279,17 @@ export default function LibraryPage() {
       <SectionTitle
         title={lib.title}
         subtitle={
-          docs.length === 0
-            ? lib.subtitleEmpty
-            : lib.subtitleStats(
-                stats.docs,
-                stats.chapters,
-                stats.mastered,
-                Math.round(MASTERY_THRESHOLD * 100),
-              )
+          // 读失败时**不显示**副标题：那句「导入一份资料…」在故障下是误导。
+          loadError
+            ? undefined
+            : docs.length === 0
+              ? lib.subtitleEmpty
+              : lib.subtitleStats(
+                  stats.docs,
+                  stats.chapters,
+                  stats.mastered,
+                  Math.round(MASTERY_THRESHOLD * 100),
+                )
         }
         action={
           <Button onClick={openImportModal} size="sm" className="px-3.5 text-sm">
@@ -386,7 +403,18 @@ export default function LibraryPage() {
         </div>
       ) : null}
 
-      {docs.length === 0 ? (
+      {/*
+        ⚠️ 错误态**必须排在空态之前**：`docs` 初值就是 `[]`，检查顺序反了
+        就等于把「读不出来」显示成「还没有资料」。
+      */}
+      {loadError ? (
+        <Card className="mt-4">
+          <p className="text-base font-semibold text-state-failed">{lib.loadFailedTitle}</p>
+          <p className="mt-1 text-sm text-ink-2">{lib.loadFailedDesc}</p>
+          {/* 技术细节原样给出（排障用）；文案由 i18n 承担。 */}
+          <p className="mt-2 break-all text-xs text-ink-3">{loadError}</p>
+        </Card>
+      ) : docs.length === 0 ? (
         <Card className="mt-4 border-dashed">
           <p className="text-base font-semibold text-ink-1">{lib.emptyTitle}</p>
           <p className="mt-1 text-sm text-ink-2">{lib.emptyDesc}</p>
