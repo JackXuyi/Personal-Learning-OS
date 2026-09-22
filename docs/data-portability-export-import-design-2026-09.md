@@ -270,7 +270,12 @@ for p in listPapers():
     drafts[p.id] = getPaperDraft(p.id)            // 可能 undefined → 跳过
 ```
 
-**⚠️ 孤儿数据的诚实处理**：遍历式收集**拿不到孤儿**（例如资料 A 已被删但它的 Section 还在——`deleteDocument` 只级联章与批注，**不清 Section/Chunk**）。因此：
+**⚠️ 孤儿数据的诚实处理**：遍历式收集**拿不到孤儿**（例如资料 A 已被删、它的 Section 还在）。
+~~`deleteDocument` 只级联章与批注，**不清 Section/Chunk**~~
+→ **时点注（2026-09-22）**：该括号已过时两轮。**Chunk 与向量**自 `rag-wiring` T14 起由
+`deleteDocumentCascade` 步骤 0 清理；**Section** 也已在 `document-cascade-cleanup-2026-09`
+补齐（连复述 / 卡状态 / `learner.byUnit` / 目标悬空章 id / 包溯源共 6 项）。
+⇒ 今天的级联**不再产出新的孤儿**，但**存量孤儿**（本轮之前删掉的资料）仍需按下面的口径如实计数。因此：
 
 - 导出时统计 `orphans`（通过 `listKnowledgeUnits()` / `listRelations()` / `listEmbeddings()` 的全量结果与「按文档收集到的 id 集合」做差集），**只在结果面板展示条数**，不阻止导出、不自动清理（清理是另一个决策）；
 - 导入侧**不重建孤儿**（它们本来就指不到东西）。在 §12.2 记录为已知残留。
@@ -1079,7 +1084,7 @@ note: "导出/导入与整库替换都在上方卡片里。整库清空只作为
 | 导出期间用户并发写库 | 本机单用户、无锁 | 接受（快照不保证事务性）。缓解：导出全程 `busy` 禁按钮；时间窗为秒级。**不做**跨进程锁 |
 | 大库导出内存峰值 | `JSON.stringify` 一次性 | 个人资料量级（10–80 MB）可接受；若超 200 MB 再评估流式分片（**本次不做**） |
 | `plos.graph` blob 与 SQLite 双写 | 一致性 | 已用「导入收口 `saveGraph(库内全量)`」覆盖两种模式（§4.3.3）；导出侧**不导出 blob**（同一事实只存一份） |
-| 孤儿 Section/Chunk/批注 | 既有数据债（`deleteDocument` 只级联章与批注） | 本次只计数不清理；清理需单独决策（涉及 FTS 与向量级联） |
+| 孤儿 Section/Chunk/批注 | ~~既有数据债（`deleteDocument` 只级联章与批注）~~ **2026-09-22 更正**：chunk/向量（T14 起）与 Section + 6 项派生态均已进级联 ⇒ **不再新增**；剩下的只是**存量**（本轮之前删除的资料） | 本次只计数不清理；存量清理需单独决策 |
 | 加密 / 签名 | 非目标 | 备份是明文 JSON —— **UI 文案必须说清「文件里有你的全部笔记，请自行妥善保管」**（不写这句话会误导用户随手发给别人） |
 | 移动端 / 多平台 | 非目标 | `backup_reveal` 已按平台分支（macOS `open -R`），Windows/Linux 分支照 `logging.rs` 的既有写法补齐 |
 

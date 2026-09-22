@@ -195,6 +195,13 @@ const kept = scopeIds ? chapters.filter((c) => scopeIds.has(c.id)) : chapters;
 证据流与 `learner.byUnit` 仍维持 **(c) append-only**（悬空的 `subjectId` / `byUnit` 残留
 没有用户可见症状，要清需另一次拍板）；`deleteDocumentCascade` 也尚未补证据流清理。
 
+> **2026-09-22 收口（本条已被推翻，保留原句留痕）**：上句的后半「尚未补证据流清理」
+> **结论作废，且方向是反的** —— 实测证据流**不该**被级联清理（三个消费方全都只看行为、
+> 不看主体；按主体删 = 回溯改写历史），改由**消费侧**兜底（首页跳过解析不到的章级行）。
+> 但同句前半的 `learner.byUnit` **判反了**：它不是 append-only 派生态，消费方过滤
+> （`analytics.ts:354`）是**兜底不是清理**，已随资料回收。同批补齐 6 项。
+> 详见 `docs/document-cascade-cleanup-2026-09.md` §2/§3。
+
 ### 7.2 其他
 
 - `plos.paper-drafts` 原有 3 个**空对象** `{}`（对应 3 份已判卷的 done 试卷）——判卷后未清草稿，

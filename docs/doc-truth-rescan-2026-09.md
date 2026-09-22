@@ -9,6 +9,8 @@
 > **范围**：`docs/business-flow-end-to-end-2026-09.md`、`docs/roadmap-next-features-plan-2026-09.md`（§F8 + **§9 聚合视图** + **§10 F7 范围 3**）、
 > `docs/learn-flashcard-design-2026-09.md`、`docs/learn-flashcard-task-runbook-2026-09.md`、
 > `docs/chapter-edit-design-2026-09.md`（§10 实测补注）、
+> **`docs/raw-id-label-fix-2026-09.md` / `docs/evidence-log-idempotency-fix-2026-09.md` /
+> `docs/tech-debt-closeout-2026-09.md` / `docs/data-portability-export-import-design-2026-09.md`（§11）**、
 > 3 处源码头注释、2 条 ×2 语言的用户可见文案、`.workbuddy/memory/MEMORY.md`。
 >
 > **不在范围**：README（故障/事实更正**不动 README**）；roadmap 的其它候选（见 §8）。
@@ -312,3 +314,57 @@ README 层面的**过度声称**（roadmap §四 第 4 条记过同类教训）�
 > 本例的坑：F7 范围 3 与 README「章节圈定」是**同一能力的两种措辞**、分属两份文档，
 > 一份已勾一份未勾 —— **看起来像矛盾，实际是分层**。只看「哪份文档说了什么」会得出错误结论，
 > 只有回到**代码事实**（类型 / 载入 / 交互 / 消费四级）才能分清。
+
+---
+
+## 11. 「待拍板」不一定是没结论，可能是**结论是反向的**（2026-09-22，第四轮）
+
+**触发**：遗留清单「⑤ `deleteDocumentCascade` 证据流清理」在 `raw-id-label-fix` §7、
+`evidence-log-idempotency-fix` §7.1、`tech-debt-closeout` §4 **三处同口径标「待拍板」**。
+用户下达「修复」指令。
+
+### 11.1 实测把「漏做」改写成「口径冲突」
+
+| 断言 | 实测 |
+|---|---|
+| 级联漏了证据流 | ⚠️ 证据流的三个消费方（`/progress` 热力图**逐日计数** / F9 记忆的节奏与模式分布 / 首页最近证据）**全都不看主体、只看行为** ⇒ 按主体删 = **回溯改写已发生的事实** |
+| （同族）批注漏了级联 | ❌ **早已级联删**（`memory.ts::forgetDocument:123-126`），且是 `learn-highlight-note-design:337` 的**既定决策** |
+| F4 文档称「`deleteDocument` 不清 Section/Chunk」 | ⚠️ **半句对、半句错**：chunk 自 rag-wiring T14 起已清；**Section 才真漏** |
+
+⇒ 「待拍板」的真实原因是**级联回收与行为历史语义冲突**，不是没人做。
+把它当「遗漏」排期，会做出**静默改写用户历史**的改动。
+
+### 11.2 真正漏的是同族的 6 项（已补齐）
+
+按 `local.ts` 的 24 个 key 穷举，判据一句话：**主体（章）随资料消失 ⇒ 永久指不到真源**。
+补齐：复述 / `CardState` / `learner.byUnit` 章键 / `Section` / 目标悬空章 id / 社区包溯源。
+其中**两处反转了旧口径**：
+- `learner.byUnit` 原被归入「append-only (c) 档」—— 判**错**了：它的真源是卷面，
+  而卷面已在级联步骤 1 删除；消费方过滤（`analytics.ts:354`）是**兜底不是清理**。
+- 目标范围剔除有一条**必须保留的例外**：`kept` 为空时**不动** —— `scopeOf` 把空范围读作
+  「全库回退」（`goal-util.ts:46`），剔空会把限定目标**静默变成全局目标**。
+
+### 11.3 两条可复用判断（建议并入 skill）
+
+> **① 「X 零消费 / X 是孤儿」之后要再追一问：是不是有人自己重算了一遍，或先行兜底了？**
+> 若是 ⇒ 修法是**抽唯一真源 / 补清理**，而不是「加个消费方」或「加个兜底」。
+> **消费方过滤 ≠ 已清理** —— 过滤把同一个判断摊给了每个消费方，各写一遍。
+>
+> **② 一句「既有数据债」里可以同时含「已过时的半句」与「仍成立的半句」。**
+> 回扫时**按半句拆开**分别处置（本例：chunk 已清 / Section 未清），
+> 整句删或整句留都会留下错误结论。
+
+### 11.4 处置
+
+| 文档 | 动作 |
+|---|---|
+| `raw-id-label-fix-2026-09.md` §7 | **改正 + 留痕**：原句划线，补两条结论相反的处置 |
+| `raw-id-label-fix-2026-09.md` §1.3 | 加**时点注**：「不改 `document-cascade.ts`」只就**当轮的孤儿卷议题**而言，判据未变 |
+| `evidence-log-idempotency-fix-2026-09.md` §7.1 | 加**时点注**：指出该句**前半判反了**（`learner.byUnit` 不是 append-only），后半作废 |
+| `tech-debt-closeout-2026-09.md` §4 | 「不修项」第 2 行标 ❌ **已失效**，保留原行留痕 |
+| `data-portability-export-import-design-2026-09.md` §4.3 / §12.2 | **两处**过时的括号与风险行更正（chunk 已清 / Section 本轮已清；余下只是**存量**） |
+| **`tests/evidence-once.test.ts` TC-EV-08** | ⚠️ **口径改判必然打断锁着旧口径的源码守卫** —— 原断言「章解析不到**必须走** `units.subjectGone` 兜底」已随本轮决策失效，改为锁新口径（整行不跳过 / **先 filter 再 slice**）。**这是回扫最易漏的一类**：`docs/` 扫干净了，`npm run test:library` 仍红（本轮实跑抓到） |
+| `docs/document-cascade-cleanup-2026-09.md` | **新增**：本轮全过程与口径论证 |
+
+⚠️ **README 不动**：这是**缺陷修复**（不是新特性），双语 checkbox 与统计行不变（实测仍 `[x]` 37 / `[ ]` 9）。
+
