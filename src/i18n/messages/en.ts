@@ -1998,6 +1998,9 @@ export const en: Messages = {
       subtitleEmpty: "Finish a chapter, then take a paper to check mastery.",
       newPaper: "＋ New paper",
       loading: "Loading…",
+      loadFailedTitle: "Failed to load quiz data",
+      loadFailedDesc:
+        "The local database may be temporarily unavailable. Restart the app and try again; your data is safe and not lost.",
       noPaperTitle: "No papers yet",
       noPaperDesc:
         "Pick one or several chapters for a paper: unit tests check one chapter, stage tests cover several, final tests span the whole book.",

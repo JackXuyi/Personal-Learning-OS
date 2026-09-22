@@ -1944,6 +1944,9 @@ export const zh = {
       subtitleEmpty: "学完一章后出卷测验，检验掌握程度。",
       newPaper: "＋ 新建试卷",
       loading: "正在加载…",
+      loadFailedTitle: "试卷数据加载失败",
+      loadFailedDesc:
+        "可能是本地数据库暂时不可用。请重启应用再试；数据仍在，不会因本次失败丢失。",
       noPaperTitle: "还没有试卷",
       noPaperDesc:
         "选一章（或几章）出一张卷：单元测检验单章，阶段测联测多章，综合测覆盖全本。",
