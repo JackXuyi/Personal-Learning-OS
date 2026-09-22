@@ -1161,6 +1161,12 @@ export const zh = {
       emptyTitle: "还没有资料",
       emptyDesc: "导入第一份资料（Markdown / 笔记 / PDF），系统会按标题自动切分成章节。",
       emptyImport: "导入第一份资料",
+      /**
+       * 读库失败的错误态。⚠️ 必须与「空库」可区分 —— 资料 / 章节下沉 SQLite 之后，
+       * 故障时若沿用空态，用户看到的是**同一个空白**，会以为自己的资料没了。
+       */
+      loadFailedTitle: "资料库读不出来",
+      loadFailedDesc: "本地数据库暂时不可用。你的资料没有被改动，重启应用后再试一次。",
       actions: {
         rename: "重命名",
         meta: "编辑信息",

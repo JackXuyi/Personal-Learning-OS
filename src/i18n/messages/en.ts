@@ -1179,6 +1179,14 @@ export const en: Messages = {
       emptyDesc:
         "Import your first document (Markdown / notes / PDF) and it will be split into chapters automatically.",
       emptyImport: "Import first document",
+      /**
+       * Read-failure state. ⚠️ Must stay distinguishable from the empty state: once
+       * documents / chapters live in SQLite, reusing the empty state on failure shows
+       * the user the *same blank page* and reads as "my material is gone".
+       */
+      loadFailedTitle: "Could not read your library",
+      loadFailedDesc:
+        "The local database is temporarily unavailable. Your material has not been changed — restart the app and try again.",
       actions: {
         rename: "Rename",
         meta: "Edit info",
