@@ -10,7 +10,14 @@
  * （nextReviewAt）+ confidence 微调，不再移动 mastery / attempts / correctCount。
  */
 import type { CognitiveLevel, Evaluation, LearnerState, SelfRating, UnitMastery } from "../domain";
-import { MASTERY_FLOOR, MASTERY_THRESHOLD, accuracyOf } from "../domain";
+import {
+  COGNITIVE_BASE_LEVEL,
+  COGNITIVE_ORDER,
+  MASTERY_FLOOR,
+  MASTERY_THRESHOLD,
+  accuracyOf,
+  cognitiveIndexOf,
+} from "../domain";
 
 /** Mastery delta applied when the model has nothing else to go on. */
 const UP_STEP = 0.08;
@@ -57,22 +64,13 @@ export function ratingStep(rating: SelfRating): number {
 
 const MS_PER_DAY = 86_400_000;
 
-const COGNITIVE_ORDER: readonly CognitiveLevel[] = [
-  "remember",
-  "understand",
-  "apply",
-  "analyze",
-  "evaluate",
-  "create",
-];
-
 export function emptyUnit(now: number): UnitMastery {
   return {
     mastery: 0,
     confidence: 0,
     attempts: 0,
     correctCount: 0,
-    cognitiveLevel: "remember",
+    cognitiveLevel: COGNITIVE_BASE_LEVEL,
     misconceptions: [],
     applicationAbility: 0,
     interviewAbility: 0,
@@ -289,7 +287,7 @@ function nextCognitiveLevel(
     if (after < 0.4) return current === "remember" ? current : "understand";
     return current;
   }
-  const idx = COGNITIVE_ORDER.indexOf(current);
+  const idx = cognitiveIndexOf(current);
   if (after >= MASTERY_THRESHOLD && idx < COGNITIVE_ORDER.length - 1) {
     return COGNITIVE_ORDER[Math.min(idx + 1, COGNITIVE_ORDER.length - 1)];
   }

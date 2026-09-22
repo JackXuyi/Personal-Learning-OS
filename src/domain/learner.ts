@@ -14,6 +14,56 @@ export type CognitiveLevel =
   | "evaluate"
   | "create";
 
+/**
+ * Bloom 认知层级由低到高 —— **唯一排序真源**。
+ *
+ * ⚠️ 抽取理由（2026-09-22 收口）：此前有**两份等价副本**各自维护同一次序 ——
+ * `engine/learner-model.ts` 的 `COGNITIVE_ORDER`（推进层级）与
+ * `features/learn/resplit-mastery.ts` 的 `COGNITIVE_ORDER`（合并取最高）。
+ * 同一规则散在多处＝两把尺子：任一处漏改，层级推进与合并口径立刻分叉。
+ * 次序只此一份，消费方一律 `cognitiveIndexOf` / 引用本常量。
+ */
+export const COGNITIVE_ORDER: readonly CognitiveLevel[] = [
+  "remember",
+  "understand",
+  "apply",
+  "analyze",
+  "evaluate",
+  "create",
+];
+
+/** 认知层级初值（`emptyUnit` 与会话兜底共用；＝ `COGNITIVE_ORDER[0]`）。 */
+export const COGNITIVE_BASE_LEVEL: CognitiveLevel = "remember";
+
+/**
+ * 认知层级 → 序号（0..`COGNITIVE_ORDER.length - 1`）。
+ * 缺省 / 认不出的值回退初值档（`COGNITIVE_BASE_LEVEL`），**绝不返回 -1**
+ * —— 返回负数会让调用方的 `sort` / `max` 静默把未知档排到最前或最后。
+ */
+export function cognitiveIndexOf(level: CognitiveLevel | undefined): number {
+  const i = level === undefined ? -1 : COGNITIVE_ORDER.indexOf(level);
+  return i < 0 ? 0 : i;
+}
+
+/**
+ * 自适应测评会话覆盖的档位数 —— 会话只走 `COGNITIVE_ORDER` 的前三档
+ * （`analyze` 及以上留给将来的扩展，不在自适应循环内）。
+ */
+export const SESSION_LEVEL_COUNT = 3;
+
+/**
+ * 测评会话起始档位（0 .. `SESSION_LEVEL_COUNT` - 1）：**直接取持久化的认知层级**，
+ * 越界钳到末档。
+ *
+ * ⚠️ 2026-09-22 前这里没有函数 —— `AssessmentSession` 由 `mastery` **重新推导**
+ * （≥0.8→应用 / >0→理解 / 否则记忆），而引擎侧 `nextCognitiveLevel` 早已把同一件事
+ * 算好并写进 `UnitMastery.cognitiveLevel` ⇒ 同一规则两处实现：`mastery ∈ (0, 0.5)`
+ * 时引擎判「记忆」而界面从「理解」起步。现一律以持久化值为准。
+ */
+export function sessionLevelIndexOf(level: CognitiveLevel | undefined): number {
+  return Math.min(cognitiveIndexOf(level), SESSION_LEVEL_COUNT - 1);
+}
+
 /** Per-unit learning record. Keyed by KnowledgeUnit.id in LearnerState. */
 export interface UnitMastery {
   /** Mastery in [0, 1]. */

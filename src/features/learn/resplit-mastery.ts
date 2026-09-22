@@ -9,10 +9,10 @@
 import type {
   Chapter,
   ChapterRange,
-  CognitiveLevel,
   LearnerState,
   UnitMastery,
 } from "../../domain";
+import { cognitiveIndexOf } from "../../domain";
 
 /** 新章 ← 旧章的匹配结果（一个旧章最多归属一个新章）。 */
 export interface ChapterMatch {
@@ -24,16 +24,6 @@ export interface ChapterMatch {
 
 /** 匹配阈值：区间重叠比 ≥ 该值才算同源（防误继承）。 */
 export const RESPLIT_MATCH_THRESHOLD = 0.6;
-
-/** Bloom 认知层级由低到高（合并时取最高层级）。 */
-const COGNITIVE_ORDER: CognitiveLevel[] = [
-  "remember",
-  "understand",
-  "apply",
-  "analyze",
-  "evaluate",
-  "create",
-];
 
 /** misconceptions 并集去重的上限（与引擎侧保持一致，防无限膨胀）。 */
 const MISCONCEPTIONS_CAP = 8;
@@ -114,11 +104,10 @@ export function mergeUnits(units: UnitMastery[]): UnitMastery {
   const misconceptions = [
     ...new Set(units.flatMap((u) => u.misconceptions)),
   ].slice(0, MISCONCEPTIONS_CAP);
+  // 次序真源 = `domain::COGNITIVE_ORDER`（经 `cognitiveIndexOf`）—— 本文件不再自留副本。
   const cognitive = units
     .map((u) => u.cognitiveLevel)
-    .reduce((hi, cur) =>
-      COGNITIVE_ORDER.indexOf(cur) > COGNITIVE_ORDER.indexOf(hi) ? cur : hi,
-    );
+    .reduce((hi, cur) => (cognitiveIndexOf(cur) > cognitiveIndexOf(hi) ? cur : hi));
   return {
     mastery: maxNum((u) => u.mastery),
     confidence: maxNum((u) => u.confidence),

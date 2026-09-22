@@ -5,6 +5,7 @@ import { PageContainer } from "../../components/layout/AppShell";
 import { DeltaBadge } from "../../components/DeltaBadge";
 import { bandOf } from "../../engine";
 import type { CognitiveLevel, KnowledgeUnit } from "../../domain";
+import { sessionLevelIndexOf } from "../../domain";
 import { useLoopStore } from "../../stores/useLoopStore";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { useI18n } from "../../i18n";
@@ -12,15 +13,15 @@ import { unitTitle } from "../units";
 
 type Stage = "answer" | "grade" | "feedback";
 
-/** 测评实际使用的三档（analyze+ 为将来扩展，不在自适应循环内）。 */
+/**
+ * 测评实际使用的三档（`analyze`+ 为将来扩展，不在自适应循环内）。
+ *
+ * ⚠️ 这三档必须等于 `domain::COGNITIVE_ORDER` 的前 `SESSION_LEVEL_COUNT` 档 ——
+ * **次序真源在 domain**，本列表只是会话覆盖面，由 `tests/cognitive-level.test.ts` 锁定。
+ */
 type QuizLevel = "remember" | "understand" | "apply";
 
 const LEVEL_ORDER: QuizLevel[] = ["remember", "understand", "apply"];
-
-function levelIndexOf(l: CognitiveLevel): number {
-  const i = LEVEL_ORDER.indexOf(l as QuizLevel);
-  return i === -1 ? 0 : i;
-}
 
 /**
  * 测评会话 —— 一次作答循环（本地模式）。
@@ -46,13 +47,12 @@ export default function AssessmentSession({
   const sessionRecord = useSessionStore((s) => s.record);
 
   const startMastery = snapshot?.masteryByUnit[unit.id] ?? 0;
-  const [levelIdx, setLevelIdx] = useState(() => {
-    const from = snapshot?.masteryByUnit[unit.id] ?? 0;
-    // 已掌握（≥80%）从应用层测，其余从当前状态推断：未开始→记忆、学习中→理解。
-    if (from >= 0.8) return 2;
-    if (from > 0) return Math.min(1, Math.max(0, levelIndexOf("understand")));
-    return 0;
-  });
+  // 起始档位直接取**持久化的认知层级**（`UnitMastery.cognitiveLevel`，经快照透传）。
+  // 2026-09-22 前这里由 `mastery` 重新推导（≥0.8→应用 / >0→理解 / 否则记忆），与引擎侧
+  // `nextCognitiveLevel` 形成两把尺子 —— 已收口，规则唯一出处 domain::sessionLevelIndexOf。
+  const [levelIdx, setLevelIdx] = useState(() =>
+    sessionLevelIndexOf(snapshot?.cognitiveByUnit[unit.id]),
+  );
   const [stage, setStage] = useState<Stage>("answer");
   const [answer, setAnswer] = useState("");
   const [revealed, setRevealed] = useState(false);

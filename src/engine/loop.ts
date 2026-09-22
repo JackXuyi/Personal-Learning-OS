@@ -17,7 +17,7 @@ import type {
   SourceDocument,
   UnitMastery,
 } from "../domain";
-import { MASTERY_THRESHOLD, RAG_UNIT_IDS, sortChaptersByOrder } from "../domain";
+import { COGNITIVE_BASE_LEVEL, MASTERY_THRESHOLD, RAG_UNIT_IDS, sortChaptersByOrder } from "../domain";
 import type { StorageAdapter } from "../storage";
 import { applyForgetting } from "./learner-model";
 import { buildChapterPlan, createLearningPlanner } from "./learning-planner";
@@ -141,11 +141,21 @@ export interface LoopSnapshot {
   readiness: number;
   /** 图谱中每个单元的掌握度快照（供 UI 徽标使用）。 */
   masteryByUnit: Record<string, number>;
+  /**
+   * 图谱中每个单元的**认知层级快照**（持久化真源 `UnitMastery.cognitiveLevel`），
+   * 供测评会话决定起始档位。2026-09-22 前该值无处可读，`AssessmentSession` 只能由
+   * mastery 重新推导 —— 见 `domain::sessionLevelIndexOf` 的注释。
+   */
+  cognitiveByUnit: Record<string, CognitiveLevel>;
 }
 
 /**
- * 空库则播种 demo，再为指定目标跑一遍闭环。这是仪表盘驱动的流水线 ——
- * 随着 MVP 功能落地，把 demo 数据集换成真实存储数据即可。
+ * 概念层闭环（两级分工的**下一级**；章级见 `runChapterLoop`）。
+ *
+ * 空库则播种 demo，再为指定目标（未传 = 首个目标）跑一遍「概念缺口 → 有序动作」，
+ * 并给出**概念级**就绪度与掌握度/认知层级快照。消费方：`/assessment`（推荐下一个
+ * 待测概念）、非概念模式的 `ReviewSession`、`CommandPalette`；首页与 `/plan` 读的是
+ * `runChapterLoop`（章级）。两者是上下两级，不是同一件事的两套实现。
  */
 export async function runLearningLoop(
   storage: StorageAdapter,
@@ -174,11 +184,15 @@ export async function runLearningLoop(
     goal.requiredUnitIds.length === 0 ? 0 : mastered / goal.requiredUnitIds.length;
 
   const masteryByUnit: Record<string, number> = {};
+  const cognitiveByUnit: Record<string, CognitiveLevel> = {};
   for (const unit of graph.units) {
-    masteryByUnit[unit.id] = learnerState.byUnit[unit.id]?.mastery ?? 0;
+    const record = learnerState.byUnit[unit.id];
+    masteryByUnit[unit.id] = record?.mastery ?? 0;
+    // 认知层级**原样透传持久化值**（不再由 mastery 推导）—— 单一真源。
+    cognitiveByUnit[unit.id] = record?.cognitiveLevel ?? COGNITIVE_BASE_LEVEL;
   }
 
-  return { goal, actions, next, readiness, masteryByUnit };
+  return { goal, actions, next, readiness, masteryByUnit, cognitiveByUnit };
 }
 
 export async function seedDemoIfEmpty(storage: StorageAdapter): Promise<void> {
