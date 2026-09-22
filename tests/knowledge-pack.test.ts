@@ -1135,6 +1135,41 @@ await check("TC-PAGE-01 资料库页：读库失败要被捕获，且错误态�
   assert.ok(errAt < emptyAt, "错误态必须排在空态之前，否则「读不出来」会显示成「还没有资料」");
 });
 
+/**
+ * TC-PAGE-02 试卷中心：同病不同症。QuizCenterPage 的 `rows` 初值是
+ * `undefined`，`load()` 失败时若不记错，页面会**永远停在「正在加载…」**
+ * —— 与真在加载无法区分（比假空态更让人干等）。
+ * 语义同 TC-PAGE-01：① `load()`（useCallback）捕获失败；② 错误态排在
+ * loading 之前。`loadError` 存在时副标题也要让位（「学完一章后出卷测验」
+ * 在故障下是误导）。
+ */
+await check("TC-PAGE-02 试卷中心：读库失败要被捕获，且错误态排在 loading 之前", () => {
+  const code = codeOf("src/features/quiz/QuizCenterPage.tsx");
+
+  const loadAt = code.indexOf("load = useCallback(async () => {");
+  assert.ok(loadAt >= 0, "QuizCenterPage 应有 useCallback 形式的 load()");
+  const nextAt = code.indexOf("useEffect(", loadAt);
+  const loadBody = code.slice(loadAt, nextAt > loadAt ? nextAt : undefined);
+  assert.ok(
+    loadBody.includes("catch"),
+    "load() 必须捕获读库失败 —— 否则 rows 停在 undefined，页面永远停在加载中",
+  );
+  assert.ok(
+    loadBody.includes("setLoadError"),
+    "失败必须写入 loadError state，而不是吞掉异常",
+  );
+
+  const errAt = code.indexOf("c.loadFailedTitle");
+  const loadingAt = code.indexOf("c.loading");
+  assert.ok(errAt >= 0, "错误态应走 i18n 文案 c.loadFailedTitle（不硬编码文案）");
+  assert.ok(loadingAt >= 0, "loading 应走 i18n 文案 c.loading");
+  assert.ok(errAt < loadingAt, "错误态必须排在 loading 之前，否则失败时永远显示「正在加载…」");
+  assert.ok(
+    code.includes("loadError\n            ? undefined"),
+    "读库失败时 SectionTitle 副标题必须让位（故障下显示「学完一章后出卷测验」是误导）",
+  );
+});
+
 /* ================================================================== */
 /* 汇总                                                                */
 /* ================================================================== */
