@@ -6,7 +6,8 @@
  *
  * 覆盖：格式与校验（TC-PACK）、泄漏守卫（TC-LEAK）、导出（TC-EXPORT）、
  * 导入与 id 重映射（TC-IMPORT）、四层体积判定（TC-VOL）、导入后派生一致性（TC-REG）、
- * 远程拉取（TC-REMOTE）。TC-RUST-01..08 / TC-DOC-01..12 分别在
+ * 远程拉取（TC-REMOTE）、主页面读库失败的错误态（TC-PAGE）。
+ * TC-RUST-01..08 / TC-DOC-01..12 分别在
  * `src-tauri/src/backup.rs` / `src-tauri/src/db/*` 与 `tests/storage-documents.test.ts`。
  *
  * 全部跑在 `InMemoryStorage`（零 IO / 零 IPC / 零浏览器）；远程层注入 mock `fetch`
@@ -1097,6 +1098,41 @@ await check("TC-REMOTE-04 拉回来的不是包（HTML 404 页）→ not-json", 
   const wrong: FetchLike = async () => fakeResponse({ text: JSON.stringify({ kind: "plos.backup" }) });
   const parsed2 = await parsePack(await fetchPackText(wrong, "https://x/a.json"), { parseInWorker: false });
   assert.equal(parsed2.ok ? "" : parsed2.kind, "not-pack");
+});
+
+/* ================================================================== */
+/* TC-PAGE：主页面读库失败的错误态（方案 §12.2 收口项）                    */
+/* ================================================================== */
+
+/**
+ * `Document` / `Chapter` 下沉 SQLite（D12–D16）之后，「读库失败」从理论问题
+ * 变成了真实路径：SQLite 不可用时 `listDocuments()` 抛 `StorageUnavailableError`。
+ *
+ * 资料库页原先直接 `await`，失败会落到 `docs.length === 0` 的空态 —— 与真正的
+ * 「空库」渲染**同一个页面**，用户会以为资料丢了（§12.3 手工验收第 11 条）。
+ *
+ * ⚠️ 只断言两条语义，不锁具体写法（重构时不误伤）：
+ * ① `load()` 捕获失败；② 渲染时错误态排在空态**之前**。
+ * HomePage 无需在此断言 —— 它的错误态由 `useLoopStore.refresh` 的 catch
+ * （`set({ error })`）统一承担，属既有机制。
+ */
+await check("TC-PAGE-01 资料库页：读库失败要被捕获，且错误态排在空态之前", () => {
+  const code = codeOf("src/features/learn/LibraryPage.tsx");
+
+  const loadAt = code.indexOf("const load = async () => {");
+  assert.ok(loadAt >= 0, "LibraryPage 应有 load()");
+  const nextAt = code.indexOf("useEffect(", loadAt);
+  const loadBody = code.slice(loadAt, nextAt > loadAt ? nextAt : undefined);
+  assert.ok(
+    loadBody.includes("catch"),
+    "load() 必须捕获读库失败 —— 否则 rejection 无人接管，docs 停在 [] 即空态",
+  );
+
+  const errAt = code.indexOf("lib.loadFailedTitle");
+  const emptyAt = code.indexOf("lib.emptyTitle");
+  assert.ok(errAt >= 0, "错误态应走 i18n 文案 lib.loadFailedTitle（不硬编码文案）");
+  assert.ok(emptyAt >= 0, "空态应走 i18n 文案 lib.emptyTitle");
+  assert.ok(errAt < emptyAt, "错误态必须排在空态之前，否则「读不出来」会显示成「还没有资料」");
 });
 
 /* ================================================================== */
