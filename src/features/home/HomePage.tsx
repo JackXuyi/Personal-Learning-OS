@@ -421,27 +421,38 @@ function evidenceActionLabel(kind: EvidenceKind, m: Messages): string {
 }
 
 /**
- * log 行 → 展示行。
+ * log 行 → 展示行。**解析不到主体时返回 `undefined`（该行不渲染）**。
  *
- * **主体解析（F6 / 决策 D7-A，2026-09-21 补齐章侧）**：
+ * **主体解析（F6 / 决策 D7-A）**：
  * - `subjectKind === "goal"` → 主体是**目标**：标题走 `capability.evidenceSubject(goalTitle)`；
- *   目标已被删（证据保留）→ `capability.evidenceFallback`（**绝不显示裸 goalId**）。
+ *   目标已被删 → `capability.evidenceFallback`（**绝不显示裸 goalId**，行**保留** ——
+ *   这一行自带 verdict，且不引用已删内容）。
  * - 其余（缺省 = chapter）→ 主体是**章**：从 `index`（全量章索引）取标题；
- *   章已被删 → `units.subjectGone`（**绝不显示裸 subjectId**）。
+ *   章已被删 → **整行不渲染**（`undefined`），由调用方 `filter` 掉。
  *
- * ⚠️ 章侧的兜底此前**缺失**：解析不到就直落 `entry.subjectId`，于是资料被删后
- * 首页会显示 `chp-1e79433b` 这种裸 id（本机实测：最近 6 行里有 4 行是这样）。
- * D7-A 立的是「主体解析不到就不显示裸 id」，章与目标本应同一条规矩。
+ * ⚠️ 两个历史时点，读代码前先知道（本文件踩过一次「结论对、但只对了一半」）：
+ *
+ * 1. **2026-09-21**：章侧此前**没有兜底** —— 解析不到就直落 `entry.subjectId`，
+ *    于是资料被删后首页显示 `chp-1e79433b` 这种裸 id（本机实测最近 6 行里 4 行如此）。
+ *    当时的处置是**保留该行**、标题回落 `units.subjectGone`（「章节已不存在」）。
+ * 2. ~~保留该行 + `units.subjectGone` 兜底~~ → **2026-09-22 改为跳过整行**。
+ *    理由：`plos.evidence` 是**行为历史**（热力图按 `at` 计数、F9 记忆按 `kind` 分布），
+ *    刻意不随资料级联删除（见 `features/learn/document-cascade.ts` 文件头）；
+ *    而「最近证据」是**当前资产**的视图 —— 让一条指不到任何章节的旧行占位，
+ *    既挤掉了真实行，也没有信息量。**库存历史不变，只是不再渲染。**
+ *    注意分辨：`/progress` 趋势下拉**仍然**保留已删章的序列并回落 `units.subjectGone`
+ *    （`TC-RAWID-01/03` 锁的正是「历史序列不因解析失败而剔除」）——
+ *    首页证据行与趋势序列是**两种不同**的展示，别把这条改动搬过去。
  *
  * **零回归（TC-REG-04）**：旧数据没有 `subjectKind`（缺省 = chapter），一律走下方
- * 章分支，行为与改动前一致。
+ * 章分支，行为不变。
  */
 function logToView(
   entry: EvidenceEntry,
   index: ChapterIndex,
   m: Messages,
   goalTitleOf: ReadonlyMap<string, string>,
-): EvidenceView {
+): EvidenceView | undefined {
   if (entry.kind === "capability" && entry.subjectKind === "goal") {
     const goalTitle = goalTitleOf.get(entry.subjectId);
     return {
@@ -455,9 +466,9 @@ function logToView(
     };
   }
   const chapter = index.byId.get(entry.subjectId);
-  const baseTitle = chapter
-    ? chapterDisplayTitle(chapter, index.docTitleOf[chapter.id], m)
-    : m.units.subjectGone;
+  // 章已不存在（资料被删 / 章被重切分掉）→ 不渲染。绝不回落裸 id，也不再占位。
+  if (!chapter) return undefined;
+  const baseTitle = chapterDisplayTitle(chapter, index.docTitleOf[chapter.id], m);
   const { text, tone } = fmtDelta(entry.delta);
   return {
     at: entry.at,
@@ -472,6 +483,10 @@ function logToView(
  *
  * 章主体一律经 `loadChapterIndex(plan.docs)` 解析 —— 用 `plan.docs`（全量）而非
  * `plan.chaptersByDoc`（按目标范围裁剪），理由见 `ChapterIndex` 的注释。
+ *
+ * ⚠️ **先过滤再截断**（顺序不可颠倒）：`logToView` 对「章已不存在」的行返回
+ * `undefined`，若先 `slice(0, 6)` 再过滤，一条幽灵行就会白白挤掉一条真实行 ——
+ * 用户看到「最近证据只有 2 条」却不知道另外 4 条被谁占了。
  */
 async function loadRecentEvidence(
   plan: ChapterLoopSnapshot,
@@ -484,7 +499,10 @@ async function loadRecentEvidence(
       const goals = await storage.listGoals().catch(() => []);
       const goalTitleOf = new Map(goals.map((g) => [g.id, g.title] as const));
       const index = await loadChapterIndex(plan.docs);
-      return log.slice(0, 6).map((e) => logToView(e, index, m, goalTitleOf));
+      return log
+        .map((e) => logToView(e, index, m, goalTitleOf))
+        .filter((v): v is EvidenceView => v !== undefined)
+        .slice(0, 6);
     }
   } catch {
     /* log 读取失败 → 走旧组装兜底。 */

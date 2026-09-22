@@ -20,8 +20,13 @@
  *   ① **行为层（真跑并发）**：`InMemoryStorage` 上并发两次写入只落 1 条；
  *      同时用**旧三步写法**做对照，证明这批断言确实能抓到竞态（不是空断言）。
  *   ② **源码层**：`QuizReportPage` 不得再出现「先查后写」，`HomePage::logToView`
- *      不得把裸 subjectId 当兜底（F6 决策 D7-A 的章侧补齐）。
- *   ③ **文案层**：`units.subjectGone` 中英成对且确实译过。
+ *      章解析不到时**整行不渲染**（且绝不回落裸 `subjectId`）。
+ *      ⚠️ 这条 2026-09-22 **改判过**：原断言是「必须走 `units.subjectGone` 兜底」
+ *      （保留该行、只兜底标题）；实测证据流是**行为历史**、刻意不随资料级联清
+ *      （见 `docs/document-cascade-cleanup-2026-09.md`），而「最近证据」是**当前资产**
+ *      的视图 ⇒ 改为**跳过整行**。`units.subjectGone` 仍归 `/progress` 趋势下拉
+ *      （历史序列，不得剔除）与首页旧组装兜底用，故文案键本身保留。
+ *   ③ **文案层**：`units.subjectGone` 中英成对且确实译过（它仍在另外两处消费）。
  *
  * ⚠️ 测试**不重写** `EVIDENCE_LOG_MAX` 的值（「两把尺子」陷阱）—— 从
  * `storage/memory.ts` 导入，改上限时本测试自动跟随。
@@ -232,12 +237,16 @@ async function main() {
     );
   });
 
-  await check("TC-EV-08 HomePage 章主体解析不到时不落裸 id（D7-A 的章侧补齐）", () => {
+  await check("TC-EV-08 HomePage 章主体解析不到时整行不渲染（D7-A 章侧，2026-09-22 改判）", () => {
     const src = codeOf(HOME);
     const fn = bracedBlockOf(src, "function logToView");
     assert.ok(
-      /units\.subjectGone/.test(fn),
-      "章解析不到必须走 units.subjectGone 兜底",
+      /if\s*\(!chapter\)\s*return undefined;/.test(fn),
+      "章解析不到必须整行跳过（return undefined），由调用方 filter 掉",
+    );
+    assert.ok(
+      !/units\.subjectGone/.test(fn),
+      "logToView 不得再用 subjectGone 占位 —— 幽灵行会挤掉真实行（该键仍归 /progress 趋势用）",
     );
     assert.ok(
       !/(\?\?|:)\s*entry\.subjectId\b/.test(fn),
@@ -254,6 +263,11 @@ async function main() {
       !/chapterIndexOf\s*\(/.test(src),
       "不得再用按目标范围裁剪的 chapterIndexOf 解析证据主体",
     );
+    // ⚠️ 顺序：先过滤 undefined 再截断 —— 先 slice 会让幽灵行白占真实行名额。
+    const filterAt = src.indexOf(".filter((v): v is EvidenceView => v !== undefined)");
+    const sliceAt = src.indexOf(".slice(0, 6)");
+    assert.ok(filterAt >= 0 && sliceAt >= 0, "必须有 filter 与 slice(0, 6)");
+    assert.ok(filterAt < sliceAt, "先 slice 再 filter 会让幽灵行挤掉真实行");
   });
 
   /* ---------- ③ 文案层 ---------- */
