@@ -84,31 +84,41 @@ export default function QuizCenterPage() {
   const { run, busyId } = useRunChapterAction();
   const [rows, setRows] = useState<PaperRow[] | undefined>();
   const [hasAnyChapter, setHasAnyChapter] = useState(false);
+  /** 读库失败信息（err.message）。非空时渲染错误态，排在 loading / 空态之前。 */
+  const [loadError, setLoadError] = useState<string>();
 
   const load = useCallback(async () => {
-    const [papers, results, lookup, allDocs] = await Promise.all([
-      storage.listPapers(),
-      storage.listPaperResults(),
-      buildLookup(),
-      storage.listDocuments(),
-    ]);
-    const resultByPaper = new Map(results.map((r) => [r.paperId, r]));
-    const chapterCounts = await Promise.all(
-      allDocs.map((d) => storage.listChapters(d.id)),
-    );
-    setHasAnyChapter(chapterCounts.some((cs) => cs.length > 0));
+    try {
+      const [papers, results, lookup, allDocs] = await Promise.all([
+        storage.listPapers(),
+        storage.listPaperResults(),
+        buildLookup(),
+        storage.listDocuments(),
+      ]);
+      const resultByPaper = new Map(results.map((r) => [r.paperId, r]));
+      const chapterCounts = await Promise.all(
+        allDocs.map((d) => storage.listChapters(d.id)),
+      );
+      setHasAnyChapter(chapterCounts.some((cs) => cs.length > 0));
 
-    const drafts = await Promise.all(
-      papers.map((p) => storage.getPaperDraft(p.id)),
-    );
-    setRows(
-      papers.map((paper, i) => ({
-        paper,
-        context: contextLabel(paper.scope.chapterIds, lookup, m),
-        result: resultByPaper.get(paper.id),
-        hasDraft: Boolean(drafts[i] && Object.keys(drafts[i] ?? {}).length > 0),
-      })),
-    );
+      const drafts = await Promise.all(
+        papers.map((p) => storage.getPaperDraft(p.id)),
+      );
+      setRows(
+        papers.map((paper, i) => ({
+          paper,
+          context: contextLabel(paper.scope.chapterIds, lookup, m),
+          result: resultByPaper.get(paper.id),
+          hasDraft: Boolean(drafts[i] && Object.keys(drafts[i] ?? {}).length > 0),
+        })),
+      );
+      // 全部数据就位后才清错：先清再读会在失败时闪一下加载/空态。
+      setLoadError(undefined);
+    } catch (err) {
+      // 读库失败（如 SQLite 不可用）：rows 停在 undefined → 若不记错，
+      // 页面会永远停在「正在加载…」，与真在加载无法区分。
+      setLoadError(err instanceof Error ? err.message : String(err));
+    }
   }, [m]);
 
   useEffect(() => {
@@ -132,7 +142,11 @@ export default function QuizCenterPage() {
       <SectionTitle
         title={c.title}
         subtitle={
-          rows && rows.length > 0 ? c.subtitleCount(rows.length) : c.subtitleEmpty
+          loadError
+            ? undefined
+            : rows && rows.length > 0
+              ? c.subtitleCount(rows.length)
+              : c.subtitleEmpty
         }
         action={
           <Link
@@ -144,7 +158,13 @@ export default function QuizCenterPage() {
         }
       />
 
-      {rows === undefined ? (
+      {loadError ? (
+        <Card className="mt-4 border-dashed">
+          <p className="text-base font-semibold text-state-failed">{c.loadFailedTitle}</p>
+          <p className="mt-1 text-sm text-ink-2">{c.loadFailedDesc}</p>
+          <p className="mt-2 truncate text-xs text-ink-3">{loadError}</p>
+        </Card>
+      ) : rows === undefined ? (
         <p className="text-sm text-ink-3">{c.loading}</p>
       ) : (
         <>
