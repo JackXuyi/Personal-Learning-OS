@@ -61,7 +61,11 @@ export interface SubmitResult {
 }
 
 interface LoopStoreState {
-  /** 概念层闭环快照（Phase 0 基座；ReviewSession / career 等沿用）。 */
+  /**
+   * 概念层闭环快照（两级分工中的**概念级**，不是「待取代的基座」——
+   * 见 `engine/learning-planner.ts` 文件头）。消费方：`/assessment`、命令面板、
+   * 非概念模式的 `ReviewSession`。
+   */
   snapshot: LoopSnapshot | undefined;
   /** V2 章级闭环快照（/ 首页主 CTA 与 /plan 计划页，T8；作用域 = activeGoal，§7.3）。 */
   chapterPlan: ChapterLoopSnapshot | undefined;

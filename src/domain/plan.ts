@@ -5,7 +5,8 @@
  */
 
 export type ActionKind =
-  // 概念层（Phase 0 基座，保留给概念粒度缺口）
+  // 概念粒度动作（章粒度动作见下组）。两级是**上下分工**、不是候选方案
+  // —— 见 engine/learning-planner.ts 文件头。
   | "learn"
   | "review"
   | "practice"
