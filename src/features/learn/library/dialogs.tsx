@@ -515,14 +515,22 @@ export function DeleteDocDialog({
   }, [doc?.id]);
 
   if (!doc) return null;
-  const r = report ?? { chapters: 0, papers: 0, concepts: 0, chunks: 0 };
+  const r = report ?? {
+    chapters: 0,
+    papers: 0,
+    concepts: 0,
+    chunks: 0,
+    annotations: 0,
+    annotationsWithNote: 0,
+    restatements: 0,
+  };
 
   return (
     <ConfirmDialog
       open={!!doc}
       onOpenChange={(o) => !o && onClose()}
       title={t.title(doc.title)}
-      description={t.desc(r.chapters, r.papers, r.concepts, r.chunks)}
+      description={t.desc(r)}
       confirmLabel={t.confirm}
       cancelLabel={m.common.cancel}
       destructive

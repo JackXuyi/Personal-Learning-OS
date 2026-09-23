@@ -1225,10 +1225,52 @@ export const en: Messages = {
       },
       del: {
         title: (t: string) => `Delete “${t}”?`,
-        desc: (c: number, p: number, k: number, chunks: number) =>
-          `This will also remove ${c} chapters, ${p} papers, ${k} concepts${
-            chunks > 0 ? ` and ${chunks} content index blocks` : ""
-          }. This cannot be undone.`,
+        /*
+         * Delete warning — the user's **only** chance to know what they lose
+         * (this cannot be undone), so it must be accurate.
+         *
+         * Two sentences: system-derived data first, then **what you wrote**
+         * (highlights / restatements) on its own line — those cannot be regenerated.
+         * Zero values are omitted ("0 restatements" is noise; same rule as `memory.report`).
+         *
+         * ⚠️ Takes a **single object** instead of 7 positional numbers: `annotations`
+         * and `annotationsWithNote` are both `number`, so a mix-up would not fail
+         * compilation — it would silently report the wrong count.
+         *
+         * ⚠️ `annotations` is **all** highlights (blank ones included) so the number
+         * matches what actually gets deleted; "with notes" is only a parenthetical and
+         * follows the same rule as the "N notes" figure on /memory (`hasNote`).
+         */
+        desc: (r: {
+          chapters: number;
+          papers: number;
+          concepts: number;
+          chunks: number;
+          annotations: number;
+          annotationsWithNote: number;
+          restatements: number;
+        }) => {
+          const mine: string[] = [];
+          if (r.annotations > 0) {
+            mine.push(
+              `${r.annotations} highlights${
+                r.annotationsWithNote > 0
+                  ? ` (${r.annotationsWithNote} with notes)`
+                  : ""
+              }`,
+            );
+          }
+          if (r.restatements > 0) mine.push(`${r.restatements} restatements`);
+          const system =
+            `This will also remove ${r.chapters} chapters, ${r.papers} papers, ${r.concepts} concepts` +
+            (r.chunks > 0 ? ` and ${r.chunks} content index blocks` : "") +
+            `.`;
+          return (
+            system +
+            (mine.length > 0 ? ` Your ${mine.join(", ")} will be removed too.` : "") +
+            ` This cannot be undone.`
+          );
+        },
         confirm: "Delete",
       },
     },

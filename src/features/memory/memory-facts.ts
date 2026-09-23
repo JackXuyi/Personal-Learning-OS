@@ -20,7 +20,7 @@
  * 与 F4 单章 Markdown 的 `pointsHeading` 同性质（方案 §13 偏差表有记录）。
  */
 import type { EvidenceKind, LearnerProfile, StudyStyle } from "../../domain";
-import { MEMORY_FACT_MIN_SAMPLES, type GeneratedEntry, type MemoryFactKey } from "../../domain";
+import { MEMORY_FACT_MIN_SAMPLES, hasNote, type GeneratedEntry, type MemoryFactKey } from "../../domain";
 import type { MemorySignals } from "./memory-signals";
 
 export type DerivedFact = GeneratedEntry;
@@ -207,7 +207,7 @@ export function deriveOutputHabit(
   if (chapterCount > 0) {
     parts.push(facts.outputDensity(round1(annotations.length / chapterCount)));
     if (annotations.length > 0) {
-      const withNote = annotations.filter((a) => a.note.trim().length > 0).length;
+      const withNote = annotations.filter(hasNote).length;
       parts.push(facts.outputNoteRatio(Math.round((withNote / annotations.length) * 100)));
     }
   }

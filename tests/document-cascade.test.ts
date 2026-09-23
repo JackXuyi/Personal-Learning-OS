@@ -19,6 +19,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type {
+  Annotation,
   CardState,
   Chapter,
   EvidenceEntry,
@@ -35,6 +36,8 @@ import {
   deleteDocumentCascade,
   previewDeleteCascade,
 } from "../src/features/learn/document-cascade.ts";
+import { zh } from "../src/i18n/messages/zh.ts";
+import { en } from "../src/i18n/messages/en.ts";
 
 const results: string[] = [];
 let failures = 0;
@@ -97,6 +100,26 @@ function restatement(id: string, documentId: string, chapterId: string): Restate
     // 刻意带上用户原文：这一项**含用户手写内容**，与批注同级。
     text: "这是我自己的复述，删资料不该无声吞掉它。",
     createdAt: 1,
+  };
+}
+
+/** 划线批注：`note` 空串 = 纯高亮（弹窗口径必须把它算进去，否则低报）。 */
+function annotation(
+  id: string,
+  documentId: string,
+  chapterId: string,
+  note: string,
+): Annotation {
+  return {
+    id,
+    documentId,
+    chapterId,
+    quote: "原文摘录",
+    start: 0,
+    end: 2,
+    note,
+    createdAt: 1,
+    updatedAt: 1,
   };
 }
 
@@ -191,6 +214,13 @@ async function seed(): Promise<InMemoryStorage> {
   ]);
   await s.saveRestatement(restatement("rst-a", "doc-a", "chp-a1"));
   await s.saveRestatement(restatement("rst-b", "doc-b", "chp-b1"));
+  // 跨资料归属：记录挂在 doc-b 下，但它的章属于 doc-a。`belongsToDoc` 的
+  // `chapterId` 分支正是「两把尺子」最容易露馅处 —— 预检与实删必须都算上它。
+  await s.saveRestatement(restatement("rst-cross", "doc-b", "chp-a1"));
+  // 划线批注：一条纯高亮（note 空）+ 一条带笔记 → 弹窗应报「2 处，其中 1 条有笔记」。
+  await s.saveAnnotation(annotation("ann-a1", "doc-a", "chp-a1", ""));
+  await s.saveAnnotation(annotation("ann-a2", "doc-a", "chp-a2", "我的笔记"));
+  await s.saveAnnotation(annotation("ann-b1", "doc-b", "chp-b1", "旁观资料的笔记"));
   await s.saveCardState(cardState("card-a", "chp-a1", "doc-a"));
   await s.saveCardState(cardState("card-b", "chp-b1", "doc-b"));
   await s.saveLearnerState({
@@ -228,7 +258,11 @@ async function main() {
     const s = await seed();
     await deleteDocumentCascade("doc-a", s);
     const rest = await s.listAllRestatements();
-    assert.deepEqual(rest.map((r) => r.id), ["rst-b"], "只应剩旁观资料的复述");
+    assert.deepEqual(
+      rest.map((r) => r.id),
+      ["rst-b"],
+      "只应剩旁观资料的复述 —— 跨资料归属的 rst-cross（章属 doc-a）也必须回收",
+    );
   });
 
   await check("TC-CASC-03 自测卡状态：本资料清除、他资料零改动", async () => {
@@ -337,7 +371,8 @@ async function main() {
     const report = await previewDeleteCascade("doc-a", s);
     assert.equal(report.chapters, 2);
     assert.equal(report.papers, 1);
-    assert.equal((await s.listAllRestatements()).length, 2, "预检不得删复述");
+    assert.equal((await s.listAllRestatements()).length, 3, "预检不得删复述");
+    assert.equal((await s.listAllAnnotations()).length, 3, "预检不得删批注");
     assert.equal(Object.keys(await s.listCardStates()).length, 2, "预检不得删卡状态");
     assert.equal((await s.listSections("chp-a1")).length, 1, "预检不得删小节");
     assert.equal(Object.keys((await s.getLearnerState()).byUnit).length, 3);
@@ -346,12 +381,102 @@ async function main() {
   await check("TC-CASC-12 对不存在的资料调用是幂等空操作", async () => {
     const s = await seed();
     await deleteDocumentCascade("doc-missing", s);
-    assert.equal((await s.listAllRestatements()).length, 2);
+    assert.equal((await s.listAllRestatements()).length, 3);
     assert.equal(Object.keys((await s.getLearnerState()).byUnit).length, 3);
     assert.deepEqual(
       (await s.listGoals()).find((g) => g.id === "goal-mixed")?.requiredChapterIds,
       ["chp-a1", "chp-b1"],
       "无章可剔时目标范围不得被改写",
+    );
+  });
+
+  /* ---------------- ⑤ 删除告知：用户手写资产必须如实 ---------------- */
+
+  await check("TC-CASC-13 预检覆盖用户手写资产（总数 / 有笔记 / 复述）", async () => {
+    const s = await seed();
+    const r = await previewDeleteCascade("doc-a", s);
+    assert.equal(r.annotations, 2, "报的是**全部**划线批注（含纯高亮），不得只报有笔记的");
+    assert.equal(r.annotationsWithNote, 1, "其中写了笔记的条数（fixture：ann-a2）");
+    assert.equal(r.restatements, 2, "复述两条：rst-a 与跨资料归属的 rst-cross");
+  });
+
+  await check("TC-CASC-14 预检报的数 = 实际删掉的数（两把尺子的守卫）", async () => {
+    const s = await seed();
+    const before = {
+      annotations: (await s.listAllAnnotations()).length,
+      restatements: (await s.listAllRestatements()).length,
+    };
+    const report = await previewDeleteCascade("doc-a", s);
+    await deleteDocumentCascade("doc-a", s);
+    const after = {
+      annotations: (await s.listAllAnnotations()).length,
+      restatements: (await s.listAllRestatements()).length,
+    };
+    assert.equal(
+      report.annotations,
+      before.annotations - after.annotations,
+      "弹窗报的划线批注数必须等于实际删掉的条数",
+    );
+    assert.equal(
+      report.restatements,
+      before.restatements - after.restatements,
+      "弹窗报的复述数必须等于实际删掉的条数",
+    );
+    // 反向钉住判据：若预检只按 `documentId` 判（漏掉跨资料归属的 rst-cross），
+    // 实际删除量会是 2 而预检报 1 —— 上一行立刻变红。此处把 2 写死，防两边一起错。
+    assert.equal(before.restatements - after.restatements, 2);
+  });
+
+  await check("TC-CASC-15 deleteDocumentCascade 的返回值与预检逐字段一致", async () => {
+    const s = await seed();
+    const preview = await previewDeleteCascade("doc-a", s);
+    const actual = await deleteDocumentCascade("doc-a", s);
+    assert.deepEqual(actual, preview, "同一份库上「说要删的」与「实际删的」必须完全相同");
+  });
+
+  /* ---------------- ⑥ 文案：零值不出现噪声，非零必须点名 ---------------- */
+
+  await check("TC-CASC-16 弹窗文案：用户资产的 0 值省略、非零点名（中英成对）", () => {
+    const none = {
+      chapters: 3,
+      papers: 1,
+      concepts: 2,
+      chunks: 0,
+      annotations: 0,
+      annotationsWithNote: 0,
+      restatements: 0,
+    };
+    assert.doesNotMatch(
+      zh.learn.library.del.desc(none),
+      /划线批注|复述/,
+      "零资产时不得出现用户资产字样（「0 条复述」是噪声）",
+    );
+    assert.doesNotMatch(
+      en.learn.library.del.desc(none),
+      /highlight|restatement/i,
+      "同上（英文）",
+    );
+
+    const mine = { ...none, annotations: 5, annotationsWithNote: 2, restatements: 3 };
+    const zhText = zh.learn.library.del.desc(mine);
+    assert.match(zhText, /5 处划线批注/, "必须点名划线批注总数（含纯高亮）");
+    assert.match(zhText, /其中 2 条写了笔记/, "有笔记的条数作括号补注");
+    assert.match(zhText, /3 条复述/, "必须点名复述");
+    assert.match(zhText, /不可撤销/, "仍须保留不可撤销提示");
+
+    const enText = en.learn.library.del.desc(mine);
+    assert.match(enText, /5 highlights/, "同上（英文）");
+    assert.match(enText, /2 with notes/, "同上（英文）");
+    assert.match(enText, /3 restatements/, "同上（英文）");
+
+    // 有划线但一条笔记都没有 → 括号整段省略（不出现「其中 0 条写了笔记」）
+    const noNote = { ...none, annotations: 4, annotationsWithNote: 0, restatements: 0 };
+    assert.match(zh.learn.library.del.desc(noNote), /4 处划线批注/);
+    assert.doesNotMatch(zh.learn.library.del.desc(noNote), /写了笔记/, "零笔记时括号必须省略");
+    assert.doesNotMatch(
+      en.learn.library.del.desc(noNote),
+      /with notes/i,
+      "同上（英文）",
     );
   });
 

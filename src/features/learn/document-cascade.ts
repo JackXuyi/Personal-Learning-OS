@@ -15,6 +15,10 @@
  *     社区包溯源 —— 判据与逐项理由见 `purgeDerivedAssets`
  *  4) 资料本体：deleteDocument（适配器内部再级联删章节与批注）
  *
+ * ⚠️ **用户手写资产（复述 / 划线批注）的收集必须早于步骤 4** —— 批注由该步级联
+ * 删除，删完再查就是 0。`userWrittenOf` 的调用点即按此排布，弹窗报数也走同一个
+ * 收集器（否则「说要删的」与「实际删的」会漂移）。
+ *
  * ⚠️ **为什么证据流（`plos.evidence`）不在这里清**（2026-09-22 拍板）
  *
  * 「删资料时补证据流清理」曾长期挂在遗留清单上（`raw-id-label-fix` §7 /
@@ -33,18 +37,110 @@
  * 因此本模块**不得**出现 `listEvidence` —— 守卫见 `tests/document-cascade.test.ts`
  * 的 TC-CASC-09。孤儿行由消费侧兜底（`HomePage::logToView` 直接跳过解析不到的章级行）。
  */
+import type { Annotation, Restatement } from "../../domain";
+import { hasNote } from "../../domain";
 import type { StorageAdapter } from "../../storage";
 
-/** 删除连带清理的数量报告（确认弹窗展示用）。 */
+/**
+ * 删除连带清理的数量报告（确认弹窗展示用）。
+ *
+ * ⚠️ 分两组字段，**顺序即重要性**：弹窗要如实告诉用户「我会失去什么」，而
+ * **用户手写的**（`annotations` / `restatements`）与**系统派生的**（前四项）
+ * 在「删了还能不能拿回来」上性质不同 —— 前者不可再生，后者重学一遍就有。
+ * 因此 `DeleteReport` 里用户资产必须是**独立、具名**的字段，不能并进计数总数，
+ * 否则弹窗只能含混地说「将清理 N 项」。
+ */
 export interface DeleteReport {
   chapters: number;
   papers: number;
   concepts: number;
   /** 该资料已落库的 Chunk 数（RAG 索引；无索引时为 0）。 */
   chunks: number;
+  /**
+   * 该资料范围内的**全部**划线批注（含 `note` 为空的纯高亮）。删除告知必须覆盖
+   * 实际删除范围，故这里是**总数**而不是「写了笔记的」——后者会低报（纯高亮同样被删）。
+   */
+  annotations: number;
+  /**
+   * 上面那批里**写了笔记**的条数（判据 `hasNote`，与 `/memory` 页的「N 条笔记」
+   * 同一口径）。只作括号补注，不替代总数。
+   */
+  annotationsWithNote: number;
+  /** 该资料范围内的复述次数（含用户手写原文）。 */
+  restatements: number;
 }
 
-/** 删除前预检：只读统计，返回将被连带清理的数量（供确认弹窗展示）。 */
+/**
+ * 「这条记录归属被删资料」的**唯一判据** —— 复述与自测卡共用。
+ *
+ * ⚠️ 预检（`previewDeleteCascade`）与实际清理（`purgeDerivedAssets`）**必须**走
+ * 同一个谓词。各写一份就是「两把尺子」：弹窗报 3 条、实际删掉 2 条，用户永远
+ * 不会知道，而这类偏差只在**跨资料归属**（`chapterId` 命中但 `documentId` 不同，
+ * 或反之）时才暴露 —— 恰恰是很难手工复现的那种。
+ */
+function belongsToDoc(
+  record: { readonly documentId: string; readonly chapterId: string },
+  docId: string,
+  chapterIds: ReadonlySet<string>,
+): boolean {
+  return record.documentId === docId || chapterIds.has(record.chapterId);
+}
+
+/** 该资料范围内的**用户手写**资产（弹窗必须如实告知的两类）。 */
+interface UserWrittenAssets {
+  annotations: Annotation[];
+  restatements: Restatement[];
+}
+
+/**
+ * 收集该资料范围内**用户手写**的资产 —— 删除告知与实际清理的**共用入口**。
+ *
+ * 为什么要抽出来：这两类东西是「删了拿不回来」的（弹窗据它报数、清理据它删除），
+ * 若各写一份过滤式，就会出现「弹窗说 3 条、实际删 2 条」这种**用户永远不会
+ * 发现**的偏差 —— 它只在跨资料归属（`chapterId` 命中而 `documentId` 不同，或反之）
+ * 时才暴露，恰恰是最难手工复现的一类。
+ *
+ * ⚠️ 调用方必须在 `store.deleteDocument` **之前**取（批注由该步级联删除）。
+ */
+async function userWrittenOf(
+  docId: string,
+  chapterIds: ReadonlySet<string>,
+  store: StorageAdapter,
+): Promise<UserWrittenAssets> {
+  const restatements = (await store.listAllRestatements()).filter((r) =>
+    belongsToDoc(r, docId, chapterIds),
+  );
+  // 批注按 `documentId` 归属 —— 与 `forgetDocument` 的级联判据同维度
+  // （`listAnnotations(docId)` 内部即 `a.documentId === documentId`）。
+  const annotations = await store.listAnnotations(docId);
+  return { annotations, restatements };
+}
+
+/**
+ * 用户手写资产 → 报告三项。**唯一算式**：`previewDeleteCascade` 与
+ * `deleteDocumentCascade` 都从这里取，不允许任一侧再写一遍 `.length`。
+ *
+ * ⚠️ `annotations` 是**总数**（含纯高亮），`annotationsWithNote` 才是「写了笔记的」
+ * （判据 `hasNote`）。两个数不是一回事，别互相替换。
+ */
+function writtenCountsOf(written: UserWrittenAssets): Pick<
+  DeleteReport,
+  "annotations" | "annotationsWithNote" | "restatements"
+> {
+  return {
+    annotations: written.annotations.length,
+    annotationsWithNote: written.annotations.filter(hasNote).length,
+    restatements: written.restatements.length,
+  };
+}
+
+/**
+ * 删除前预检：只读统计，返回将被连带清理的数量（供确认弹窗展示）。
+ *
+ * ⚠️ 口径上必须与 `deleteDocumentCascade` **逐项对齐**（尤其用户手写的复述与
+ * 划线批注 —— 弹窗漏报它们等于让用户在不知情下丢掉自己写的东西）。守卫见
+ * `tests/document-cascade.test.ts` 的 TC-CASC-14。
+ */
 export async function previewDeleteCascade(
   docId: string,
   store: StorageAdapter,
@@ -64,7 +160,17 @@ export async function previewDeleteCascade(
     concepts = g.units.filter((u) => unitIds.has(u.id)).length;
   }
   const chunks = (await store.listChunksByDocument(docId)).length;
-  return { chapters: chapters.length, papers: papers.length, concepts, chunks };
+
+  // 用户手写资产（与实际清理同源：`userWrittenOf` + `writtenCountsOf`）
+  const written = await userWrittenOf(docId, chapterIds, store);
+
+  return {
+    chapters: chapters.length,
+    papers: papers.length,
+    concepts,
+    chunks,
+    ...writtenCountsOf(written),
+  };
 }
 
 /**
@@ -87,22 +193,27 @@ export async function previewDeleteCascade(
  * - **目标范围 / 社区包溯源**：引用资料或章 id 的**指针**，随被引用方失效而失效。
  *
  * ⚠️ **证据流刻意不在本函数内**，理由见文件头大段注释。
+ *
+ * ⚠️ 本函数与 `previewDeleteCascade` 是**同一件事的两个视角**（实际做 / 只说数量）：
+ * 归属判据一律走 `belongsToDoc`、笔记判据一律走 `hasNote`，**不得在任一侧内联重写**。
+ * 复述实体由调用方经 `userWrittenOf` 收集后传入 —— 与弹窗报数用的是同一份数组，
+ * 而不是「同样的过滤条件再算一遍」。
+ *
+ * 批注不在此处删除（由适配器的 `forgetDocument` 级联）—— 但仍**报数**（见 report）。
  */
 async function purgeDerivedAssets(
   docId: string,
   chapterIds: ReadonlySet<string>,
+  written: UserWrittenAssets,
   store: StorageAdapter,
 ): Promise<void> {
-  // 3a) 复述记录
-  const restatements = (await store.listAllRestatements()).filter(
-    (r) => r.documentId === docId || chapterIds.has(r.chapterId),
-  );
-  for (const r of restatements) await store.deleteRestatement(r.id);
+  // 3a) 复述记录（含用户手写原文；实体来自与预检同源的 userWrittenOf）
+  for (const r of written.restatements) await store.deleteRestatement(r.id);
 
   // 3b) 自测卡调度状态（`deleteCardStates([])` 是既定的空操作，无需前置判空）
   const cardStates = await store.listCardStates();
   const orphanCardIds = Object.values(cardStates)
-    .filter((c) => c.documentId === docId || chapterIds.has(c.chapterId))
+    .filter((c) => belongsToDoc(c, docId, chapterIds))
     .map((c) => c.cardId);
   await store.deleteCardStates(orphanCardIds);
 
@@ -150,13 +261,22 @@ async function purgeDerivedAssets(
   }
 }
 
-/** 删除资料并级联清理（顺序见模块头）。store 必传——保持 node 单测可直跑。 */
+/**
+ * 删除资料并级联清理（顺序见模块头）。store 必传——保持 node 单测可直跑。
+ *
+ * 返回的 `DeleteReport` 与 `previewDeleteCascade` **同源**：用户手写资产用同一个
+ * `userWrittenOf` 收集、同一个 `writtenCountsOf` 报数 —— 所以「弹窗说要删的」
+ * 就是「实际删掉的」，不存在两套口径。
+ */
 export async function deleteDocumentCascade(
   docId: string,
   store: StorageAdapter,
 ): Promise<DeleteReport> {
   const chapters = await store.listChapters(docId);
   const chapterIds = new Set(chapters.map((c) => c.id));
+
+  // 用户手写资产先收集（步骤 4 的 `deleteDocument` 会级联删批注 → 之后再查就没了）。
+  const written = await userWrittenOf(docId, chapterIds, store);
 
   // 0) Chunk + 向量（RAG 索引）
   const chunks = await store.listChunksByDocument(docId);
@@ -184,9 +304,15 @@ export async function deleteDocumentCascade(
   }
 
   // 3) 派生学习资产（复述 / 卡片 / 掌握度 / 小节 / 目标范围 / 包溯源）
-  await purgeDerivedAssets(docId, chapterIds, store);
+  await purgeDerivedAssets(docId, chapterIds, written, store);
 
   // 4) 资料本体（适配器内部再级联删章节与批注）
   await store.deleteDocument(docId);
-  return { chapters: chapters.length, papers: papers.length, concepts, chunks: chunks.length };
+  return {
+    chapters: chapters.length,
+    papers: papers.length,
+    concepts,
+    chunks: chunks.length,
+    ...writtenCountsOf(written),
+  };
 }

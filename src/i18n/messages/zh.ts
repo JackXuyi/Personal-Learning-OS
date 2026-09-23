@@ -1205,10 +1205,51 @@ export const zh = {
       },
       del: {
         title: (t: string) => `删除《${t}》？`,
-        desc: (c: number, p: number, k: number, chunks: number) =>
-          `将连带清理 ${c} 个章节、${p} 份试卷、${k} 个知识概念${
-            chunks > 0 ? `、${chunks} 块正文索引` : ""
-          }。此操作不可撤销。`,
+        /*
+         * 删除告知 —— 这是用户**唯一的知情机会**（不可撤销），故必须如实。
+         *
+         * 两句分工：先报**系统派生物**（章节 / 试卷 / 概念 / 索引块），再单列
+         * **你写下的东西**（划线批注 / 复述）—— 后者删了不可再生，值得单独一句。
+         * 零值一律省略，不出现「0 条复述」这类噪声（与 `memory.report`
+         * 「只列真正发生过的动作」同一原则）。
+         *
+         * ⚠️ 参数取**单个对象**而非 7 个位置参数：`annotations` 与
+         * `annotationsWithNote` 同为 number，位置写错编译器不会报错，只会静默报错数。
+         *
+         * ⚠️ 口径：`annotations` 是**全部**划线批注（含纯高亮）—— 删除告知要覆盖
+         * 实际删除范围；「写了笔记的」只作括号补注，其口径与 `/memory` 页的
+         * 「N 条笔记」一致（`hasNote`）。两个数不是一回事，别互相替换。
+         */
+        desc: (r: {
+          chapters: number;
+          papers: number;
+          concepts: number;
+          chunks: number;
+          annotations: number;
+          annotationsWithNote: number;
+          restatements: number;
+        }) => {
+          const mine: string[] = [];
+          if (r.annotations > 0) {
+            mine.push(
+              `${r.annotations} 处划线批注${
+                r.annotationsWithNote > 0
+                  ? `（其中 ${r.annotationsWithNote} 条写了笔记）`
+                  : ""
+              }`,
+            );
+          }
+          if (r.restatements > 0) mine.push(`${r.restatements} 条复述`);
+          const system =
+            `将连带清理 ${r.chapters} 个章节、${r.papers} 份试卷、${r.concepts} 个知识概念` +
+            (r.chunks > 0 ? `、${r.chunks} 块正文索引` : "") +
+            `。`;
+          return (
+            system +
+            (mine.length > 0 ? `你写下的 ${mine.join("、")}也会一并删除。` : "") +
+            `此操作不可撤销。`
+          );
+        },
         confirm: "删除",
       },
     },

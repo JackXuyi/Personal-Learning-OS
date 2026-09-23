@@ -15,7 +15,7 @@
  * ⚠️ 纯函数，`tests/learner-memory.test.ts` 直接覆盖（含掩码边界与裁剪顺序）。
  */
 import type { Annotation, Restatement } from "../../domain";
-import { MEMORY_LIMITS, normalizeMemoryText } from "../../domain";
+import { MEMORY_LIMITS, hasNote, normalizeMemoryText } from "../../domain";
 import type { MemorySample } from "../../ai/memory-pipeline";
 import { maskPii } from "../profile/pii-mask";
 
@@ -44,7 +44,7 @@ export function collectSamples(
   const rows: Row[] = [];
 
   for (const a of annotations) {
-    if (!a.note.trim()) continue;
+    if (!hasNote(a)) continue;
     rows.push({ at: a.updatedAt, id: a.id, kind: "note", raw: a.note });
   }
   for (const r of restatements) {

@@ -15,7 +15,7 @@
  * ⚠️ 会被 `tests/learner-memory.test.ts` 在 strip-types 下直跑：不得用 TS 参数属性。
  */
 import type { GeneratedEntry, MemoryCategory, MemoryDocMeta, ParsedMemoryDoc } from "../../domain";
-import { categoryOfKey, normalizeMemoryText } from "../../domain";
+import { categoryOfKey, hasNote, normalizeMemoryText } from "../../domain";
 import type { AIProvider } from "../../ai/types";
 import { AiProviderError } from "../../ai/types";
 import type { ExistingMemory, MemorySample } from "../../ai/memory-pipeline";
@@ -217,7 +217,7 @@ function behaviorSummaryOf(signals: MemorySignals): string {
   const kindLine = Object.entries(byKind)
     .map(([k, n]) => `${k} ${n}`)
     .join(" / ");
-  const withNote = signals.annotations.filter((a) => a.note.trim()).length;
+  const withNote = signals.annotations.filter(hasNote).length;
   const reps = Object.values(signals.cards).reduce((n, c) => n + c.reps, 0);
   const coverages = signals.restatements
     .map((r) => r.feedback?.coverage)

@@ -25,7 +25,7 @@ import { PageContainer } from "../../components/layout/AppShell";
 import { cn } from "../../lib/utils";
 import { useI18n } from "../../i18n";
 import type { LearnerProfile } from "../../domain";
-import { MEMORY_FACT_MIN_SAMPLES, formatMemoryTimestamp, parseMemoryDoc } from "../../domain";
+import { MEMORY_FACT_MIN_SAMPLES, formatMemoryTimestamp, hasNote, parseMemoryDoc } from "../../domain";
 import { EVIDENCE_LOG_MAX } from "../../storage/memory";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
@@ -230,7 +230,9 @@ export default function MemoryPage() {
   /* ── 有内容：查看 / 编辑 + 差异 + 折叠区 + 清空 ── */
   /** 页头动作报告的各行（0–3 行；选取规则在 `memory-texts.ts`，可单测）。 */
   const reportLines = reportLinesOf(stats, m);
-  const notesWithNote = signals ? signals.annotations.filter((a) => a.note.trim()).length : 0;
+  // 「有笔记的批注」判据 = `hasNote`（domain 唯一真源）。这里原先内联
+  // `a.note.trim()`，与删除弹窗新引入的计数是同一规则的两份实现 —— 已收归。
+  const notesWithNote = signals ? signals.annotations.filter(hasNote).length : 0;
   const days = signals ? spanDays(signals.evidence) : 0;
   const stale = signals !== undefined && signals.evidence.length >= EVIDENCE_LOG_MAX;
 
