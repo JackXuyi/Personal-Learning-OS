@@ -430,6 +430,13 @@ export async function analyzeConceptsNow(
 
 #### 4.3.4 资料级写操作（`library-actions.ts`）
 
+> ⏱ **时点快照（本设计写作时）**：下列签名是当时的形态，此后**两次扩展** ——
+> `chunks`（RAG 接线，见 `rag-wiring-task-runbook.md`）与 `annotations` /
+> `annotationsWithNote` / `restatements`（**用户手写资产的删除告知**，2026-09-23，
+> 见 `document-cascade-cleanup-2026-09.md` §5.1）。**接口真源见
+> `src/features/learn/document-cascade.ts`。**
+> 本文件其它处的弹窗文案示意、UC 用例里的「章节 / 试卷 / 概念数量」清单同属该时点口径。
+
 ```ts
 export interface DeleteReport { chapters: number; papers: number; concepts: number }
 
