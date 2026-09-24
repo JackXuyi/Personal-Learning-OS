@@ -186,8 +186,12 @@ const run = async () => {
       "pdf-no-text": "L-no-text",
       "pdf-too-large": "L-pdf-too-large",
       "read-failed": "L-read-failed",
+      "docx-legacy": "L-docx-legacy",
+      "docx-bad-zip": "L-docx-bad-zip",
+      "docx-no-text": "L-docx-no-text",
     };
     assert.equal(localErrorText({ error: "pdf-no-text" }, localLabels), "L-no-text");
+    assert.equal(localErrorText({ error: "docx-legacy" }, localLabels), "L-docx-legacy");
     assert.equal(
       localErrorText({ error: "unsupported", detail: "a.docx" }, localLabels),
       "L-unsupported",
@@ -202,6 +206,10 @@ const run = async () => {
       "src/features/learn/import/github.ts",
       "src/features/learn/import/local-files.ts",
       "src/features/learn/import/pdf.ts",
+      // F8 范围 3：DOCX 三件套同属「导入适配层」，必须受同一条不变量约束。
+      "src/features/learn/import/docx.ts",
+      "src/features/learn/import/docx-markdown.ts",
+      "src/features/learn/import/mammoth-reader.ts",
     ]) {
       const src: string = readFileSync(rel(file), "utf8");
       for (const [i, raw] of src.split("\n").entries()) {
