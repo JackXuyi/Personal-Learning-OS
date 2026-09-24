@@ -9,6 +9,7 @@
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "layer:check": "node scripts/layer-boundary-scan.mjs --fail-on-violation",
     "test:i18n": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/i18n-alignment.test.ts",
     "test:goal": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/goal-repo.test.ts",
     "test:scope": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/chapter-scope.test.ts",

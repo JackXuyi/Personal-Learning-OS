@@ -21,7 +21,8 @@
 | `src/engine` | 学习循环纯逻辑（band、forgetting、plan ETA 等） |
 | `src/ai` | AI 供应商适配（含 `vault.ts` 密钥、`builtin.ts` 本地模型 invoke 封装） |
 | `src/storage` | 持久化适配层（`local.ts` / `memory.ts`）；组件不得直接碰 localStorage |
-| `src/stores` | Zustand store（`useLoopStore`、`useSessionStore`…） |
+| `src/stores` | Zustand store（`useLoopStore`、`useSessionStore`…）——**只存状态**，编排不写这里 |
+| `src/services` | 无 React 的编排层（可读写 stores / storage / ai / engine；**不得** import features）；判据 `npm run layer:check` |
 | `src/features` | 业务页面/组件，按域分（home、plan、learn、assessment、quiz、goals、learner、knowledge、spaces、study、settings） |
 | `src/components` | 共享 UI：`ui/`（UI Kit 生成层：button/dialog…，可改自有）、`primitives.tsx`（PLOS 领域原语）、`layout/AppShell.tsx`（`PageContainer`） |
 | `src/lib` | `utils.ts`（`cn` = clsx + tailwind-merge），供 ui 层使用 |
@@ -52,12 +53,12 @@ Cursor / Claude 系工具会按 frontmatter 自动注入：`alwaysApply: true` �
 
 | Rule 文件 | 触发 | 核心要点 |
 |-----------|------|----------|
-| `code-structure-and-dependencies` | always | 文件 ≤700 行；≥10 行×≥3 处先抽取；依赖单向（domain→engine/ai/storage→stores→features） |
+| `code-structure-and-dependencies` | always | 文件 ≤700 行；≥10 行×≥3 处先抽取；依赖单向（domain→engine/ai/storage→stores/services→features）；`stores`/`services`/`components` ↛ `features`，判据 `npm run layer:check` |
 | `commit-conventions` | always | Conventional Commits，scope 取 PLOS 域（`ui` `i18n` `engine` `docs` `tauri` …） |
 | `docs-task-runbook` | always | 实质任务：意图 → 读 docs → 写 runbook → 逐任务执行 → 收尾同步文档 |
 | `pre-task-technical-design` | always | 实质任务先澄清 + 完整中文技术方案，用户确认后才写生产代码 |
 | `engineering-code-style` | always | 相对导入（`@/*` 仅豁免 ui/lib 层）、中文注释、i18n 双语、Tailwind 4 token、`import type` |
-| `layer-import-boundaries` | always | src ↔ src-tauri 只走 IPC；UI → stores/storage；纯逻辑不依赖 React |
+| `layer-import-boundaries` | always | src ↔ src-tauri 只走 IPC；UI → stores / services / storage；纯逻辑不依赖 React |
 | `no-headless-browser-validation` | always | 禁止主动启动无头/任何浏览器校验样式/布局/功能（截图、DOM、视觉检查）；校验走 typecheck + node 单测 + 代码自审；仅用户显式要求浏览器级/E2E 时放行 |
 | `react.mdc` | globs `src/**/*.tsx` | Tailwind 4 + 语义 token + UI Kit（`components/ui`）优先 + primitives 原语；状态色仅 dot/徽标 |
 | `rust.mdc` | globs `src-tauri/**/*.rs` | 模块 vault/llm → lib.rs 注册；命令 `Result<T,String>`；macOS-only vault |
@@ -100,9 +101,9 @@ Cursor / Claude 系工具会按 frontmatter 自动注入：`alwaysApply: true` �
 - **样式**：Tailwind 4 utility + token（`--color-surface` `ink-1..3` `line` `primary` `state-*`，加 shadcn 角色 `background/card/muted/accent/border/ring`）；新 hex 只允许进 `main.css`
 - **UI 原语**：优先 `components/ui`（Button/Dialog…）与 `primitives.tsx`（Section/KnowledgeRow/EvidenceRow/ActionCard/Card/Stat/DeltaBadge）及 `AppShell.PageContainer`
 - **一致性**：同一视觉模式跨 ≥3 个文件重复 → 必须抽取公共组件（第 2 处须在 PR 声明「待抽」）；判据 `node scripts/ui-consistency-scan.mjs`，详见 `skills/plos-ui-system`
-- **数据流**：组件 → `src/stores` → `src/storage`；桌面能力（Keychain/本地模型）→ `invoke("vault_*"|"llm_*")`，纯浏览器预览用 `isTauri()` 守卫
+- **数据流**：组件 → `src/stores` → `src/storage`；跨 store / storage / ai 的编排落 `src/services/<域>/`（无 React）；桌面能力（Keychain/本地模型）→ `invoke("vault_*"|"llm_*")`，纯浏览器预览用 `isTauri()` 守卫
 - **Rust**：新命令在属主模块实现 → `lib.rs` `generate_handler!` 注册 → 前端封装进 `src/ai/*`
-- **测试**：`npm run typecheck`；纯逻辑单测写 `tests/*.test.ts`（`npm run test:i18n|goal|scope|eta`）；dev 端口 1420
+- **测试**：`npm run typecheck` + `npm run layer:check`（分层边界，可执行判据）；纯逻辑单测写 `tests/*.test.ts`（`npm run test:i18n|goal|scope|eta`）；dev 端口 1420
 - **文档**：新增方案落 `docs/<AREA>-<title>-design-YYYY-MM.md`，沿用 `docs/*-plan-*.md` 命名风格
 
 ## 维护约定（改 rules / skills 时强制执行）

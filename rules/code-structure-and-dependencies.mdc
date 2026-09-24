@@ -33,10 +33,18 @@ When the **same or near-identical logic** appears **≥ 10 lines** and **≥ 3 t
 
 ## 3. No circular dependencies
 
-- TS direction: **domain (types/constants) → engine / ai / storage → stores → features / components**.
-  UI (features/components) must not be imported by domain/engine/ai/storage.
+- TS direction: **domain → engine / ai / storage → stores / services → features / components**
+  - `engine` / `ai` / `storage` 互为同层（允许互换）；`stores` / `services` 互为同层（允许互换）。
+  - ⚠️ **`stores` / `services` 不得 import `features` / `components`**（2026-09-24 补充：原规则只禁
+    `domain/engine/ai/storage`，`stores` 不在名单，6 处反向依赖因此长期未被发现）。
+  - ⚠️ **`components` 不得 import `features`**（同为 Tier 3，但共享 UI 不得依赖业务页面）。
+  - ⚠️ `engine` / `ai` 不得**值**导入 `i18n/messages/*`（`import type` 与 `i18n/types` 豁免）。
+  - 判据（可执行）：`npm run layer:check`（`scripts/layer-boundary-scan.mjs`）。存量债务在脚本内
+    **显式登记为基线**：检测全量、只禁新增。
 - Rust direction: **vault / llm modules → lib.rs**.
 - If `A` imports `B`, `B` must not import `A`. Break cycles with a leaf `types` module or callback injection.
+  ⚠️ 不要用 `await import()`「打断」ESM 环 —— 若目标模块已被多处静态引用，它本就不会被拆成独立
+  chunk，`npm run build` 会报 `INEFFECTIVE_DYNAMIC_IMPORT`。消除产生环的那条边才是正解。
 
 ## Related
 

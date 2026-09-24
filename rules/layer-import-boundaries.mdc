@@ -12,6 +12,8 @@ Talk across layers only through the documented IPC contracts or store/storage ad
 | `src/**` (React UI) | `src-tauri/**` | `invoke` / `listen` (`@tauri-apps/api`), wrapped in helpers/hooks |
 | `src-tauri/**` (Rust) | `src/**` | Tauri commands / events; shared shapes via serde + mirrored TS types |
 | `src/domain` `src/engine` `src/ai` | React (`react`, hooks, DOM), `src-tauri` | Keep pure TS; UI reads them via `src/stores` / hooks |
+| `src/stores` `src/services` | `src/features` `src/components` | Put orchestration in `src/services/<domain>/`; write state through the store's **plain setters** (e.g. `setCoverage`). **Do not use `await import()` to "break" the cycle — measured ineffective.** |
+| `src/components` | `src/features` | Shared UI must not depend on a business page; lift the shared piece into `src/components/` |
 
 ```text
 ❌ BAD: a feature component imports a Rust module or calls llm/vault logic inline
@@ -23,8 +25,11 @@ Talk across layers only through the documented IPC contracts or store/storage ad
 **Data flow (local-first)**
 
 - UI → `src/stores/*`（zustand）→ 读 `src/domain` 类型 / `src/engine` 纯逻辑。
+- 编排（跨 store / storage / ai 的流程）落 `src/services/<域>/`（无 React）；UI 只经 store 或 service。
 - 持久化只经 `src/storage`（`local.ts` / `memory.ts` 适配层），组件不直接碰 localStorage。
 - 桌面能力（密钥、本地模型）→ 仅 `invoke`（`vault_*` / `llm_*`，命令在 `src-tauri/src/lib.rs` 注册）。
+
+判断以上全部边：`npm run layer:check`（`scripts/layer-boundary-scan.mjs`）。
 
 Shared UI helpers live under `src/components/`; shared domain under `src/domain` / `src/engine` / `src/ai`.
 Rust helpers stay inside `src-tauri/src/<module>` (`vault.rs`, `llm/`).
