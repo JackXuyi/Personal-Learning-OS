@@ -34,6 +34,7 @@ import { capabilityItemId, capabilityTaskId, newId, snapshotItems } from "../../
 import type { CapabilityPerTaskScore } from "../../engine";
 import {
   buildReport,
+  canStartCapabilityRun,
   CAPABILITY_LIMITS,
   CAPABILITY_THRESHOLD,
   createGoalPaper,
@@ -300,7 +301,7 @@ export async function startCapabilityRun(input: {
   if (!provider.isConfigured()) return { status: "no-ai" }; // 零写入
 
   const items = await store.listCapabilityItems(input.goalId);
-  if (items.length < CAPABILITY_LIMITS.minItems) return { status: "no-items" };
+  if (!canStartCapabilityRun(items)) return { status: "no-items" };
 
   const scope = await resolveScope(goal, store);
   if (scope.chapters.length === 0) return { status: emptyScopeStatus(goal) };
@@ -393,7 +394,7 @@ export async function submitCapabilityRun(input: {
   const run = await store.getCapabilityRun(input.runId);
   if (!run) return { status: "error", errorKind: "generic" };
   // ②
-  if (run.items.length < CAPABILITY_LIMITS.minItems) return { status: "no-items" };
+  if (!canStartCapabilityRun(run.items)) return { status: "no-items" };
 
   const answers: Record<string, string> = {};
   for (const task of run.tasks) answers[task.id] = (input.answers[task.id] ?? "").trim();

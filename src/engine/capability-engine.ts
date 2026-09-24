@@ -47,9 +47,6 @@ export const CAPABILITY_LIMITS = {
   quoteMaxChars: 200,
 } as const;
 
-/** 单条引用在报告中的展示区间（列表内截断，避免报告被长引用撑爆）。 */
-export const CAPABILITY_EVIDENCE_PREVIEW_CHARS = 60;
-
 /** 单任务 · 单能力项的原始分（AI 回填后的结果，报告生成的输入）。 */
 export interface CapabilityPerTaskScore {
   taskId: string;
@@ -235,7 +232,14 @@ export function capabilityStatsOf(report: CapabilityReport | undefined): Capabil
   };
 }
 
-/** 发起前校验（UI 禁用态与服务层共用同一判据，避免两处口径漂移）。 */
-export function canStartCapabilityRun(items: readonly CapabilityItem[]): boolean {
+/**
+ * 发起前校验（UI 禁用态与服务层共用同一判据，避免两处口径漂移）。
+ *
+ * 只关心**条数**，故对「清单」（`CapabilityItem`）与「run 快照」
+ * （`CapabilityItemSnapshot`，提交时复校）两种形态都成立。
+ */
+export function canStartCapabilityRun(
+  items: readonly CapabilityItem[] | readonly CapabilityItemSnapshot[],
+): boolean {
   return items.length >= CAPABILITY_LIMITS.minItems;
 }

@@ -26,7 +26,7 @@ import type {
   CapabilityStatus,
   LearningGoal,
 } from "../../domain";
-import { CAPABILITY_LIMITS, capabilityStatsOf } from "../../engine";
+import { canStartCapabilityRun, CAPABILITY_LIMITS, capabilityStatsOf } from "../../engine";
 import { capabilityItemId } from "../../domain";
 import { useI18n } from "../../i18n";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
@@ -316,7 +316,7 @@ export default function CapabilityPage() {
                   size="sm"
                   data-testid="cap-start"
                   loading={busy === "start"}
-                  disabled={busy !== undefined || items.length < CAPABILITY_LIMITS.minItems}
+                  disabled={busy !== undefined || !canStartCapabilityRun(items)}
                   onClick={() => void doStart()}
                 >
                   {c.startRun}
