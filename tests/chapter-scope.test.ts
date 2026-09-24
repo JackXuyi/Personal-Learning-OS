@@ -15,6 +15,7 @@ import type { SourceDocument } from "../src/domain/document.ts";
 import type { Chapter } from "../src/domain/chapter.ts";
 import type { LearningGoal } from "../src/domain/goal.ts";
 import type { LearnerState } from "../src/domain/learner.ts";
+import { zh } from "../src/i18n/messages/zh.ts";
 import { runChapterLoop } from "../src/engine/loop.ts";
 
 const results: string[] = [];
@@ -109,7 +110,7 @@ function masteryState(masteries: Record<string, number>): LearnerState {
 const run = async () => {
   await check("无目标范围 → 回退全库章（total=5，两文档全保留）", async () => {
     const { s } = await buildStorage();
-    const snap = await runChapterLoop(s);
+    const snap = await runChapterLoop(s, zh);
     assert.equal(snap.goal?.id, "g-all");
     assert.equal(snap.total, 5);
     assert.equal(snap.chaptersByDoc.docA?.length, 2);
@@ -118,7 +119,7 @@ const run = async () => {
 
   await check("传 goalId + 章范围 → 只覆盖目标章（total=3，docB 仅留 b1）", async () => {
     const { s } = await buildStorage();
-    const snap = await runChapterLoop(s, undefined, "g-scope");
+    const snap = await runChapterLoop(s, zh, "g-scope");
     assert.equal(snap.goal?.id, "g-scope");
     assert.equal(snap.total, 3);
     assert.equal(snap.chaptersByDoc.docA?.length, 2);
@@ -129,7 +130,7 @@ const run = async () => {
   await check("裁剪范围外章不进 mastered / actions", async () => {
     const { s } = await buildStorage();
     await s.saveLearnerState(masteryState({ a1: 0.9, b1: 0.85, b2: 0.95 }));
-    const snap = await runChapterLoop(s, undefined, "g-scope");
+    const snap = await runChapterLoop(s, zh, "g-scope");
     // 范围内 a1(0.9)、b1(0.85) 达标；范围外的 b2(0.95) 不计入。
     assert.equal(snap.total, 3);
     assert.equal(snap.mastered, 2);

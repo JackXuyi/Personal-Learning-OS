@@ -81,7 +81,7 @@ const A_MASTERED: LearnerState = { byUnit: { chA: mastery({ mastery: 0.9, attemp
 const PREREQ_MARK = "前置章节";
 
 check("TC-UC03-01 前置未掌握 → chB 排在 chA 之后且 reasons 标注", () => {
-  const plan = buildChapterPlan({ chapters: [CH_A, CH_B], learnerState: NO_LEARNING, graph: GRAPH });
+  const plan = buildChapterPlan({ chapters: [CH_A, CH_B], learnerState: NO_LEARNING, graph: GRAPH }, zh);
   assert.equal(plan.length, 2);
   assert.equal(plan[0].unitId, "chA", "前置章应排前");
   assert.equal(plan[1].unitId, "chB");
@@ -96,7 +96,7 @@ check("TC-UC03-01 前置未掌握 → chB 排在 chA 之后且 reasons 标注", 
 });
 
 check("TC-UC03-02 前置章已达标 → 不标注", () => {
-  const plan = buildChapterPlan({ chapters: [CH_A, CH_B], learnerState: A_MASTERED, graph: GRAPH });
+  const plan = buildChapterPlan({ chapters: [CH_A, CH_B], learnerState: A_MASTERED, graph: GRAPH }, zh);
   const b = plan.find((a) => a.unitId === "chB");
   assert.ok(b, "chB 应在计划中");
   assert.ok(!b.reasons.join(" ").includes(PREREQ_MARK), "前置已达标不应标注");
@@ -104,12 +104,15 @@ check("TC-UC03-02 前置章已达标 → 不标注", () => {
 });
 
 check("TC-UC03-03 无 graph / 空 graph → 与现状逐项一致（向后兼容）", () => {
-  const withoutGraph = buildChapterPlan({ chapters: [CH_A, CH_B], learnerState: NO_LEARNING });
-  const emptyGraph = buildChapterPlan({
-    chapters: [CH_A, CH_B],
-    learnerState: NO_LEARNING,
-    graph: { units: [], relations: [] },
-  });
+  const withoutGraph = buildChapterPlan({ chapters: [CH_A, CH_B], learnerState: NO_LEARNING }, zh);
+  const emptyGraph = buildChapterPlan(
+    {
+      chapters: [CH_A, CH_B],
+      learnerState: NO_LEARNING,
+      graph: { units: [], relations: [] },
+    },
+    zh,
+  );
   const shape = (plan: ReturnType<typeof buildChapterPlan>) =>
     plan.map((a) => ({ kind: a.kind, unitId: a.unitId, reasons: a.reasons }));
   assert.deepEqual(shape(emptyGraph), shape(withoutGraph));
@@ -124,7 +127,7 @@ check("TC-UC03-04 互为前置 → 双方各自标注、均出现、无死循环
       { id: "r2", fromId: "u3", toId: "u1", type: "prerequisite" },
     ],
   };
-  const plan = buildChapterPlan({ chapters: [CH_A, CH_B], learnerState: NO_LEARNING, graph: mutual });
+  const plan = buildChapterPlan({ chapters: [CH_A, CH_B], learnerState: NO_LEARNING, graph: mutual }, zh);
   assert.equal(plan.length, 2, "双方都保留，不丢弃");
   const a = plan.find((x) => x.unitId === "chA");
   const b = plan.find((x) => x.unitId === "chB");
@@ -139,7 +142,7 @@ check("TC-UC03-05 已达标但到期复习（cls=4）→ 不标注前置", () =>
       chB: mastery({ mastery: 0.9, attempts: 2, nextReviewAt: 1 }),
     },
   };
-  const plan = buildChapterPlan({ chapters: [CH_A, CH_B], learnerState: learner, graph: GRAPH, now: 1000 });
+  const plan = buildChapterPlan({ chapters: [CH_A, CH_B], learnerState: learner, graph: GRAPH, now: 1000 }, zh);
   const b = plan.find((x) => x.unitId === "chB");
   assert.ok(b, "到期复习章应在计划中");
   assert.equal(b.kind, "review-points");
@@ -152,7 +155,7 @@ check("TC-EDGE-02 前置章不在计划范围内 → 忽略，不标注", () => 
     ...GRAPH,
     relations: [{ id: "r1", fromId: "u9", toId: "u3", type: "prerequisite" }],
   };
-  const plan = buildChapterPlan({ chapters: [CH_A, CH_B], learnerState: NO_LEARNING, graph: outOfScope });
+  const plan = buildChapterPlan({ chapters: [CH_A, CH_B], learnerState: NO_LEARNING, graph: outOfScope }, zh);
   const b = plan.find((x) => x.unitId === "chB");
   assert.ok(b);
   assert.ok(!b.reasons.join(" ").includes(PREREQ_MARK), "范围外前置必须忽略");

@@ -134,7 +134,7 @@ function SessionBody() {
         const masteryMap: Record<string, number> = {};
         for (const [id, mm] of Object.entries(ls.byUnit)) masteryMap[id] = mm.mastery;
         setConceptMastery(masteryMap);
-        const planActions = createLearningPlanner().buildPlan({
+        const planActions = createLearningPlanner(m).buildPlan({
           goal: {
             id: `goal-ch-${found.id}`,
             type: "study",

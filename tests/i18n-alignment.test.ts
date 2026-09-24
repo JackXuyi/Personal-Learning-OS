@@ -8,7 +8,9 @@
  *  1) zh/en 字典递归结构对齐（缺键 / 多键 / 叶子类型不一 → 抛错）；
  *  2) 叶子不允许空字符串（防漏翻 placeholder）；
  *  3) detectSystemLang 分支（zh-* → zh，其余 → en）；
- *  4) 引擎默认中文不回退 + 注入 en 后产出英文（learning-planner / loop）。
+ *  4) 引擎**无默认语言**（第 3 批已删 `m: Messages = zh` 默认值）：显式传 zh 得
+ *     中文、传 en 得英文（learning-planner / loop）。漏传 m 是**编译错误**，
+ *     不再静默出中文。
  */
 import assert from "node:assert/strict";
 import { zh } from "../src/i18n/messages/zh.ts";
@@ -123,12 +125,12 @@ const GRAPH = {
 };
 const LEARNER = { byUnit: {} };
 
-check("createLearningPlanner() 默认中文（不回退英文）", () => {
-  const actions = createLearningPlanner().buildPlan({ goal: GOAL, graph: GRAPH, learnerState: LEARNER });
+check("createLearningPlanner(zh) → 中文（引擎已无默认值，漏传 m 是编译错误）", () => {
+  const actions = createLearningPlanner(zh).buildPlan({ goal: GOAL, graph: GRAPH, learnerState: LEARNER });
   assert.ok(actions.length > 0, "应有缺口动作");
   const first = actions[0].reasons[0] ?? "";
   assert.equal(first, zh.engine.goalRequired({ title: GOAL.title, importance: GOAL.importance }));
-  assert.ok(HAS_HAN.test(first), "默认应产出中文");
+  assert.ok(HAS_HAN.test(first), "显式传 zh 应产出中文");
 });
 
 check("createLearningPlanner(en) 注入英文", () => {
@@ -151,8 +153,8 @@ const CHAPTER = {
   documentId: "d1",
 };
 
-check("buildChapterPlan() 默认中文 / (en) 英文", () => {
-  const zhPlan = buildChapterPlan({ chapters: [CHAPTER], learnerState: LEARNER });
+check("buildChapterPlan(zh) 中文 / (en) 英文 —— 两者都必须显式传 m", () => {
+  const zhPlan = buildChapterPlan({ chapters: [CHAPTER], learnerState: LEARNER }, zh);
   assert.ok(zhPlan.length > 0);
   assert.equal(
     zhPlan[0].reasons[0],

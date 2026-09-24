@@ -22,6 +22,7 @@ import { createPaper } from "../src/engine/quiz-engine.ts";
 import { buildChapterPlan, clsRankMap } from "../src/engine/learning-planner.ts";
 import { estimateEtaMin, estimatePlanEta } from "../src/features/plan/chapter-action.ts";
 import { mergeResumeDraft, normalizeProfile, ProfileError, toProfile } from "../src/features/profile/profile-service.ts";
+import { zh } from "../src/i18n/messages/zh.ts";
 import { InMemoryStorage } from "../src/storage/memory.ts";
 import { LocalStorageAdapter } from "../src/storage/local.ts";
 
@@ -244,8 +245,8 @@ async function main() {
   await check("TC-UC08-01 不传 prefs / 传 depth → 输出与现状逐项相同", () => {
     const chapters = [chapter("c1", 1, "ready"), chapter("c2", 2, "not-started")];
     const learnerState = { byUnit: {} };
-    const none = buildChapterPlan({ chapters, learnerState });
-    const depth = buildChapterPlan({ chapters, learnerState, prefs: { depth: "depth" } });
+    const none = buildChapterPlan({ chapters, learnerState }, zh);
+    const depth = buildChapterPlan({ chapters, learnerState, prefs: { depth: "depth" } }, zh);
     const key = (a: NextAction[]) => a.map((x) => `${x.kind}:${x.unitId}`);
     assert.deepEqual(key(depth), key(none));
     // 现状顺序：学完待测(3) 先于 推进未学(5)
@@ -255,11 +256,14 @@ async function main() {
 
   await check("TC-UC08-02 depth=breadth → 未学章提到待测章之前（且不跨类）", () => {
     const chapters = [chapter("c1", 1, "ready"), chapter("c2", 2, "not-started")];
-    const plan = buildChapterPlan({
-      chapters,
-      learnerState: { byUnit: {} },
-      prefs: { depth: "breadth" },
-    });
+    const plan = buildChapterPlan(
+      {
+        chapters,
+        learnerState: { byUnit: {} },
+        prefs: { depth: "breadth" },
+      },
+      zh,
+    );
     assert.deepEqual(plan.map((x) => `${x.kind}:${x.unitId}`), [
       "learn-chapter:c2",
       "chapter-quiz:c1",

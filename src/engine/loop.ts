@@ -5,6 +5,10 @@
  *
  * `buildRagDemoDataset()` 镜像 README 的职业案例（AI 应用工程师），让脚手架
  * 在没有任何导入文档或 AI Provider 的情况下端到端演示整个闭环。
+ *
+ * ★ 语言注入契约（第 3 批）：本文件**不再**默认 `zh`，调用方必须显式传 `m` ——
+ *   漏传从「静默出中文」变为编译错误。兜底（未指定界面语言时用中文）属调用方
+ *   决策，见 `stores/useLoopStore.refresh`。
  */
 import type {
   CognitiveLevel,
@@ -19,11 +23,10 @@ import type {
 } from "../domain";
 import { COGNITIVE_BASE_LEVEL, MASTERY_THRESHOLD, RAG_UNIT_IDS, sortChaptersByOrder } from "../domain";
 import type { StorageAdapter } from "../storage";
+import type { Messages } from "../i18n/types";
 import { applyForgetting } from "./learner-model";
 import { buildChapterPlan, createLearningPlanner } from "./learning-planner";
 import { createRecommendationEngine } from "./recommendation-engine";
-import type { Messages } from "../i18n/messages/zh";
-import { zh } from "../i18n/messages/zh";
 
 const MS_PER_DAY = 86_400_000;
 const NOW = Date.now();
@@ -159,8 +162,8 @@ export interface LoopSnapshot {
  */
 export async function runLearningLoop(
   storage: StorageAdapter,
-  goalId?: string,
-  m: Messages = zh,
+  goalId: string | undefined,
+  m: Messages,
 ): Promise<LoopSnapshot> {
   await seedDemoIfEmpty(storage);
 
@@ -247,7 +250,7 @@ export interface ChapterLoopSnapshot {
  */
 export async function runChapterLoop(
   storage: StorageAdapter,
-  m: Messages = zh,
+  m: Messages,
   goalId?: string,
 ): Promise<ChapterLoopSnapshot> {
   const [goals, docs, rawLearner, graph, profile] = await Promise.all([

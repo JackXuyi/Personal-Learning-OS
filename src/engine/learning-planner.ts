@@ -40,8 +40,7 @@ import {
   sortChaptersByOrder,
 } from "../domain";
 import { bandOf, masteryOfUnit } from "./mastery-engine";
-import type { Messages } from "../i18n/messages/zh";
-import { zh } from "../i18n/messages/zh";
+import type { Messages } from "../i18n/types";
 
 export interface PlanInput {
   goal: LearningGoal;
@@ -64,7 +63,7 @@ function kindForMastery(mastery: number): NextAction["kind"] {
   }
 }
 
-export function createLearningPlanner(m: Messages = zh): LearningPlanner {
+export function createLearningPlanner(m: Messages): LearningPlanner {
   return {
     buildPlan({ goal, graph, learnerState }) {
       const gaps = goal.requiredUnitIds.filter(
@@ -309,7 +308,7 @@ function specForChapter(
  */
 export function buildChapterPlan(
   input: ChapterPlanInput,
-  m: Messages = zh,
+  m: Messages,
 ): NextAction[] {
   const { learnerState, now = Date.now(), graph } = input;
   // F1：偏好的档位覆盖（默认恒等 → 零回归）。

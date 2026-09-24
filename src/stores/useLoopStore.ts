@@ -160,12 +160,16 @@ export const useLoopStore = create<LoopStoreState>((set, get) => ({
   refresh: async (m?: Messages) => {
     set({ loading: true, error: undefined });
     try {
+      // engine 自第 3 批起**不再**持有 `m: Messages = zh` 默认值（去 i18n 值耦合）。
+      // 兜底责任上移到调用侧：未指定界面语言 ⇒ 用默认中文。`zh` 本文件早已导入
+      // （:215 的 duplicateSubmit 兜底），故非新增依赖。
+      const msg = m ?? zh;
       // activeGoal 先解析（getActiveGoal：偏好 id 失效/未设置回退首个目标），
       // 概念层与章级快照均按该目标上下文重算（§7.3 读取路径参数化）。
       const activeGoal = await storage.getActiveGoal();
       const [snapshot, chapterPlan] = await Promise.all([
-        runLearningLoop(storage, activeGoal?.id, m),
-        runChapterLoop(storage, m, activeGoal?.id),
+        runLearningLoop(storage, activeGoal?.id, msg),
+        runChapterLoop(storage, msg, activeGoal?.id),
       ]);
       // 目标列表随快照刷新（seed 由 runLearningLoop 空库播种）。
       const goals = await storage.listGoals();
