@@ -3,7 +3,6 @@ import { Card } from "../../components/primitives";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useI18n } from "../../i18n";
 import type { ActiveSource } from "../../ai/active";
-import { labelOfLocalModel, labelOfProvider } from "../../ai/presets";
 import BuiltinModelsPanel from "./BuiltinModelsPanel";
 import ApiModelsTab from "./ApiModelsTab";
 import VectorIndexCard from "./VectorIndexCard";
@@ -36,7 +35,7 @@ export default function AIModelsSection() {
   const [tab, setTab] = useState<Tab>(
     saved.active?.source === "api" ? "api" : "local",
   );
-  const { active, providerReady } = saved;
+  const { active } = saved;
   const apiSaved = apiActiveOf(active);
 
 
@@ -51,25 +50,6 @@ export default function AIModelsSection() {
   ) => {
     saveActive(api, { testedOk, latencyMs });
   };
-
-  // ---- Active Banner 文案 ----
-  let bannerTitle: string;
-  let bannerDesc: string;
-  let bannerTone: "ok" | "warn" | "empty" = "warn";
-  if (active?.source === "local") {
-    bannerTitle = labelOfLocalModel(active.model);
-    bannerDesc = providerReady ? s.banner.localReady : s.banner.localNotReady;
-    bannerTone = providerReady ? "ok" : "warn";
-  } else if (active?.source === "api") {
-    bannerTitle = `${labelOfProvider(active.provider)} · ${active.model || s.banner.untitledModel}`;
-    bannerDesc = providerReady ? s.banner.apiReady : s.banner.apiNotReady;
-    bannerTone = providerReady ? "ok" : "warn";
-  } else {
-    bannerTitle = s.banner.noneTitle;
-    bannerDesc = s.banner.noneDesc;
-    bannerTone = "empty";
-  }
-
 
   return (
     <div className="space-y-4">
