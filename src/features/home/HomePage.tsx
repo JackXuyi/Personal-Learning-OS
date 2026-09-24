@@ -33,29 +33,33 @@ import { useChapterIndex, useRunChapterAction } from "../plan/run-action";
  * 首页 —— Today 启动器（UI Workbench U1，docs/ui-workbench-plan-2026-09.md §U1）。
  *
  * 设计：第一屏只回答「现在最值得做什么，为什么」。
- *  1) 页头：今日 + 日期；目标上下文（goal 下拉切换 activeGoal）+ 章就绪度（目标刻度线）。
- *  2) NEXT BEST ACTION：唯一主行动 ActionCard（reasons = why-now 证据链）。
- *  3) 今日清单：NBA 之外的高优动作（KnowledgeRow 压缩行）+ 查看完整计划。
- *  4) RECENT EVIDENCE：折叠区，展示最近测评的证据行（§7.1 落地前的临时组装）。
+ *  1) 页头：今日 + 日期。
+ *  2) 目标上下文组（U1 §334 同组呈现）：goal 下拉 + 管理/新建入口 + 就绪度（目标刻度线）
+ *     + 达成统计（含截止日锚点）+ F2 落后警示（带行动出口）。
+ *  3) NEXT BEST ACTION：唯一主行动 ActionCard（reasons = why-now 证据链）。
+ *  4) 今日清单：NBA 之外的高优动作（KnowledgeRow 压缩行）+ 查看完整计划（位置恒定）。
+ *  5) RECENT EVIDENCE：折叠区，展示最近测评的证据行；无证据整段隐藏（空态不占位）。
+ *
+ * 2026-09-24 首屏收口：目标组由两行合并为一组；去掉 checked 竞态（以 plan 就绪为判据）；
+ * 错误卡补重试；「查看完整计划」固定挂 Section action 位。
  *
  * 数据来源：useLoopStore.chapterPlan（按 activeGoal 范围，§7.3）+ goal repo（activeGoal）
  * + 最近试卷结果（evidence 临时组装）。零引擎算法改动。
  */
 export default function HomePage() {
   const plan = useLoopStore((s) => s.chapterPlan);
-  const loading = useLoopStore((s) => s.loading);
   const error = useLoopStore((s) => s.error);
   const refresh = useLoopStore((s) => s.refresh);
   const { m, lang } = useI18n();
-  /** 首帧前不闪空态。 */
-  const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    void (async () => {
-      await refresh(m);
-      setChecked(true);
-    })();
+    void refresh(m);
   }, [refresh]);
+
+  // 就绪判据（2026-09-24 收口）：plan 已加载即渲染。不再用独立 checked 标记——
+  // refresh 抛错时 checked 照样置位会闪现空态；且首帧「正在同步」卡会夸大
+  // localStorage 读的成本。loading 不再参与首屏判定（GoalContext 内自取）。
+  const ready = plan !== undefined;
 
   return (
     <PageContainer>
@@ -64,13 +68,24 @@ export default function HomePage() {
         <span className="text-xs text-ink-3">{dateHead(lang)}</span>
       </header>
 
+      {/* 错误卡：有旧数据时与内容同现（不打断）；带重试出口。 */}
       {error ? (
         <Card className="mt-4">
-          <p className="text-sm text-state-failed">{error}</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="min-w-0 text-sm text-state-failed">{error}</p>
+            <button
+              type="button"
+              onClick={() => void refresh(m)}
+              className="shrink-0 text-xs font-medium text-primary transition-colors hover:text-primary/70"
+            >
+              {m.home.retry}
+            </button>
+          </div>
         </Card>
       ) : null}
 
-      {!checked || (loading && !plan) ? (
+      {/* 加载卡：仅在「无数据且未报错」时出现，不与错误卡同现。 */}
+      {!error && !ready ? (
         <Card className="mt-6">
           <p className="text-sm text-ink-3">{m.home.running}</p>
         </Card>
@@ -138,36 +153,15 @@ function TodayView() {
 
   return (
     <div className="mt-5">
-      {/* 目标上下文 + 章就绪度 */}
-      <GoalContext />
-
-      <div className="mt-1 flex items-baseline justify-between gap-4">
-        <p className="text-sm text-ink-2">
-          {m.home.masteredOf(plan.mastered, plan.total)}
-          {gaps > 0 ? <span className="text-ink-3"> · {m.home.pendingOf(gaps)}</span> : null}
-        </p>
-        <p className="text-sm font-medium tabular-nums text-ink-1">
-          {Math.round(readiness * 100)}%{" "}
-          <span className="text-xs font-normal text-ink-3">
-            {m.home.targetOf(Math.round(MASTERY_THRESHOLD * 100))}
-          </span>
-        </p>
-      </div>
-      <div className="mt-2">
-        <Bar
-          value={readiness}
-          target={MASTERY_THRESHOLD}
-          targetLabel={m.home.targetOf(Math.round(MASTERY_THRESHOLD * 100))}
-          className="bg-primary"
-        />
-      </div>
-
-      {/* F2 落后警示（D4）：仅「有截止日 + 已声明预算 + 落后」时出现；超前不显示（不制造暗示）。 */}
-      {quota.pace?.behind ? (
-        <p className="mt-2 text-sm text-amber-700" data-testid="home-behind-warning">
-          ⚠ {m.home.behindWarning(quota.pace.days)}
-        </p>
-      ) : null}
+      {/* 目标上下文组（U1 §334）：goal 下拉 + 就绪度 + Bar + 达成统计 + 落后警示 同组呈现。 */}
+      <GoalContext
+        mastered={plan.mastered}
+        total={plan.total}
+        gaps={gaps}
+        readiness={readiness}
+        daysLeft={quota.daysLeft}
+        behindDays={quota.pace?.behind ? quota.pace.days : undefined}
+      />
 
       {/* NEXT BEST ACTION —— 一屏一个主决策 */}
       <Section title={m.home.nextBestAction} className="mt-6" />
@@ -175,56 +169,49 @@ function TodayView() {
         <NextActionCard run={run} busyId={busyId} />
       </div>
 
-      {/* 今日清单（NBA 之外的高优动作） */}
-      {items.length > 0 ? (
-        <>
-          <Section
-            title={
-              showQuota
-                ? m.home.quotaTitle(items.length, itemsMinutes)
-                : m.home.todayTitle(items.length)
-            }
-            className="mt-6"
-            action={
-              <Link to="/plan" className="text-xs font-medium text-primary hover:text-primary/70">
-                {m.home.viewPlan} →
-              </Link>
-            }
-          />
-          <div className="mt-1">
-            {items.map((action) => {
-              const chapter = index.get(action.unitId);
-              const mastery = chapter ? (plan.learner.byUnit[chapter.id]?.mastery ?? 0) : 0;
-              const meta = chapterActionMeta(action.kind, m);
-              const busy = busyId === chapter?.id;
-              return (
-                <KnowledgeRow
-                  key={action.id}
-                  tone={toneOfMastery(mastery)}
-                  title={
-                    chapter
-                      ? chapterDisplayTitle(chapter, plan.docTitleOf[chapter.id], m)
-                      : action.unitId
-                  }
-                  bandLabel={m.units.action[action.kind]}
-                  mastery={mastery}
-                  actionLabel={busy ? "…" : meta.verb}
-                  onAction={busy ? undefined : () => void run(action)}
-                />
-              );
-            })}
-          </div>
-        </>
-      ) : (
-        <div className="mt-5 flex justify-end">
+      {/* 今日清单（NBA 之外的高优动作）—— Section 恒渲染，「查看完整计划」固定挂
+          action 位，不随 items 是否为空漂移（2026-09-24 收口）。 */}
+      <Section
+        title={
+          items.length > 0 && showQuota
+            ? m.home.quotaTitle(items.length, itemsMinutes)
+            : m.home.todayTitle(items.length)
+        }
+        className="mt-6"
+        action={
           <Link to="/plan" className="text-xs font-medium text-primary hover:text-primary/70">
             {m.home.viewPlan} →
           </Link>
-        </div>
-      )}
+        }
+      />
+      <div className="mt-1">
+        {items.map((action) => {
+          const chapter = index.get(action.unitId);
+          const mastery = chapter ? (plan.learner.byUnit[chapter.id]?.mastery ?? 0) : 0;
+          const meta = chapterActionMeta(action.kind, m);
+          const busy = busyId === chapter?.id;
+          return (
+            <KnowledgeRow
+              key={action.id}
+              tone={toneOfMastery(mastery)}
+              title={
+                chapter
+                  ? chapterDisplayTitle(chapter, plan.docTitleOf[chapter.id], m)
+                  : action.unitId
+              }
+              bandLabel={m.units.action[action.kind]}
+              mastery={mastery}
+              actionLabel={busy ? "…" : meta.verb}
+              onAction={busy ? undefined : () => void run(action)}
+            />
+          );
+        })}
+      </div>
 
-      {/* RECENT EVIDENCE（折叠区；§7.1 log 落地前由最近试卷结果临时组装） */}
-      {evidence !== undefined ? (
+      {/* RECENT EVIDENCE（折叠区；§7.1 log 落地前由最近试卷结果临时组装）。
+          无证据时整段隐藏（2026-09-24 收口：空态文案不占首屏位，与「空/失败隐藏 Section」
+          的克制口径一致）。 */}
+      {evidence !== undefined && evidence.length > 0 ? (
         <details className="group mt-6">
           <summary className="flex cursor-pointer list-none items-center justify-between">
             <span className="text-xs font-semibold tracking-wide text-ink-2">
@@ -233,20 +220,16 @@ function TodayView() {
             <span className="text-xs text-ink-3 transition-transform group-open:rotate-180">▾</span>
           </summary>
           <div className="mt-1">
-            {evidence.length > 0 ? (
-              evidence.map((row, i) => (
-                <EvidenceRow
-                  key={`${row.at}-${i}`}
-                  time={timeAgo(row.at, m)}
-                  title={row.title}
-                  verdict={row.verdict}
-                  delta={row.delta}
-                  deltaTone={row.tone}
-                />
-              ))
-            ) : (
-              <p className="py-1 text-xs text-ink-3">{m.home.evidenceEmpty}</p>
-            )}
+            {evidence.map((row, i) => (
+              <EvidenceRow
+                key={`${row.at}-${i}`}
+                time={timeAgo(row.at, m)}
+                title={row.title}
+                verdict={row.verdict}
+                delta={row.delta}
+                deltaTone={row.tone}
+              />
+            ))}
           </div>
         </details>
       ) : null}
@@ -286,8 +269,29 @@ function NextActionCard({
   );
 }
 
-/** 目标上下文行：goal 下拉（切换 activeGoal）+ 管理入口。 */
-function GoalContext() {
+/**
+ * 目标上下文组（2026-09-24 收口，对齐 U1 设计稿 §334 的同组呈现）：
+ * 单行 = goal 下拉 +「管理目标」+「＋ 新建目标」快捷入口（U1 承诺补齐）+ 右侧就绪度；
+ * 下接 Bar 与达成统计（含截止日锚点）、F2 落后警示。无目标时仍渲染创建入口
+ * （此前 `goals.length === 0` 直接 return null，首页缺创建目标的引导）。
+ */
+function GoalContext({
+  mastered,
+  total,
+  gaps,
+  readiness,
+  daysLeft,
+  behindDays,
+}: {
+  mastered: number;
+  total: number;
+  gaps: number;
+  readiness: number;
+  /** 距截止天数（`quota.daysLeft` 唯一口径，下限 1）；无 deadline → undefined。 */
+  daysLeft?: number;
+  /** F2 落后天数（`quota.pace.days`）；未落后 → undefined（超前不显示，不制造暗示）。 */
+  behindDays?: number;
+}) {
   const goals = useLoopStore((s) => s.goals);
   const activeGoal = useLoopStore((s) => s.activeGoal);
   const switchGoal = useLoopStore((s) => s.switchGoal);
@@ -300,29 +304,74 @@ function GoalContext() {
     if (activeGoal && pickId === activeGoal.id) setPickId(undefined);
   }, [activeGoal, pickId]);
 
-  if (goals.length === 0) return null;
-  const value = pickId ?? activeGoal?.id ?? "";
-
   return (
-    <div className="flex items-center gap-3">
-      <Select
-        ariaLabel={m.home.goalSelectAria}
-        value={value}
-        disabled={loading}
-        onValueChange={(v) => {
-          if (!v || v === activeGoal?.id) return;
-          setPickId(v);
-          void switchGoal(v, m);
-        }}
-        options={goals.map((g) => ({ value: g.id, label: g.title }))}
-        className="h-8 max-w-64"
-      />
-      <Link
-        to="/goals"
-        className="text-xs font-medium text-ink-3 transition-colors hover:text-primary"
-      >
-        {m.home.manageGoals}
-      </Link>
+    <div>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-3">
+          {goals.length > 0 ? (
+            <Select
+              ariaLabel={m.home.goalSelectAria}
+              value={pickId ?? activeGoal?.id ?? ""}
+              disabled={loading}
+              onValueChange={(v) => {
+                if (!v || v === activeGoal?.id) return;
+                setPickId(v);
+                void switchGoal(v, m);
+              }}
+              options={goals.map((g) => ({ value: g.id, label: g.title }))}
+              className="h-8 max-w-64"
+            />
+          ) : null}
+          {goals.length > 0 ? (
+            <Link
+              to="/goals"
+              className="shrink-0 text-xs font-medium text-ink-3 transition-colors hover:text-primary"
+            >
+              {m.home.manageGoals}
+            </Link>
+          ) : null}
+          <Link
+            to="/goals/new"
+            className="shrink-0 text-xs font-medium text-ink-3 transition-colors hover:text-primary"
+          >
+            {m.goals.newGoal}
+          </Link>
+        </div>
+        <p className="shrink-0 text-sm font-medium tabular-nums text-ink-1">
+          {Math.round(readiness * 100)}%{" "}
+          <span className="text-xs font-normal text-ink-3">
+            {m.home.targetOf(Math.round(MASTERY_THRESHOLD * 100))}
+          </span>
+        </p>
+      </div>
+
+      <div className="mt-2">
+        <Bar
+          value={readiness}
+          target={MASTERY_THRESHOLD}
+          targetLabel={m.home.targetOf(Math.round(MASTERY_THRESHOLD * 100))}
+          className="bg-primary"
+        />
+      </div>
+
+      <p className="mt-1.5 text-xs text-ink-3">
+        {m.home.masteredOf(mastered, total)}
+        {gaps > 0 ? <span> · {m.home.pendingOf(gaps)}</span> : null}
+        {daysLeft !== undefined ? (
+          <span> · {m.home.daysToDeadline(daysLeft)}</span>
+        ) : null}
+      </p>
+
+      {/* F2 落后警示（D4）：仅「有截止日 + 已声明预算 + 落后」时出现；带行动出口（P5）。
+          警示色复用 state-weak（琥珀系语义 token），不再硬编码 amber-700。 */}
+      {behindDays !== undefined ? (
+        <p className="mt-1 text-xs text-state-weak" data-testid="home-behind-warning">
+          ⚠ {m.home.behindWarning(behindDays)} ·{" "}
+          <Link to="/plan" className="font-medium underline-offset-2 hover:underline">
+            {m.home.behindAction}
+          </Link>
+        </p>
+      ) : null}
     </div>
   );
 }

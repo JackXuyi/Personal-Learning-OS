@@ -607,10 +607,13 @@ export const en: Messages = {
     quotaTitle: (n: number, min: number) => `${n} items today · ${min} min suggested`,
     /** F2: behind warning (reuses the "N days past" figure, no second number). */
     behindWarning: (days: number) => `At this pace, ${days} day(s) past the target`,
+    /** F2: action outlet for the behind warning — close the loop immediately. */
+    behindAction: "Adjust plan",
     viewPlan: "View full plan",
     recentEvidence: "Recent evidence",
-    evidenceEmpty:
-      "No assessments yet — finish a quiz or review and it will show up here.",
+    /** Deadline anchor for the stats line (quota.daysLeft is the single source). */
+    daysToDeadline: (n: number) => `${n} day(s) to deadline`,
+    retry: "Retry",
     generating: "Working…",
     time: {
       today: "Today",

@@ -602,9 +602,13 @@ export const zh = {
     quotaTitle: (n: number, min: number) => `今日 ${n} 项 · 建议 ${min} 分钟`,
     /** F2：落后警示（沿用「预计晚 N 天」口径，不引入第二套数字）。 */
     behindWarning: (days: number) => `按当前节奏，预计晚 ${days} 天达标`,
+    /** F2：落后警示的行动出口——负反馈立刻闭环为可做动作。 */
+    behindAction: "去调整计划",
     viewPlan: "查看完整计划",
     recentEvidence: "最近证据",
-    evidenceEmpty: "暂无测评记录——完成测评或复习后，学习证据会出现在这里。",
+    /** 页头/统计行的截止日情绪锚点（quota.daysLeft 唯一口径）。 */
+    daysToDeadline: (n: number) => `距截止 ${n} 天`,
+    retry: "重试",
     generating: "生成中…",
     time: {
       today: "今天",
