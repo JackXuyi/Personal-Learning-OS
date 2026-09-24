@@ -120,7 +120,7 @@ Evidence 理想链: Source → Knowledge → Question → Answer → Evaluation 
 | P2-2 | **重复/卫生**：`ratingLabel` 在 StudyPage 与 ReviewSession 重复定义（应入 units.ts）；`queueHint` 3 天硬阈值与 rating 间隔（1/2/4/7）脱钩（P0-1 修复后顺带解决）；ReviewSession 顶部 `useMemo` import 未使用（tsconfig 已开 noUnusedLocals，但 TS7 未报——建议补 ESLint 兜底） | 归一 + 引入 ESLint + 清理 unused import |
 | P2-3 | **localStorage 适配无版本/无 schema**：JSON.parse 失败静默 fallback（数据损坏时用户无感知丢失）；每次 save 全量序列化 graph+learner | 加 `plos.meta.version`、load 失败 `console.warn`；数据量大后再做节流/增量（SQLite 就绪即替换） |
 | P2-4 | **空库行为统一**：`runLearningLoop` 在无 goals 时 `throw`（Study 直接访问会被 error 态兜住而非空态引导） | 与 P1-4 一并处理：空库返回 `{empty:true}` 快照，各页渲染统一 EmptyState |
-| P2-5 | **`DEFAULT_GOAL`（goal.ts）`requiredUnitIds: []` 且有误导性的就绪度语义**：若被复用，`actions.length===0` 会触发「🎉 已全部达标」 | 若仅作类型示例建议删除，或空 required 时 readiness 展示为「—」而非 0%/达标 |
+| P2-5 | ~~**`DEFAULT_GOAL`（goal.ts）`requiredUnitIds: []` 且有误导性的就绪度语义**：若被复用，`actions.length===0` 会触发「🎉 已全部达标」~~ ✅ **已按建议删除（2026-09-24）**：`domain/goal.ts::DEFAULT_GOAL` 全仓零消费，已随 D 类死代码清理一并移除（见 `docs/code-gap-review-2026-09.md` §二） | 原建议：若仅作类型示例建议删除，或空 required 时 readiness 展示为「—」而非 0%/达标 |
 
 ---
 

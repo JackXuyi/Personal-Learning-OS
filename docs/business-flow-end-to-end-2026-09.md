@@ -393,8 +393,8 @@ applyPaperResult / applyKeyPointRating  ──写入──▶  UnitMastery.nextR
 | **页面** | `/assessment`（`AssessmentPage.tsx`） |
 | **入口** | `/assessment` 页内 `startChapterPaper:81-103` → `createPaperAndSave`（本地确定性题）—— 即"资料作用域"单章出卷 |
 | **概念单元自测** | `AssessmentSession.tsx:34-147`：答案对照参考 + **人工自评对错**、1/2 键、写回 `submitAnswer` |
-| ✅ **章级评测的本地判分** | `assessment-engine.ts`：无 AI 时**不伪造判分**，返回 `score: undefined`（pending）或 `notAnswered`，`misconceptions` **恒空**。**F6 T13 后此为唯一路径**（见下行） |
-| ✅ **废弃契约已清理** | 原「所有 provider 的 `generateAssessment` / `evaluateAnswer` 直接抛错」—— **已于 2026-09-15（F6 T13）从 `AIProvider` 接口整体删除**（实测 4 处实现：`openai-compatible.ts` / `builtin.ts` / `registry.ts` / **`active.ts`**，全为零调用方）；`assessment-engine.ts` 同步止损为**纯本地确定性引擎**（`provider` 形参移除） |
+| ✅ **章级评测的本地判分** | 原 `assessment-engine.ts`：无 AI 时**不伪造判分**，返回 `score: undefined`（pending）或 `notAnswered`，`misconceptions` **恒空**。⚠️ **2026-09-24 更正**：该模块在生产侧**零消费**（唯一消费者是 `tests/i18n-alignment.test.ts`）—— 出卷 / 判分的真实链路是 `engine/quiz-engine.ts::createPaper` / `gradeAndApply` ⇒ **已整模块删除**（见 `docs/code-gap-review-2026-09.md` §二）。本行原断言的「F6 T13 后此为唯一路径」**不成立** |
+| ✅ **废弃契约已清理** | 原「所有 provider 的 `generateAssessment` / `evaluateAnswer` 直接抛错」—— **已于 2026-09-15（F6 T13）从 `AIProvider` 接口整体删除**（实测 4 处实现：`openai-compatible.ts` / `builtin.ts` / `registry.ts` / **`active.ts`**，全为零调用方）；（当时的）`assessment-engine.ts` 同步止损为**纯本地确定性引擎**（`provider` 形参移除）——⚠️ 该文件本身已于 **2026-09-24 删除** |
 | **结论** | **本地闭环可跑通**（客观题 + 人工自评）；**目标级 AI 评测已由 F6 落地**（下一行）；章级「AI 出题 / 判分」这一具体形态**已被有意放弃**，不再作为缺口 |
 | **对 E4 的语义澄清** | 当时记录：「AI 进行评测」实际由三条已实现的 AI 链路部分承接 ① `generateQuizQuestionsWithAi`（改写题面）② `gradeSubjectiveWithAi`（主观题批改）③ 章级 map-reduce（要点/概念抽取）；真正缺失的是**"针对目标的能力评测"**。**→ 该缺口已由 F6 于 2026-09-15 补齐**：目标拆成 3–6 个能力项，用**场景任务**取证据、AI 按 rubric 逐项判分并给可锚回作答原文的引文，产出 append-only 能力报告；入口 `/goals/:goalId/capability`（`docs/goal-capability-assessment-design-2026-09.md`）|
 
@@ -429,7 +429,7 @@ not-started ──打开阅读──▶ learning ──标记学完(markReady)�
 
 | 项 | 落点 |
 |---|---|
-| 定义 | `domain/chapter.ts:18 ChapterStatus`、`CHAPTER_FLOW:31` |
+| 定义 | `domain/chapter.ts:18 ChapterStatus`（状态流转说明挂在该类型 doc 上）。⚠️ 原并列的 `CHAPTER_FLOW:31` 状态机表**全仓零消费，已于 2026-09-24 删除** —— 真实流转由 `statusAfterExam` 收口，其余由调用方直改 |
 | `not-started → learning` | `ChapterReaderPage.tsx:60-64` |
 | `→ ready` | `markReady:104` |
 | `→ mastered / retake` | `statusAfterExam`（`domain/chapter.ts:111`）；写回 `QuizGradingPage.tsx:393 syncChapterStatus` |
