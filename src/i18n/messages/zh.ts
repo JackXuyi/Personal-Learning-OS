@@ -1505,7 +1505,7 @@ export const zh = {
       sourceTab: { paste: "粘贴", local: "本地文件", github: "GitHub" },
       /** 本地文件面板。 */
       local: {
-        dropTitle: "拖拽 .md / .txt / .pdf 到此处，或点击选择文件",
+        dropTitle: "拖拽 .md / .txt / .pdf / .docx 到此处，或点击选择文件",
         dropHint: "支持批量选择多个文件；扫描版 PDF 暂不支持（文本型 PDF 可导入）",
         selected: (n: number) => `已选 ${n} 个文件`,
         importable: (n: number) => `其中 ${n} 份可导入`,
@@ -1514,14 +1514,19 @@ export const zh = {
         kindMd: "Markdown",
         kindTxt: "纯文本",
         kindPdf: "PDF",
+        kindDocx: "DOCX",
         import: (n: number) => `保存并切分 ${n} 份资料`,
         /** 转换失败文案；键与 `LocalFileErrorKind` 对齐（import/error-text.ts 消费）。 */
         errors: {
-          unsupported: "不支持的类型（仅 .md / .txt / .pdf）",
+          unsupported: "不支持的类型（仅 .md / .txt / .pdf / .docx）",
           "too-large": "超出大小限制",
           "pdf-no-text": "未抽取到文本（可能为扫描件）",
           "pdf-too-large": "PDF 页数超出上限",
           "read-failed": "读取失败",
+          /** ⚠️ 必须**可行动**：给的是「用 Word 另存为 .docx」这个具体操作。 */
+          "docx-legacy": "这是旧版 .doc 或加密文档，请用 Word 另存为 .docx 后重试",
+          "docx-bad-zip": "文档已损坏或不是有效的 .docx",
+          "docx-no-text": "未抽取到文本（文档可能只含图片）",
         },
       },
       /** GitHub 面板。 */
