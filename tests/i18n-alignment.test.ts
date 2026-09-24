@@ -8,7 +8,7 @@
  *  1) zh/en 字典递归结构对齐（缺键 / 多键 / 叶子类型不一 → 抛错）；
  *  2) 叶子不允许空字符串（防漏翻 placeholder）；
  *  3) detectSystemLang 分支（zh-* → zh，其余 → en）；
- *  4) 引擎默认中文不回退 + 注入 en 后产出英文（learning-planner / assessment-engine / loop）。
+ *  4) 引擎默认中文不回退 + 注入 en 后产出英文（learning-planner / loop）。
  */
 import assert from "node:assert/strict";
 import { zh } from "../src/i18n/messages/zh.ts";
@@ -18,7 +18,6 @@ import {
   buildChapterPlan,
   createLearningPlanner,
 } from "../src/engine/learning-planner.ts";
-import { createAssessmentEngine } from "../src/engine/assessment-engine.ts";
 import { runLearningLoop } from "../src/engine/loop.ts";
 
 const HAS_HAN = /[\p{Script=Han}]/u;
@@ -168,22 +167,6 @@ check("buildChapterPlan() 默认中文 / (en) 英文", () => {
     en.engine.chapterNotStarted("TypeScript Basics"),
   );
   assert.ok(!HAS_HAN.test(enPlan[0].reasons.join(" ")));
-});
-
-const QUESTION = {
-  id: "q1",
-  unitId: "u1",
-  type: "understanding",
-  cognitiveLevel: "understand",
-  prompt: "Explain",
-  referenceAnswer: "ref",
-};
-
-check("assessment-engine 未作答 feedback：默认中文 / (en) 英文", async () => {
-  const zhEval = await createAssessmentEngine().evaluate(QUESTION, { content: "   " });
-  assert.equal(zhEval.feedback, zh.engine.notAnswered);
-  const enEval = await createAssessmentEngine(en).evaluate(QUESTION, { content: "   " });
-  assert.equal(enEval.feedback, en.engine.notAnswered);
 });
 
 check("loop 无目标错误：默认中文 / (en) 英文", async () => {

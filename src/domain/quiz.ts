@@ -57,13 +57,6 @@ export interface Paper {
 
 /* ---------- 元信息（UI 预览 / 卷型标识复用） ---------- */
 
-export const QUIZ_TYPE_LABEL: Record<QuizType, string> = {
-  choice: "选择题",
-  judge: "判断题",
-  qa: "问答题",
-  application: "应用题",
-};
-
 export const PAPER_MODE_LABEL: Record<PaperMode, string> = {
   "unit-test": "单元测",
   "stage-test": "阶段测",

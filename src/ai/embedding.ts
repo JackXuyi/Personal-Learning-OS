@@ -79,11 +79,6 @@ export function createEmbedder(model: string): Embedder | undefined {
   };
 }
 
-/** 本地向量化是否可用(桌面端 + 已配置模型名)。 */
-export function isLocalEmbeddingAvailable(model: string): boolean {
-  return createEmbedder(model) !== undefined;
-}
-
 // ---------------------------------------------------------------------------
 // 模型就绪状态缓存
 //

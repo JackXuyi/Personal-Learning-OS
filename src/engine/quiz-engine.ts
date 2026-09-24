@@ -17,7 +17,6 @@ import type {
   CognitiveLevel,
   Paper,
   PaperAnswers,
-  PaperMode,
   PaperQuestion,
   PaperResult,
   PaperScope,
@@ -358,17 +357,6 @@ function assemble(scope: PaperScope, questions: PaperQuestion[], now: number): P
    与跨文档聚合出卷（createPaperGroupedByDoc / createRetakePaper /
    createGoalPaper）已拆到 `./paper-scope.ts`（G5 行数护栏），由 engine/index.ts
    统一 re-export，调用方不变。 */
-
-/* ------------------------------------------------------------------ */
-/* 导出：题型配比快照（供 UI 预览 / 文档核对）                        */
-/* ------------------------------------------------------------------ */
-
-export const QUIZ_QUOTA_PREVIEW: Record<PaperMode, string> = {
-  "unit-test": "单章 5 题：选择2·判断1·问答1·应用1（低掌握仅客观3）",
-  "stage-test": "每章 客观3 + 主观1（轮换；低掌握章 客观4）",
-  "final-test": "总 clamp(3n,15,20) · 客观~60% / 主观~40%",
-  retake: "每章 客观3 · 主观剔除 · 难度降一档",
-};
 
 /* ------------------------------------------------------------------ */
 /* 判分（T3）—— 客观本地判 + 主观 pending（P0-3）                     */

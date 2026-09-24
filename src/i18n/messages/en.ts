@@ -417,61 +417,12 @@ export const en: Messages = {
     },
     /** Settings · AI Model Center (local model downloads + API model config). */
     models: {
-      pageTitle: "Settings · AI Model Center",
-      pageSubtitle:
-        "Pick your “current model”: knowledge extraction / quiz generation & grading / Q&A and progress summaries all run through it.",
-      timeToday: "Today",
       savedOk: "Saved ✓",
       currentUse: "Currently in use",
-      banner: {
-        activePrefix: "In use:",
-        untitledModel: "(no model)",
-        localReady:
-          "Local model · Ready · data stays on this machine and works offline; AI tasks like knowledge extraction and quiz grading run through it",
-        localNotReady:
-          "Local model · Not ready (download one under “Local models” and set it current first)",
-        apiReady:
-          "API model · Connected, cloud inference; AI tasks like knowledge extraction and quiz grading run through it",
-        apiNotReady:
-          "API model · Not tested yet (try “Test connection” before using)",
-        noneTitle: "No model selected",
-        noneDesc:
-          "Learning features will run on offline heuristics. Download a local model or configure an API model to unlock full AI capability.",
-      },
       tabLocal: "Local models (download & run)",
       tabApi: "API models (requests)",
       localHint:
         "Download and activate a local model — default tier Qwen3.5-4B (~2.5 GB); clicking “Set current” takes effect right away, no save needed.",
-      aiStatus: "AI status",
-      savedPassed: "Passed test when saved",
-      savedFailed: "Did not pass when saved",
-      noModel: "No model selected",
-      heuristicAlways: "Offline heuristic engine always available",
-      runtime: "Runtime",
-      runtimeHeuristic: "Engine runs on offline heuristics",
-      runtimeCallable: "Current model is callable",
-      runtimeMissingCfg: "Missing key config (model file / Key / URL)",
-      retesting: "Testing…",
-      retestConnection: "Retest connection",
-      retestOk: (ms: number) => `Retest passed · ${ms}ms latency`,
-      keychainNote:
-        "API Key is stored in the system Keychain, never kept in plaintext on this machine; read/written by the app, settings only shows a mask.",
-      statusLegend:
-        "“Passed test when saved” records the last save result; “Runtime” decides in real time whether the current model can be called. When not ready, the engine degrades to local heuristics (never crashes).",
-      currentConfig: "Current config",
-      kv: {
-        source: "Source",
-        model: "Model",
-        provider: "Provider",
-        status: "Status",
-        sourceLocal: "Local model",
-        sourceApi: "API model",
-        none: "(none)",
-        empty: "(empty)",
-        testedPass: (t: string, latMs: number | null) =>
-          latMs ? `Test passed · ${t} · ${latMs}ms` : `Test passed · ${t}`,
-        notTested: "Not passed / not ready",
-      },
       api: {
         presetProvider: "Preset provider",
         presetHint:
@@ -2318,7 +2269,7 @@ export const en: Messages = {
     },
   },
 
-  /** Engine runtime copy (learning-planner / assessment-engine / loop; defaults to zh). */
+  /** Engine runtime copy (learning-planner / loop; defaults to zh). */
   aiTask: {
     // —— AI task registry generic copy (docs/ai-loading-unify-design-2026-09.md §8.16) ——
     running: "Working…",
@@ -2361,10 +2312,6 @@ export const en: Messages = {
       `“${title}” hasn't been studied yet — proceed through chapters in order.`,
     prereqPending: (names: string) =>
       `Prerequisite chapter(s) “${names}” not mastered yet — clearing them first pays off.`,
-    // —— assessment-engine feedback ——
-    notAnswered: "No answer.",
-    pendingSubjective:
-      "Subjective answers need AI grading — no Provider configured, so this answer isn't counted as right or wrong for now.",
     // —— loop / store runtime errors ——
     goalNotFound: "No learning goal found.",
     duplicateSubmit:

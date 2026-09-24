@@ -12,7 +12,7 @@
 | `button.tsx` | 所有按钮。variants：default / secondary / **outline** / ghost / link / destructive；size：default / sm / lg / icon | 导出 `buttonVariants`，`<Link>` 要按钮样就用它拼 className（Button 不支持 asChild） |
 | `badge.tsx` | 徽标、标签、计数 | |
 | `input.tsx` / `textarea.tsx` / `label.tsx` | 表单 | 已有标准 focus 环，不要手写 input |
-| `select.tsx` / `checkbox.tsx` / `tabs.tsx` / `separator.tsx` | 表单与结构 | |
+| `select.tsx` / `checkbox.tsx` / `tabs.tsx` | 表单与结构 | |
 | `dialog.tsx` / `alert-dialog.tsx` / `confirm-dialog.tsx` | 浮层 | 导出 `overlayBase` / `contentBase`，自建浮层请复用 |
 | `dropdown-menu.tsx` | 下拉菜单 | |
 

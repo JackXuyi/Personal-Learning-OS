@@ -32,14 +32,3 @@ export interface LearningGoal {
   /** Optional deadline (epoch ms). */
   deadlineAt?: number;
 }
-
-/** 种子数据与首页仪表盘使用的示例目标。 */
-export const DEFAULT_GOAL: LearningGoal = {
-  id: "goal-ai-app-engineer",
-  type: "career",
-  title: "AI Application Engineer",
-  description: "The career example used throughout the README.",
-  importance: "high",
-  requiredUnitIds: [],
-  createdAt: 0,
-};

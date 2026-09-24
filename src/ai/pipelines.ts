@@ -44,14 +44,7 @@ import {
   isRecord,
   str,
 } from "./pipeline-core";
-import type { AiKeyPointDraft } from "./chapter-map-reduce";
-import {
-  buildKeyPointBlockMessages,
-  buildKeyPointMessages,
-  parseKeyPointBlockDrafts,
-  parseKeyPointDrafts,
-  planChapterBlocks,
-} from "./chapter-map-reduce";
+import { planChapterBlocks } from "./chapter-map-reduce";
 import type { AiConceptDraft, AiRelationDraft } from "./concept-map-reduce";
 import {
   buildConceptBlockMessages,
@@ -546,73 +539,4 @@ export async function extractChapterConceptsWithAi(
       : {}),
   }));
   return { units, relations: materializeRelations(relations, units.map((u) => u.id)) };
-}
-
-/* ------------------------------------------------------------------ */
-/* 5) 章要点 AI 抽取 · 兼容执行器（章内分块 map + 代码级合并）          */
-/* ------------------------------------------------------------------ */
-
-/**
- * 章要点抽取（既有签名的**兼容执行器**）。
- *
- * 与改造前的差异：不再因单章 > 4 万字直接抛错 —— 内部改为章内分块 map +
- * 代码级合并去重，长章同样能出要点。
- *
- * 与 `extractKeyPointsMapped` 的差异：返回的草稿**不含偏移**（由调用方用
- * `locateQuote` 锚定），也**不跑 AI 归并**。需要一步到位的调用方请直接用
- * `extractKeyPointsMapped`（它注入 anchor 并做引用式归并）。
- */
-export async function extractKeyPointsWithAi(
-  provider: AIProvider,
-  input: { chapterTitle: string; text: string },
-): Promise<AiKeyPointDraft[]> {
-  const body = input.text.trim();
-  if (body.length === 0) {
-    throw new AiProviderError("request-failed", "章正文为空，无法提炼要点。");
-  }
-  const blocks = planChapterBlocks(body);
-
-  if (blocks.length <= 1) {
-    if (body.length > PIPELINE_LIMITS.keyPointBlockMaxChars) {
-      throw new AiProviderError(
-        "request-failed",
-        `单块仍过长（${body.length} 字，上限 ${PIPELINE_LIMITS.keyPointBlockMaxChars}），分块算法异常，请排查。`,
-      );
-    }
-    const raw = await chatJson(
-      provider,
-      buildKeyPointMessages({ chapterTitle: input.chapterTitle, text: body }),
-      TEMPERATURE.keyPoint,
-    );
-    return parseKeyPointDrafts(raw);
-  }
-
-  const out: AiKeyPointDraft[] = [];
-  const seen = new Set<string>();
-  for (let k = 0; k < blocks.length; k++) {
-    try {
-      const raw = await chatJson(
-        provider,
-        buildKeyPointBlockMessages({
-          blockIndex: k,
-          blockTotal: blocks.length,
-          text: body.slice(blocks[k].start, blocks[k].end),
-        }),
-        TEMPERATURE.keyPoint,
-      );
-      for (const d of parseKeyPointBlockDrafts(raw)) {
-        if (seen.has(d.point)) continue;
-        seen.add(d.point);
-        out.push(d);
-        if (out.length >= PIPELINE_LIMITS.keyPointMergeMax) break;
-      }
-    } catch {
-      // 单块失败跳过：其余块仍可用（与 mapped 版一致）。
-    }
-    if (out.length >= PIPELINE_LIMITS.keyPointMergeMax) break;
-  }
-  if (out.length === 0) {
-    throw new AiProviderError("request-failed", "所有分块提炼均失败，未能得到任何要点。");
-  }
-  return out;
 }

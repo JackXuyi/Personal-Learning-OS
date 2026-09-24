@@ -14,27 +14,22 @@
  */
 import { MASTERY_FLOOR, MASTERY_THRESHOLD } from "./plan";
 
-/** 章节学习状态（章状态机，docs §3 步骤 1）。 */
+/**
+ * 章节学习状态（章状态机，docs §3 步骤 1）。
+ *
+ * 流转：
+ *   not-started → learning（打开阅读）→ ready（标记学完）
+ *   ready → mastered（卷面 ≥ 0.8）
+ *   ready 且卷面 < 0.6 → retake（待补考，补考卷达标后回 mastered）
+ *
+ * 卷面驱动的流转由 `statusAfterExam` 收口，其余由调用方直改。
+ */
 export type ChapterStatus =
   | "not-started"
   | "learning"
   | "ready"
   | "mastered"
   | "retake";
-
-/**
- * 章状态流转：
- *   not-started → learning（打开阅读）→ ready（标记学完）
- *   ready → mastered（卷面 ≥ 0.8）
- *   ready 且卷面 < 0.6 → retake（待补考，补考卷达标后回 mastered）
- */
-export const CHAPTER_FLOW: Record<ChapterStatus, ChapterStatus[]> = {
-  "not-started": ["learning", "ready"],
-  learning: ["ready"],
-  ready: ["mastered", "retake"],
-  mastered: ["retake"],
-  retake: ["mastered", "ready"],
-};
 
 /** 章正文在文档纯文本中的字符区间（引用切片，不复制原文）。 */
 export interface ChapterRange {
@@ -82,15 +77,6 @@ export interface Chapter {
   /** 章状态（切分产出时恒为 not-started，由学习/测评推进）。 */
   status: ChapterStatus;
   createdAt: number;
-}
-
-/** 章节级「可掌握对象」视图——引擎只依赖该抽象（MasterySubject.kind="chapter"）。 */
-export function asMasterySubject(chapter: Chapter): {
-  id: string;
-  kind: "chapter";
-  title: string;
-} {
-  return { id: chapter.id, kind: "chapter", title: chapter.title };
 }
 
 /** 按 order 升序排序（存储写入与读取统一使用，保证确定性）。 */

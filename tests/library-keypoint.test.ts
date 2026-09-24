@@ -8,18 +8,15 @@
  *  2) point 超 60 字 → 裁剪；quote 超 200 字 → 裁剪；
  *  3) 缺 quote 的条目 → 丢弃（无原文出处的要点不入库，E3 诚实降级）；
  *  4) 重复 point → 去重；超过 8 条 → 截断到 8（D4：与长章归并后的上限统一口径）；
- *  5) 全部不合规 / 非对象响应 → 抛类型化错误（不静默返回空）；
- *  6) 章正文为空 → 执行器抛错（不发起 AI 调用）。
+ *  5) 全部不合规 / 非对象响应 → 抛类型化错误（不静默返回空）。
  */
 import assert from "node:assert/strict";
 import {
   buildKeyPointMessages,
-  extractKeyPointsWithAi,
   parseKeyPointDrafts,
   PIPELINE_LIMITS,
 } from "../src/ai/pipelines.ts";
 import { AiProviderError } from "../src/ai/types.ts";
-import type { AIProvider } from "../src/ai/types.ts";
 
 const results: string[] = [];
 let failures = 0;
@@ -33,13 +30,6 @@ async function check(name: string, fn: () => Promise<void> | void) {
     results.push(`✗ ${name}\n    ${err instanceof Error ? err.message : String(err)}`);
   }
 }
-
-/** 假 provider：只用于触发「未配置 / 空正文」这两条不依赖网络的路径。 */
-const offlineProvider: AIProvider = {
-  kind: "builtin",
-  isConfigured: () => false,
-  chat: () => Promise.reject(new Error("不应被调用")),
-};
 
 await check("合规响应 → 原样返回", () => {
   const out = parseKeyPointDrafts({
@@ -116,13 +106,6 @@ await check("buildKeyPointMessages：提示词含章标题与正文", () => {
   assert.equal(msgs[0].role, "system");
   assert.ok(msgs[1].content.includes("第一章 概述"), "user 消息应带章标题");
   assert.ok(msgs[1].content.includes("正文内容"), "user 消息应带正文");
-});
-
-await check("空正文 → 执行器直接抛错，不发起 AI 调用", async () => {
-  await assert.rejects(
-    () => extractKeyPointsWithAi(offlineProvider, { chapterTitle: "t", text: "   " }),
-    (err: unknown) => err instanceof AiProviderError,
-  );
 });
 
 console.log(results.join("\n"));

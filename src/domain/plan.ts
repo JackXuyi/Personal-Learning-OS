@@ -1,5 +1,5 @@
 /**
- * 学习计划 / 缺口 / 下一步动作类型。
+ * 下一步动作类型（NextAction）。
  *
  * 学习规划器与推荐引擎的输出——自适应系统据此决定「最佳下一步」。
  */
@@ -18,15 +18,6 @@ export type ActionKind =
   | "chapter-quiz"
   | "retake-quiz"
   | "review-points";
-
-export interface SkillGap {
-  unitId: string;
-  currentMastery: number;
-  /** 该目标要求达到的掌握度（默认 0.8）。 */
-  targetMastery: number;
-  /** 为什么这个缺口重要（可解释原则）。 */
-  reasons: string[];
-}
 
 export interface NextAction {
   id: string;

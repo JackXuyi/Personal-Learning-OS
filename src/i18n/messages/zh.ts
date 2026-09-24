@@ -424,59 +424,12 @@ export const zh = {
     },
     /** 设置 · AI 模型中心（本地模型下载 + API 模型配置）。 */
     models: {
-      pageTitle: "设置 · AI 模型中心",
-      pageSubtitle:
-        "选择「当前使用模型」：知识抽取 / 测评出题判分 / 答疑与学习进度总结都由它完成。",
-      timeToday: "今天",
       savedOk: "已保存 ✓",
       currentUse: "当前使用",
-      banner: {
-        activePrefix: "当前使用:",
-        untitledModel: "(未填模型)",
-        localReady:
-          "本地模型 · 已就绪 · 数据不出本机,离线可用;知识抽取 / 测评出题判分等 AI 任务将由它完成",
-        localNotReady: "本地模型 · 未就绪(需先在「本地模型」页下载并设为当前)",
-        apiReady:
-          "API 模型 · 已连接,云端推理;知识抽取 / 测评出题判分等 AI 任务将由它完成",
-        apiNotReady: "API 模型 · 尚未测试通过(建议先「测试连接」再使用)",
-        noneTitle: "未选择任何模型",
-        noneDesc:
-          "学习功能将以离线启发式运行。下载一个本地模型,或配置一个 API 模型,即可解锁完整 AI 能力。",
-      },
       tabLocal: "本地模型(下载运行)",
       tabApi: "API 模型(请求)",
       localHint:
         "下载并激活一个本地模型 —— 默认档 Qwen3.5-4B(约 2.5 GB);点选「设为当前」即生效,无需保存。",
-      aiStatus: "AI 状态",
-      savedPassed: "保存时已通过测试",
-      savedFailed: "保存时未通过测试",
-      noModel: "未选择模型",
-      heuristicAlways: "离线启发式引擎始终可用",
-      runtime: "运行时",
-      runtimeHeuristic: "引擎走离线启发式",
-      runtimeCallable: "当前模型可调用",
-      runtimeMissingCfg: "缺关键配置(模型文件 / Key / 地址)",
-      retesting: "测试中…",
-      retestConnection: "重新测试连接",
-      retestOk: (ms: number) => `重新测试通过 · 延迟 ${ms}ms`,
-      keychainNote:
-        "API Key 已存入系统钥匙串(Keychain),不在本机明文保存;由应用读写,设置页仅显示掩码。",
-      statusLegend:
-        "「保存时已通过测试」记录上次保存结果;「运行时」实时判定当前能否调用。未就绪时引擎自动以本地启发式逻辑降级运行(不崩溃)。",
-      currentConfig: "当前配置",
-      kv: {
-        source: "来源",
-        model: "模型",
-        provider: "供应商",
-        status: "状态",
-        sourceLocal: "本地模型",
-        sourceApi: "API 模型",
-        none: "（未选择）",
-        empty: "（空）",
-        testedPass: (t: string, latMs: number | null) =>
-          latMs ? `测试通过 · ${t} · ${latMs}ms` : `测试通过 · ${t}`,
-        notTested: "未通过测试 / 尚未就绪",
-      },
       api: {
         presetProvider: "预置供应商",
         presetHint: "选择后自动带入默认 Base URL 与建议模型,下方均可修改。",
@@ -2250,7 +2203,7 @@ export const zh = {
     },
   },
 
-  /** 引擎运行时文案（learning-planner / assessment-engine / loop 注入，默认 zh）。 */
+  /** 引擎运行时文案（learning-planner / loop 注入，默认 zh）。 */
   aiTask: {
     // —— AI 任务注册表通用文案（docs/ai-loading-unify-design-2026-09.md §8.16）——
     running: "处理中…",
@@ -2291,10 +2244,6 @@ export const zh = {
       `《${title}》尚未学习——按顺序推进本章。`,
     prereqPending: (names: string) =>
       `前置章节《${names}》尚未掌握，先补前置更省力。`,
-    // —— assessment-engine feedback ——
-    notAnswered: "未作答。",
-    pendingSubjective:
-      "主观题需 AI 精确判分——未配置 Provider，本答案暂不计入对错。",
     // —— loop / store 运行时错误 ——
     goalNotFound: "未找到学习目标。",
     duplicateSubmit: "该单元刚提交过，可撤销后重试。",

@@ -1,60 +1,11 @@
 /**
- * 知识图谱引擎 —— 构建并编辑知识单元组成的图谱。
- * 采用纯结构操作，便于对图谱进行推理与可视化。
+ * 章概念子图工具 —— 图谱的**纯结构操作**（无状态、可直跑单测）。
  *
- * N5 概念层回归（T14）：追加章子图工具 subgraphOf / replaceChapterConcepts，
- * 供 ChapterGraphPage（图谱视图恢复）与概念抽取落库复用。
+ * N5 概念层回归（T14）：提供章子图裁剪 `subgraphOf` 与概念替换
+ * `replaceChapterConcepts`，供 ChapterGraphPage（图谱视图恢复）与概念抽取
+ * 落库复用。原 `graphEngine`（addUnit / removeUnit / connect）零消费，已移除。
  */
-import type {
-  KnowledgeGraph,
-  KnowledgeRelation,
-  KnowledgeUnit,
-  RelationType,
-} from "../domain";
-import { newId } from "../domain";
-
-export interface GraphEngine {
-  addUnit(graph: KnowledgeGraph, unit: KnowledgeUnit): KnowledgeGraph;
-  removeUnit(graph: KnowledgeGraph, unitId: string): KnowledgeGraph;
-  connect(
-    graph: KnowledgeGraph,
-    fromId: string,
-    toId: string,
-    type: RelationType,
-    strength?: number,
-  ): KnowledgeGraph;
-}
-
-export const graphEngine: GraphEngine = {
-  addUnit(graph, unit) {
-    if (graph.units.some((u) => u.id === unit.id)) return graph;
-    return { units: [...graph.units, unit], relations: graph.relations };
-  },
-
-  removeUnit(graph, unitId) {
-    return {
-      units: graph.units.filter((u) => u.id !== unitId),
-      relations: graph.relations.filter(
-        (r) => r.fromId !== unitId && r.toId !== unitId,
-      ),
-    };
-  },
-
-  connect(graph, fromId, toId, type, strength) {
-    const already = graph.relations.some(
-      (r) => r.fromId === fromId && r.toId === toId && r.type === type,
-    );
-    if (already) return graph;
-    const relation: KnowledgeRelation = {
-      id: newId("rel"),
-      fromId,
-      toId,
-      type,
-      strength,
-    };
-    return { units: graph.units, relations: [...graph.relations, relation] };
-  },
-};
+import type { KnowledgeGraph, KnowledgeRelation, KnowledgeUnit } from "../domain";
 
 /* ------------------------------------------------------------------ */
 /* N5 概念层回归：章子图工具（纯函数）                                  */

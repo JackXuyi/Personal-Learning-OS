@@ -29,10 +29,3 @@ export function isGap(
 export function masteryOfUnit(state: LearnerState, unitId: string): number {
   return masteryOf(state, unitId)?.mastery ?? 0;
 }
-
-/** Average mastery across a set of units (goal readiness proxy). */
-export function averageMastery(state: LearnerState, unitIds: string[]): number {
-  if (unitIds.length === 0) return 0;
-  const sum = unitIds.reduce((acc, id) => acc + masteryOfUnit(state, id), 0);
-  return sum / unitIds.length;
-}

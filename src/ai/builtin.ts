@@ -133,10 +133,6 @@ export function embedDelete(model: string): Promise<void> {
   return invoke("embed_delete", { model });
 }
 
-export function embedDefaultModel(): Promise<string> {
-  return invoke<string>("embed_default_model");
-}
-
 /** Rust `EmbedResponse`(camelCase 已在此处对齐为 TS 命名)。 */
 export interface EmbedTextsResult {
   dim: number;
