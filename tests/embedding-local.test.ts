@@ -22,7 +22,7 @@ import {
   resetEmbeddingStatusCache,
   type Embedder,
 } from "../src/ai/embedding.ts";
-import { buildIndex } from "../src/features/learn/index-service.ts";
+import { buildIndex } from "../src/services/learn/index-service.ts";
 import { InMemoryStorage } from "../src/storage/memory.ts";
 import type { Chunk, Embedding, SourceDocument } from "../src/domain/index.ts";
 import { embeddingKey } from "../src/domain/embedding.ts";
@@ -264,7 +264,7 @@ const run = async () => {
   });
 
   await check("D3 index-service 不 import chunk-engine（TC-EDGE-07）", () => {
-    const src = codeOf("src/features/learn/index-service.ts");
+    const src = codeOf("src/services/learn/index-service.ts");
     assert.equal(src.includes("chunk-engine"), false);
     assert.equal(/from "\.\.\/engine\/chunk-engine"/.test(src), false);
   });

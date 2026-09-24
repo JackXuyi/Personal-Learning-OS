@@ -39,7 +39,7 @@ import {
   replaceDocumentBody,
   updateDocumentMeta,
 } from "../library-actions";
-import { autoIndexAfterImport } from "../index-service";
+import { autoIndexAfterImport } from "../../../services/learn/index-service";
 import type { DeleteReport, ReplacePhaseKey } from "../library-actions";
 import type { DocActionKind } from "./DocActionsMenu";
 

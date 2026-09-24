@@ -12,9 +12,22 @@
  *   不整轮中断——这样「重建索引」可以部分成功,失败的下一轮「仅补齐缺失」即可续算。
  *
  * 本模块同时是**索引状态机的外壳**:编排 `useIndexStore`(stores 层)的状态流转,
- * 供设置页与导入弹窗调用。store 自身只存状态、不反向依赖 features(分层约束)。
+ * 供设置页与导入弹窗调用。store 自身只存状态,由本模块调它的纯 setter
+ * (`begin` / `setProgress` / `setCoverage` / `finish` / `fail`)推进
+ * (分层约束,判据 `npm run layer:check`)。
+ *
+ * 位置:**第 3 批起本模块在 `services/` 层**(原 `features/learn/`)。它**不得**
+ * import `features/`;内部相对导入(`../../domain` / `../../ai/*` / `../../stores/*`)
+ * 因 `features/<域>/` 与 `services/<域>/` 同为 `src/` 下两层而保持不变。
  */
-import type { Chunk, Embedding, EmbeddingTargetType } from "../../domain";
+import type {
+  Chunk,
+  Embedding,
+  EmbeddingTargetType,
+  IndexCoverage,
+  IndexOffReason,
+  IndexProgress,
+} from "../../domain";
 import { embeddingKey } from "../../domain";
 import { isTauri } from "@tauri-apps/api/core";
 import type { StorageAdapter } from "../../storage";
@@ -28,15 +41,6 @@ import {
 import { storage } from "../../stores/useLoopStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useIndexStore } from "../../stores/useIndexStore";
-
-export interface IndexProgress {
-  /** 待处理总数（仅缺失模式 = 缺失条数）。 */
-  total: number;
-  /** 已成功写入的条数。 */
-  done: number;
-  /** 失败的条数（可重试：下次「仅补齐缺失」会带上）。 */
-  failed: number;
-}
 
 export interface IndexRunOptions {
   storage: StorageAdapter;
@@ -124,14 +128,6 @@ export async function buildIndex(opts: IndexRunOptions): Promise<IndexProgress> 
   return progress;
 }
 
-/** 覆盖率统计（供设置页 / 资料卡展示）。 */
-export interface IndexCoverage {
-  /** 该类型下可被向量化的目标总数。 */
-  total: number;
-  /** 当前模型已向量化的条数。 */
-  indexed: number;
-}
-
 /** 统计覆盖率（只看当前配置的模型，换模型后覆盖率自然归零）。 */
 export async function embeddingCoverage(
   model: string,
@@ -156,6 +152,18 @@ export async function embeddingCoverage(
 /** 当前配置的本地向量模型名(未配置返回空串)。 */
 export function activeEmbeddingModel(): string {
   return useSettingsStore.getState().embedding?.model?.trim() ?? "";
+}
+
+/**
+ * 重新统计覆盖率并写入 store。
+ *
+ * 消费方:设置页 mount / 索引完成后 / 导入·导出·知识包操作后。
+ * 为什么编排在**服务**里而不是 store 里:store 只该存状态(见 `useIndexStore`
+ * 文件头),且 store 反向 import 本模块会成 ESM 环——那是第 3 批消掉的缺陷。
+ */
+export async function refreshCoverage(): Promise<void> {
+  const coverage = await embeddingCoverage(activeEmbeddingModel());
+  useIndexStore.getState().setCoverage(coverage);
 }
 
 /**
@@ -203,7 +211,7 @@ export async function rebuildIndex(opts: { onlyMissing?: boolean } = {}): Promis
       onlyMissing: opts.onlyMissing ?? false,
       onProgress: (p) => useIndexStore.getState().setProgress(p),
     });
-    await useIndexStore.getState().refreshCoverage();
+    await refreshCoverage();
     // 全部失败必须可见:此前单批失败是静默计数,用户只看得到「0% 覆盖率」。
     if (out.done === 0 && out.failed > 0) {
       useIndexStore.getState().fail(`全部 ${out.failed} 块向量化失败,可再点「仅补齐缺失」重试。`);
@@ -216,9 +224,6 @@ export async function rebuildIndex(opts: { onlyMissing?: boolean } = {}): Promis
     throw err;
   }
 }
-
-/** 「未自动入队」的原因(undefined = 可以入队)。 */
-export type IndexOffReason = "preview" | "disabled" | "no-model";
 
 /**
  * 当前是否具备「自动向量化」能力。

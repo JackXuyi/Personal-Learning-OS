@@ -11,7 +11,7 @@
  * - 模型未下载 / 文件损坏 → 不启用向量化,导入走纯全文索引;
  * - 下载完成自动启用(写 `embedding` 设置),不需要用户二次点击。
  *
- * 数据流:本卡片 → `ai/builtin` 的 `embed_*` 命令 + `features/learn/index-service`
+ * 数据流:本卡片 → `ai/builtin` 的 `embed_*` 命令 + `services/learn/index-service`
  * (编排)→ `stores/useIndexStore`(状态)。卡片不直接碰 storage。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -36,7 +36,7 @@ import { DEFAULT_EMBEDDING_MODEL, refreshEmbeddingStatus } from "../../ai/embedd
 import { useI18n } from "../../i18n";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { coveragePercent, useIndexStore } from "../../stores/useIndexStore";
-import { isAutoIndexCapable, rebuildIndex } from "../learn/index-service";
+import { isAutoIndexCapable, rebuildIndex, refreshCoverage } from "../../services/learn/index-service";
 
 /** 状态徽标样式:颜色走语义 token,不硬编码 slate/indigo(避免既有漂移扩大)。 */
 const STATUS_STYLE: Record<LlmModelInfo["status"], string> = {
@@ -60,7 +60,6 @@ export default function VectorIndexCard() {
   const error = useIndexStore((s) => s.error);
   const coverage = useIndexStore((s) => s.coverage);
   const coverageLoaded = useIndexStore((s) => s.coverageLoaded);
-  const refreshCoverage = useIndexStore((s) => s.refreshCoverage);
 
   const [models, setModels] = useState<LlmModelInfo[]>([]);
   const [device, setDevice] = useState<LlmDeviceInfo | null>(null);
@@ -120,8 +119,10 @@ export default function VectorIndexCard() {
   }, [desktop, refresh]);
 
   useEffect(() => {
+    // 第 3 批起 `refreshCoverage` 由 `services/learn/index-service` 导出（store 已纯化），
+    // 是模块级函数 ⇒ 无依赖项。
     void refreshCoverage();
-  }, [refreshCoverage]);
+  }, []);
 
   // 当前卡片对应的模型:优先用已保存设置里的名字,否则取清单首位。
   const configured = savedModel?.trim() || DEFAULT_EMBEDDING_MODEL;

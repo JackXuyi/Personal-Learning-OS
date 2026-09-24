@@ -32,7 +32,7 @@ import { storage } from "../../stores/useLoopStore";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { loadMemoryEntries } from "../memory/memory-service";
 import { locateQuote } from "./evidence-anchor";
-import { activeEmbeddingModel } from "./index-service";
+import { activeEmbeddingModel } from "../../services/learn/index-service";
 
 /** 问题长度上限（UI 与 service 共用同一常量，避免两处口径漂移）。 */
 export const MAX_QUESTION_CHARS = 200;

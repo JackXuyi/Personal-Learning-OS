@@ -15,9 +15,9 @@ import type { Embedder } from "../src/ai/embedding.ts";
 import { cosineSimilarity, cosineTopK } from "../src/ai/retrieval/vector-search.ts";
 import { fuseRankings } from "../src/ai/retrieval/rrf.ts";
 import { hybridSearch } from "../src/ai/retrieval/hybrid-search.ts";
-import { buildIndex } from "../src/features/learn/index-service.ts";
+import { buildIndex } from "../src/services/learn/index-service.ts";
 import { useIndexStore } from "../src/stores/useIndexStore.ts";
-import { rebuildIndex } from "../src/features/learn/index-service.ts";
+import { rebuildIndex } from "../src/services/learn/index-service.ts";
 
 const results: string[] = [];
 let failures = 0;

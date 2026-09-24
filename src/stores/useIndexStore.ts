@@ -1,15 +1,17 @@
 /**
  * 索引任务状态（useIndexStore）—— 只存状态，不含编排逻辑。
  *
- * 分层约束：stores 不得反向依赖 features，因此「调 provider → 写 storage」的编排
- * 放在 `features/learn/index-service.ts`，由它调用本 store 的 `begin/setProgress/
- * finish/fail` 推进状态；UI（设置页索引卡）读 `running` / `progress` / `coverage`。
+ * ⚠️ 本模块**不得** import `features/` 或 `services/`。它曾经用 `await import()`
+ * 「打断环」，实测无效：`index-service` 被 6 处静态引用 ⇒ 不可能拆成独立 chunk，
+ * `npm run build` 报 `INEFFECTIVE_DYNAMIC_IMPORT`。统计与编排现在归
+ * `services/learn/index-service`，本 store 只提供 `setCoverage` 这个纯 setter。
+ * 判据：`npm run layer:check`。
  *
  * 生命周期：会话级、**不持久化**。重启后据 `listEmbeddings` 重新派生真实覆盖率
  * （不持久化的好处：不会出现「进度 92%」这种重启后无法续算的假状态）。
  */
 import { create } from "zustand";
-import type { IndexCoverage, IndexProgress } from "../features/learn/index-service";
+import type { IndexCoverage, IndexProgress } from "../domain";
 
 interface IndexState {
   /** 任务是否在跑（UI 门闩 + 按钮禁用态）。 */
@@ -26,11 +28,10 @@ interface IndexState {
   // ---- 以下为 index-service 驱动的状态迁移，UI 不直接调用 ----
   begin: () => void;
   setProgress: (p: IndexProgress) => void;
+  /** 写入覆盖率快照（**纯 setter**：统计在 `services/learn/index-service`，本 store 不认识它）。 */
+  setCoverage: (coverage: IndexCoverage) => void;
   finish: () => void;
   fail: (message: string) => void;
-
-  /** 重新统计覆盖率（进入设置页 / 索引完成后调用）。 */
-  refreshCoverage: () => Promise<void>;
 }
 
 const EMPTY_PROGRESS: IndexProgress = { total: 0, done: 0, failed: 0 };
@@ -44,19 +45,9 @@ export const useIndexStore = create<IndexState>()((set) => ({
 
   begin: () => set({ running: true, progress: EMPTY_PROGRESS, error: undefined }),
   setProgress: (progress) => set({ progress }),
+  setCoverage: (coverage) => set({ coverage, coverageLoaded: true }),
   finish: () => set({ running: false }),
   fail: (message) => set({ running: false, error: message }),
-
-  refreshCoverage: async () => {
-    // 动态 import 打断「store → features → store」的静态循环依赖：
-    // index-service 需要读本 store 的状态，本 store 又需要它的统计函数。
-    // 静态 import 会形成 ESM 循环，用 await import 让依赖在运行时按需解析。
-    const { embeddingCoverage, activeEmbeddingModel } = await import(
-      "../features/learn/index-service"
-    );
-    const coverage = await embeddingCoverage(activeEmbeddingModel());
-    set({ coverage, coverageLoaded: true });
-  },
 }));
 
 /**

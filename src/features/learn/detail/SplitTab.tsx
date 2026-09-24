@@ -38,7 +38,7 @@ import { notifyDocsChanged } from '../../../components/layout/AppShell';
 import { splitDocumentNow, SplitServiceError } from '../split-service';
 import { applyChapterEdit, ChapterEditError } from '../chapter-edit-service';
 import type { ChapterEdit, ChapterEditResult } from '../chapter-edit-service';
-import { autoIndexAfterImport } from '../index-service';
+import { autoIndexAfterImport } from '../../../services/learn/index-service';
 import { analyzeChaptersNow } from '../analyze-service';
 import { chapterCharCount } from '../chapter-preview';
 import { ChapterRow } from './ChapterRow';

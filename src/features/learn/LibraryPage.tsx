@@ -32,7 +32,7 @@ import { SegmentedTabs } from "../../components/primitives";
 import DocumentCard from "./library/DocumentCard";
 import type { DocActionKind } from "./library/DocActionsMenu";
 import { SplitServiceError, splitDocumentNow } from "./split-service";
-import { activeEmbeddingModel, autoIndexAfterImport } from "./index-service";
+import { activeEmbeddingModel, autoIndexAfterImport } from "../../services/learn/index-service";
 import {
   AppendDocModal,
   DeleteDocDialog,

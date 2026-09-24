@@ -19,7 +19,7 @@ import { Spinner } from "../../../components/ui/spinner";
 import { useI18n } from "../../../i18n";
 import type { Messages } from "../../../i18n";
 import { storage, useLoopStore } from "../../../stores/useLoopStore";
-import { useIndexStore } from "../../../stores/useIndexStore";
+import { refreshCoverage } from "../../../services/learn/index-service";
 import { decodeBytes } from "../../learn/import/decode";
 import {
   COUNT_KEYS,
@@ -248,7 +248,7 @@ export default function DataPortabilityCard({ counts, onDataChanged }: Props) {
       /* 刷新失败不回滚导入：数据已落库，页面重进即可 */
     }
     try {
-      await useIndexStore.getState().refreshCoverage();
+      await refreshCoverage();
     } catch {
       /* 覆盖率是派生统计，失败不影响已写入的数据 */
     }

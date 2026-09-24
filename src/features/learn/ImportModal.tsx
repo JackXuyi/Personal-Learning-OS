@@ -29,7 +29,7 @@ import GithubPanel from "./import/GithubPanel";
 import type { ImportTab, ImportUnit, ImportSummary, DuplicateAction } from "./import/types";
 import { LIMITS } from "./import/types";
 import { runUnitImport, runBatchImport } from "./import/pipeline";
-import { autoIndexAfterImport, autoIndexBlockedReason } from "./index-service";
+import { autoIndexAfterImport, autoIndexBlockedReason } from "../../services/learn/index-service";
 import { scheduleAutoEnrich } from "./auto-enrich";
 import { isReplaceableTitle } from "./enrich-service";
 import { notifyDocsChanged } from "../../components/layout/AppShell";

@@ -7,7 +7,7 @@ import type { Chapter, LearningGoal } from "../domain";
 import { useI18n, type Messages } from "../i18n";
 import { hybridSearch, type SearchHit } from "../ai/retrieval/hybrid-search";
 import { createEmbedder } from "../ai/embedding";
-import { activeEmbeddingModel } from "../features/learn/index-service";
+import { activeEmbeddingModel } from "../services/learn/index-service";
 import {
   actionPath,
   chapterDisplayTitle,

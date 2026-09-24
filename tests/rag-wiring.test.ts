@@ -19,7 +19,7 @@ import { InMemoryStorage } from "../src/storage/memory.ts";
 import { runUnitImport } from "../src/features/learn/import/pipeline.ts";
 import { splitDocumentNow } from "../src/features/learn/split-service.ts";
 import { rebuildChunks } from "../src/features/learn/index-chunks.ts";
-import { buildIndex } from "../src/features/learn/index-service.ts";
+import { buildIndex } from "../src/services/learn/index-service.ts";
 import type { Embedder } from "../src/ai/embedding.ts";
 import {
   deleteDocumentCascade,

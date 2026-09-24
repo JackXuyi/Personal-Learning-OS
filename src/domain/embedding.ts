@@ -47,6 +47,33 @@ export interface EmbeddingVector {
 }
 
 /**
+ * 索引任务的进度（写入 `useIndexStore`；服务驱动，UI 只读）。
+ *
+ * 归 `domain` 而非 `features` 的理由：`stores` 层需要它，而 `stores` 不得反向依赖
+ * `features`（分层约束，判据 `npm run layer:check`）——否则只能把类型复制一份，
+ * 那就是「两把尺子」。
+ */
+export interface IndexProgress {
+  /** 待处理总数（仅缺失模式 = 缺失条数）。 */
+  total: number;
+  /** 已成功写入的条数。 */
+  done: number;
+  /** 失败的条数（可重试：下次「仅补齐缺失」会带上）。 */
+  failed: number;
+}
+
+/** 向量覆盖率（供设置页 / 资料卡展示）。 */
+export interface IndexCoverage {
+  /** 该类型下可被向量化的目标总数。 */
+  total: number;
+  /** 当前模型已向量化的条数。 */
+  indexed: number;
+}
+
+/** 「未自动入队」的原因（undefined = 可以入队）。 */
+export type IndexOffReason = "preview" | "disabled" | "no-model";
+
+/**
  * 生成 embedding 查找 key（targetType + targetId + model）。
  * 用于快速定位同一 target 的多模型向量。
  */
