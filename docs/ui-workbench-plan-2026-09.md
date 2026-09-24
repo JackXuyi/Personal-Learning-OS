@@ -353,6 +353,7 @@ RECENT EVIDENCE（折叠态）
 - 数据来源：`useLoopStore.chapterPlan`（按 activeGoal 范围）+ activeGoal（goal repo）+ 当次会话 records；**零引擎算法改动**。
 - 改动文件：`features/home/HomePage.tsx`（MainCtaCard → ActionCard；ReadinessCard 上提为页头；新增 goal 下拉、Today 清单行 = KnowledgeRow、Recent Evidence 折叠区）。
 - **验收**：首屏（1280×800，不滚动）只出现 1 个主 CTA + 就绪度 + why-now；切换 activeGoal 后今日数据随目标重算；任一 action 的 reasons 非空即显示 4 类 reason 行；空库/全达标两态沿用现有 EmptyState/AllDoneCard 并修正文案。
+- **落地补记（2026-09-24 首屏收口）**：目标上下文由两行合并为一组（goal 下拉 + 管理/**新建**入口 + 就绪度 + Bar + 达成统计含截止日锚点 + 落后警示带「去调整计划」出口）——补齐本节「+ 新建目标 → /goals/new」承诺；去掉 `checked` 竞态（以 `plan` 就绪为判据），错误卡补重试；「查看完整计划」固定挂 Section action 位不随 items 漂移；最近证据无记录时整段隐藏（`evidenceEmpty` 键同批删除）。落后警示色由硬编码 `amber-700` 收敛到语义 token `state-weak`。
 - **涉及建议稿**：§5/6/7/36。
 
 ### U2 · Plan（计划页分段化）
