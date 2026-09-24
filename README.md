@@ -407,7 +407,7 @@ never depend on a network call.
 Every capability the project intends to ship — this doubles as the roadmap.
 `[x]` = shipped · `[ ]` = not yet · `P0` / `P1` / `P2` = priority of the unshipped items.
 
-**37 shipped · 9 not yet.**
+**38 shipped · 8 not yet.**
 
 ### 📥 Ingestion
 
@@ -415,7 +415,7 @@ Every capability the project intends to ship — this doubles as the roadmap.
 - [x] Encoding sniffing (BOM / UTF-8 / GB18030) and duplicate-safe re-import
 - [x] AI enrichment after import — the document title (titles you typed are kept) and a whole-document overview are generated in the background
 - [ ] OCR fallback for scanned PDFs `P2` — pdfjs returns 0 characters on image-only PDFs
-- [ ] DOCX parsing `P2`
+- [x] DOCX parsing — headings recovered from Word style *and* font-size evidence, tables converted to GFM, images skipped (never inlined as base64); legacy `.doc` / encrypted files are rejected with an actionable hint
 - [ ] EPUB parsing `P2`
 - [ ] Fetch a web page by URL `P2`
 

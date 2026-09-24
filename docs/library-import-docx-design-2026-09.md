@@ -4,7 +4,7 @@
 |------|------|
 | 作者 | Agent |
 | 日期 | 2026-09-23 |
-| 状态 | **待确认**（D1 / D3 已确认，见 §3.4） |
+| 状态 | **✅ 已实施（2026-09-23）** —— D1 / D3 由用户确认、D6 由用户确认「接受 D6，直接实施」；实施记录与实测输出见 `docs/library-import-docx-task-runbook-2026-09.md` |
 | 关联需求 | `docs/roadmap-next-features-plan-2026-09.md` §F8 范围 3；README `[ ] Import coverage (DOCX / EPUB / URL / OCR)` |
 
 ## 1. 背景
@@ -287,21 +287,16 @@ flowchart TB
 
 ```ts
 // docx-markdown.ts —— 刻意不 import mammoth：AST 用结构类型描述（可脱离 mammoth 单测）
-export interface MammothText   { type: "text";   value: string }
-export interface MammothRun    {
-  type: "run"; children: MammothText[];
+// ⚠️ 实施期收紧：下面是**已实现形态**（单一「宽 type + 全可选字段」结构），不是初稿的 6 个精确接口
+//    —— 理由见「实施期偏离」表第 5 行（宽 type 成员会让判别式收窄失效，精确类型是假安全）。
+export interface MammothNode {
+  type: string;                                  // 块级 paragraph / table；行内 run / hyperlink / text / image / tab / break…
+  children?: readonly MammothNode[];
+  value?: string;                                // 仅 text 节点
   styleId?: string | null; styleName?: string | null;
-  isBold?: boolean; fontSize?: number | null;      // ⚠️ fontSize 单位＝磅（= w:sz/2）
+  isBold?: boolean; fontSize?: number | null;    // ⚠️ fontSize 单位＝磅（= w:sz/2）
+  numbering?: { isOrdered?: boolean; level?: string } | null;
 }
-export interface MammothParagraph {
-  type: "paragraph"; children: (MammothRun | MammothHyperlink)[];
-  styleId?: string | null; styleName?: string | null;
-  numbering?: { isOrdered: boolean; level: string } | null;
-}
-export interface MammothTableCell  { type: "tableCell";  children: MammothParagraph[] }
-export interface MammothTableRow   { type: "tableRow";   children: MammothTableCell[] }
-export interface MammothTable      { type: "table";      children: MammothTableRow[] }
-export type MammothNode = MammothParagraph | MammothTable | /* 其它块级：忽略 */ { type: string };
 
 export interface DocxMarkdownResult {
   text: string;
@@ -312,10 +307,9 @@ export interface DocxMarkdownResult {
   skippedImages: number;
 }
 
-export function docxNodesToMarkdown(
-  nodes: readonly MammothNode[],
-  options?: { maxChars?: number },
-): DocxMarkdownResult;
+// ⚠️ 实施期删除 `options?: { maxChars }`：方案自身注明「此处只回报 length」⇒ 该参数无消费方，
+//    留着会触发本仓 error 级的 `noUnusedParameters`（见「实施期偏离」表第 6 行）。
+export function docxNodesToMarkdown(nodes: readonly MammothNode[]): DocxMarkdownResult;
 
 // docx.ts
 export class DocxLegacyError extends Error { name = "DocxLegacyError"; }        // OLE：老 .doc / 加密
@@ -537,7 +531,9 @@ export function isHeadingShape(line: string): boolean;
 const HEADING_STYLE_RE = /^(?:heading|标题)\s*([1-6])$/i;
 /** 字号显著性倍数（相对正文基准）。实测 1.15 足以区分 12pt↔14pt，又不误吞 11pt↔12pt。 */
 const SIZE_HEADING_RATIO = 1.15;
-const MAX_HEADING_CHARS = 40;
+// ⚠️ 实施期删除了初稿的 `const MAX_HEADING_CHARS = 40`：长度/标点护栏**只有一把尺子**
+//    （heading-patterns.isHeadingShape）。在 docx-markdown 里再定义一次就是第二把尺子，
+//    且会因无消费方触发 `noUnusedLocals`（见「实施期偏离」表第 7 行）。
 
 /** 段落主字号：按**字符长度加权**（正文段落长、标题段落短，故不能按 run 数或段落数）。 */
 function paragraphFontSize(para: MammothParagraph): number;
@@ -655,12 +651,21 @@ export async function readDocumentNodes(buffer: ArrayBuffer): Promise<readonly M
 
 ```ts
 // 伪代码
-const OLE_MAGIC = 0xd0cf11e0;   // 前 4 字节小端
+/**
+ * ⚠️ 实施期修正（原本是错的）：初稿写 `const OLE_MAGIC = 0xd0cf11e0; // 前 4 字节小端` ——
+ *    那是把字节序列按**大端**读出的数字，而小端读出的值是 `0xe011cfd0`，两者永不相等，
+ *    魔数判定会**静默失效**（单测 TC-DOCX-11 / A3 抓住）。改为**字节序列比对**，
+ *    与「前 4 字节 D0 CF 11 E0」这句话本身一致，不再有大小端歧义。
+ */
+const OLE_MAGIC_BYTES = [0xd0, 0xcf, 0x11, 0xe0];
+function hasOleMagic(bytes: Uint8Array): boolean {
+  return bytes.length >= 4 && OLE_MAGIC_BYTES.every((byte, i) => bytes[i] === byte);
+}
 
 export async function extractDocxMarkdown(buffer: ArrayBuffer): Promise<DocxMarkdownResult> {
   const bytes = new Uint8Array(buffer);
   // ① 魔数：OLE（老 .doc / 加密）比「不是 zip」更具体，先判 → 提示可行动
-  if (bytes.length >= 4 && u32le(bytes, 0) === OLE_MAGIC) throw new DocxLegacyError();
+  if (hasOleMagic(bytes)) throw new DocxLegacyError();
   // ② 读 AST（mammoth 的异常在此归一化）
   let nodes: readonly MammothNode[];
   try { nodes = await readDocumentNodes(buffer); }
@@ -668,6 +673,8 @@ export async function extractDocxMarkdown(buffer: ArrayBuffer): Promise<DocxMark
   // ③ AST → Markdown
   const result = docxNodesToMarkdown(nodes);
   if (!result.text.trim()) throw new DocxNoTextError();
+  // ④ 字符护栏（实施期从 local-files 移到此处：护栏跟着抽取器走，任何调用方都拿不到超限正文）
+  if (result.text.length > LIMITS.docxMaxChars) throw new DocxTooLargeError(result.text.length);
   return result;
 }
 ```
@@ -720,28 +727,35 @@ export async function extractDocxMarkdown(buffer: ArrayBuffer): Promise<DocxMark
     | "unsupported" | "too-large" | "pdf-no-text" | "pdf-too-large" | "read-failed"
 +   | "docx-legacy" | "docx-bad-zip" | "docx-no-text";
 
++ // ⚠️ 实施期新增（偏离第 9 行）：文件字节线改成映射表，替掉原来的 `pdf ? … : md` 三元
++ //    —— 否则「.docx 超限」的 detail 会报成 md 的 1MB 尺子。
++ const FILE_BYTE_LIMITS: Record<LocalFileKind, number> = {
++   md: LIMITS.localMdBytes, txt: LIMITS.localMdBytes,
++   pdf: LIMITS.localPdfBytes, docx: LIMITS.localDocxBytes,
++ };
+
   export async function fileToUnit(file: File): Promise<ImportUnit | LocalFileError> {
     ...
 +   if (cls.kind === "docx") {
-+     try {
-+       const out = await extractDocxMarkdown(await file.arrayBuffer());
-+       // 正文超字符护栏复用既有 `too-large`
-+       if (out.text.length > LIMITS.docxMaxChars) return err("too-large", `${file.name} chars>${LIMITS.docxMaxChars}`);
-+       return {
-+         title, format: "markdown",
-+         // 有标题证据 → md 标题切分；否则段落聚类（与 PDF 的 promote 策略同构）
-+         splitFormat: out.headings > 0 ? "markdown" : "txt",
-+         text: out.text, source,
-+         extract: { headings: out.headings, tables: out.tables },
-+       };
-+     } catch (e) {
-+       if (e instanceof DocxLegacyError) return err("docx-legacy", file.name);
-+       if (e instanceof DocxNoTextError) return err("docx-no-text", file.name);
-+       if (e instanceof DocxBadArchiveError) return err("docx-bad-zip", file.name);
-+       return err("read-failed", `${file.name}: ${e instanceof Error ? e.message : String(e)}`);
-+     }
++     // 不套内层 try/catch：docx 的语义化错误并入**既有单一 catch**（偏离第 9 行）
++     const out = await extractDocxMarkdown(await file.arrayBuffer());
++     return {
++       title, format: "markdown",
++       // 有标题证据 → md 标题切分；否则段落聚类（与 PDF 的 promote 策略同构）
++       splitFormat: out.headings > 0 ? "markdown" : "txt",
++       text: out.text, source,
++       extract: { headings: out.headings, tables: out.tables },
++     };
 +   }
     const out = await extractPdfText(...);
+  } catch (e) {
+    if (e instanceof PdfNoTextError) return err("pdf-no-text", e.message);
+    if (e instanceof PdfTooLargeError) return err("pdf-too-large", e.message);
++   if (e instanceof DocxLegacyError) return err("docx-legacy", file.name);
++   if (e instanceof DocxBadArchiveError) return err("docx-bad-zip", file.name);
++   if (e instanceof DocxNoTextError) return err("docx-no-text", file.name);
++   if (e instanceof DocxTooLargeError) return err("too-large", `${file.name} chars>${LIMITS.docxMaxChars}`);
+    return err("read-failed", ...);
   }
 ```
 
@@ -796,7 +810,7 @@ export async function extractDocxMarkdown(buffer: ArrayBuffer): Promise<DocxMark
 
 ```json
 + "test:docx": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/import-docx.test.ts",
-  "test:library": "... && npm run test:extract && npm run test:docx && ..."
+  "test:library": "... && npm run test:docs && npm run test:docx && npm run test:pack && ..."
 ```
 
 ```json
@@ -851,7 +865,7 @@ export async function extractDocxMarkdown(buffer: ArrayBuffer): Promise<DocxMark
 | 层级 | 工具/方式 | 覆盖重点 | 不负责 |
 |---|---|---|---|
 | 单元 | `tests/import-docx.test.ts`（`npm run test:docx`，node 直跑） | 四层判定、表格、列表、图片跳过、护栏、错误映射、AST 契约形状 | React 渲染、真实文件 IO |
-| 单元 | `tests/import-extract.test.ts`（既有） | T1 重构后 `promotePdfHeadings` 零回归 | — |
+| 单元 | `tests/import-extract.test.ts`（既有） | T1 重构后 `promotePdfHeadings` 零回归；**实施期增强**：G2 中文文案静态断言的扫描名单加入 DOCX 三件套（`docx.ts` / `docx-markdown.ts` / `mammoth-reader.ts`），`localLabels` 夹具补 3 个新 kind | — |
 | 单元 | `tests/import-core.test.ts`（既有） | `classifyLocalFile` / `stripExtension` 回归 | — |
 | 单元 | `tests/i18n-alignment.test.ts`（既有） | zh/en 结构对齐 | — |
 | 集成 | `tests/import-docx.test.ts` 内的 `runUnitImport` 用例 | DOCX unit → 切章结果（内存 storage） | — |
@@ -868,6 +882,10 @@ export async function extractDocxMarkdown(buffer: ArrayBuffer): Promise<DocxMark
 ### 11.3 通过标准
 
 - `npm run test:docx` 全绿；`npm run test:library` 全链 exit=0；`npm run test:i18n` 全绿（新增 4 个文案键成对）；
+  ⚠️ **实施期实测更正**：`test:library` 链（27 组）**不含** `test:import` / `test:extract` / `test:i18n` ——
+  它们一直靠手工单独跑。本次把 `test:docx` **加入**链内（使新测试进入例行门禁），
+  同时 `test:import` / `test:extract` / `test:i18n` 作为**单独一组门禁**逐条跑（见 runbook 验证录像）。
+  把「import 三件套不在 `test:library` 链内」登记为遗留，不在本次顺手扩大范围。
 - `npm run typecheck` **仅剩既存 3 条** `AIModelsSection` 基线；
 - **负向验证**（守卫非假绿，逐组实跑并确认变红）：
 
@@ -904,6 +922,10 @@ export async function extractDocxMarkdown(buffer: ArrayBuffer): Promise<DocxMark
 | TC-DOCX-15 | UC-01 | 多 run 拼一句话 | 拼接**不插入**额外空格 | 单元 |
 | TC-DOCX-16 | UC-01 | 空段落 / 连续空段 | 归并为一个段落分隔；`\n{3,}` → `\n\n` | 单元 |
 | **TC-DOCX-17** | — | **AST 契约形状**：对真 DOCX 字节断言 `run.fontSize` 为 `number`、`numbering.isOrdered` 为 `boolean`、`text.value` 为 `string` | 全部成立（mammoth 升级破坏契约时立刻变红） | 单元 |
+| TC-DOCX-A1 | UC-01 | 行内 `tab` / `break` 节点 | 各渲染为一个空格（相邻文本不粘连） | 单元 |
+| TC-DOCX-A2 | UC-03 | 全表格文档（表格内有 4 行） | `headings=0`（表格内段落不参与正文基准）、`tables=1` | 单元 |
+| TC-DOCX-A3 | UC-04 | `fileToUnit` 端到端：真 DOCX / OLE 改名 / 随机字节 | 成功（`headings=3`）· `docx-legacy` · `docx-bad-zip` | 集成 |
+| **TC-DOCX-A4** | UC-01 | **正文基准加权口径**：5 个短段（14pt）+ 1 个长段（12pt） | 识别 5 个标题（字符加权）；若改为**段落数加权**则基准误判为 14pt → 0 个标题（供负向验证第 2 条变红） | 单元 |
 
 ### 12.1 边界与回归
 
@@ -922,6 +944,34 @@ export async function extractDocxMarkdown(buffer: ArrayBuffer): Promise<DocxMark
 
 ---
 
+## 实施期偏离（记录，不静默）
+
+> 口径见 `skills/docs-task-runbook`「Departures from the written design」：
+> 实现与已批准方案不一致时必须留痕，否则「代码与方案一致」会悄悄变成假话。
+
+| # | 位置 | 设计原文 | 实现 | 理由 |
+|---|---|---|---|---|
+| 1 | `mammoth-reader.ts` 错误 | `if (!root) throw new DocxBadArchiveError();`（import `docx.ts` 的错误类） | 不 import `docx.ts`，抛普通 `Error`；由 `docx.ts` 的 `catch` 统一归一化 | 直接 import 会形成循环依赖（`docx.ts` → `mammoth-reader.ts` → `docx.ts`）；对外语义不变（仍是 `DocxBadArchiveError`） |
+| 2 | `mammothInput` 入参 | `mammothInput(bytes: Uint8Array)` + `bytes.buffer.slice(...) as ArrayBuffer` | `mammothInput(buffer: ArrayBuffer)`：node 包一层 `new Uint8Array(buffer)`，浏览器直传 | `file.arrayBuffer()` 本就是精确长度的 `ArrayBuffer` ⇒ 省一次整篇拷贝（20MB 文档的峰值内存），并**免掉初稿里唯一那处断言** |
+| 3 | AST 取值 | `transformDocument: (doc) => { root = doc as never; ... }` | `isRecord(root)` + `Array.isArray(children)` 收窄 | 同样零 `as any`，但 `as never` 会把真正的形状错误一起吞掉 |
+| 4 | AST 类型策略 | （未规定） | 单一「宽 `type` + 全可选字段」结构，不用判别式联合 | 联合里只要有宽 `type: string` 成员，判别式收窄就失效 ⇒ 精确类型是**假安全** |
+| 5 | §4.3 AST 接口 | 6 个精确接口（`MammothText` / `MammothRun` / `MammothParagraph` / `MammothTableCell` / `MammothTableRow` / `MammothTable`） | 合并为 1 个 `MammothNode` | 同第 4 行 |
+| 6 | `docxNodesToMarkdown` 签名 | `(nodes, options?: { maxChars? })` | `(nodes)` | 方案自身注明「此处只回报 length」⇒ 参数无消费方，留着会触发 error 级 `noUnusedParameters` |
+| 7 | `docx-markdown.ts` 常量 | `const MAX_HEADING_CHARS = 40` | 删除，长度/标点护栏只走 `isHeadingShape` | 同一阈值两处定义＝**两把尺子**；且无消费方（`noUnusedLocals`） |
+| 8 | 字符护栏位置 | 在 `local-files.ts` 判 `out.text.length > LIMITS.docxMaxChars` | 在 `docx.ts` 末尾抛 `DocxTooLargeError`；`local-files` 只做 kind 映射 | 护栏跟着抽取器走 ⇒ 任何调用方都拿不到超限正文；也让方案已声明的 `DocxTooLargeError` 有消费方（否则是死类） |
+| 9 | `local-files.ts` | docx 分支内再套一层 `try/catch`；尺寸线用 `pdf ? … : md` 三元 | 错误并入**既有单一 catch**；新增 `FILE_BYTE_LIMITS: Record<LocalFileKind, number>` | 单一错误漏斗更好维护；三元会让「.docx 超限」的 detail 报成 md 的 1MB 尺子；映射表自带「新增 kind 必须补齐」的类型约束 |
+| 10 | 行内节点 | 未规定 `tab` / `break` | 各渲染为一个空格；列表 `level` 按 2 空格缩进、夹到 6 级 | 直接丢弃会让相邻文本粘连（`<w:br/>` 在转换产物里极常见）；`level` 是 §3.3d 注明「用于嵌套缩进」的字段 |
+
+### 实施期发现的**方案自身缺陷**（已就地修正）
+
+| # | 位置 | 方案原文 | 问题 | 修正 |
+|---|---|---|---|---|
+| D1 | §8.5 | `const OLE_MAGIC = 0xd0cf11e0; // 前 4 字节小端` | 该值是把字节序列按**大端**读出的数字，而小端读出为 `0xe011cfd0` —— 判等**永不成立**，魔数判定静默失效（`.doc` 会被当成「坏压缩包」，用户拿不到那句可行动提示） | 改为字节序列比对 `[0xd0, 0xcf, 0x11, 0xe0]`（§8.5 已就地更正）；TC-DOCX-11 / A3 锁住 |
+| D2 | §8.10 / §11.3 | 假定 `test:library` 链里已有 `test:extract` | 实测链内**没有** `test:import` / `test:extract` / `test:i18n`（它们一直靠手工单独跑） | 见 §11.3 更正；`test:docx` 加入链内，三件套单独成组跑，并把「不在链内」登记为遗留 |
+| D3 | §12 | 未列「正文基准加权口径」的守卫用例 | 负向验证第 2 条（基准改为「段落数加权」）在初稿用例上**不会变红** ⇒ 该条等于没测 | 新增 **TC-DOCX-A4**（5 个短大字段 + 1 个长正字段），使该变体真变红 |
+
+---
+
 ## 变更记录
 
 | 日期 | 变更 | 作者 |
@@ -929,3 +979,4 @@ export async function extractDocxMarkdown(buffer: ArrayBuffer): Promise<DocxMark
 | 2026-09-23 | 初稿：自写 ZIP + OOXML 方案；登记 D1–D5 | Agent |
 | 2026-09-23 | **架构重建**：D1 确认引入 `mammoth`、D3 确认 GFM 表格 ⇒ 实测发现 `convertToMarkdown` 不产表格、HTML→MD 在 Node 需 DOM，故新增 **D6：只用 `transformDocument` 取 AST，自写 Markdown 输出层**（两个已确认决策的唯一同时成立形态）。同时：AST 实测确认含 `fontSize`（磅）/`isBold`/`numbering.isOrdered`；移除自写 ZIP 与 OOXML 扫描器；`docxXmlBytes` 护栏因拿不到解压前声明大小而删除，改由文件字节 + 正文字符两端夹住；新增 TC-DOCX-17 锁 AST 契约 | Agent |
 | 2026-09-23 | **补 §3.3h 三条硬约束**（入口选型定稿）：① 类型声明落后于实现（无 `convertToMarkdown`）⇒ 改用 `convertToHtml` 并丢弃返回值，零 `as any`；② Node 与浏览器入参**无交集**（`lib/unzip.js` 认 `buffer` / `browser/unzip.js` 只认 `arrayBuffer`），且 d.ts 只声明后者 ⇒ 集中一处用 `window` 探测（`process` 在本 tsconfig 报 TS2591）；③ 该写法已用项目 `tsc` 实测通过。补 TC-EDGE-09/10、负向验证 1 行、步骤 2 前移为「最先证伪」 | Agent |
+| 2026-09-23 | **实施完成（T1–T11）**：状态置「已实施」；**就地修正方案自身缺陷 D1–D3**（§8.5 的 OLE 魔数按大端写成 u32 ⇒ 判等永不成立、§8.10/§11.3 对 `test:library` 链构成的错误假定、§12 缺「基准加权口径」守卫用例）；新增「**实施期偏离**」10 行 + 「方案自身缺陷」3 行；§4.3 AST 接口与 `docxNodesToMarkdown` 签名、§8.3 的 `MAX_HEADING_CHARS`、§8.7 的 docx 分支与错误漏斗均按**已实现形态**改写；§11.1/§12 补 TC-DOCX-A1–A4。实测：`test:docx` 22/22 · `test:extract` 13/13 · `test:import` 30/30 · `test:i18n` 8/8 · `test:library` exit 0 · `typecheck` 仅 3 条基线；**真机 4 份真实 DOCX 标题数 4 / 1 / 6 / 0 与 §3.3b 基线一致**；负向验证 9/9 变红 | Agent |

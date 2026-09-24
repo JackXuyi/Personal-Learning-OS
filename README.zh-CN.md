@@ -412,7 +412,7 @@ Ollama、llama.cpp、LM Studio 以及 OpenAI 兼容端点（OpenAI、Anthropic�
 项目打算交付的全部能力，同时充当路线图。
 `[x]` = 已实现 · `[ ]` = 未实现 · `P0` / `P1` / `P2` = 未实现项的优先级。
 
-**已实现 37 项 · 未实现 9 项。**
+**已实现 38 项 · 未实现 8 项。**
 
 ### 📥 资料接入
 
@@ -420,7 +420,7 @@ Ollama、llama.cpp、LM Studio 以及 OpenAI 兼容端点（OpenAI、Anthropic�
 - [x] 编码嗅探（BOM / UTF-8 / GB18030）与重复导入合并
 - [x] 导入后 AI 整理 —— 后台生成资料标题（手填标题不被覆盖）与整篇概览
 - [ ] 扫描件 PDF 的 OCR 兜底 `P2` —— 纯图片 PDF 经 pdfjs 解析为 0 字符
-- [ ] DOCX 解析 `P2`
+- [x] DOCX 解析 —— 标题由 Word 样式**与字号证据**共同还原，表格转 GFM，图片跳过（不内联 base64）；旧版 `.doc` / 加密文档被拒绝并给出可行动提示
 - [ ] EPUB 解析 `P2`
 - [ ] 通过 URL 抓取网页 `P2`
 
