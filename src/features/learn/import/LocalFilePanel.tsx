@@ -1,12 +1,12 @@
 /**
- * 本地文件来源面板（拖拽/点选 .md / .pdf，批量）。
+ * 本地文件来源面板（拖拽/点选 .md / .txt / .pdf / .docx，批量）。
  *
  * 职责（docs/knowledge-import-design-2026-09.md §7.2 / §8.6）：
  * - 收集用户选中的「可导入」文件（受控，files 由 ImportModal 持有，便于底部
  *   主按钮计数与批量执行）；本面板只做选择交互 + 即时预校验展示；
  * - 预校验（classifyLocalFile）：扩展名白名单 + 大小护栏即时标红，超限/不支持
- *   的行仅展示不进入可导入列表；「扫描件 PDF」预校验不可知，导入期由
- *   fileToUnit 判定并计入批量失败项。
+ *   的行仅展示不进入可导入列表；「扫描件 PDF」「非 ZIP / 旧版 .doc 改名」预校验
+ *   不可知，导入期由 fileToUnit 判定并计入批量失败项。
  *
  * 导入动作由 ImportModal 底部主按钮统一触发（本面板不直接写 storage）。
  */
@@ -14,7 +14,7 @@ import { useRef, useState } from "react";
 import type { DragEvent } from "react";
 import { useI18n } from "../../../i18n";
 import { classifyLocalFile, formatBytes } from "./types";
-import type { LocalFileClassified } from "./types";
+import type { LocalFileClassified, LocalFileKind } from "./types";
 
 interface LocalFilePanelProps {
   /** 当前可导入文件（受控；新增/移除都通过 onFilesChange 上抛）。 */
@@ -99,7 +99,7 @@ export default function LocalFilePanel({ files, onFilesChange, disabled }: Local
           ref={inputRef}
           type="file"
           multiple
-          accept=".md,.markdown,.mdown,.txt,.pdf"
+          accept=".md,.markdown,.mdown,.txt,.pdf,.docx"
           className="hidden"
           data-testid="local-file-input"
           disabled={disabled}
@@ -146,6 +146,7 @@ export default function LocalFilePanel({ files, onFilesChange, disabled }: Local
                     md: fmt.local.kindMd,
                     txt: fmt.local.kindTxt,
                     pdf: fmt.local.kindPdf,
+                    docx: fmt.local.kindDocx,
                   })}
                 </span>
                 <span className="shrink-0 tabular-nums text-ink-3">{formatBytes(row.file.size)}</span>
@@ -179,12 +180,11 @@ function StatusIcon({ state }: { state: Row["state"] }) {
   return <span className="shrink-0 font-bold text-state-mastered">✓</span>;
 }
 
-/** 类型徽标文案：md → Markdown；txt → 纯文本；pdf → PDF；不支持 → 占位符（文案走 i18n）。 */
-function kindLabel(
-  state: Row["state"],
-  labels: { md: string; txt: string; pdf: string },
-): string {
-  if (state === "unsupported") return "—";
-  if (state.kind === "pdf") return labels.pdf;
-  return state.kind === "txt" ? labels.txt : labels.md;
+/**
+ * 类型徽标文案：**映射式**（显式覆盖每个 kind）。
+ * ⚠️ 刻意不写成三元链：新增 kind 时 `Record<LocalFileKind, string>` 会强制补齐，
+ *    不会像 `pdf ? … : txt ? … : md` 那样把新类型静默显示成 Markdown。
+ */
+function kindLabel(state: Row["state"], labels: Record<LocalFileKind, string>): string {
+  return state === "unsupported" ? "—" : labels[state.kind];
 }
