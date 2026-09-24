@@ -132,9 +132,15 @@
 
 ## 6. 遗留（本轮明确未做）
 
-1. **#11 的另一层**：`quiz-engine.ts::bandOfMastery` **仍只看 `mastery`**，未引入 `cognitiveLevel`
-   权重；无历史时也**未**用 `profile.level` 定 band。**属产品决策**（难度是否该随认知层级上升），
-   未拍板 → 保持现状并登记。
+1. **#11 的另一层**：`quiz-engine.ts::bandOfMastery` **函数本体仍只看 `mastery`**，未引入 `cognitiveLevel`
+   权重。**属产品决策**（难度是否该随认知层级上升），未拍板 → 保持现状并登记。
+
+   > ⚠️ **校正（2026-09-24 实测纠偏）**：此处早前作「无历史时也**未**用 `profile.level` 定 band」——
+   > **与代码相反，该句已删**。F1 已落地 `engine/profile-band.ts::bandForChapter()`：无掌握度证据
+   > （`attempts === 0 && mastery === 0`）时按 `bandForLevel(profile?.level)` 定带（`LEVEL_BAND` 四档映射），
+   > 出卷主干全部走它（`quiz-engine.ts:234/258/278/335`，入口注入 `paper-flow.ts:77→86`）。
+   > `roadmap-next-features-plan-2026-09.md` §F1 亦把它列为**已实施** ⇒ 两文档口径现已一致。
+   > **仍为真的是**：`bandOfMastery` 本体只看 `mastery`，未引入 `cognitiveLevel` 权重。
 2. **#10 的调用边界已写进注释**，但没有机器可验的约束（例如把 `buildPlan` 的适用范围做成类型）。
    当前靠代码评审；若将来出现「误用」，再考虑加护栏。
 3. 其它仍在 `roadmap` 的项：F5 `D1-C`/`D5-C`（**刻意不做**）、F7 范围 2/4、F8 范围 2–5、
@@ -147,3 +153,4 @@
 | 日期 | 版本 | 说明 |
 |---|---|---|
 | 2026-09-22 | v1 | 立项并实施：#11 消「两把尺子」（次序真源 + 起始档位读持久化值）；#10 语义归位（4 处注释）。新增 `tests/cognitive-level.test.ts`（12 例）并完成三组负向验证 |
+| 2026-09-24 | v1.1 | **§6.1 反向结论校正**（文档纠偏 · `docs/code-gap-review-2026-09.md` D1）：原写「#11 的另一层……无历史时也**未**用 `profile.level` 定 band」—— 实测**与代码相反**（`engine/profile-band.ts::bandForChapter()` 在无掌握度证据时按 `bandForLevel(profile?.level)` 定带；F1 已交付，`roadmap §F1` 亦列为已实施）。已删该句并换为校正注；**保留仍成立的那一半**（`bandOfMastery` 本体只看 `mastery`、未引入 `cognitiveLevel` 权重，待产品拍板） | `docs/code-gap-review-2026-09.md` · `docs/roadmap-next-features-plan-2026-09.md` §F1 |
