@@ -14,6 +14,7 @@
  * 坐标约定：pdf.js 的 `transform = [a, b, c, d, e, f]`，`e` = x，`f` = 基线 y；
  * PDF 用户空间原点在**左下角**，故 y 越大越靠上——排序时 y 降序即「从上到下」。
  */
+import { isHeadingShape, isNumberedHeading } from "./heading-patterns";
 
 /** pdf.js text item 的最小子集（只声明本模块读取的字段）。 */
 export interface PdfTextItem {
@@ -272,27 +273,22 @@ export function joinPageLines(lines: readonly string[]): string {
   return out.join("\n");
 }
 
-/** 疑似标题行：中文序号章名（第 X 章）/ Chapter N / 数字编号小节。 */
-const HEADING_PATTERNS: RegExp[] = [
-  /^第\s*[一二三四五六七八九十百千零两0-9]{1,6}\s*[章节篇部讲]\s*\S/,
-  /^chapter\s+\d{1,3}\b/i,
-  /^\d{1,2}(\.\d{1,2}){1,3}\s+\S/,
-];
-
 /**
  * 把 PDF 正文里的「疑似标题行」提升为 Markdown 标题（`## `）。
  *
  * PDF 没有结构标记，切分器只能按段落聚类——`## ` 是让「第 X 章」被识别成章节的
  * 唯一低成本手段。规则刻意保守：行必须短（≤40 字符）、不以句末标点结尾、
  * 且已带 `#` 的行不重复提升。
+ *
+ * 两条判据（形状护栏 + 编号形态）与 DOCX 输出层共用 `heading-patterns.ts`：
+ * 同一份内容经 PDF 与 DOCX 两条路进来，必须切出同样的章节。
  */
 export function promotePdfHeadings(text: string): { text: string; promoted: number } {
   let promoted = 0;
   const out = text.split("\n").map((raw) => {
     const line = raw.trim();
-    if (!line || line.length > 40 || line.startsWith("#")) return raw;
-    if (/[。！？；，]$/.test(line)) return raw;
-    if (!HEADING_PATTERNS.some((re) => re.test(line))) return raw;
+    if (!isHeadingShape(line)) return raw;
+    if (!isNumberedHeading(line)) return raw;
     promoted += 1;
     return `## ${line}`;
   });
