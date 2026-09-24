@@ -71,6 +71,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.43.0",
+    "mammoth": "^1.12.3",
     "mermaid": "^12.0.0",
     "pdfjs-dist": "^4.10.38",
     "react": "^19.2.8",
