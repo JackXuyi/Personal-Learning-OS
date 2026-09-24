@@ -43,7 +43,7 @@
 | T8 | `LocalFilePanel.tsx`：accept + kindLabel 映射化 | T6 | done | `accept` 加 `.docx`；`kindLabel` 由三元链改 `Record<LocalFileKind, string>` 映射式（新增 kind 时 typecheck 强制补齐，不再静默显示成 Markdown） |
 | T9 | i18n zh/en 成对（kindDocx + 3 错误 + 2 处文案更新） | T7 T8 | done | zh/en 成对：`kindDocx` + 3 条 DOCX 错误文案（`docx-legacy` **可行动**：写明「用 Word 另存为 .docx」）+ `dropTitle` / `unsupported` 加 `.docx`。`test:i18n` **8/8 ✓，0 ✗，exit 0** |
 | T10 | `tests/import-docx.test.ts` + `test:docx` 串链 | T1–T9 | done | **两层测试 22 例全绿**：AST 字面量层（四层判定 / 表格三态 / 列表 / 图片跳过 / 多 run / 空段 / tab-break / 基准加权 / 表格不污染基准）+ 真字节层（测试内最小 ZIP 写入器 `store`+CRC32；AST 契约守卫 TC-DOCX-17、OLE / 随机字节 / 缺 `document.xml` / 无文本 / 超字符五条错误路径、`fileToUnit` 与 `runUnitImport` 端到端）。**连带同步两处既有断言**：`import-core` 的 `.docx → unsupported`（设计变更，改为认 docx + 补 `.doc` 仍拒绝）、`import-extract` 的 `localLabels` 夹具补 3 个新 kind。**并增强 G2 静态断言**：中文文案扫描名单加入 DOCX 三件套（为此把 `mammoth-reader` 的两条排障文案改成英文）。`test:docx` 已串入 `test:library` |
-| T11 | 负向验证（变体实跑）→ 门禁 → docs 收口 → 提交 | T10 | done | 负向验证 **9/9 全部变红且源码逐字节还原**（含第 2 条「基准改段落数加权」—— 为它补了 TC-DOCX-A4，否则该条不会红）。门禁：`typecheck` 仅 3 条基线 / `test:library` exit 0 / `test:docx` 22/22 / `test:extract` 13/13 / `test:import` 30/30 / `test:i18n` 8/8。真机 4 份真实 DOCX 抽查 4 / 1 / 6 / 0。README 双语勾选 + 统计行手工同步（`[x]` 38 · `[ ]` 8，两版实测一致）；roadmap §F8 明细节 + 4 处汇总节回扫；方案文档补「实施期偏离」10 行 + 「方案自身缺陷」3 行并**就地修正 §8.5 的 OLE 魔数缺陷** |
+| T11 | 负向验证（变体实跑）→ 门禁 → docs 收口 → 提交 | T10 | done | 负向验证 **9/9 全部变红且源码逐字节还原**（含第 2 条「基准改段落数加权」—— 为它补了 TC-DOCX-A4，否则该条不会红）。门禁：`typecheck` 仅 3 条基线 / `test:library` exit 0 / `test:docx` 22/22 / `test:extract` 13/13 / `test:import` 30/30 / `test:i18n` 8/8。真机 4 份真实 DOCX 抽查 4 / 1 / 6 / 0。README 双语勾选 + 统计行手工同步（**条目层** `[x]` 38 · `[ ]` 8，两版实测一致；⚠️ 原始 `grep -o` 计数是 39 / 9，各含**图例行**那一个，别直接抄）；roadmap §F8 明细节 + 4 处汇总节回扫；方案文档补「实施期偏离」10 行 + 「方案自身缺陷」3 行并**就地修正 §8.5 的 OLE 魔数缺陷**。**提交 7 条（见下 §提交分组），全部只落本地、未 push** |
 
 ## 实施期发现（决策或文档被推翻时记此）
 
@@ -53,6 +53,27 @@
 | 2026-09-23 | **方案 §8.5 的 `OLE_MAGIC = 0xd0cf11e0` 是错的**：该值是把魔数字节按**大端**读出的数字，小端读出为 `0xe011cfd0` ⇒ 判等永不成立，魔数判定**静默失效**（老 `.doc` 会被当成「坏压缩包」，用户拿不到「另存为 .docx」那句可行动提示）。 | 由单测 TC-DOCX-11 / A3 抓住 ⇒ 改**字节序列比对**；方案 §8.5 已就地更正，并写入「方案自身缺陷」表 D1。**教训：位运算常量与字节序混用是「不报错的错」**。 |
 | 2026-09-23 | 负向验证第 2 条（正文基准改「段落数加权」）在原用例上**不会变红** —— 那些用例里两种加权口径恰好同解 ⇒ 该条等于没测。 | 补 **TC-DOCX-A4**（5 个短大字段 + 1 个长正字段，两种口径分道扬镳），该变体随即真变红。**教训：负向验证不真跑，就不知道守卫是不是空的**。 |
 | 2026-09-23 | `tests/import-extract.test.ts` 的 G2 静态断言只扫 `github.ts` / `local-files.ts` / `pdf.ts` —— 新增的 DOCX 三件套不在名单内。 | 把三个新文件加入扫描名单（同层不变量应同层覆盖）；为此把 `mammoth-reader.ts` 的两条中文排障文案改成英文，保持「导入层零中文串」这条不变量**机械可查**。 |
+| 2026-09-24 | **提交粒度自纠**：首轮按「一文件一组」提交后回看发现 —— `import-core` 的 `.docx → unsupported` 断言被**分类提交**（`classifyLocalFile` 那一刻）推翻，却拖到**测试提交**才同步 ⇒ 中间 3 条提交的 `test:import` 是红的。三条都未 push ⇒ `git reset`（soft，保工作树）重做分组。 | 定则：**「被本提交推翻的既有断言」必须与本提交同批**，不管它在哪个文件。重排后**逐条** `git stash -u` → `typecheck` + 相关套件 → `stash pop` 实测，7 条全绿。教训：**「编译得过」不等于「测试绿」**，中间提交的绿必须实测而非推断。 |
+| 2026-09-24 | **i18n 与「新 kind」的次序不是免费的**：原以为「i18n 键新增可先于消费它的 UI」（既有定则），但 `error-text.ts` 的 `LocalErrorLabels = Record<LocalFileErrorKind, string>` 使**先加 kind 会让调用点立刻缺键** ⇒ 反向才会红。 | i18n 提交**刻意排在接线之前**（`1b4eb2e` 早于 `4b121a0`）。定则收紧为：**新增错误 kind 时，i18n 文案必须早于 kind 定义**（属性访问不触发多余属性检查，多几个键是安全的）；已同步进 memory。 |
+
+## 提交分组（本地 7 条，未 push）
+
+> 口径：一提交一可编译、且**相关测试绿**（不是「跑得起来」）。逐条实测：
+> `git stash -u` → `typecheck` + 该提交相关的测试套件 → `git stash pop`。
+> `package.json` 被**行级拆分**（依赖行进解析提交，`test:docx` 脚本 + `test:library` 串链进测试提交）
+> ⇒ 那两条提交的 `git commit` 一律**裸 `-F -`**（走 index，不带 pathspec）。
+
+| # | commit | 任务 | 内容 | 独立实测 |
+|---|--------|------|------|----------|
+| 1 | `d06046e` | T1 | refactor：抽出 `heading-patterns.ts`（PDF / DOCX 共用标题判据唯一真源） | `test:extract` 13/13（`promotePdfHeadings` 断言一字未改） |
+| 2 | `4a4a52d` | T6 | `.docx` 登记为可导入类型（分类 + 两条体积线 + `extract` 两字段 + `stripExtension`） | `test:import` 30/30 · `test:extract` 13/13 |
+| 3 | `88b9c24` | T2–T5 | DOCX 解析层三件套 + `mammoth` 依赖行 + `package-lock` | `test:import` 30/30 · `test:extract` 13/13 |
+| 4 | `1b4eb2e` | T9 | i18n zh/en（**刻意早于 5**：见实施期发现） | `test:i18n` exit 0 |
+| 5 | `4b121a0` | T7 T8 | 适配器 docx 分支 + `FILE_BYTE_LIMITS` + 面板 `kindLabel` 映射化 | `test:import` 30/30 · `test:extract` 13/13 |
+| 6 | `742e51d` | T10 | 单测 22 例 + `import-extract` 夹具/扫描名单 + `test:docx` 脚本与串链 | `test:docx` 22/22 · `test:extract` 13/13 · `test:i18n` exit 0 |
+| 7 | `4804357` | T11 | docs：方案回填 / 本 runbook / roadmap / README 双语 | 纯文档，最终态跑完整 `test:library` exit 0 |
+
+`git rev-list --count origin/main..HEAD` = **10**（含本特性前既有的本地领先 3 条）。
 
 ## 验证录像（2026-09-23 实测）
 
@@ -85,6 +106,10 @@ $ npm run test:library  → exit 0（28 组串联，含新串入的 test:docx 22
 受控样本 4（size×4）· 报名系统需求 1 · 橙子.docx 6（+1 表格 +14 图跳过）· 邢行行.docx 0
 → 与方案 §3.3b 基线 4 / 1 / 6 / 0 **完全一致**；`邢行行.docx` 的「逐字空格」经证伪在**源 `text.value` 内**
 ```
+
+> 2026-09-24：提交分组重排（见 §提交分组）后，按上述命令**逐提交复核**；最终态**复跑**一遍
+> `typecheck` / `test:docx` / `test:extract` / `test:import` / `test:i18n` / `test:library`，
+> 输出与本录像逐字一致（`ALL PASS`，exit 0）。
 
 ## 遗留（本次不做，登记备查）
 
