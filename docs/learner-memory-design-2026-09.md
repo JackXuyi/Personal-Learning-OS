@@ -1220,6 +1220,13 @@ sequenceDiagram
 
 ## 8. 涉及文件及改动伪代码
 
+> ⚠️ **2026-09-24 分层归位**（`docs/architecture-service-layer-design-2026-09.md`）：下列 §8.x 中标注为
+> `src/features/memory/*` 的**服务模块**已迁至 `src/services/memory/*` —— 即 `memory-service` /
+> `memory-facts` / `memory-doc-merge` / `memory-signals` 四个。**仍留 `src/features/memory/`**：
+> `memory-texts.ts`（i18n → 服务契约的映射器，必须知道 i18n）、`desktop-memory-doc.ts`（依赖 Tauri
+> `invoke`）、`memory-samples.ts`（依赖 `features/profile/pii-mask`）、`memory-import.ts` 与全部 `.tsx`。
+> 本节列出的**签名是行为契约，未变**；只有文件位置变了。
+
 > 共 **27 个文件**：新增 14（含 1 个 Rust 模块、1 个测试）、修改 13。文档同步另计（§9 T19）。**若走 D12-B，则减去 2 个（`memory_doc.rs` / `desktop-memory-doc.ts`）。**
 
 ### 8.0 `src/lib/hash.ts`（新增，T0 前置）

@@ -11,7 +11,7 @@
 1. **主链路无大洞，测试健康。** 48 个测试文件全部绿（`test:library` ALL PASS + 19 个独立组全绿，54s）；导入 → 切分 → 学 → 测 → 判 → 报告 → 复习全闭环。
 2. **缺口集中在四类，都不是「主链路漏了一段」**：
    - **A 已实现但零接线**（14 个符号 + 1 个孤儿文件 + 1 个整模块；含 D3 修复后**连带产生**的 2 个）—— 有实现、有单测、无人用 → ✅ **2026-09-24 清完（第 2 批，见 §二）**
-   - **B 同族越层**（`stores → features`、`engine → i18n`、`ai → engine`）—— 正式规则的三条之外，实际存在的反向依赖 → 第 3 批
+   - **B 同族越层**（`stores → features`、`engine → i18n`、`ai → engine`）—— 正式规则的三条之外，实际存在的反向依赖 → ✅ **2026-09-24 收口（第 3 批，见 §三）**；其中 `ai → engine` 是同层互换，**刻意保留**
    - **C 重复实现 ≥3 处**（7 组）—— 违反「同一逻辑跨 ≥3 处必抽取」→ 第 4 批
    - **D 文档与代码相反**（3 处）—— 会误导后来者重复造轮子 / 误判门禁状态 → ✅ **2026-09-24 收口（第 1 批，见 §一）**
 3. **最该先动的是 D，不是 A —— ✅ 已于 2026-09-24 收口**（详见 §一）。死代码只是浪费，反向文档会**主动误导**：`tech-debt-closeout §6.1` 声称「无历史时未用 `profile.level` 定 band」，而代码早已用（且 roadmap 把它列为已实施）——两文档自相矛盾。**D1/D2 改文档、D3 改代码**（删死代码后 `typecheck` 归零，README 无需改动即成立）。
@@ -98,16 +98,34 @@
 
 ---
 
-## 三、🟠 中：分层越界（同族反向依赖）
+## 三、🟠 中：分层越界（同族反向依赖）—— ✅ **已收口（2026-09-24，第 3 批）**
 
-规则 `layer-import-boundaries.mdc` 声明方向 `domain → engine/ai/storage → stores → features`。`engine/ai → features` 无违规（0 命中），但存在下列**反向**依赖：
+> 处置文档：`docs/architecture-service-layer-design-2026-09.md`；执行台账：`docs/architecture-service-layer-runbook-2026-09.md`。
+> 判据（可执行）：`npm run layer:check`（`scripts/layer-boundary-scan.mjs`，断言 A1–A4 + 值依赖图无环）。
 
-| 方向 | 位置 | 说明 |
+规则 `layer-import-boundaries.mdc` 声明方向 `domain → engine/ai/storage → stores → services → features`。`engine/ai → features` 无违规（0 命中），第 3 批前存在下列**反向**依赖：
+
+| 方向 | 位置 | 说明 | 处置 |
+|---|---|---|---|
+| **stores → features** | `stores/useLoopStore.ts:31-43` | **值导入** `features/memory/memory-service`（`applyAiEntries`/`clearMemoryDoc`/`loadMemory`…） | ✅ memory 四服务模块下沉 `src/services/memory/` |
+| | `stores/useIndexStore.ts:12, 54-56` | 反向 import `features/learn/index-service`，**并靠 `await import()` 打断 ESM 环** —— 文件 `:4` 自己写着「stores 不得反向依赖 features」。⚠️ **且该手法实测无效**：`npm run build` 报 `[INEFFECTIVE_DYNAMIC_IMPORT]`（`index-service` 同时被 6 处静态 import）⇒ 既违反分层、又没起到分包作用，是纯负债 | ✅ **消环**：store 纯化（`refreshCoverage` → 纯 setter `setCoverage`，编排归服务）+ `index-service` 下沉；动态 import 归零 |
+| **engine → i18n** | ~~`engine/assessment-engine.ts:24-25`~~（该模块第 2 批已删）· `engine/loop.ts:25-26` · `engine/learning-planner.ts:43-44` | 纯逻辑层 `import { zh }` 作默认文案表（`m: Messages = zh`）⇒ engine 输出与 UI 语言层耦合 | ✅ 删 4 处默认值，`m` 变必填；导入改 `import type { Messages } from "../i18n/types"`（运行时零依赖） |
+| **ai → engine** | `ai/pipelines.ts:34-35`（**值导入** `applyChapterRefine`）· `ai/refine-batch.ts:18` | 同层横向耦合 | **刻意保留**（同层互换允许，实测无环） |
+
+### 3.1 ⚠️ 规则盲区 —— 本次越界能长期存在的**根因**（✅ 已补）
+
+`rules/code-structure-and-dependencies.mdc:37` 原文只禁「`domain/engine/ai/storage` 不得 import features」，`rules/layer-import-boundaries.mdc` 的表格也没有 `stores` 那一行 —— **`stores` 从不在禁止名单里**，而代码注释（`useIndexStore.ts:4`）与审计报告却按「违规」处理。⇒ 下一个人读规则会得出「这样写合规」的结论。
+
+第 3 批把层序与两条禁令写进上述两份规则 + `AGENTS.md`，并落成可执行门禁 —— **只改代码不改规则，同一类问题必然复发**。
+
+### 3.2 第 3 批**顺带发现**（新，2026-09-24 实测）
+
+| 项 | 实测 | 处置 |
 |---|---|---|
-| **stores → features** | `stores/useLoopStore.ts:31-43` | **值导入** `features/memory/memory-service`（`applyAiEntries`/`clearMemoryDoc`/`loadMemory`…） |
-| | `stores/useIndexStore.ts:12, 54-56` | 反向 import `features/learn/index-service`，**并靠 `await import()` 打断 ESM 环** —— 文件 `:4` 自己写着「stores 不得反向依赖 features」。⚠️ **且该手法实测无效**：`npm run build` 报 `[INEFFECTIVE_DYNAMIC_IMPORT]`（`index-service` 同时被 `CommandPalette` / `ImportModal` / `LibraryPage` / `chapter-qa-service` / `SplitTab` 静态 import）⇒ 动态 import **既违反分层、又没起到分包作用**，是纯负债 |
-| **engine → i18n** | `engine/assessment-engine.ts:24-25` · `engine/loop.ts:25-26` · `engine/learning-planner.ts:43-44` | 纯逻辑层 `import { zh }` 作默认文案表（`m: Messages = zh`）⇒ engine 输出与 UI 语言层耦合 |
-| **ai → engine** | `ai/pipelines.ts:34-35`（**值导入** `applyChapterRefine`）· `ai/refine-batch.ts:18` | 同层横向耦合（当前无环，因 engine 不反依赖 ai） |
+| `components → features` **4 条** | `CommandPalette.tsx:5 → features/units` · `:10 → features/learn/index-service` · `:11 → features/plan/chapter-action` · `AppShell.tsx:5 → features/learn/ImportModal` | 1 条随本批下沉**自动消除**（`:10` 现指 `services/`）；**余 3 条登记为门禁基线，不在本批范围** —— 修它们要动 UI 挂载结构（`AppShell`/`ImportModal`/`units`/`chapter-action` 的归属），与本批「纯结构重构、零 UI 变化」冲突，需单独方案 + UI 测试保护 |
+| **2 组既存模块级环** | ① `engine/profile-band.ts ⇄ engine/quiz-engine.ts`（同层 Tier 1，属模块拆分问题）② `components/CommandPalette ⇄ components/layout/AppShell ⇄ features/learn/ImportModal`（Tier 3，UI 事件总线式互引） | 登记为门禁基线；**同属未排期债务** |
+
+> ⚠️ 方案 §4.1 曾断言 A5「无环 ✅ 0」，实测为 **2 组**（方案期只做了逐行 import grep，**未做 SCC**）⇒ 已在方案「实现偏离记录」登记。基线机制口径：**检测全量、只禁新增** —— 存量不被伪装成绿的。
 
 ---
 
@@ -131,11 +149,11 @@
 |---|---|---|
 | 单文件 >700 行 | `i18n/messages/{en,zh}.ts`（2370/2301）· `storage/tauri.ts:1103` · `learn/ImportModal.tsx:835` · `data/portability/DataPortabilityCard.tsx:714` · `quiz/QuizReportPage.tsx:707` · `src-tauri/src/db/commands.rs:1266` · `db/models.rs:796` | 词典表属合理例外；其余 6 个（含 2 个 Rust）应拆 |
 | i18n 硬编码（真上屏） | `goals/GoalFormPage.tsx:344`「（第 {c.order} 章）」· `home/HomePage.tsx:353-354`「{月}月{日}日」· `learn/library/dialogs.tsx:46-51` `FORMAT_OPTIONS` 中文标签（英文界面也显示中文） | `engineering-code-style.mdc` 要求 UI 文案一律走 i18n |
-| i18n 硬编码（.ts 层，抛给 UI） | `learn/library-actions.ts:56/128/131`（`setError(err.message)` 直接上屏）· `learn/index-service.ts:194` · `learn/analyze-service.ts` 多处 | 分类 enum 应交给 UI 映射（`analyze-service` 已带 `kind`，文案是否上屏**待复核**） |
+| i18n 硬编码（.ts 层，抛给 UI） | `learn/library-actions.ts:56/128/131`（`setError(err.message)` 直接上屏）· `services/learn/index-service.ts`（原 `features/learn/`）· `learn/analyze-service.ts` 多处 | 分类 enum 应交给 UI 映射（`analyze-service` 已带 `kind`，文案是否上屏**待复核**） |
 | locale 脆弱匹配 | `learn/library/dialogs.tsx:295` `msg.includes("上限") \|\| msg.includes("limit")` | 对错误串做中文子串匹配 |
 | 原生 `<select>` | `features/progress/ProgressPage.tsx:200-213` | `react.mdc` 要求走 `components/ui/select.tsx`；全仓唯一一处 |
 | `@/` alias 空配 | `tsconfig.json:19-21` · `vite.config.ts:10-14` 声明了 alias，`src` 内 **0 次使用** | 可保留（shadcn 生成层豁免位），但属死配置 |
-| 无效动态 import ×2 | `useIndexStore.ts:54`（`index-service`）· `features/profile/resume-import.ts`（`learn/import/pdf.ts`） | `npm run build` 报 `[INEFFECTIVE_DYNAMIC_IMPORT]`：目标模块同时被静态 import ⇒ 拆不出 chunk，动态写法只增复杂度 |
+| 无效动态 import —— ✅ **第 3 批消除 1 处** | ~~`useIndexStore.ts:54`（`index-service`）~~ 已随 store 纯化归零 · 余 `features/profile/resume-import.ts`（`learn/import/pdf.ts`） | `npm run build` 报 `[INEFFECTIVE_DYNAMIC_IMPORT]`：目标模块同时被静态 import ⇒ 拆不出 chunk，动态写法只增复杂度。**余 1 处待第 4 批** |
 | 单 chunk >500 kB | `npm run build` 警告（主 chunk 2.35 MB / gzip 718 kB） | 无代码分割，属性能优化项非缺口 |
 
 ---
@@ -172,12 +190,18 @@
   2.3 canStartCapabilityRun → 走【接线】为唯一门禁（消「两把尺子」，非删除）
   ⚠️ 唯一未同步处：Rust `embed_default_model` 命令（TS 镜像已删，Rust 侧保留）→ 见 §2.5
 
-第 3 批（分层归位，风险中）
-  stores → features：把 memory-service / index-service 的真源下沉到 services 层
-  engine → i18n：文案表改由调用方注入（engine 只产 key / enum）
+第 3 批 —— ✅ 已完成 2026-09-24
+  方案 docs/architecture-service-layer-design-2026-09.md ｜ 台账 docs/architecture-service-layer-runbook-2026-09.md
+  3.1 新建 src/services 层；memory 四模块 + index-service 下沉 ⇒ stores → features 归零
+  3.2 消环：useIndexStore 纯化（refreshCoverage → 纯 setter setCoverage，编排归服务）⇒ 动态 import 归零
+  3.3 engine 去 i18n 值依赖 + 删 4 处 `m: Messages = zh`（m 变必填）；5 个测试文件同批
+  3.4 新增可执行门禁 `npm run layer:check`；同批补 rules ×2 + AGENTS.md
+  ⚠️ 未纳入本批：components → features 余 3 条 · 2 组既存环（见 §3.2）
+  ⚠️ 仍未迁：features/ 下其余 12 个 *-service.ts（方案 §3.1.3，按需另批）
 
 第 4 批（抽取重复）
   shortDate / AI 错误分类器 / aliveRef —— 3 组均为逐字相同，抽取零语义风险
+  ⤴ 另含 §五「无效动态 import」余 1 处（features/profile/resume-import.ts）
 
 第 5 批（功能增量）
   F7-c 学习单元实体 · 章节拆分 · EPUB / URL 抓取 · OCR —— 均为 P2，按产品需要排
@@ -191,13 +215,18 @@
 - 本地复核：`npm run typecheck`（**修复前** 3 条 TS6133 → **exit 0**）· **全部 48 个 `test:*` 套件绿**（第 2 批后重跑，`TOTAL_FAIL=0`）· `npm run build` **exit 0**
 - 所有「零消费」结论均经全仓 Grep（含 `tests/`、`scripts/`、`src-tauri/`）复核；命中仅出现在定义处 / barrel `export *` / 文档时判为死代码
 - ⚠️ **`npm run build` 在本机需要绕过沙箱**：沙箱的 `safe-delete` 守卫会拦截 `vite:prepare-out-dir` 清空 `dist/assets`（316 文件 > 阈值 50，`SAFE_DELETE_BULK_CONFIRM_REQUIRED`）—— 这是**环境限制**，与代码无关（报错点在 `vite:prepare-out-dir`，此前 `5073 modules transformed` 已成功）。
+- ⚠️ **本报告的「代码级」结论一律先实测再采信**：第 2 批推翻了孤儿 i18n 键计数（8 → **33**）；第 3 批推翻了 A5「无环 ✅ 0」（实测 **2 组**）与「`components → features` 可直接归零」（实测 **4 条**，1 条随下沉消除、3 条需单独批次）。教训：**grep 逐行枚举 ≠ 图级断言**（环必须做 SCC），**计数必须先跑再写**。
+- 第 3 批新增判据：`npm run layer:check`（`scripts/layer-boundary-scan.mjs`，报告模式 + `--fail-on-violation` 严格档 + `--json`）。
 
-### 第 2 批的回扫口径（改了哪些文档、为什么不动其余）
+### 回扫口径（改哪些文档、为什么不动其余）
 
-| 处置 | 对象 | 理由 |
-|---|---|---|
-| **改** | 本报告 §零/§二/§七/§附 | 它是本轮的**唯一权威记录** |
-| **改** | `skills/plos-ui-system/references/component-catalog.md` | 组件台账是**活表**，删组件必须跟 |
-| **改** | `docs/library-module-review-2026-09.md` P2-3 / 建议 18、`docs/business-logic-review-2026-09.md` P2-5 | 三处是**开放的债/建议登记**（「未兑现承诺」类）—— 不标记会被重新排期 |
-| **改** | `docs/business-flow-end-to-end-2026-09.md` 的「章级评测本地判分」行 | 它是**现状参照**，且该行断言 `assessment-engine.ts` 是「唯一路径」——模块已删，事实被推翻 |
-| **不动** | 约 20 份 docs 里对已删符号的历史引用（各轮 design / runbook / review 快照，如 `goal-capability-assessment-{design,task-runbook}`、`i18n-design`、`ai-chapter-mapreduce-*`、`library-detail-page-*`、`ui-workbench-plan`、`roadmap` 的 ✅ 已修行…） | 它们是**各自当时的历史快照**（记录「当时发生了什么」），改写＝篡改历史。判据：**据它们排期前逐条实测**，而非替它们改错 |
+| 批次 | 处置 | 对象 | 理由 |
+|---|---|---|---|
+| 第 2 批 | **改** | 本报告 §零/§二/§七/§附 | 它是本轮的**唯一权威记录** |
+| 第 2 批 | **改** | `skills/plos-ui-system/references/component-catalog.md` | 组件台账是**活表**，删组件必须跟 |
+| 第 2 批 | **改** | `docs/library-module-review-2026-09.md` P2-3 / 建议 18、`docs/business-logic-review-2026-09.md` P2-5 | 三处是**开放的债/建议登记**（「未兑现承诺」类）—— 不标记会被重新排期 |
+| 第 2 批 | **改** | `docs/business-flow-end-to-end-2026-09.md` 的「章级评测本地判分」行 | 它是**现状参照**，且该行断言 `assessment-engine.ts` 是「唯一路径」——模块已删，事实被推翻 |
+| 第 3 批 | **改** | 本报告 §零/§三（新建 3.1/3.2）/§五/§七/§附 | 同上（唯一权威记录） |
+| 第 3 批 | **改** | `docs/learner-memory-design-2026-09.md` §8 开头 | 加**位置注记**：§8.x 里 4 个服务模块已迁 `src/services/memory/`；**不逐条改写 20 余处路径** —— 它们是方案期快照，且该节签名是**行为契约**（未变） |
+| 第 3 批 | **改** | `rules/code-structure-and-dependencies.mdc` · `rules/layer-import-boundaries.mdc` · `AGENTS.md` · `package.json` | 规则是**约束本体**：「stores 不在禁止名单」正是本次出事的机制 ⇒ 必须同批修，否则问题必复发 |
+| 两批 | **不动** | 约 20 份 docs 里对已删符号 / 旧路径的历史引用（各轮 design / runbook / review 快照，如 `goal-capability-assessment-*`、`i18n-design`、`ai-chapter-mapreduce-*`、`library-detail-page-*`、`ui-workbench-plan`…）；本轮涉及的 `learner-memory-design` §8.x 内 20 余处旧路径同理 | 它们是**各自当时的历史快照**（记录「当时发生了什么」），改写＝篡改历史。判据：**据它们排期前逐条实测**，而非替它们改错 |
