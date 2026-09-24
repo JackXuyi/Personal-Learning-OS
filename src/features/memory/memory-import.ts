@@ -21,7 +21,7 @@ import { AiProviderError } from "../../ai/types";
 import type { ExistingMemory, MemorySample } from "../../ai/memory-pipeline";
 import { extractMemoryDraft } from "../../ai/memory-pipeline";
 import { collectSamples } from "./memory-samples";
-import type { MemorySignals } from "./memory-signals";
+import type { MemorySignals } from "../../services/memory/memory-signals";
 
 /** 记忆归纳失败的分类（UI 按 kind 取 i18n 文案）。 */
 export type MemoryRunErrorKind =

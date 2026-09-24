@@ -26,10 +26,10 @@ import { EMPTY_MEMORY_META } from "../domain";
 import type { Messages } from "../i18n/messages/zh";
 import { zh } from "../i18n/messages/zh";
 // F9：记忆的状态入口在 store（设计 §8.14），实现全部委托给服务层。
-// 依赖方向说明：`features/memory/*` **不** import 本模块（服务层的 `store` 参数是
+// 依赖方向说明：`services/memory/*` **不** import 本模块（服务层的 `store` 参数是
 // 注入的 `StorageAdapter`，可脱离 store 直测），故此处是真单向、无环。
-import type { MemorySignals } from "../features/memory/memory-signals";
-import type { MemoryTexts, RefreshOptions } from "../features/memory/memory-service";
+import type { MemorySignals } from "../services/memory/memory-signals";
+import type { MemoryTexts, RefreshOptions } from "../services/memory/memory-service";
 import {
   applyAiEntries,
   clearMemoryDoc,
@@ -39,8 +39,8 @@ import {
   restoreDismissed,
   saveUserDoc,
   useSystemVersion,
-} from "../features/memory/memory-service";
-import type { MergeStats } from "../features/memory/memory-doc-merge";
+} from "../services/memory/memory-service";
+import type { MergeStats } from "../services/memory/memory-doc-merge";
 
 /**
  * 整个应用唯一的存储实例。默认由 localStorage 支撑

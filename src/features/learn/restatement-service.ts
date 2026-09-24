@@ -39,7 +39,7 @@ import { extractRestatementFeedback } from "../../ai/restatement";
 import { applyKeyPointRating } from "../../engine";
 import { storage } from "../../stores/useLoopStore";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
-import { loadMemoryEntries } from "../memory/memory-service";
+import { loadMemoryEntries } from "../../services/memory/memory-service";
 import { locateQuote } from "./evidence-anchor";
 
 /** 复述长度下限 / 上限（UI 与服务层共用同一常量，避免两处口径漂移）。 */

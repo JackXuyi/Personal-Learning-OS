@@ -11,8 +11,8 @@
  */
 import type { MemoryDocScaffold, MemoryCategory } from "../../domain";
 import type { Messages } from "../../i18n/types";
-import type { MemoryFactTexts } from "./memory-facts";
-import type { MergeStats } from "./memory-doc-merge";
+import type { MemoryFactTexts } from "../../services/memory/memory-facts";
+import type { MergeStats } from "../../services/memory/memory-doc-merge";
 
 /** 「会写进用户 markdown 文档」的骨架文案。 */
 export function scaffoldOf(m: Messages): MemoryDocScaffold {

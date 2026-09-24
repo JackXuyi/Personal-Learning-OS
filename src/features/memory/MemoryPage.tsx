@@ -29,14 +29,14 @@ import { MEMORY_FACT_MIN_SAMPLES, formatMemoryTimestamp, hasNote, parseMemoryDoc
 import { EVIDENCE_LOG_MAX } from "../../storage/memory";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
-import type { MemorySignals } from "./memory-signals";
-import { countChapters, loadMemorySignals } from "./memory-signals";
-import type { MergeStats } from "./memory-doc-merge";
-import { memoryDiffs } from "./memory-doc-merge";
-import { deriveAllFacts, spanDays, studyStyleMismatch } from "./memory-facts";
+import type { MemorySignals } from "../../services/memory/memory-signals";
+import { countChapters, loadMemorySignals } from "../../services/memory/memory-signals";
+import type { MergeStats } from "../../services/memory/memory-doc-merge";
+import { memoryDiffs } from "../../services/memory/memory-doc-merge";
+import { deriveAllFacts, spanDays, studyStyleMismatch } from "../../services/memory/memory-facts";
 import { factTextsOf, lastMergedPrefixOf, reportLinesOf, scaffoldOf } from "./memory-texts";
-import type { MemoryErrorKind } from "./memory-service";
-import { MemoryError, externalChangeAt } from "./memory-service";
+import type { MemoryErrorKind } from "../../services/memory/memory-service";
+import { MemoryError, externalChangeAt } from "../../services/memory/memory-service";
 import { MEMORY_AI_MIN_SAMPLES, prepareAiRun } from "./memory-import";
 import {
   isDesktopFileAvailable,

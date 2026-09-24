@@ -27,7 +27,7 @@ import {
 import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { useLoopStore } from "../../stores/useLoopStore";
 import { MemoryRunError, prepareAiRun, runMemoryAi, type MemoryRunErrorKind } from "./memory-import";
-import type { MemorySignals } from "./memory-signals";
+import type { MemorySignals } from "../../services/memory/memory-signals";
 import { lastMergedPrefixOf, scaffoldOf } from "./memory-texts";
 
 type Step = "notice" | "payload" | "result";

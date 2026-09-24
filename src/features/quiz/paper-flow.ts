@@ -14,7 +14,7 @@ import { canCreatePaperMode, createPaper } from "../../engine";
 import { generateQuizQuestionsWithAi } from "../../ai";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { storage } from "../../stores/useLoopStore";
-import { loadMemoryEntries } from "../memory/memory-service";
+import { loadMemoryEntries } from "../../services/memory/memory-service";
 
 /** 出卷失败的分类（UI 按 kind 取 i18n 文案，不暴露原始错误）。 */
 export type PaperFlowErrorKind = "invalid-mode" | "no-chapters";

@@ -11,7 +11,7 @@
 import { useI18n } from "../../i18n";
 import { Card, Section } from "../../components/primitives";
 import { buttonVariants } from "../../components/ui/button";
-import type { MemoryDiffEntry } from "./memory-doc-merge";
+import type { MemoryDiffEntry } from "../../services/memory/memory-doc-merge";
 
 export default function MemoryDiffNotice({
   diffs,

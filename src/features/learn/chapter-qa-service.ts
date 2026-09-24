@@ -30,7 +30,7 @@ import { answerChapterQuestion } from "../../ai/chapter-qa";
 import { retrieveChapterContext } from "../../ai/retrieval/chapter-context";
 import { storage } from "../../stores/useLoopStore";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
-import { loadMemoryEntries } from "../memory/memory-service";
+import { loadMemoryEntries } from "../../services/memory/memory-service";
 import { locateQuote } from "./evidence-anchor";
 import { activeEmbeddingModel } from "../../services/learn/index-service";
 

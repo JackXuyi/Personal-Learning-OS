@@ -43,9 +43,9 @@ import { capabilityItemId } from "../src/domain/capability.ts";
 import { hashId } from "../src/lib/hash.ts";
 import { deriveChapterCards } from "../src/engine/flashcard-engine.ts";
 import { InMemoryStorage } from "../src/storage/memory.ts";
-import type { MergeStats } from "../src/features/memory/memory-doc-merge.ts";
-import { mergeMemoryDoc, memoryDiffs } from "../src/features/memory/memory-doc-merge.ts";
-import type { MemoryFactTexts } from "../src/features/memory/memory-facts.ts";
+import type { MergeStats } from "../src/services/memory/memory-doc-merge.ts";
+import { mergeMemoryDoc, memoryDiffs } from "../src/services/memory/memory-doc-merge.ts";
+import type { MemoryFactTexts } from "../src/services/memory/memory-facts.ts";
 import {
   deriveAllFacts,
   deriveCadence,
@@ -53,8 +53,8 @@ import {
   deriveReviewRhythm,
   deriveStudyMode,
   studyStyleMismatch,
-} from "../src/features/memory/memory-facts.ts";
-import type { MemorySignals } from "../src/features/memory/memory-signals.ts";
+} from "../src/services/memory/memory-facts.ts";
+import type { MemorySignals } from "../src/services/memory/memory-signals.ts";
 import {
   MEMORY_AI_MIN_SAMPLES,
   MemoryRunError,
@@ -73,7 +73,7 @@ import {
   restoreDismissed,
   saveUserDoc,
   useSystemVersion,
-} from "../src/features/memory/memory-service.ts";
+} from "../src/services/memory/memory-service.ts";
 import { parseMemoryDraft } from "../src/ai/memory-pipeline.ts";
 import { lastMergedPrefixOf, reportLinesOf, scaffoldOf } from "../src/features/memory/memory-texts.ts";
 import { zh } from "../src/i18n/messages/zh.ts";
