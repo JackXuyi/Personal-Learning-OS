@@ -74,17 +74,20 @@ const REPO_TREE = {
 
 const run = async () => {
   // ---- 1) classifyLocalFile ----
-  await check("classify md / pdf / unsupported", () => {
+  await check("classify md / pdf / docx / unsupported", () => {
     assert.deepEqual(classifyLocalFile({ name: "a.md", size: 100 }), { kind: "md", overLimit: false });
     assert.deepEqual(classifyLocalFile({ name: "b.markdown", size: 100 }), { kind: "md", overLimit: false });
     assert.deepEqual(classifyLocalFile({ name: "c.PDF", size: 100 }), { kind: "pdf", overLimit: false });
-    assert.deepEqual(classifyLocalFile({ name: "d.docx", size: 100 }), { error: "unsupported" });
+    // F8 范围 3：.docx 已是可导入类型；旧格式（OLE / 宏 / 模板）仍明确拒绝。
+    assert.deepEqual(classifyLocalFile({ name: "d.docx", size: 100 }), { kind: "docx", overLimit: false });
+    assert.deepEqual(classifyLocalFile({ name: "e.doc", size: 100 }), { error: "unsupported" });
   });
 
-  await check("classify 大小护栏（md>1MB / pdf>30MB）", () => {
+  await check("classify 大小护栏（md>1MB / pdf>30MB / docx>20MB）", () => {
     assert.equal(classifyLocalFile({ name: "a.md", size: LIMITS.localMdBytes + 1 }).overLimit, true);
     assert.equal(classifyLocalFile({ name: "b.md", size: LIMITS.localMdBytes }).overLimit, false);
     assert.equal(classifyLocalFile({ name: "c.pdf", size: LIMITS.localPdfBytes + 1 }).overLimit, true);
+    assert.equal(classifyLocalFile({ name: "d.docx", size: LIMITS.localDocxBytes + 1 }).overLimit, true);
   });
 
   // ---- 2) stripExtension / formatBytes ----

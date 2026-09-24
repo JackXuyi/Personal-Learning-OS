@@ -19,6 +19,8 @@ export const LIMITS = {
   localMdBytes: 1 * 1024 * 1024,
   /** 单个 .pdf ≤ 30MB（pdf.js 内存解析护栏）。 */
   localPdfBytes: 30 * 1024 * 1024,
+  /** 单个 .docx ≤ 20MB（解压后整篇进内存，故比 PDF 保守）。 */
+  localDocxBytes: 20 * 1024 * 1024,
   /** PDF 页数护栏（内存/耗时）。 */
   pdfMaxPages: 500,
   /** GitHub 仓库抽取 md 文件数上限（未认证 API/raw 并发护栏）。 */
@@ -33,6 +35,12 @@ export const LIMITS = {
    * 口径与 githubTotalChars 对齐，超限在表单层前置拦截（按钮禁用 + 提示）。
    */
   pasteMaxChars: 1_500_000,
+  /**
+   * DOCX 入库正文字符护栏（F8 范围 3）。
+   * ⚠️ 与 `pasteMaxChars` / `githubTotalChars` 是**同一把尺子**（「入库正文体量」这条线），
+   * 不是文件字节线 —— 放错组会让人以为它是 `.docx` 的大小上限（那由 `localDocxBytes` 管）。
+   */
+  docxMaxChars: 1_500_000,
 } as const;
 
 /**
@@ -69,12 +77,15 @@ export interface ImportUnit {
   /**
    * 抽取元信息（结果卡可观测性，G6）：仅本地文件来源填充。
    * - `pages` / `nonEmptyPages`：PDF 总页数与抽到文本的页数（差值大 → 疑似扫描件）；
-   * - `encoding`：md 实际采用的解码名（非 utf-8 时提示，避免静默乱码，G4）。
+   * - `encoding`：md 实际采用的解码名（非 utf-8 时提示，避免静默乱码，G4）；
+   * - `headings` / `tables`：DOCX 识别到的标题数与 GFM 表格数（`headings = 0` ⇒ 切分降级为段落聚类）。
    */
   extract?: {
     pages?: number;
     nonEmptyPages?: number;
     encoding?: string;
+    headings?: number;
+    tables?: number;
   };
 }
 
@@ -107,8 +118,8 @@ export interface ImportSummary {
   skipped: { title: string; source?: string }[];
 }
 
-/** 本地文件类型判定（纯文本类 .md / .txt + .pdf）。 */
-export type LocalFileKind = "md" | "txt" | "pdf";
+/** 本地文件类型判定（纯文本类 .md / .txt + .pdf + .docx）。 */
+export type LocalFileKind = "md" | "txt" | "pdf" | "docx";
 
 export interface LocalFileClassified {
   kind: LocalFileKind;
@@ -133,12 +144,17 @@ export function classifyLocalFile(file: { name: string; size: number }): LocalFi
   if (lower.endsWith(".pdf")) {
     return { kind: "pdf", overLimit: file.size > LIMITS.localPdfBytes };
   }
+  if (lower.endsWith(".docx")) {
+    return { kind: "docx", overLimit: file.size > LIMITS.localDocxBytes };
+  }
+  // ⚠️ `.doc` / `.docm` / `.dotx` 明确不支持（OLE 二进制 / 宏 / 模板），由本函数拦下；
+  //    「伪装成 .docx 的 OLE」扩展名骗得过去，只能在导入期按魔数判定（docx.ts）。
   return { error: "unsupported" };
 }
 
 /** 去掉文件扩展名作为默认资料标题。 */
 export function stripExtension(name: string): string {
-  return name.replace(/\.(md|markdown|mdown|txt|pdf)$/i, "");
+  return name.replace(/\.(md|markdown|mdown|txt|pdf|docx)$/i, "");
 }
 
 /** 文件大小格式化（B/KB/MB，无小数）。 */
