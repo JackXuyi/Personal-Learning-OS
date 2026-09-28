@@ -17,12 +17,11 @@
 import type {
   Chapter,
   ChapterAnswer,
-  ChapterQaErrorKind,
   QaCitation,
 } from "../../domain";
 import type { StorageAdapter } from "../../storage";
 import type { AIProvider } from "../../ai/types";
-import { AiProviderError } from "../../ai/types";
+import { aiFailureKindOf } from "../../ai/failure-kind";
 import type { Embedder } from "../../ai/embedding";
 import { createEmbedder } from "../../ai/embedding";
 import { PIPELINE_LIMITS } from "../../ai/pipeline-core";
@@ -117,7 +116,7 @@ export async function askChapter(input: AskChapterInput): Promise<ChapterAnswer>
       status: citations.length > 0 ? "answered" : "unanchored",
     };
   } catch (err) {
-    return { ...base, status: "error", errorKind: classifyQaError(err) };
+    return { ...base, status: "error", errorKind: aiFailureKindOf(err) };
   }
 }
 
@@ -163,21 +162,4 @@ export function anchorQuotes(
     if (out.length >= MAX_CITATIONS) break;
   }
   return out;
-}
-
-/**
- * 异常 → 稳定的原因分类（不把异常栈丢给用户；文案由 UI 走 i18n）。
- *
- * - `not-configured` → 未配置 / 密钥失效；
- * - `request-failed` → 主要是模型输出不可解析（`chatJson` / `extractJson`），
- *   这是本地小模型最常见的失败模式（UC-06），故归入 `parse`；
- * - 其它（storage / 检索链路）→ `fetch`。
- */
-function classifyQaError(err: unknown): ChapterQaErrorKind {
-  if (err instanceof AiProviderError) {
-    if (err.code === "not-configured") return "not-configured";
-    if (err.code === "request-failed") return "parse";
-    return "generic";
-  }
-  return "fetch";
 }

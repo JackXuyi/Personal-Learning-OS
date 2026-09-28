@@ -22,7 +22,6 @@
 import type {
   LearnerState,
   Restatement,
-  RestatementErrorKind,
   RestatementFeedback,
   RestatementMisread,
   RestatementPoint,
@@ -32,7 +31,7 @@ import type {
 import { RESTATEMENT_LIMITS, newId } from "../../domain";
 import type { StorageAdapter } from "../../storage";
 import type { AIProvider } from "../../ai/types";
-import { AiProviderError } from "../../ai/types";
+import { aiFailureKindOf } from "../../ai/failure-kind";
 import { PIPELINE_LIMITS } from "../../ai/pipeline-core";
 import type { RestatementDraft } from "../../ai/restatement";
 import { extractRestatementFeedback } from "../../ai/restatement";
@@ -127,7 +126,7 @@ export async function checkRestatement(input: CheckRestatementInput): Promise<Re
     return { status: "ok", record: saved, rating: ratingForCoverage(coverage), at: now };
   } catch (err) {
     // 文本已落库（仅缺 feedback）：返回 record，UI 据此在「往次复述」中可见并可重试。
-    return { status: "error", errorKind: classifyRestatementError(err), record, at: now };
+    return { status: "error", errorKind: aiFailureKindOf(err), record, at: now };
   }
 }
 
@@ -258,21 +257,4 @@ export async function removeRestatement(
   store: StorageAdapter = storage,
 ): Promise<void> {
   await store.deleteRestatement(id);
-}
-
-/**
- * 异常 → 稳定的原因分类（不把异常栈丢给用户；文案由 UI 走 i18n）。
- *
- * 照抄 `chapter-qa-service.classifyQaError`：
- * - `not-configured` → 阻断门通过后模型失效（竞态）；
- * - `request-failed` → 主要是模型输出不可解析（`chatJson` / `extractJson`）→ `parse`；
- * - 其它（storage / 读取链路）→ `fetch`。
- */
-function classifyRestatementError(err: unknown): RestatementErrorKind {
-  if (err instanceof AiProviderError) {
-    if (err.code === "not-configured") return "not-configured";
-    if (err.code === "request-failed") return "parse";
-    return "generic";
-  }
-  return "fetch";
 }

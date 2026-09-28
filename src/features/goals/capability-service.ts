@@ -48,7 +48,7 @@ import {
   toIndexedItems,
 } from "../../ai/capability";
 import type { AIProvider } from "../../ai/types";
-import { AiProviderError } from "../../ai/types";
+import { aiFailureKindOf } from "../../ai/failure-kind";
 import type { StorageAdapter } from "../../storage";
 import { storage as defaultStorage } from "../../stores/useLoopStore";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
@@ -169,7 +169,7 @@ export async function proposeCapabilityItems(input: {
       data: { items, truncated: draft.items.length >= CAPABILITY_LIMITS.maxItems },
     };
   } catch (err) {
-    return { status: "error", errorKind: classifyCapabilityError(err) };
+    return { status: "error", errorKind: aiFailureKindOf(err) };
   }
 }
 
@@ -365,7 +365,7 @@ export async function startCapabilityRun(input: {
     await store.saveCapabilityRun(run);
     return { status: "ok", data: { run, ...(paperId ? { paperId } : {}) } };
   } catch (err) {
-    return { status: "error", errorKind: classifyCapabilityError(err) };
+    return { status: "error", errorKind: aiFailureKindOf(err) };
   }
 }
 
@@ -483,7 +483,7 @@ export async function submitCapabilityRun(input: {
     }
     return { status: "ok", data: { report, run: scored } };
   } catch (err) {
-    return { status: "error", errorKind: classifyCapabilityError(err) };
+    return { status: "error", errorKind: aiFailureKindOf(err) };
   }
 }
 
@@ -598,22 +598,8 @@ export async function objectiveStageOf(
 }
 
 /* ------------------------------------------------------------------ */
-/* ⑤ 异常分类                                                          */
+/* ⑤ UI 视图派生（清单 / 快照 → 渲染所需形状）                          */
 /* ------------------------------------------------------------------ */
-
-/**
- * 异常 → 稳定分类（不把异常栈丢给用户；文案由 UI 走 i18n）。
- * 与 `classifyRestatementError` 同口径：`not-configured` 是竞态，
- * `request-failed` 主要是解析失败，其余（storage 链路）归 `fetch`。
- */
-function classifyCapabilityError(err: unknown): CapabilityErrorKind {
-  if (err instanceof AiProviderError) {
-    if (err.code === "not-configured") return "not-configured";
-    if (err.code === "request-failed") return "parse";
-    return "generic";
-  }
-  return "fetch";
-}
 
 /** 供 UI 复用的能力项快照视图（清单 → 报告渲染所需形状）。 */
 export function snapshotOf(items: readonly CapabilityItem[]): CapabilityItemSnapshot[] {
