@@ -3,7 +3,8 @@
  *
  * 交互（docs §4.2 P4）：
  * - 逐题流：进度 x/y + 范围标签；← 上一题 / → 下一题；
- * - 控件按题型：选择 → 选项卡（键盘 1–4）；判断 → ✓/✗ 纯符号按钮（文字保留在 aria-label）；问答与应用 → textarea；
+ * - 控件按题型：选择 / 判断 → 同一套行式选项（判断固定 ✓ / ✗ 两行，键盘 1–2；文字保留在 aria-label）；
+ *   问答与应用 → textarea；
  * - 草稿：每答一题自动暂存（storage.savePaperDraft），中途离开可续答；
  * - 交卷（T7 判卷流）：存最终草稿 → paper.status=grading → 跳 /quiz/:paperId/grading，
  *   判分/掌握度回写/章状态流转在该判卷页完成（5s 内可撤销）。
@@ -14,6 +15,7 @@
  *   （报告页 / 判卷页见 QuizReportPage / QuizGradingPage）
  */
 import { useCallback, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { Bar, Card } from "../../components/primitives";
 import type { Paper, PaperAnswers, PaperQuestion } from "../../domain";
@@ -269,6 +271,55 @@ export default function QuizAnswerPage() {
   );
 }
 
+/**
+ * 判断题的固定两个选项：与单选同行式交互，只是选项内容为符号。
+ * 文字（对 ✓ / 错 ✗）只作可访问名——报告页另用带文字版（report 命名空间）。
+ */
+const JUDGE_OPTIONS = [
+  { val: "true", glyph: "✓" },
+  { val: "false", glyph: "✗" },
+] as const;
+
+/**
+ * 选项行（单选与判断**共用**）：序号徽标 + 内容，选中态高亮。
+ * 抽成一个组件是为了让两种题型走同一条渲染路径——交互一致不能靠「两处保持同步」。
+ */
+function OptionRow({
+  badge,
+  selected,
+  onClick,
+  ariaLabel,
+  children,
+}: {
+  badge: number;
+  selected: boolean;
+  onClick: () => void;
+  ariaLabel?: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={ariaLabel}
+      aria-pressed={selected}
+      className={`flex w-full items-center gap-3 rounded-lg border px-3.5 py-2.5 text-left text-sm transition ${
+        selected
+          ? "border-indigo-400 bg-indigo-50 text-slate-900"
+          : "border-slate-200 text-slate-700 hover:bg-slate-50"
+      }`}
+    >
+      <span
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${
+          selected ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 text-slate-400"
+        }`}
+      >
+        {badge}
+      </span>
+      <span className="min-w-0 flex-1">{children}</span>
+    </button>
+  );
+}
+
 /** 单题卡：按题型渲染控件。 */
 function QuestionCard({
   q,
@@ -283,7 +334,9 @@ function QuestionCard({
 }) {
   const { m } = useI18n();
   const a = m.quiz.answer;
-  const choiceFast = a.keyboardFast(q.options?.length ?? 0);
+  /** 快捷键提示：判断固定两个选项，其余按选项数。 */
+  const optionCount = q.type === "judge" ? JUDGE_OPTIONS.length : (q.options?.length ?? 0);
+  const keyboardHint = a.keyboardFast(optionCount);
   return (
     <Card className="p-6">
       <div className="flex items-start gap-3">
@@ -304,55 +357,33 @@ function QuestionCard({
       <div className="mt-4 pl-9">
         {q.type === "choice" ? (
           <div className="space-y-2">
-            {(q.options ?? []).map((opt, i) => {
-              const selected = value === String(i);
-              return (
-                <button
-                  key={i}
-                  onClick={() => onChange(String(i))}
-                  className={`flex w-full items-center gap-3 rounded-lg border px-3.5 py-2.5 text-left text-sm transition ${
-                    selected
-                      ? "border-indigo-400 bg-indigo-50 text-slate-900"
-                      : "border-slate-200 text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  <span
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${
-                      selected
-                        ? "border-indigo-600 bg-indigo-600 text-white"
-                        : "border-slate-300 text-slate-400"
-                    }`}
-                  >
-                    {i + 1}
-                  </span>
-                  <span className="min-w-0 flex-1">{opt}</span>
-                </button>
-              );
-            })}
-            <p className="pt-1 text-[11px] text-slate-300">{choiceFast}</p>
+            {(q.options ?? []).map((opt, i) => (
+              <OptionRow
+                key={i}
+                badge={i + 1}
+                selected={value === String(i)}
+                onClick={() => onChange(String(i))}
+              >
+                {opt}
+              </OptionRow>
+            ))}
+            <p className="pt-1 text-[11px] text-slate-300">{keyboardHint}</p>
           </div>
         ) : q.type === "judge" ? (
-          <div className="flex gap-2">
-            {(
-              [
-                ["true", a.trueLabel],
-                ["false", a.falseLabel],
-              ] as const
-            ).map(([val, label]) => (
-              <button
-                key={val}
-                onClick={() => onChange(val)}
-                aria-label={label}
-                className={`flex flex-1 items-center justify-center rounded-lg border py-3 text-xl font-semibold transition ${
-                  value === val
-                    ? "border-indigo-400 bg-indigo-50 text-indigo-600"
-                    : "border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
-                }`}
+          /* 与单选**完全同一套行式交互**（同一组件），只是选项固定为 ✓ / ✗ 两行。 */
+          <div className="space-y-2">
+            {JUDGE_OPTIONS.map((o, i) => (
+              <OptionRow
+                key={o.val}
+                badge={i + 1}
+                selected={value === o.val}
+                onClick={() => onChange(o.val)}
+                ariaLabel={o.val === "true" ? a.trueLabel : a.falseLabel}
               >
-                {/* 只留符号不放文字（i18n 文案保留在 aria-label，报告页仍用带文字版）。 */}
-                {val === "true" ? "✓" : "✗"}
-              </button>
+                <span className="text-base font-semibold leading-none">{o.glyph}</span>
+              </OptionRow>
             ))}
+            <p className="pt-1 text-[11px] text-slate-300">{keyboardHint}</p>
           </div>
         ) : (
           <textarea
