@@ -5,6 +5,14 @@
  * 浏览器预览同一条代码路径；Worker 以 asset URL 运行时解析（Vite 自动打包），
  * 无需额外构建插件。
  *
+ * ⚠️ **pdfjs 按需加载**（`loadPdfjs`）：本模块顶层不再静态 import `pdfjs-dist`，
+ * 否则任何 import 本模块的调用方都会被拖上一个数 MB 的浏览器向依赖 ——
+ * 最贵的一处是 node 单测进程（`resume-import.ts` 曾被它牵连，那里用动态
+ * `import()` 规避，但本模块同时被 `local-files.ts` 静态引用 ⇒ 构建报
+ * `[INEFFECTIVE_DYNAMIC_IMPORT]`，隔离没换来、chunk 也没拆出）。
+ * 现在 `pdfjs-dist` 只被本模块动态 import，因此它**真的**被拆成独立 chunk：
+ * 单测进程零副作用，主 chunk 也不再背它。
+ *
  * 版式处理（G5 修复）：抽取结果先经 `pdf-layout.ts` 做
  * **y 聚类成行 → 分栏重排 → 行内补空格 → 跨页页眉/页码去噪 → 折行/连字符修复**，
  * 再交给切分器。此前只按 `str + hasEOL` 顺序拼接，双栏论文阅读顺序错乱、
@@ -16,16 +24,22 @@
  *
  * 错误对象**不携带用户可见文案**（G2）：UI 按 `kind` 取 i18n，`message` 只作排障。
  */
-import * as pdfjs from "pdfjs-dist";
 import { LIMITS } from "./types";
 import { joinPageLines, reflowPageItems, stripRunningHeads } from "./pdf-layout";
 import type { PdfTextItem } from "./pdf-layout";
 
-// Vite：worker 以 asset URL 形式随构建产物发布。
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url,
-).toString();
+/**
+ * Vite：worker 以 asset URL 形式随构建产物发布。
+ * 顶层只解析 URL、不 import pdfjs —— 本模块因此对 node 单测进程零副作用。
+ */
+const WORKER_SRC = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+
+/** 按需加载 pdfjs 并配置 worker（重复调用走 ESM 模块缓存，无额外开销）。 */
+async function loadPdfjs(): Promise<typeof import("pdfjs-dist")> {
+  const pdfjs = await import("pdfjs-dist");
+  pdfjs.GlobalWorkerOptions.workerSrc = WORKER_SRC;
+  return pdfjs;
+}
 
 /** 扫描件 / 无法抽取文本。 */
 export class PdfNoTextError extends Error {
@@ -54,6 +68,7 @@ export interface PdfExtractResult {
 
 /** 抽取 PDF 全文为纯文本（不落盘；内存解析）。失败抛 PdfNoTextError / PdfTooLargeError。 */
 export async function extractPdfText(buffer: ArrayBuffer): Promise<PdfExtractResult> {
+  const pdfjs = await loadPdfjs();
   const data = new Uint8Array(buffer);
   const doc = await pdfjs.getDocument({ data }).promise;
   try {

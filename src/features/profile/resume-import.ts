@@ -8,9 +8,11 @@
  *   任何 storage 写入都由 `useLoopStore.saveProfile` 在用户确认后发生；
  * - **错误只产 `kind`**，文案由 UI 侧 `useI18n` 映射。
  *
- * ⚠️ `pdf.ts` 只做 **type-only** import + 运行时动态 `import()`：
- * `pdf.ts` 顶层会配置 pdfjs worker，静态引入会让本模块在 node 单测进程里
- * 连带拉起 pdfjs（浏览器向依赖）。测试注入 `extractText` 时根本不会加载它。
+ * ⚠️ 本模块**静态** import `pdf.ts`：`pdf.ts` 自己已把 pdfjs 改成按需加载
+ * （见其文件头），因此 node 单测进程不会因本模块而拉起 pdfjs。
+ * 此前这里用运行时动态 `import()` 规避同一问题，但 `pdf.ts` 同时被
+ * `local-files.ts` 静态引用 ⇒ 构建报 `[INEFFECTIVE_DYNAMIC_IMPORT]`：
+ * 既没拆出 chunk，隔离也只落在本模块一侧。
  *
  * ⚠️ 本文件会被 `tests/resume-parse.test.ts` 在 strip-types 下直跑 ——
  * 不得使用 TS 参数属性（`constructor(readonly x: T)`）与 `enum`。
@@ -20,7 +22,7 @@ import { AiProviderError } from "../../ai/types";
 import type { ResumeDraft } from "../../ai/resume-pipeline";
 import { extractResumeDraft, isEmptyResumeDraft, RESUME_LIMITS } from "../../ai/resume-pipeline";
 import { LIMITS } from "../learn/import/types";
-import type { PdfExtractResult } from "../learn/import/pdf";
+import { extractPdfText, type PdfExtractResult } from "../learn/import/pdf";
 import { maskPii } from "./pii-mask";
 
 /** 简历来源：本地 PDF 文件或粘贴文本。 */
@@ -55,17 +57,22 @@ export interface ResumeImportResult {
   partialPages?: { nonEmpty: number; total: number };
 }
 
-/** 默认抽取器：运行时按需加载 `pdf.ts`（含 pdfjs worker 配置）。 */
+/** 默认抽取器：`pdf.ts` 的 `extractPdfText`（pdfjs 在它内部按需加载）。 */
 async function defaultExtract(bytes: ArrayBuffer): Promise<PdfExtractResult> {
-  const mod = await import("../learn/import/pdf");
-  return mod.extractPdfText(bytes);
+  return extractPdfText(bytes);
 }
 
 /**
  * 类型化错误 → 分类；未识别的异常统一归 `ai-failed`。
  *
- * pdf.js 的两个错误按 `name` 判定（不 `instanceof`）：`pdf.ts` 是动态加载的，
- * 顶层 import 它的类会把 pdfjs 拖进单测进程。两个类都显式设置了 `name`。
+ * pdf.js 的两个错误按 `name` 判定（不 `instanceof`）：`extractText` 可由调用方
+ * **注入**（单测 / 其它抽取后端），不保证错误对象就是本模块 import 到的那一个
+ * 类实例 —— 按 `name` 判定对「谁来抛」不做假设。两个类都显式设置了 `name`。
+ *
+ * ⚠️ 2026-09-28 更正：旧注释称「`pdf.ts` 是运行时动态 `import()`，顶层 import
+ * 它的类会把 pdfjs 拖进单测进程」—— 该理由已随 `pdf.ts` 改为**内部按需加载
+ * pdfjs** 而失效（见 `pdf.ts` 头注释）。duck-typing 现为**刻意保留**：同族判定
+ * `local-files.ts:109-110` 用 `instanceof`，两者在 node 下都可行，此处口径不变。
  */
 function kindOf(err: unknown): ResumeImportErrorKind {
   if (err instanceof ResumeImportError) return err.kind;
