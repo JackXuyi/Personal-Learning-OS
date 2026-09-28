@@ -184,10 +184,11 @@ export function DocumentMetaDialog({
             <span className="text-xs text-ink-3">{t.format}</span>
             <Select
               ariaLabel={t.format}
+              size="sm"
               value={format}
               onValueChange={(v) => setFormat(v as DocumentFormat)}
               options={FORMAT_OPTIONS}
-              className="h-8 w-auto"
+              className="w-auto"
             />
           </div>
         </div>
@@ -350,11 +351,12 @@ export function UpdateDocModal({
                 <span className="text-xs text-ink-3">{m.learn.import.format}</span>
                 <Select
                   ariaLabel={m.learn.import.format}
+                  size="sm"
                   value={format}
                   onValueChange={(v) => setFormat(v as DocumentFormat)}
                   disabled={busy}
                   options={FORMAT_OPTIONS}
-                  className="h-8 w-auto"
+                  className="w-auto"
                 />
               </div>
             </div>

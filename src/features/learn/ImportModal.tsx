@@ -451,6 +451,7 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
           <span className="text-xs text-ink-3">{fmt.format}</span>
           <Select
             ariaLabel={fmt.format}
+            size="sm"
             value={format}
             onValueChange={(v) => setFormat(v as DocumentFormat)}
             disabled={busy}
@@ -458,7 +459,7 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
               value: o.value,
               label: o.label,
             }))}
-            className="h-8 w-auto"
+            className="w-auto"
           />
           {content.trim() && !busy && !done ? (
             <button
@@ -539,6 +540,8 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
                     <span className="block truncate text-ink-3">{unit.source}</span>
                   </span>
                   <Select
+                    size="sm"
+                    ariaLabel={fmt.duplicate.actionLabel}
                     value={action}
                     onValueChange={(v) =>
                       setConflictChoices((prev) => ({ ...prev, [key]: v as DuplicateAction }))
@@ -549,7 +552,7 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
                       { value: "overwrite", label: fmt.duplicate.overwrite },
                       { value: "create", label: fmt.duplicate.create },
                     ]}
-                    className="h-8 w-auto shrink-0"
+                    className="w-auto shrink-0"
                   />
                 </li>
               );

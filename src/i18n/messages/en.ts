@@ -1549,6 +1549,8 @@ export const en: Messages = {
       /** O2/D1: duplicate-import conflict panel. */
       duplicate: {
         head: "Some sources already exist — choose how to handle each:",
+        /** Accessible name for the per-row dropdown (Select requires ariaLabel). */
+        actionLabel: "Duplicate handling",
         row: (title: string, existing: string) => `${title} (existing: ${existing})`,
         skip: "Skip",
         overwrite: "Overwrite (replace old)",

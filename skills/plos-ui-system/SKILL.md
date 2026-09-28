@@ -30,6 +30,7 @@ description: PLOS 前端一致性闸门——基于新侧栏样件的 Tailwind 4
 | 现有组件清单 + 抽取台账（30 条候选） | `references/component-catalog.md` |
 | 侧栏/Header/PageContainer 常量 + 两条 CSS 坑 | `references/shell-and-layout.md` |
 | 抽取 5 步 + 命名 + 例外条款 + 审稿清单 | `references/extraction-playbook.md` |
+| 下拉/选值控件的唯一来源、尺寸档、可访问名 | [`rules/dropdown-select.mdc`](../../rules/dropdown-select.mdc) |
 | 单个组件怎么实现（cva / Base UI / 按钮外观的 Link） | [`ui-impl-tokens`](../ui-impl-tokens/SKILL.md) |
 | `data-testid` 命名 | [`playwright-test-ids`](../playwright-test-ids/SKILL.md) |
 
@@ -46,11 +47,15 @@ description: PLOS 前端一致性闸门——基于新侧栏样件的 Tailwind 4
 node scripts/ui-consistency-scan.mjs                    # 出报告，退出码恒 0
 node scripts/ui-consistency-scan.mjs --top=30 --min-files=4
 node scripts/ui-consistency-scan.mjs --fail-on=3        # 当有 ≥3 文件重复 → 退出码 1
+node scripts/ui-consistency-scan.mjs --fail-on-native   # 存在原生 <select>/<option> → 退出码 1
+node scripts/ui-consistency-scan.mjs --fail-on-sticky-glass  # sticky+backdrop-filter → 退出码 1
 node scripts/ui-consistency-scan.mjs --json             # 机器可读
 ```
 
-扫描 157 个源文件，输出四类：重复类串候选 / 硬编码调色板色 / focus 环透明度分布 / 裸 px 字号分布。
+扫描 `src/` 下全部 `.ts`/`.tsx`，输出六类：重复类串候选 / 硬编码调色板色 / focus 环透明度分布 / 裸 px 字号分布 / **原生下拉控件** / **sticky+backdrop-filter 组合**。
 **基线（2026-09-11）**：454 处硬编码色（16 文件）· 84 条跨 ≥3 文件重复模式 · focus 环 4 种透明度 · 83 处裸 px 字号。
+**第 5 类基线（2026-09-28）**：**0 命中** ⇒ `npm run ui:check` 已可作硬门禁直接接入 CI（口径见 [`rules/dropdown-select.mdc`](../../rules/dropdown-select.mdc)）。
+**第 6 类基线（2026-09-28）**：**0 命中**（sticky 容器禁用 backdrop-filter —— macOS WKWebView 残影瓦片 bug，口径见 [`rules/react.mdc`](../../rules/react.mdc) §Styling）。
 `--fail-on=3` 当前必然失败 —— 这是真实状况，不是脚本有问题。台账清到阈值以下之后再把它接进 CI。
 
 ## 审稿门禁（改 UI 的 PR 必须逐条回答）

@@ -439,7 +439,7 @@ export default function KnowledgePackCard({ docs, onDataChanged }: Props) {
                   value={form.license}
                   onValueChange={(v) => setForm((f) => ({ ...f, license: v as PackLicense | "" }))}
                   ariaLabel={p.licenseLabel}
-                  className="h-8 text-xs"
+                  size="sm"
                   options={[
                     { value: "", label: p.licenseNone },
                     ...LICENSE_VALUES.map((v) => ({ value: v, label: p.licenses[v] })),

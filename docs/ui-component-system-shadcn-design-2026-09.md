@@ -438,7 +438,8 @@ perl -pi -e 's/((?:bg|text|border|ring|fill|stroke|decoration|from|to|via)-)acce
 **M2 执行记录（2026-09-09）**：CLI 不可用延续，四类交互件**手写同构封装**（基于本地实测 `@base-ui/react@1.8.0`：`dialog`/`alert-dialog`/`select`/`checkbox` 子路径齐全，render-prop、无 asChild）：
 - `ui/dialog.tsx`（Root/Trigger/Content/Header/Footer/Title/Description + Esc/遮罩/× 关闭，overlay `bg-ink-1/40`）；
 - `ui/alert-dialog.tsx`（无 dismiss 语义）+ `ui/confirm-dialog.tsx`（受控 confirm 便捷封装，无 i18n、文案调用方传）→ 替换 `window.confirm`×3（ReviewSession Esc/exit 两处、BuiltinModelsPanel 删模型），**全仓 window.confirm 归零**；
-- `ui/select.tsx`（受控单值 Select：value=option.value、`Select.Value` children 函数映射 label、Positioner `alignItemWithTrigger={false}` 弹层于触发下方）→ 替换原生 `<select>`×5（GoalForm type/importance、HomePage 目标切换、ImportModal format、ApiModelsTab 预置供应商），**原生 select 归零**；
+- `ui/select.tsx`（受控单值 Select：value=option.value、`Select.Value` children 函数映射 label、Positioner `alignItemWithTrigger={false}` 弹层于触发下方）→ 替换原生 `<select>`×5（GoalForm type/importance、HomePage 目标切换、ImportModal format、ApiModelsTab 预置供应商），**当次原生 select 归零**；
+  ⚠️ **2026-09-28 更正**：此后 F3 开发又新引入 1 处（`features/progress/ProgressPage.tsx` 的掌握度趋势章节下钻），故「归零」仅对 2026-09-09 当时成立，**不是**当前状态。该处已收口为 `Select`，并把不变式升级为可反复执行的判据：`rules/dropdown-select.mdc` + `npm run ui:check`（`scripts/ui-consistency-scan.mjs --fail-on-native`，当前基线 0）。同时 `Select` 收敛为 `size` 两档（`sm`=h-8/text-xs、`md`=h-9/text-sm），调用点只允许覆写宽度与背景。教训：**一次性清理型承诺必须配可反复执行的判据**，否则会在下一次功能开发中静默复发。
 - `ui/checkbox.tsx`（Base UI Root+Indicator+lucide 勾，data-checked 品牌色）→ GoalForm 章节范围多选替换（行点击 toggle + checkbox 自身防双触发，`closest("[data-slot=checkbox]")` 短路），**原生 checkbox 归零**。
 - **豁免记录**：① ImportModal 自写 modal 外壳**暂缓换 Dialog**——busy 状态机/阶段动画/结果卡 onInspect 导航语义复杂，低收益高回归面，M3 独立评估；② CommandPalette（⌘K）**保留自写**（gate 未决：Base UI 版 `command` wrapper 可用性待用户侧 `shadcn list` 补录，fallback 矩阵生效）。
 - 门禁：typecheck 0、单测全绿、vite build 通过；键盘可走通（弹层 Esc 关/确认按钮焦点由 Base UI 托管）——最终目测待用户。

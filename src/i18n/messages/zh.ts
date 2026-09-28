@@ -1524,6 +1524,8 @@ export const zh = {
       /** O2/D1：重复导入冲突面板。 */
       duplicate: {
         head: "以下资料已存在同源记录，请选择处理方式：",
+        /** 每行下拉的可访问名（Select 必传 ariaLabel）。 */
+        actionLabel: "重复处理方式",
         row: (title: string, existing: string) => `${title}（已存在：${existing}）`,
         skip: "跳过",
         overwrite: "覆盖（删旧重建）",

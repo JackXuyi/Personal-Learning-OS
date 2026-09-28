@@ -543,8 +543,9 @@ export default function ChapterReaderPage() {
         </div>
       </div>
 
-      {/* 底部主行动：窄屏换行，按钮不挤压提示文案 */}
-      <div className="sticky bottom-4 z-10 mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface/90 px-4 py-3.5 shadow-lg backdrop-blur sm:px-5">
+      {/* 底部主行动：窄屏换行，按钮不挤压提示文案
+          ⚠️ sticky 容器禁用 backdrop-filter（残影瓦片 bug，详见 QuizAnswerPage 底栏注释）。 */}
+      <div className="sticky bottom-4 z-10 mt-6 flex transform-gpu flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-3.5 shadow-lg sm:px-5">
         <div className="min-w-0">
           <p className="hidden text-xs text-ink-3 sm:block">
             {dueReview

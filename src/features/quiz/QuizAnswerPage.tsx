@@ -193,8 +193,11 @@ export default function QuizAnswerPage() {
         />
       ) : null}
 
-      {/* 底部：上一题 / 下一题 / 交卷 */}
-      <div className="sticky bottom-4 z-10 mt-6 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white/90 px-5 py-3.5 shadow-lg backdrop-blur">
+      {/* 底部：上一题 / 下一题 / 交卷。
+          ⚠️ sticky 容器禁用 backdrop-filter（backdrop-blur）：macOS WKWebView 会把
+          bar 内未重绘的区域留成上一帧的残影瓦片——实测表现为第 2 题的「下一题」按钮
+          残影从第 3 题的「交卷」左侧露出来。用不透明底色 + transform-gpu 自成合成层。 */}
+      <div className="sticky bottom-4 z-10 mt-6 flex transform-gpu items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-3.5 shadow-lg">
         <button
           onClick={() => setIndex((i) => Math.max(0, i - 1))}
           disabled={index === 0}

@@ -61,6 +61,7 @@ Cursor / Claude 系工具会按 frontmatter 自动注入：`alwaysApply: true` �
 | `layer-import-boundaries` | always | src ↔ src-tauri 只走 IPC；UI → stores / services / storage；纯逻辑不依赖 React |
 | `no-headless-browser-validation` | always | 禁止主动启动无头/任何浏览器校验样式/布局/功能（截图、DOM、视觉检查）；校验走 typecheck + node 单测 + 代码自审；仅用户显式要求浏览器级/E2E 时放行 |
 | `react.mdc` | globs `src/**/*.tsx` | Tailwind 4 + 语义 token + UI Kit（`components/ui`）优先 + primitives 原语；状态色仅 dot/徽标 |
+| `dropdown-select.mdc` | globs `src/**/*.tsx` | 下拉/选值控件唯一来源＝`components/ui/select`（动作菜单才用 `dropdown-menu`）；尺寸只用 `size`（sm/md）、`ariaLabel` 必传、`className` 只许覆写宽度与背景；禁止原生 `<select>`/手写浮层，判据 `npm run ui:check` |
 | `rust.mdc` | globs `src-tauri/**/*.rs` | 模块 vault/llm → lib.rs 注册；命令 `Result<T,String>`；macOS-only vault |
 
 ## Skills：按任务类型按需加载

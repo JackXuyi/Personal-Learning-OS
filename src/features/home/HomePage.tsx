@@ -311,6 +311,7 @@ function GoalContext({
           {goals.length > 0 ? (
             <Select
               ariaLabel={m.home.goalSelectAria}
+              size="sm"
               value={pickId ?? activeGoal?.id ?? ""}
               disabled={loading}
               onValueChange={(v) => {
@@ -319,7 +320,7 @@ function GoalContext({
                 void switchGoal(v, m);
               }}
               options={goals.map((g) => ({ value: g.id, label: g.title }))}
-              className="h-8 max-w-64"
+              className="max-w-64"
             />
           ) : null}
           {goals.length > 0 ? (

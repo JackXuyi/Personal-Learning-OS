@@ -514,14 +514,16 @@ export default function DataPortabilityCard({ counts, onDataChanged }: Props) {
             value={docId}
             onValueChange={setDocId}
             ariaLabel={d.mdPickDoc}
-            className="h-8 w-52 text-xs"
+            size="sm"
+            className="w-52"
             options={docs.map((x) => ({ value: x.id, label: x.title }))}
           />
           <Select
             value={chapterId}
             onValueChange={setChapterId}
             ariaLabel={d.mdPickChapter}
-            className="h-8 w-52 text-xs"
+            size="sm"
+            className="w-52"
             disabled={chapters.length === 0}
             options={chapters.map((x) => ({ value: x.id, label: x.title }))}
           />

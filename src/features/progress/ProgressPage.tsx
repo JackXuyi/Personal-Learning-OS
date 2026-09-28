@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Bar, Card, Section } from "../../components/primitives";
 import { buttonVariants } from "../../components/ui/button";
+import { Select } from "../../components/ui/select";
 import { PageContainer } from "../../components/layout/AppShell";
 import { cn } from "../../lib/utils";
 import type { EvidenceEntry, LearnerState, LearningGoal, PaperResult } from "../../domain";
@@ -197,20 +198,21 @@ export default function ProgressPage() {
               {pg.trendCaption(trend.paperCount, trend.chapters.length)}
             </span>
             {trend.chapters.length > 0 ? (
-              <select
+              <Select
+                size="sm"
+                ariaLabel={pg.trendChapterLabel}
                 value={chapterId}
-                onChange={(e) => setChapterId(e.target.value)}
-                aria-label={pg.trendChapterLabel}
-                className="rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink-2"
-              >
-                <option value="">{pg.trendAllChapters}</option>
-                {trend.chapters.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {/* 章已随资料删除 → 兜底文案（**绝不显示裸 id**，同 D7-A 章侧口径）。 */}
-                    {c.title ?? m.units.subjectGone}
-                  </option>
-                ))}
-              </select>
+                onValueChange={setChapterId}
+                className="w-auto"
+                options={[
+                  { value: "", label: pg.trendAllChapters },
+                  ...trend.chapters.map((c) => ({
+                    // 章已随资料删除 → 兜底文案（**绝不显示裸 id**，同 D7-A 章侧口径）。
+                    value: c.id,
+                    label: c.title ?? m.units.subjectGone,
+                  })),
+                ]}
+              />
             ) : null}
           </span>
         }

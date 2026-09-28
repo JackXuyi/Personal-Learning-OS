@@ -34,7 +34,7 @@ description: PLOS UI 实现规范——先读语义 token（src/styles/main.css 
 
 ### 使用（调用方）
 - 受控交互控件（button/input/dialog/menu 等）优先 `src/components/ui/*`；跨页面展示原语用 `primitives.tsx`。
-- **不要**在业务代码里用裸 `<select>` / `window.confirm` / 手写浮层绕过 UI Kit（M2 起逐项替换，见方案 §7）。
+- **不要**在业务代码里用裸 `<select>` / `window.confirm` / 手写浮层绕过 UI Kit（下拉/选值控件口径见 [`rules/dropdown-select.mdc`](../../rules/dropdown-select.mdc)，判据 `npm run ui:check`）。
 - 需要「按钮外观的路由跳转」时：UI Kit `Button` 只渲染 `<button>`（无 asChild 多态）——用 `className={cn(buttonVariants({ variant }), "你的附加类")}` 套在 `<Link>` 上（相对导入 `ui/button` 的 `buttonVariants` 与 `lib/utils` 的 `cn`）。
 - 业务组件按 feature 归置：`src/features/<feature>/`；跨 feature 的共享 UI 提升到 `src/components/`。
 

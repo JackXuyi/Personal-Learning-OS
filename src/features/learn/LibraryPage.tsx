@@ -316,11 +316,12 @@ export default function LibraryPage() {
                 ariaLabel={lib.goalFilterLabel}
                 value={goalFilter}
                 onValueChange={setGoalFilter}
+                size="sm"
                 options={[
                   { value: GOAL_FILTER_ALL, label: lib.goalFilterAll },
                   ...linkedGoals.map((g) => ({ value: g.id, label: g.title })),
                 ]}
-                className="h-8 w-36 bg-surface text-xs"
+                className="w-36"
               />
             ) : null}
             <SegmentedTabs<Sort>

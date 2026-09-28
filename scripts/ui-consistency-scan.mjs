@@ -1,16 +1,24 @@
 #!/usr/bin/env node
 /**
- * UI 一致性扫描器 —— skills/plos-ui-system 的可执行判据。
+ * UI 一致性扫描器 —— skills/plos-ui-system + rules/dropdown-select 的可执行判据。
  *
  * 为什么要有这个脚本：本仓库禁止主动起浏览器做视觉校验
  * （rules/no-headless-browser-validation），所以「同一个视觉模式是不是又被人手写了
  * 第三遍」这件事只能靠静态扫描判定。没有它，「复用 > 2 处必须抽取」就只是一句口号。
  *
- * 扫描三类问题：
+ * 扫描六类问题：
  *   1) 重复类串：跨文件重复的 n 元 utility 序列（默认 n=4）→ 抽取候选
  *   2) 硬编码调色板色：text-slate-500 / bg-indigo-600 等绕过 main.css token 的写法
  *   3) focus 环分布：ring-ring/NN 的透明度取值分布 → 应收敛到唯一值 /50
- *   附：裸字号 text-[Npx] 分布
+ *   4) 裸字号 text-[Npx] 分布
+ *   5) 原生下拉控件：<select> / <option> / <datalist> → 必须为 0
+ *      （唯一来源是 components/ui/select；口径见 rules/dropdown-select.mdc）
+ *   6) sticky + backdrop-filter 组合 → 必须为 0
+ *      （macOS WKWebView 残影瓦片 bug；口径见 rules/react.mdc §Styling）
+ *
+ * ⚠️ 第 5、6 类是「有过一次清理、又复发」的那类问题：2026-09-09 的 M2 声明「原生 select
+ * 归零」，2026-09 后期 F3 开发又新引入 1 处；2026-09-28 答题页底栏残影暴露 sticky+blur
+ * 组合在 3 个页面共存。一次性清理必须配可反复执行的判据。
  *
  * 用法：
  *   node scripts/ui-consistency-scan.mjs                    # 出报告，退出码恒 0
@@ -18,15 +26,19 @@
  *   node scripts/ui-consistency-scan.mjs --gram=5           # n-gram 长度调整为 5
  *   node scripts/ui-consistency-scan.mjs --min-files=4      # 只报跨 ≥4 文件的模式
  *   node scripts/ui-consistency-scan.mjs --fail-on=3        # 存在跨 ≥3 文件模式 → 退出码 1
+ *   node scripts/ui-consistency-scan.mjs --fail-on-native   # 存在原生下拉控件 → 退出码 1
+ *   node scripts/ui-consistency-scan.mjs --fail-on-sticky-glass  # sticky+backdrop-filter → 退出码 1
  *   node scripts/ui-consistency-scan.mjs --json             # 机器可读输出
  *
- * 退出码：0 = 报告模式（或达标）；1 = 命中 --fail-on 阈值；2 = 参数/运行错误。
+ * 退出码：0 = 报告模式（或达标）；1 = 命中 --fail-on / --fail-on-native 阈值；2 = 参数/运行错误。
  *
  * 已知局限（有意为之的启发式，不是精确解析）：
  *   - 不做 AST 解析，只抽取源码里的字符串字面量，因此理论上会有「像 utility 其实不是」
  *     的噪声（import 路径已显式剔除，其余靠 n-gram 至少 4 连来压制）；
  *   - 同一模式串写法不同（如顺序调换）会被算成两条，故本脚本用于「发现候选」而非「定罪」，
- *     最终是否抽取由人按 references/extraction-playbook.md 判定。
+ *     最终是否抽取由人按 references/extraction-playbook.md 判定；
+ *   - 第 5 类只认**小写**原生标签（`<select`），大写开头视为 React 组件（UI Kit `Select`），
+ *     注释与字符串字面量已剥离，避免「文档里提到 <select>」被误报。
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -87,6 +99,26 @@ const BANNED_RE = new RegExp(
   "g",
 );
 
+/**
+ * 原生下拉标签（小写 = DOM 标签；`<Select` 是 UI Kit 组件，不匹配）。
+ * 匹配开/闭标签与 `React.createElement("select", …)`。
+ */
+const NATIVE_TAG_RE = /<\/?(select|option|optgroup|datalist)\b/g;
+const NATIVE_CREATE_RE = /createElement\(\s*["'](select|option|optgroup|datalist)["']/g;
+
+/**
+ * sticky + backdrop-filter 组合的判定：同一个 class 串里同时出现 `sticky` 与
+ * `backdrop-*`（含 `sm:backdrop-blur` 前缀形态）。模态遮罩（fixed）不受限。
+ */
+function stickyGlassHitsOf(tokens, file, line) {
+  const hasSticky = tokens.includes("sticky");
+  const hasBackdrop = tokens.some((t) => {
+    const head = t.includes(":") ? t.slice(t.lastIndexOf(":") + 1) : t;
+    return head === "backdrop-filter" || head.startsWith("backdrop-blur");
+  });
+  return hasSticky && hasBackdrop ? [{ file, line }] : [];
+}
+
 /** @param {string[]} argv */
 function parseArgs(argv) {
   const opts = {
@@ -95,6 +127,8 @@ function parseArgs(argv) {
     minFiles: 3,
     top: 20,
     failOn: null,
+    failOnNative: false,
+    failOnStickyGlass: false,
     json: false,
   };
   for (const arg of argv) {
@@ -117,6 +151,12 @@ function parseArgs(argv) {
         break;
       case "fail-on":
         opts.failOn = Number(value);
+        break;
+      case "fail-on-native":
+        opts.failOnNative = value !== "false";
+        break;
+      case "fail-on-sticky-glass":
+        opts.failOnStickyGlass = value !== "false";
         break;
       case "json":
         opts.json = value !== "false";
@@ -153,6 +193,51 @@ function collectFiles(dir, out) {
     if (!st) continue;
     if (st.isDirectory()) collectFiles(full, out);
     else if (/\.(ts|tsx)$/.test(name)) out.push(full);
+  }
+  return out;
+}
+
+/**
+ * 把注释与字符串字面量替换成等长空白（保留换行与索引），
+ * 供「原生标签」判定使用 —— 避免注释里写的 `<select>` 被误报。
+ * @param {string} src
+ */
+function blankOutCommentsAndStrings(src) {
+  const n = src.length;
+  let out = "";
+  let i = 0;
+  while (i < n) {
+    const c = src[i];
+    const next = src[i + 1];
+    if (c === "/" && next === "*") {
+      const end = src.indexOf("*/", i + 2);
+      const stop = end === -1 ? n : end + 2;
+      out += src.slice(i, stop).replace(/[^\n]/g, " ");
+      i = stop;
+      continue;
+    }
+    if (c === "/" && next === "/") {
+      const end = src.indexOf("\n", i);
+      const stop = end === -1 ? n : end;
+      out += " ".repeat(stop - i);
+      i = stop;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      let j = i + 1;
+      while (j < n) {
+        if (src[j] === "\\") j += 2;
+        else if (src[j] === c) {
+          j += 1;
+          break;
+        } else j += 1;
+      }
+      out += src.slice(i, j).replace(/[^\n]/g, " ");
+      i = j;
+      continue;
+    }
+    out += c;
+    i += 1;
   }
   return out;
 }
@@ -217,6 +302,8 @@ function scanFile(file, gramSize) {
   const banned = [];
   const rings = [];
   const rawSizes = [];
+  const native = [];
+  const stickyGlass = [];
 
   for (const lit of stringLiterals(src)) {
     if (isModuleSpecifier(lit.before)) continue;
@@ -224,6 +311,8 @@ function scanFile(file, gramSize) {
     for (let i = 0; i + gramSize <= tokens.length; i += 1) {
       grams.add(tokens.slice(i, i + gramSize).join(" "));
     }
+    // 第 6 类：sticky 容器 + backdrop-filter（残影瓦片 bug，口径 rules/react.mdc §Styling）。
+    stickyGlass.push(...stickyGlassHitsOf(tokens, file, lineOf(src, lit.index)));
   }
 
   let m;
@@ -240,7 +329,38 @@ function scanFile(file, gramSize) {
     rawSizes.push({ px: m[1], line: lineOf(src, m.index) });
   }
 
-  return { file, grams, banned, rings, rawSizes };
+  // 第 5 类：原生下拉控件 —— 先剥注释/字符串，再按小写标签判定。
+  const code = blankOutCommentsAndStrings(src);
+  native.push(...collectNativeHits(code, file));
+  for (const hit of collectNativeCreateHits(src, code)) {
+    if (!native.some((h) => h.line === hit.line)) native.push(hit);
+  }
+
+  return { file, grams, banned, rings, rawSizes, native, stickyGlass };
+}
+
+/** 标签命中（`<select` 这类）→ 位置列表。 */
+function collectNativeHits(code, file) {
+  const hits = [];
+  NATIVE_TAG_RE.lastIndex = 0;
+  let m;
+  while ((m = NATIVE_TAG_RE.exec(code)) !== null) {
+    hits.push({ file, tag: m[1], line: lineOf(code, m.index) });
+  }
+  return hits;
+}
+
+/** `createElement("select", …)` 命中 → 位置列表（字符串已剥离，故在原文上另扫）。 */
+function collectNativeCreateHits(src, code) {
+  const hits = [];
+  NATIVE_CREATE_RE.lastIndex = 0;
+  let m;
+  while ((m = NATIVE_CREATE_RE.exec(src)) !== null) {
+    // 落在注释/字符串里的 createElement 字样不算：用剔除后的文本核对同一位置附近是否有真代码。
+    if (code.slice(Math.max(0, m.index - 4), m.index).trimEnd() === "") continue;
+    hits.push({ tag: m[1], line: lineOf(src, m.index) });
+  }
+  return hits;
 }
 
 /** @param {string} file */
@@ -317,6 +437,31 @@ function renderMarkdown(report, opts) {
     }
   }
   p();
+
+  p(`## 5. 原生下拉控件（应为 0）`);
+  if (report.native.length === 0) {
+    p(`✅ 0 命中 —— \`<select>\` / \`<option>\` / \`<datalist>\` 已全部收口到 \`components/ui/select\`。`);
+    p(`口径与允许覆写范围见 \`rules/dropdown-select.mdc\`；门禁入口 \`npm run ui:check\`。`);
+  } else {
+    const files = new Set(report.native.map((n) => n.file));
+    p(`合计 **${report.native.length}** 处，分布在 **${files.size}** 个文件 —— 必须改用 \`components/ui/select\`（口径见 \`rules/dropdown-select.mdc\`）。`);
+    p(`| 文件 | 行 | 标签 |`);
+    p(`|------|----|------|`);
+    for (const n of report.native) p(`| \`${n.file}\` | ${n.line} | \`<${n.tag}>\` |`);
+  }
+  p();
+
+  p(`## 6. sticky + backdrop-filter 组合（应为 0）`);
+  if (report.stickyGlass.length === 0) {
+    p(`✅ 0 命中 —— sticky 容器未使用 \`backdrop-blur\` / \`backdrop-filter\`（WKWebView 残影瓦片 bug）。`);
+    p(`口径见 \`rules/react.mdc\` §Styling；模态遮罩等 fixed 浮层不受限。`);
+  } else {
+    p(`合计 **${report.stickyGlass.length}** 处 —— sticky 容器禁用 backdrop-filter（macOS WKWebView 会留上一帧残影瓦片），改不透明底色 + \`transform-gpu\`。`);
+    p(`| 文件 | 行 |`);
+    p(`|------|----|`);
+    for (const n of report.stickyGlass) p(`| \`${n.file}\` | ${n.line} |`);
+  }
+  p();
   return lines.join("\n");
 }
 
@@ -344,6 +489,8 @@ function main() {
   const banned = [];
   const rings = [];
   const rawSizes = [];
+  const native = [];
+  const stickyGlass = [];
   for (const file of files) {
     const r = scanFile(file, opts.gram);
     for (const g of r.grams) {
@@ -353,6 +500,8 @@ function main() {
     if (r.banned.length) banned.push({ file, layer: layerOf(file), hits: r.banned });
     rings.push(...r.rings.map((x) => ({ ...x, file })));
     rawSizes.push(...r.rawSizes.map((x) => ({ ...x, file })));
+    native.push(...r.native.map((x) => ({ ...x, file })));
+    stickyGlass.push(...r.stickyGlass.map((x) => ({ ...x, file })));
   }
 
   const tally = (items, key) => {
@@ -370,12 +519,28 @@ function main() {
     ringDistribution: tally(rings, "alpha"),
     rawSizeDistribution: tally(rawSizes, "px"),
     ringFiles: rings,
+    native,
+    stickyGlass,
   };
 
   if (opts.json) {
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   } else {
     process.stdout.write(renderMarkdown(report, opts));
+  }
+
+  // 第 5、6 类门禁（独立开关：首次接入时基线均为 0，可直接进 CI）。
+  if (opts.failOnNative && native.length > 0) {
+    process.stderr.write(
+      `[ui-scan] 门禁未通过：${native.length} 处原生下拉控件，请改用 components/ui/select（rules/dropdown-select.mdc）\n`,
+    );
+    process.exit(1);
+  }
+  if (opts.failOnStickyGlass && stickyGlass.length > 0) {
+    process.stderr.write(
+      `[ui-scan] 门禁未通过：${stickyGlass.length} 处 sticky + backdrop-filter 组合（WKWebView 残影瓦片 bug，rules/react.mdc §Styling）\n`,
+    );
+    process.exit(1);
   }
 
   if (opts.failOn !== null) {

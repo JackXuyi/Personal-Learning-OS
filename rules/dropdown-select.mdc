@@ -1,0 +1,54 @@
+---
+description: 下拉/选值控件规则——唯一来源、尺寸档、必传可访问名、允许覆写范围；禁止原生 select 与业务层直连 Base UI。
+globs: src/**/*.tsx
+alwaysApply: false
+---
+
+# 下拉与选值控件（PLOS `src`）
+
+本 rule 管「下拉该长什么样、该住在哪」，不重复 `react.mdc` 的通用组件策略。判据是**可执行**的（见文末）。
+
+## 先分辨语义：选一个值，还是执行一个动作
+
+| 用途 | 用谁 | 位置 |
+|------|------|------|
+| **选值**（筛选项、格式、目标、供应商…） | `Select` | `src/components/ui/select.tsx` |
+| **动作菜单**（重命名 / 删除 / 导出…的「⋯」） | `DropdownMenu` | `src/components/ui/dropdown-menu.tsx` |
+| **互斥视图切换**（Tab 式） | `Tabs` | `src/components/ui/tabs.tsx` |
+
+判断口径：**选完是否落成一个持久化的值**。是 → `Select`；否（触发一个命令）→ `DropdownMenu`。
+
+## 硬约束
+
+1. **禁止原生 `<select>` / `<option>` / `<datalist>`**：样式不可控、键盘与移动端行为不统一、无法与 token 对齐。
+2. **禁止业务代码直接 `import "@base-ui/react/select"`**：Base UI 只能由 `components/ui/*` 封装后供上层使用（`react.mdc` §Component policy）。
+3. **禁止手写浮层做选值**（`absolute` + `useState` + 点击外部关闭那一套）。
+4. **尺寸只有两档**，走 `size` prop，不写进 `className`：
+   - `size="sm"` — `h-8 text-xs`：页头筛选条 / 表格行 / 对话框内联控件
+   - `size="md"`（默认）— `h-9 text-sm`：表单字段
+5. **`className` 只允许覆写宽度与背景**（`w-52` / `max-w-64` / `w-auto` / `bg-app-bg`）。**高度（`h-*`）与字号（`text-*`）不许出现在 `className` 里** —— 出现了说明缺档位，请改 `size` 定义而不是在调用点堆样式。
+6. **`ariaLabel` 必传**：本仓库的 `Field` 只做视觉分组、不做 `htmlFor` 关联，`ariaLabel` 是该控件唯一的可访问名。
+7. **「全部 / 不选」哨兵值必须具名且带注释**：如 `LibraryPage` 的 `GOAL_FILTER_ALL`；用空串 `""` 时须注明语义（`Select` 的 value 只能是 `string`）。
+
+## 新增 / 改造流程
+
+1. 先查 `components/ui/` 是否已有目标控件 —— **别手写**。
+2. 缺控件 → 按 shadcn 惯例在 `components/ui/` 新建（`cva` + 语义 token + `data-slot`），再让业务层消费。
+3. 已有控件差一个档位 → 改 `size` 档位定义，并同步本 rule 与判据；不要在调用点堆 `className`。
+
+## 可执行判据
+
+```bash
+npm run ui:check   # = node scripts/ui-consistency-scan.mjs --fail-on-native
+```
+
+`src/**` 下命中任何原生 `<select` / `<option` / `<datalist` → 退出码 1。**当前基线：0 命中。**
+
+⚠️ **只写文字规则不够**：`react.mdc` 第 19 行早已禁止原生 `<select>`，但 M2 清理（2026-09-09 声明「原生 select 归零」）之后，F3 开发时又新引入 1 处（`ProgressPage`）。凡是「一次性清理」型承诺，都必须配一条能被反复执行的判据。
+
+## Related
+
+- `rules/react.mdc`（§Component policy：组件来源优先级）
+- `skills/plos-ui-system/SKILL.md`（跨文件一致性闸门与抽取规则）
+- `skills/ui-impl-tokens/SKILL.md`（单个控件怎么实现）
+- `docs/ui-component-system-shadcn-design-2026-09.md`（三层架构、组件清单与存量映射）
