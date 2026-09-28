@@ -11,7 +11,7 @@
  *
  * 硬约束：卡面 100% 来自 `Chapter`（零 AI）；正反面语义 = quote / point。
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card, SectionTitle } from "../../components/primitives";
 import { ConfirmDialog } from "../../components/ui/confirm-dialog";
@@ -21,6 +21,7 @@ import type { CardState, CardStateMap, DerivedCard, SelfRating } from "../../dom
 import { nextReviewInDays } from "../../engine";
 import { collectCards, rateCard, revertCard } from "../learn/flashcard-service";
 import { fmtDate } from "../goals/GoalsPage";
+import { useAliveRef } from "../../hooks/useAliveRef";
 import { useI18n } from "../../i18n";
 
 /** 四档顺序（间隔天数从引擎取，避免与 1/2/4/7 的两处口径漂移）。 */
@@ -62,13 +63,8 @@ export default function CardSession({
   const [finished, setFinished] = useState(false);
   const [confirmExitOpen, setConfirmExitOpen] = useState(false);
 
-  const aliveRef = useRef(true);
-  useEffect(() => {
-    aliveRef.current = true;
-    return () => {
-      aliveRef.current = false;
-    };
-  }, []);
+  /** 卸载后丢弃迟到的 setState（切章 / 切页时不写已卸组件）。 */
+  const aliveRef = useAliveRef();
 
   /** 加载卡片组：`collectCards` 内部只做派生 + 孤儿清理（唯一写点）。 */
   const load = useCallback(async () => {

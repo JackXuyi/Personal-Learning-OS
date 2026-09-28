@@ -8,7 +8,7 @@
  * - 所有反馈内联在面板内，无弹层、无 Toast（保持阅读页无模态打断）。
  * - `data-testid` 一次到位（`rules/playwright-test-ids`：写 testid 但不启浏览器）。
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useI18n } from "../../../i18n";
 import type { Chapter, ChapterAnswer, ChapterQaErrorKind, QaCitation, SourceDocument } from "../../../domain";
@@ -17,6 +17,7 @@ import { Button } from "../../../components/ui/button";
 import { Spinner } from "../../../components/ui/spinner";
 import { Textarea } from "../../../components/ui/textarea";
 import { useAiReady } from "../../../hooks/useAiReady";
+import { useAliveRef } from "../../../hooks/useAliveRef";
 import { isUsefulKeyPoint } from "../../../lib/text-quality";
 import { MAX_QUESTION_CHARS, askChapter } from "../chapter-qa-service";
 import { splitCitationMarkers } from "./qa-citations";
@@ -48,13 +49,7 @@ export default function ChapterQaPanel({
   const [asking, setAsking] = useState(false);
   const [answer, setAnswer] = useState<ChapterAnswer | undefined>();
   /** 卸载后丢弃迟到的 setState（切章 / 切页时不写已卸组件）。 */
-  const aliveRef = useRef(true);
-  useEffect(() => {
-    aliveRef.current = true;
-    return () => {
-      aliveRef.current = false;
-    };
-  }, []);
+  const aliveRef = useAliveRef();
 
   const tooLong = question.length > MAX_QUESTION_CHARS;
   const canAsk = aiReady && question.trim().length > 0 && !tooLong && !asking;

@@ -11,7 +11,7 @@
  * - 点引文 → `onHighlight(章内相对偏移)` → 复用页面既有 `highlightSourceRange` 通道。
  * - `data-testid` 一次到位（`rules/no-headless-browser-validation`：写 testid 但不启浏览器）。
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useI18n } from "../../../i18n";
 import type {
@@ -30,6 +30,7 @@ import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
 import { Spinner } from "../../../components/ui/spinner";
 import { Textarea } from "../../../components/ui/textarea";
 import { useAiReady } from "../../../hooks/useAiReady";
+import { useAliveRef } from "../../../hooks/useAliveRef";
 import { useLoopStore } from "../../../stores/useLoopStore";
 import {
   MAX_RESTATEMENT_CHARS,
@@ -62,14 +63,8 @@ export default function ChapterRestatementPanel({
   const [showHistory, setShowHistory] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Restatement | undefined>();
   const [scheduled, setScheduled] = useState(false);
-  /** 卸载后丢弃迟到的 setState（切章 / 切页时不写已卸组件，照抄 ChapterQaPanel）。 */
-  const aliveRef = useRef(true);
-  useEffect(() => {
-    aliveRef.current = true;
-    return () => {
-      aliveRef.current = false;
-    };
-  }, []);
+  /** 卸载后丢弃迟到的 setState（切章 / 切页时不写已卸组件）。 */
+  const aliveRef = useAliveRef();
 
   /**
    * 章切换 → 丢弃未提交文本与上次结果（UC-11，与章内提问的会话级语义一致），
