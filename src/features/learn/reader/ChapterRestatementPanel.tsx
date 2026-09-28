@@ -32,6 +32,7 @@ import { Textarea } from "../../../components/ui/textarea";
 import { useAiReady } from "../../../hooks/useAiReady";
 import { useAliveRef } from "../../../hooks/useAliveRef";
 import { useLoopStore } from "../../../stores/useLoopStore";
+import { shortDate } from "../library/shared";
 import {
   MAX_RESTATEMENT_CHARS,
   MIN_RESTATEMENT_CHARS,
@@ -638,13 +639,4 @@ function HistoryRow({
 /** 引文预览（单行省略，与线框「引文前 60 字…」同口径）。 */
 function previewOf(quote: string): string {
   return quote.length > 60 ? `${quote.slice(0, 60)}…` : quote;
-}
-
-/** 短日期（随界面语言）：9/8 或 Sep 8。 */
-function shortDate(at: number, lang: "zh" | "en"): string {
-  const locale = lang === "zh" ? "zh-CN" : "en-US";
-  return new Intl.DateTimeFormat(locale, {
-    month: lang === "zh" ? "numeric" : "short",
-    day: "numeric",
-  }).format(new Date(at));
 }

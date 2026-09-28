@@ -34,6 +34,7 @@ import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { useI18n } from "../../i18n";
 import { chapterBadge } from "./chapter-badge";
 import { highlightSourceRange, markRanges, scrollToQuote, unwrapMarks, HIGHLIGHT_WINDOW } from "./highlight";
+import { shortDate } from "./library/shared";
 import {
   createAnnotation,
   listChapterAnnotations,
@@ -613,13 +614,4 @@ function leadOf(keyPoints: readonly string[], body: string): string | undefined 
     .find((s) => s && !/^#{1,6}\s/.test(s));
   if (!first) return undefined;
   return first.length > 96 ? `${first.slice(0, 96)}…` : first;
-}
-
-/** 短日期（随界面语言）：9/8 或 Sep 8。 */
-function shortDate(at: number, lang: "zh" | "en"): string {
-  const locale = lang === "zh" ? "zh-CN" : "en-US";
-  return new Intl.DateTimeFormat(locale, {
-    month: lang === "zh" ? "numeric" : "short",
-    day: "numeric",
-  }).format(new Date(at));
 }
