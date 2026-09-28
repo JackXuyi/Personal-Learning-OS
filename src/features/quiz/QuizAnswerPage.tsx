@@ -3,7 +3,7 @@
  *
  * 交互（docs §4.2 P4）：
  * - 逐题流：进度 x/y + 范围标签；← 上一题 / → 下一题；
- * - 控件按题型：选择 → 选项卡（键盘 1–4）；判断 → 对/错；问答与应用 → textarea；
+ * - 控件按题型：选择 → 选项卡（键盘 1–4）；判断 → ✓/✗ 纯符号按钮（文字保留在 aria-label）；问答与应用 → textarea；
  * - 草稿：每答一题自动暂存（storage.savePaperDraft），中途离开可续答；
  * - 交卷（T7 判卷流）：存最终草稿 → paper.status=grading → 跳 /quiz/:paperId/grading，
  *   判分/掌握度回写/章状态流转在该判卷页完成（5s 内可撤销）。
@@ -342,13 +342,15 @@ function QuestionCard({
               <button
                 key={val}
                 onClick={() => onChange(val)}
-                className={`flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
+                aria-label={label}
+                className={`flex flex-1 items-center justify-center rounded-lg border py-3 text-xl font-semibold transition ${
                   value === val
-                    ? "border-indigo-400 bg-indigo-50 text-indigo-700"
-                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    ? "border-indigo-400 bg-indigo-50 text-indigo-600"
+                    : "border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
                 }`}
               >
-                {label}
+                {/* 只留符号不放文字（i18n 文案保留在 aria-label，报告页仍用带文字版）。 */}
+                {val === "true" ? "✓" : "✗"}
               </button>
             ))}
           </div>
