@@ -5,8 +5,8 @@
  *   npm run test:eta
  *
  * 覆盖：
- *  1) chapter-quiz → 卷模式时长常量（unit-test = 8 分钟）；
- *  2) retake-quiz → 卷模式时长常量（retake = 5 分钟）；
+ *  1) chapter-quiz → 卷模式时长常量（unit-test = 12 分钟）；
+ *  2) retake-quiz → 卷模式时长常量（retake = 8 分钟）；
  *  3) learn-chapter 无章信息 → 回退 12；
  *  4) learn-chapter 短章 → clamp 下限 5；
  *  5) learn-chapter 超长章 → clamp 上限 40；
@@ -58,11 +58,11 @@ function chapterOf(chars: number): Chapter {
 }
 
 async function main() {
-  await check("chapter-quiz → 8 min（unit-test 模式时长）", () => {
-    assert.equal(estimateEtaMin(action("chapter-quiz"), undefined), 8);
+  await check("chapter-quiz → 12 min（unit-test 模式时长，随题量内容驱动上调）", () => {
+    assert.equal(estimateEtaMin(action("chapter-quiz"), undefined), 12);
   });
-  await check("retake-quiz → 5 min（retake 模式时长）", () => {
-    assert.equal(estimateEtaMin(action("retake-quiz"), undefined), 5);
+  await check("retake-quiz → 8 min（retake 模式时长，随题量内容驱动上调）", () => {
+    assert.equal(estimateEtaMin(action("retake-quiz"), undefined), 8);
   });
   await check("learn-chapter 无章 → 回退 12", () => {
     assert.equal(estimateEtaMin(action("learn-chapter"), undefined), 12);

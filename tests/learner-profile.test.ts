@@ -114,10 +114,12 @@ async function main() {
       scope: { chapterIds: ["c1"], mode: "unit-test" },
       chapters: [ch],
     });
+    // 夹具 2 个要点 → 题量内容驱动 = 每要点 2 题（选择 + 判断各一）
     assert.deepEqual(shapeOfPaper(paper), [
       "choice/remember/1",
       "judge/remember/1",
       "choice/remember/1",
+      "judge/remember/1",
     ]);
   });
 
@@ -134,6 +136,7 @@ async function main() {
       "choice/analyze/3",
       "judge/understand/3",
       "choice/analyze/3",
+      "judge/understand/3",
       "qa/analyze/5",
       "application/evaluate/5",
     ]);
@@ -147,6 +150,7 @@ async function main() {
       "choice/remember/1",
       "judge/remember/1",
       "choice/remember/1",
+      "judge/remember/1",
     ]);
   });
 
@@ -166,15 +170,15 @@ async function main() {
 
   await check("TC-UC03-01 有计划预算 → 线性推算完成日", () => {
     const now = 1_700_000_000_000;
-    const actions = Array.from({ length: 30 }, () => action("chapter-quiz")); // 30 × 8 = 240 min
+    const actions = Array.from({ length: 30 }, () => action("chapter-quiz")); // 30 × 12 = 360 min
     const eta = estimatePlanEta({
       actions,
       chapterOf: () => undefined,
       profile: { ...profileOf("basic"), weeklyMinutes: 300 },
       now,
     });
-    assert.equal(eta.totalMinutes, 240);
-    assert.equal(eta.finishAt, now + (240 / 300) * 7 * DAY);
+    assert.equal(eta.totalMinutes, 360);
+    assert.equal(eta.finishAt, now + (360 / 300) * 7 * DAY);
     assert.equal(eta.deadline, undefined);
   });
 
@@ -187,15 +191,15 @@ async function main() {
         profile: { ...profileOf("basic"), ...(weeklyMinutes !== undefined ? { weeklyMinutes } : {}) },
       });
       assert.equal(eta.finishAt, undefined, `weekly=${weeklyMinutes}`);
-      assert.equal(eta.totalMinutes, 8);
+      assert.equal(eta.totalMinutes, 12);
     }
   });
 
   await check("TC-UC03-04 + D5 完成日早于截止日 → behind=false；晚于 → behind=true", () => {
     const now = 1_700_000_000_000;
-    const actions = Array.from({ length: 30 }, () => action("chapter-quiz")); // 240 min
+    const actions = Array.from({ length: 30 }, () => action("chapter-quiz")); // 360 min
     const weekly = { ...profileOf("basic"), weeklyMinutes: 300 };
-    const finish = now + (240 / 300) * 7 * DAY;
+    const finish = now + (360 / 300) * 7 * DAY;
 
     const ahead = estimatePlanEta({
       actions, chapterOf: () => undefined, profile: weekly, deadlineAt: finish + 3 * DAY, now,

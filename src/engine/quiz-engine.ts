@@ -2,7 +2,9 @@
  * Quiz Engine（试卷引擎）—— 出卷（T2）+ 判分（T3）。
  *
  * 从「章集合 + 学习者状态」确定性生成试卷：
- *   - 配额：按卷型（单元/阶段/综合/补考）× 章数 × 难度带计算题型分布
+ *   - 配额：**内容驱动** —— 逐章按 keyPoints 定量（每个要点 2 题：选择 + 判断，
+ *           clamp(4,12)；无要点章保底 3），综合测按总量 clamp(3n,15,20) 分摊
+ *           （见 §每章题量配额；UI 预览走同一份 chapterQuota）；
  *   - 难度自适应：mastery < 0.4 → 记忆/理解档客观题为主；
  *                 > 0.7 → 增加应用/分析档主观题
  *   - 题面：客观题用本地确定性题库（keyPoints 驱动，无 AI 也可判分）；
@@ -17,6 +19,7 @@ import type {
   CognitiveLevel,
   Paper,
   PaperAnswers,
+  PaperMode,
   PaperQuestion,
   PaperResult,
   PaperScope,
@@ -61,8 +64,115 @@ function difficultyOf(type: QuizType, band: DifficultyBand, lift = 0): number {
 }
 
 /* ------------------------------------------------------------------ */
+/* 每章题量配额（内容驱动）                                            */
+/* ------------------------------------------------------------------ */
+
+/** 每个要点出 2 题：选择（识别）+ 判断（验证）各一。 */
+export const QUESTIONS_PER_KEYPOINT = 2;
+/** 每章客观题下限：短章（1–2 个要点）也要有基本题量。 */
+export const OBJECTIVE_QUOTA_MIN = 4;
+/** 每章客观题上限：合并章要点可能偏多，防止单章卷面失控。 */
+export const OBJECTIVE_QUOTA_MAX = 12;
+/** 无要点章（只有标题可出题）的保底题量 —— 与内容驱动前的单章 3 题一致。 */
+export const OBJECTIVE_QUOTA_FALLBACK = 3;
+
+/**
+ * 单章客观题配额：按**章节内容**定量 —— 每个要点 2 题，收敛到 [4, 12]。
+ *
+ * 改动前的固定配额（单元测 3 / 阶段测 3–4 / 补考 3）会让「5 个要点的章只考 3 个」，
+ * 与「考一卷 = 检验本章掌握度」的语义不符；改为逐要点覆盖后，题量随内容长度伸缩。
+ * 要点超出上限（2×要点数 > 12）时按要点均分，覆盖优先于「每要点两题」。
+ */
+export function objectiveQuotaFor(chapter: Chapter): number {
+  const n = chapter.keyPoints.length;
+  if (n === 0) return OBJECTIVE_QUOTA_FALLBACK;
+  return Math.min(OBJECTIVE_QUOTA_MAX, Math.max(OBJECTIVE_QUOTA_MIN, n * QUESTIONS_PER_KEYPOINT));
+}
+
+/** 卷型 → 单章配额（客观题数 / 主观题上限 / 难度升降档）。 */
+export interface ChapterQuota {
+  objective: number;
+  /** 该卷型每章最多出几道主观题（实际是否出还需 band>1 且有 AI 判分）。 */
+  subjective: 0 | 1 | 2;
+  /** 补考卷整体降一档。 */
+  lift: number;
+}
+
+/**
+ * 单章配额表（**出卷与 UI 预览共用的唯一来源**）。
+ * 综合测不逐章配额定，见 buildFinalTest（总量 clamp(3n,15,20) 后再分摊）。
+ */
+export function chapterQuota(mode: PaperMode, chapter: Chapter): ChapterQuota {
+  switch (mode) {
+    case "unit-test":
+      return { objective: objectiveQuotaFor(chapter), subjective: 2, lift: 0 };
+    case "stage-test":
+      return { objective: objectiveQuotaFor(chapter), subjective: 1, lift: 0 };
+    case "retake":
+      return { objective: objectiveQuotaFor(chapter), subjective: 0, lift: -1 };
+    case "final-test":
+      return { objective: 0, subjective: 0, lift: 0 };
+  }
+}
+
+/** 预计题量（UI 模式卡预览）—— 与 createPaper 走**同一份** chapterQuota，不做第二套算法。 */
+export interface PlannedQuota {
+  objective: number;
+  subjective: number;
+  total: number;
+}
+
+/**
+ * 按范围与卷型算出「预计题量」。主观题只在有 AI 判分（allowSubjective）
+ * 且该章 band > 1 时出 —— 与 unitQuota / stageQuota 的判据逐条对齐。
+ */
+export function plannedQuota(input: {
+  mode: PaperMode;
+  chapters: Chapter[];
+  allowSubjective?: boolean;
+  learnerState?: LearnerState;
+  profile?: LearnerProfile;
+}): PlannedQuota {
+  const ordered = [...input.chapters].sort((a, b) => a.order - b.order);
+  if (ordered.length === 0) return { objective: 0, subjective: 0, total: 0 };
+
+  if (input.mode === "final-test") {
+    const n = ordered.length;
+    const total = Math.min(20, Math.max(15, n * 3));
+    const subjective = input.allowSubjective ? Math.min(Math.round(total * 0.4), n * 2) : 0;
+    return { objective: total - subjective, subjective, total };
+  }
+
+  let objective = 0;
+  let subjective = 0;
+  for (const chapter of ordered) {
+    const quota = chapterQuota(input.mode, chapter);
+    objective += quota.objective;
+    const band = bandForChapter(input.learnerState?.byUnit[chapter.id], input.profile);
+    if (quota.subjective > 0 && input.allowSubjective && band > 1) subjective += quota.subjective;
+  }
+  return { objective, subjective, total: objective + subjective };
+}
+
+/* ------------------------------------------------------------------ */
 /* 本地确定性题库（keyPoints 驱动）                                   */
 /* ------------------------------------------------------------------ */
+
+/** 选择题干扰项数（与 AI 出题提示词的「恰好 4 个选项」对齐）。 */
+const CHOICE_DISTRACTORS = 3;
+
+/** 题量槽位：每个要点均分 count 题（余数给前 r 个要点），按要点成组展开。 */
+function quotaSlots(kpCount: number, count: number): { kp: number; occurrence: number }[] {
+  const n = Math.max(1, kpCount);
+  const base = Math.floor(count / n);
+  const remainder = count - base * n;
+  const slots: { kp: number; occurrence: number }[] = [];
+  for (let j = 0; j < n; j += 1) {
+    const per = base + (j < remainder ? 1 : 0);
+    for (let k = 0; k < per; k += 1) slots.push({ kp: j, occurrence: k });
+  }
+  return slots;
+}
 
 function buildChoice(
   chapter: Chapter,
@@ -88,9 +198,16 @@ function buildChoice(
   };
 }
 
+/**
+ * 判断题：谓词固定为「是本章的要点之一」，真伪都可在本章范围内判定。
+ * - 真陈述 = 本章要点（answer true）；
+ * - 伪陈述 = **其他章的要点**（answer false）—— 改动前所有判断题答案恒为 true，
+ *   题量放大后会退化成「一律答真」，故按奇偶交替出真假题（见 objectiveQuestions）。
+ */
 function buildJudge(
   chapter: Chapter,
-  keyPoint: string,
+  statement: string,
+  isTrue: boolean,
   band: DifficultyBand,
   lift = 0,
 ): PaperQuestion {
@@ -99,8 +216,8 @@ function buildJudge(
     chapterId: chapter.id,
     type: "judge",
     cognitiveLevel: cognitiveOf("judge", band),
-    prompt: `判断：「${keyPoint}」这一说法是否成立？`,
-    answer: "true",
+    prompt: `判断：「${statement}」是本章的要点之一。`,
+    answer: isTrue ? "true" : "false",
     difficulty: difficultyOf("judge", band, lift),
   };
 }
@@ -127,27 +244,46 @@ function buildSubjective(
   };
 }
 
-/** choice 干扰项：同文档其他章 keyPoints（不同章互作干扰）；不足时用中性兜底句。 */
-function collectDistractors(chapter: Chapter, allChapters: Chapter[]): string[] {
-  const distractors: string[] = [];
+/** 干扰项不足时的中性兜底句。 */
+const FALLBACK_DISTRACTORS = [
+  "该要点与本章内容无关。",
+  "该要点在本章中并未出现。",
+  "该要点是其他章节的核心主张。",
+];
+
+/**
+ * choice 干扰项池：同文档**其他章**的 keyPoints（去重、排除本章自己的要点）。
+ *
+ * 改动前每次出题都在池里截前 3 条 → 同章多道选择题的选项列表一模一样；
+ * 现在返回**整个池**，由 pickDistractors 按题号轮转取窗口。
+ * 池不足 3 条时才用中性兜底句补齐（兜底句是最后手段，不抢占真实干扰项）。
+ */
+function distractorPool(chapter: Chapter, allChapters: Chapter[]): string[] {
+  const own = new Set(chapter.keyPoints);
+  const pool: string[] = [];
   for (const other of allChapters) {
     if (other.id === chapter.id) continue;
     for (const kp of other.keyPoints) {
-      distractors.push(kp);
-      if (distractors.length >= 3) break;
+      if (!kp || own.has(kp) || pool.includes(kp)) continue;
+      pool.push(kp);
     }
-    if (distractors.length >= 3) break;
   }
-  const FALLBACK = [
-    "该要点与本章内容无关。",
-    "该要点在本章中并未出现。",
-    "该要点是其他章节的核心主张。",
-  ];
-  for (const f of FALLBACK) {
-    if (distractors.length >= 3) break;
-    distractors.push(f);
+  for (const f of FALLBACK_DISTRACTORS) {
+    if (pool.length >= CHOICE_DISTRACTORS) break;
+    if (!pool.includes(f)) pool.push(f);
   }
-  return distractors;
+  return pool;
+}
+
+/** 按题号从池中轮转取 3 条（池长 ≥3 时同题内必然互不相同）。 */
+function pickDistractors(pool: string[], seed: number): string[] {
+  if (pool.length === 0) return [];
+  const start = (seed * CHOICE_DISTRACTORS) % pool.length;
+  const out: string[] = [];
+  for (let k = 0; k < Math.min(CHOICE_DISTRACTORS, pool.length); k += 1) {
+    out.push(pool[(start + k) % pool.length]);
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------------ */
@@ -219,7 +355,14 @@ function nextIndex(questionIndex: Record<string, number>): number {
   return questionIndex.n;
 }
 
-/** 生成 N 道客观题（判断约占 1/3，每 3 题第 2 题为判断）。 */
+/**
+ * 生成 N 道客观题（逐要点覆盖 + 题型交替 + 真假交替）。
+ *
+ * - **覆盖优先**：每个要点均分题量（余数给前几个要点），同一要点先选后判；
+ * - **判断真假交替**：第 1、3、5… 道判断题是真陈述，第 2、4、6… 道用其他章的
+ *   要点作伪陈述（answer false）—— 全真判断题在题量放大后会失去区分度；
+ * - **干扰项按题轮转**：池长 ≥3 时同章多道选择题的选项组合各不相同。
+ */
 function objectiveQuestions(
   chapter: Chapter,
   allChapters: Chapter[],
@@ -230,22 +373,27 @@ function objectiveQuestions(
   profile?: LearnerProfile,
 ): PaperQuestion[] {
   const out: PaperQuestion[] = [];
+  if (count <= 0) return out;
   const band = bandForChapter(learnerState?.byUnit[chapter.id], profile);
   const kps = chapter.keyPoints.length > 0 ? chapter.keyPoints : [chapter.title];
-  for (let i = 0; i < count; i++) {
+  const pool = distractorPool(chapter, allChapters);
+  let judgeNo = 0;
+  for (const { kp: kpi, occurrence } of quotaSlots(kps.length, count)) {
     const gi = nextIndex(questionIndex);
-    const kp = kps[i % kps.length];
-    if (i % 3 === 1) {
-      out.push(buildJudge(chapter, kp, band, lift));
+    const kp = kps[kpi];
+    if (occurrence % 2 === 1) {
+      const isTrue = judgeNo % 2 === 0;
+      judgeNo += 1;
+      const statement = isTrue ? kp : (pool[gi % pool.length] ?? kp);
+      out.push(buildJudge(chapter, statement, isTrue, band, lift));
     } else {
-      const distractors = collectDistractors(chapter, allChapters);
-      out.push(buildChoice(chapter, kp, distractors, band, gi, lift));
+      out.push(buildChoice(chapter, kp, pickDistractors(pool, gi), band, gi, lift));
     }
   }
   return out;
 }
 
-/** 单元测：单章 3 客观 +（band>1 且有 AI）2 主观：qa + application。 */
+/** 单元测：单章按内容定量（每要点 2 题）+（band>1 且有 AI）2 主观：qa + application。 */
 function unitQuota(
   chapter: Chapter,
   allChapters: Chapter[],
@@ -254,8 +402,17 @@ function unitQuota(
   questionIndex: Record<string, number>,
   profile?: LearnerProfile,
 ): PaperQuestion[] {
+  const quota = chapterQuota("unit-test", chapter);
   const band = bandForChapter(learnerState?.byUnit[chapter.id], profile);
-  const out = objectiveQuestions(chapter, allChapters, learnerState, 3, questionIndex, 0, profile);
+  const out = objectiveQuestions(
+    chapter,
+    allChapters,
+    learnerState,
+    quota.objective,
+    questionIndex,
+    quota.lift,
+    profile,
+  );
   if (band > 1 && allowSubjective) {
     const kps = chapter.keyPoints.length > 0 ? chapter.keyPoints : undefined;
     out.push(buildSubjective(chapter, kps?.[0], "qa", band));
@@ -264,7 +421,7 @@ function unitQuota(
   return out;
 }
 
-/** 阶段测：每章 客观3 +（band>1 且有 AI）主观1（qa/application 按章序轮换）；band1 章 4 客观。 */
+/** 阶段测：每章按内容定量 +（band>1 且有 AI）主观 1（qa/application 按章序轮换）。 */
 function stageQuota(
   chapter: Chapter,
   allChapters: Chapter[],
@@ -274,14 +431,15 @@ function stageQuota(
   ci: number,
   profile?: LearnerProfile,
 ): PaperQuestion[] {
+  const quota = chapterQuota("stage-test", chapter);
   const band = bandForChapter(learnerState?.byUnit[chapter.id], profile);
   const out = objectiveQuestions(
     chapter,
     allChapters,
     learnerState,
-    band === 1 ? 4 : 3,
+    quota.objective,
     questionIndex,
-    0,
+    quota.lift,
     profile,
   );
   if (band > 1 && allowSubjective) {
@@ -292,7 +450,7 @@ function stageQuota(
   return out;
 }
 
-/** 补考卷：每章客观3，主观剔除，难度整体降一档（lift=-1）。 */
+/** 补考卷：每章按内容定量，主观剔除，难度整体降一档（lift = -1）。 */
 function retakeQuota(
   chapter: Chapter,
   allChapters: Chapter[],
@@ -300,7 +458,16 @@ function retakeQuota(
   questionIndex: Record<string, number>,
   profile?: LearnerProfile,
 ): PaperQuestion[] {
-  return objectiveQuestions(chapter, allChapters, learnerState, 3, questionIndex, -1, profile);
+  const quota = chapterQuota("retake", chapter);
+  return objectiveQuestions(
+    chapter,
+    allChapters,
+    learnerState,
+    quota.objective,
+    questionIndex,
+    quota.lift,
+    profile,
+  );
 }
 
 /** 综合测：总题量 clamp(3n, 15, 20)，客观 ~60% / 主观 ~40%（每章主观至多 2）。 */

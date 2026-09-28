@@ -21,22 +21,27 @@ import { zh, type Messages } from "../../i18n";
  */
 export { PAPER_MODE_MIN_CHAPTERS as MODE_MIN_CHAPTERS } from "../../engine/paper-scope";
 
-/** 模式 → 一行可读说明（配比 + 时长），供模式卡片副标题。 */
+/**
+ * 模式 → 一行可读说明（预计题量 + 时长），供模式卡片副标题。
+ *
+ * `plan` 由 `engine::plannedQuota` 算出（与实际出卷**同一份**配额规则）——
+ * 题量随所选章的要点数变化，不再是写死的「5 题 / 每章 3 题」。
+ */
 export function modeHint(
   mode: PaperMode,
-  chapterCount: number,
+  plan: { chapters: number; questions: number },
   m: Messages = zh,
 ): string {
   const duration = PAPER_MODE_DURATION_MIN[mode];
   switch (mode) {
     case "unit-test":
-      return m.quiz.hintUnit(duration);
+      return m.quiz.hintUnit(plan.questions, duration);
     case "stage-test":
-      return m.quiz.hintStage(chapterCount, duration);
+      return m.quiz.hintStage(plan.chapters, plan.questions, duration);
     case "final-test":
-      return m.quiz.hintFinal(chapterCount, duration);
+      return m.quiz.hintFinal(plan.chapters, plan.questions, duration);
     case "retake":
-      return m.quiz.hintRetake(duration);
+      return m.quiz.hintRetake(plan.questions, duration);
   }
 }
 

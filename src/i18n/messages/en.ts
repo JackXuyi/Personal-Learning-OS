@@ -1981,15 +1981,26 @@ export const en: Messages = {
       application: "Apply",
     },
     status: { open: "In progress", grading: "Grading", done: "Done" },
-    hintUnit: (dur: number) => `Single chapter · ~${dur} min`,
-    hintStage: (n: number, dur: number) => `${n} chapters together · ~${dur} min`,
-    hintFinal: (n: number, dur: number) => `Final paper (${n} chapters) · ~${dur} min`,
-    hintRetake: (dur: number) => `Wrong chapters only · ~${dur} min`,
+    hintUnit: (n: number, dur: number) => `Single chapter · ~${n} items · ~${dur} min`,
+    hintStage: (chapters: number, n: number, dur: number) =>
+      `${chapters} chapters together · ~${n} items · ~${dur} min`,
+    hintFinal: (chapters: number, n: number, dur: number) =>
+      `Final paper (${chapters} chapters) · ~${n} items · ~${dur} min`,
+    hintRetake: (n: number, dur: number) => `Wrong chapters only · ~${n} items · ~${dur} min`,
+    /**
+     * Mode-card quota line: counts come from `plannedQuota` (same quota rules as
+     * paper creation); subjective items are counted only when AI grading is
+     * available and the chapter band > 1.
+     */
     quotaPreview: {
-      "unit-test": "5 items: 2 choice · 1 judge · 1 qa · 1 app (low mastery → objective only ×3)",
-      "stage-test": "Per chapter objective ×3 + subjective ×1 (rotated; low mastery → objective ×4)",
-      "final-test": "Total clamp(3n,15,20) · objective ~60% / subjective ~40%",
-      retake: "Per chapter objective ×3 · no subjective · one notch easier",
+      "unit-test": (objective: number, subjective: number) =>
+        `From this chapter's key points (2 per point: choice + judge) · objective ${objective}${subjective > 0 ? ` + subjective ${subjective}` : ""}`,
+      "stage-test": (objective: number, subjective: number) =>
+        `Per chapter from key points (2 per point) · objective ${objective}${subjective > 0 ? ` + subjective ${subjective}` : ""}`,
+      "final-test": (objective: number, subjective: number) =>
+        `Total clamp(3n,15,20) · objective ${objective}${subjective > 0 ? ` + subjective ${subjective}` : ""}`,
+      retake: (objective: number, subjective: number) =>
+        `Per chapter from key points · objective ${objective}${subjective > 0 ? ` + subjective ${subjective}` : ""} · one notch easier`,
     },
     rangeWithCount: (range: string, n: number) => `${range} · ${n} chapter(s)`,
     itemUnit: (n: number) => `${n} item(s)`,
@@ -2075,8 +2086,8 @@ export const en: Messages = {
       aiReadyHint: "AI ready: prompts generated live · Q&A/application graded by AI",
       noAiHint: "No AI configured: objective questions only (local deterministic bank)",
       footerDefault: "Pick scope and type, then create the paper.",
-      footerSummary: (label: string, n: number, dur: number) =>
-        `${label} · ${n} chapter(s) · ~${dur} min · item count auto from key points`,
+      footerSummary: (label: string, n: number, questions: number, dur: number) =>
+        `${label} · ${n} chapter(s) · ~${questions} items · ~${dur} min`,
       start: "Create & start →",
       drNone: "Select chapters first",
       drUnitNotOne: "Unit tests cover a single chapter",

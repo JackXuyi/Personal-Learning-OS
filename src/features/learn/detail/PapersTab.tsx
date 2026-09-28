@@ -19,7 +19,8 @@ import { useI18n } from '../../../i18n';
 import { storage } from '../../../stores/useLoopStore';
 import { useAiTask } from '../../../stores/useAiTaskStore';
 import { PAPER_MODE_DURATION_MIN, sortChaptersByOrder } from '../../../domain';
-import { availablePaperModes, canCreatePaperMode } from '../../../engine';
+import { availablePaperModes, canCreatePaperMode, plannedQuota } from '../../../engine';
+import { buildActiveProvider } from '../../../stores/useSettingsStore';
 import { createPaperAndSave, PaperFlowError } from '../../quiz/paper-flow';
 import { recommendDocPaper, recommendPaper } from '../paper-advice';
 import type {
@@ -49,6 +50,8 @@ export default function PapersTab({ doc, chapters, learner }: PapersTabProps) {
   const [results, setResults] = useState<PaperResult[]>([]);
   /** F1 画像（难度先验）：与出卷引擎同源读取，保证「推荐带 = 实出带」。 */
   const [profile, setProfile] = useState<LearnerProfile | undefined>();
+  /** T12 门：AI 判分就绪才出主观题 —— 题量预览与 `createPaperAndSave` 共用同一判据。 */
+  const aiReady = buildActiveProvider().isConfigured();
   // 出卷 busy 全局化：paper:{docId}（与 NewQuizPage/AssessmentPage 共享互斥语义）。
   const task = useAiTask(`paper:${doc.id}`);
   /** 本轮点击的按钮键（loading 展示在哪个按钮上；纯 UI 指示）。 */
@@ -261,7 +264,7 @@ export default function PapersTab({ doc, chapters, learner }: PapersTabProps) {
             </div>
 
             {list.length === 0 ? (
-              /* 未出卷：给推荐卷型 + 难度带 + 预计时长 + 一键出卷 */
+              /* 未出卷：给推荐卷型 + 难度带 + 预计题量/时长 + 一键出卷 */
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="text-xs text-ink-3">{t.papers.reason[advice.reason]}</span>
                 <span className="rounded-full border border-line bg-subtle px-2 py-0.5 text-xs text-ink-1">
@@ -269,6 +272,18 @@ export default function PapersTab({ doc, chapters, learner }: PapersTabProps) {
                 </span>
                 <span className="text-xs text-ink-3">
                   {t.papers.difficulty(advice.band)}
+                </span>
+                {/* 题量与向导同源（plannedQuota）：随本章要点数变化 */}
+                <span className="text-xs text-ink-3">
+                  {m.quiz.itemUnit(
+                    plannedQuota({
+                      mode: advice.mode,
+                      chapters: [ch],
+                      allowSubjective: aiReady,
+                      learnerState: learner ?? undefined,
+                      profile,
+                    }).total,
+                  )}
                 </span>
                 <span className="text-xs text-ink-3">
                   {t.papers.duration(PAPER_MODE_DURATION_MIN[advice.mode])}

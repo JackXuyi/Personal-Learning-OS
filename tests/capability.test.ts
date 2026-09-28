@@ -1090,8 +1090,8 @@ async function main(): Promise<void> {
     assert.equal(JSON.stringify(await store.getLearnerState()), before);
   });
 
-  await check("TC-REG-02 createRetakePaper 行为不变（题量 / 题型 / 干扰项按文档分组）", () => {
-    // 跨两文档的补考卷：每章 3 客观、无主观、难度降一档
+  await check("TC-REG-02 createRetakePaper 行为不变（题量按章要点 / 题型 / 干扰项按文档分组）", () => {
+    // 跨两文档的补考卷：每章按内容定量（夹具 2 要点 → 4 客观）、无主观、难度降一档
     const paper = createRetakePaper({
       chapters: [CH1, CH4],
       docChapters: new Map([
@@ -1100,7 +1100,7 @@ async function main(): Promise<void> {
       ]),
       now: NOW,
     });
-    assert.equal(paper.questions.length, 6);
+    assert.equal(paper.questions.length, 8);
     assert.equal(paper.scope.mode, "retake");
     assert.deepEqual(paper.scope.chapterIds, ["c1", "c4"]);
     assert.ok(paper.questions.every((q) => q.type === "choice" || q.type === "judge"));

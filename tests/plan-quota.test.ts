@@ -312,14 +312,15 @@ async function main() {
     assert.equal(q.daysLeft, 3);
   });
 
-  await check("TC-EDGE-08 全 retake-quiz（5 分钟常量）→ 不读章信息仍正确分组", () => {
+  await check("TC-EDGE-08 全 retake-quiz（8 分钟常量）→ 不读章信息仍正确分组", () => {
     const { actions, chapterOf } = retakeQueue(2);
-    const q = planQuota({ actions, chapterOf, deadlineAt: DAY, now: NOW });
-    assert.equal(q.totalMinutes, 10);
-    assert.equal(q.dueTodayMin, 5);
+    const q = planQuota({ actions, chapterOf, deadlineAt: 2 * DAY, now: NOW });
+    assert.equal(q.totalMinutes, 16);
+    assert.equal(q.dueTodayMin, 6);
+    assert.equal(q.daysLeft, 3);
     assert.deepEqual(idsOf(q.groups?.today ?? []), ["r0"]);
     assert.deepEqual(idsOf(q.groups?.week ?? []), ["r1"]);
-    assert.equal(q.todayMinutes, 5);
+    assert.equal(q.todayMinutes, 8);
   });
 
   await check("TC-EDGE-09 阅读速度口径统一：advanced(450) 不用 DEFAULT_PACE(350)", () => {

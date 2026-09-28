@@ -1929,15 +1929,25 @@ export const zh = {
       application: "应用",
     },
     status: { open: "未完成", grading: "判卷中", done: "已完成" },
-    hintUnit: (dur: number) => `单章 · 约 ${dur} 分钟`,
-    hintStage: (n: number, dur: number) => `${n} 章联测 · 约 ${dur} 分钟`,
-    hintFinal: (n: number, dur: number) => `综合卷（${n} 章）· 约 ${dur} 分钟`,
-    hintRetake: (dur: number) => `仅错题章 · 约 ${dur} 分钟`,
+    hintUnit: (n: number, dur: number) => `单章 · 预计 ${n} 题 · 约 ${dur} 分钟`,
+    hintStage: (chapters: number, n: number, dur: number) =>
+      `${chapters} 章联测 · 预计 ${n} 题 · 约 ${dur} 分钟`,
+    hintFinal: (chapters: number, n: number, dur: number) =>
+      `综合卷（${chapters} 章）· 预计 ${n} 题 · 约 ${dur} 分钟`,
+    hintRetake: (n: number, dur: number) => `仅错题章 · 预计 ${n} 题 · 约 ${dur} 分钟`,
+    /**
+     * 模式卡配比行：题量来自 `plannedQuota`（与出卷同一份配额规则），
+     * 主观题数 = 有 AI 判分且该章 band>1 时才计入。
+     */
     quotaPreview: {
-      "unit-test": "单章 5 题：选择2·判断1·问答1·应用1（低掌握仅客观3）",
-      "stage-test": "每章 客观3 + 主观1（轮换；低掌握章 客观4）",
-      "final-test": "总 clamp(3n,15,20) · 客观~60% / 主观~40%",
-      retake: "每章 客观3 · 主观剔除 · 难度降一档",
+      "unit-test": (objective: number, subjective: number) =>
+        `按本章要点定量（每要点 2 题：选择 + 判断）· 客观 ${objective}${subjective > 0 ? ` + 主观 ${subjective}` : ""}`,
+      "stage-test": (objective: number, subjective: number) =>
+        `每章按要点定量（每要点 2 题）· 客观 ${objective}${subjective > 0 ? ` + 主观 ${subjective}` : ""}`,
+      "final-test": (objective: number, subjective: number) =>
+        `总 clamp(3n,15,20) · 客观 ${objective}${subjective > 0 ? ` + 主观 ${subjective}` : ""}`,
+      retake: (objective: number, subjective: number) =>
+        `每章按要点定量 · 客观 ${objective}${subjective > 0 ? ` + 主观 ${subjective}` : ""} · 难度降一档`,
     },
     rangeWithCount: (range: string, n: number) => `${range} · ${n} 章`,
     itemUnit: (n: number) => `${n} 题`,
@@ -2019,8 +2029,8 @@ export const zh = {
       aiReadyHint: "AI 就绪：题面即时生成 · 问答/应用由 AI 批改",
       noAiHint: "未配置 AI：仅客观题（本地确定性题库）",
       footerDefault: "选好范围与卷型后即可出卷。",
-      footerSummary: (label: string, n: number, dur: number) =>
-        `${label} · ${n} 章 · 约 ${dur} 分钟 · 题量按要点自动生成`,
+      footerSummary: (label: string, n: number, questions: number, dur: number) =>
+        `${label} · ${n} 章 · 预计 ${questions} 题 · 约 ${dur} 分钟`,
       start: "生成并开始 →",
       drNone: "先选择章节",
       drUnitNotOne: "单元测只测单章",

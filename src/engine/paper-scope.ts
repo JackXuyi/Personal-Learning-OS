@@ -147,7 +147,7 @@ export function createPaperGroupedByDoc(input: {
 }
 
 /**
- * 补考卷（docs §4 模式表：仅错题章 · 每章 3 客观 · 主观剔除 · 降一档难度）。
+ * 补考卷（docs §4 模式表：仅错题章 · 每章按要点定量 · 主观剔除 · 降一档难度）。
  *
  * 签名与行为均与拆分前一致（`createPaperGroupedByDoc` 的 `retake` 特化）。
  */

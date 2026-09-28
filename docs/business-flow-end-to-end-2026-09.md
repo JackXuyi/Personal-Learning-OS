@@ -212,10 +212,10 @@ Document ──splitDocument──▶ Chapter[]
 | 项 | 内容 |
 |---|---|
 | **入口** | `/quiz/new` 三步向导（`NewQuizPage.tsx:153`）→ 范围（本章/多选章/全本）→ 模式 → 生成并开始 |
-| **核心函数** | `createPaper`（`src/engine/quiz-engine.ts:175`），按 `scope.mode` 分派（L189-205） |
-| **卷型配额** | · **unit-test**（`unitQuota:242`）：单章**客观 3** + （mastery band > 1 **且有 AI**）qa + application 各 1<br/>· **stage-test**（`stageQuota:260`）：每章 band 1 时客观 4；否则客观 3 + （band > 1 且有 AI）主观 1（qa/application 按章序轮换）<br/>· **final-test**（`buildFinalTest:289`）：总量 `clamp(3n, 15, 20)`，主观 = `min(round(total × 0.4), n × 2)`，客观约 60%，按章均摊余数<br/>· **retake**（`retakeQuota:279`）：每章客观 3、**主观剔除**、难度 `lift = -1` 降一档；跨文档聚合走 `createRetakePaper:406`（按 `documentId` 分组，干扰项取各文档其他章） |
-| **难度自适应** | `bandOfMastery:36`（< 0.4 → 1，< 0.7 → 2，否则 3）；认知层级 `cognitiveOf:44`；难度 `difficultyOf:58` |
-| **题目来源** | **本地确定性题库**（keyPoints 驱动）：`buildChoice:67` / `buildJudge:91` / `buildSubject:109` / `collectDistractors:131` |
+| **核心函数** | `createPaper`（`src/engine/quiz-engine.ts:316`），按 `scope.mode` 分派；题量真源 `objectiveQuotaFor:86` / `chapterQuota:105` / `plannedQuota:129` |
+| **卷型配额** | **内容驱动（2026-09-28 改档）**：`objectiveQuotaFor` = 每要点 2 题（选择 + 判断各一），`clamp(OBJECTIVE_QUOTA_MIN=4, OBJECTIVE_QUOTA_MAX=12)`，无要点章 `OBJECTIVE_QUOTA_FALLBACK=3`<br/>· **unit-test**（`unitQuota:397`）：按内容定量 + （band > 1 **且有 AI**）qa + application 各 1<br/>· **stage-test**（`stageQuota:425`）：每章按内容定量 + （band > 1 且有 AI）主观 1（qa/application 按章序轮换）<br/>· **final-test**（`buildFinalTest:474`）：总量 `clamp(3n, 15, 20)`（**不变**），主观 = `min(round(total × 0.4), n × 2)`，客观约 60%，按章均摊余数<br/>· **retake**（`retakeQuota:454`）：每章按内容定量、**主观剔除**、难度 `lift = -1` 降一档；跨文档聚合走 `createRetakePaper`（按 `documentId` 分组，干扰项取各文档其他章）<br/>⚠️ UI 模式卡预览走 `plannedQuota`（同一份配额表），偏离即 `npm run test:quiz` 的 TC-Q-14 失败 |
+| **难度自适应** | `bandOfMastery:39`（< 0.4 → 1，< 0.7 → 2，否则 3）；认知层级 `cognitiveOf`；难度 `difficultyOf` |
+| **题目来源** | **本地确定性题库**（keyPoints 驱动）：`buildChoice:177` / `buildJudge:207`（**真假交替**：伪陈述取其他章要点）/ `buildSubjective:226`；干扰项 `distractorPool:261` + `pickDistractors:279`（**按题轮转**，不再全章复用一组）；题量槽位 `quotaSlots`（逐要点覆盖，同要点先选后判） |
 | **AI 的作用** | **只改写题面，不改配额**：`paper-flow.ts:54 createPaperAndSave`（`:74` 先建本地卷 → `:88` 调 `generateQuizQuestionsWithAi` → `:96-98` 失败静默回退）。实现 `ai/pipelines.ts:299`（`buildQuizGenMessages:178`、`QUIZ_SYSTEM:167`、`mergeAiQuizContent:269` 逐题校验兜底） |
 | **校验护栏** | `NEW_PAPER_MODES:342`、`PAPER_MODE_MIN_CHAPTERS:345`、`availablePaperModes:358`、`canCreatePaperMode:383` |
 | **落库** | `Paper`，状态机 `open / grading / done`（`domain/quiz.ts:45`） |
@@ -256,10 +256,12 @@ Document ──splitDocument──▶ Chapter[]
 
 | 模式 | 触发场景 | 范围 | 题量 | 客观/主观 | 预计时长 |
 |---|---|---|---|---|---|
-| unit-test | 单章 ready | 1 章 | 3–5 | 客观 3（+ 主观 0–2 需 AI） | ~8 min |
-| stage-test | 连续几章 ready | 2–3 章 | 每章 3–4 | 每章客观 3 + 主观 0–1 | ~15 min |
+| unit-test | 单章 ready | 1 章 | **按要点定量**：每要点 2 题 clamp(4,12) | 选择/判断各一（+ 主观 0–2 需 AI 且 band>1） | ~12 min |
+| stage-test | 连续几章 ready | 2–3 章 | **每章按要点定量**（同上） | 每章客观按要点 + 主观 0–1 | ~30 min |
 | final-test | 全章 ready / 目标就绪判定 | 全本 | 15–20 | 客观 ~60% / 主观 ~40% | ~30 min |
-| retake | 单元测未达标 | 仅错题章 | 每章 3 | 全客观（降一档难度） | ~5 min |
+| retake | 单元测未达标 | 仅错题章 | **每章按要点定量**（同上） | 全客观（降一档难度） | ~8 min |
+
+> ⚠️ **2026-09-28 改档**：题量从固定配额（3 / 每章 3–4 / 每章 3）改为**内容驱动**（每要点 2 题，`clamp(4,12)`，无要点章 3 题保底）；同批把判断题改为真假交替（原答案恒为 true）、选择题改为按题轮转干扰项（原全章复用一组）。真源 `engine/quiz-engine.ts::objectiveQuotaFor/chapterQuota/plannedQuota`，门禁 `npm run test:quiz`。
 
 ---
 

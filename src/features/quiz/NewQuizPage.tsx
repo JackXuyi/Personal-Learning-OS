@@ -21,7 +21,7 @@ import { Card, SectionTitle } from "../../components/primitives";
 import { PageContainer, openImportModal } from "../../components/layout/AppShell";
 import type { Chapter, LearnerState, PaperMode, SourceDocument } from "../../domain";
 import { PAPER_MODE_DURATION_MIN } from "../../domain";
-import { availablePaperModes, NEW_PAPER_MODES } from "../../engine";
+import { availablePaperModes, NEW_PAPER_MODES, plannedQuota } from "../../engine";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { storage } from "../../stores/useLoopStore";
 import { useAiTask } from "../../stores/useAiTaskStore";
@@ -317,6 +317,13 @@ export default function NewQuizPage() {
               const on = mode === mm;
               const label = m.quiz.mode[mm];
               const reason = disabledReason(mm, selected.size, chapters.length);
+              // 题量预览与实际出卷同源（`plannedQuota`）：随所选章的要点数实时变化。
+              const plan = plannedQuota({
+                mode: mm,
+                chapters: sortedSelected,
+                allowSubjective: aiReady,
+                learnerState: learner,
+              });
               return (
                 <button
                   key={mm}
@@ -330,10 +337,12 @@ export default function NewQuizPage() {
                 >
                   <p className="text-sm font-semibold text-slate-800">{label}</p>
                   <p className="mt-0.5 text-xs leading-5 text-slate-500">
-                    {enabled ? modeHint(mm, sortedSelected.length, m) : reason}
+                    {enabled
+                      ? modeHint(mm, { chapters: sortedSelected.length, questions: plan.total }, m)
+                      : reason}
                   </p>
                   <p className="mt-1.5 text-[11px] leading-4 text-slate-400">
-                    {m.quiz.quotaPreview[mm]}
+                    {m.quiz.quotaPreview[mm](plan.objective, plan.subjective)}
                   </p>
                   {enabled ? (
                     <p className="mt-1 text-[10px] leading-3 text-slate-300">
@@ -351,7 +360,17 @@ export default function NewQuizPage() {
       <div className="sticky bottom-4 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white/90 px-5 py-3.5 shadow-lg backdrop-blur">
         <p className="text-xs text-slate-500">
           {mode
-            ? np.footerSummary(m.quiz.mode[mode], sortedSelected.length, PAPER_MODE_DURATION_MIN[mode])
+            ? np.footerSummary(
+                m.quiz.mode[mode],
+                sortedSelected.length,
+                plannedQuota({
+                  mode,
+                  chapters: sortedSelected,
+                  allowSubjective: aiReady,
+                  learnerState: learner,
+                }).total,
+                PAPER_MODE_DURATION_MIN[mode],
+              )
             : np.footerDefault}
         </p>
         <Button

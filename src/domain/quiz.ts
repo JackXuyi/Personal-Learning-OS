@@ -64,12 +64,22 @@ export const PAPER_MODE_LABEL: Record<PaperMode, string> = {
   retake: "补考卷",
 };
 
-/** 各卷型预计时长（分钟，docs §3 配比表）。 */
+/**
+ * 各卷型预计时长（分钟）。**唯一出处**：向导模式卡 / 资料详情页出卷按钮 /
+ * 计划动作 ETA（`features/plan/chapter-action.ts`）共用，不得再写第二份。
+ *
+ * 口径（2026-09-28 随「题量内容驱动」重算）：客观题约 45 秒/题、主观题约 3 分钟/题。
+ * - 单元测：典型 5 要点 → 10 客观（7.5 min）；有 AI 判分时再 +2 主观 → 约 12 min；
+ * - 阶段测：典型 3 章 × 5 要点 → 30 客观 + 3 主观 ≈ 30 min；
+ * - 补考卷：典型 5 要点 → 10 客观 ≈ 8 min（无主观）；
+ * - 综合测：15–20 题（主观约 40%）≈ 30 min。
+ * 题量真源见 `engine/quiz-engine.ts` 的 `objectiveQuotaFor` / `plannedQuota`。
+ */
 export const PAPER_MODE_DURATION_MIN: Record<PaperMode, number> = {
-  "unit-test": 8,
-  "stage-test": 15,
+  "unit-test": 12,
+  "stage-test": 30,
   "final-test": 30,
-  retake: 5,
+  retake: 8,
 };
 
 /** 客观题（本地可确定性判分）。 */

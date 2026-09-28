@@ -66,10 +66,14 @@ Four paper modes, generated from your own chapter content:
 
 | Mode | Scope | Questions | When to use |
 | --- | --- | --- | --- |
-| **Unit test** | 1 chapter | 3 objective + up to 2 subjective | After finishing a chapter |
-| **Stage test** | 2–3 chapters | ~3–4 per chapter | After a run of chapters |
+| **Unit test** | 1 chapter | From the chapter's key points (2 per point, 4–12) + up to 2 subjective | After finishing a chapter |
+| **Stage test** | 2–3 chapters | Per chapter from key points (same rule) | After a run of chapters |
 | **Final test** | Whole book | 15–20 (~60% objective) | Goal readiness check |
-| **Retake** | Weak chapters only | 3 per chapter, one level easier | After scoring under 60% |
+| **Retake** | Weak chapters only | Per chapter from key points, one level easier | After scoring under 60% |
+
+> Item counts scale with the chapter content: each key point gets one choice and one judge
+> question, so a chapter with 5 key points yields 10 items — no longer a fixed 3, and every
+> key point is covered. A chapter with no key points falls back to 3 items.
 
 Difficulty is picked from your current mastery band — below 40% you get recall and
 comprehension questions; above 70% the paper shifts toward application and analysis.
