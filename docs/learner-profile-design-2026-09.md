@@ -1254,7 +1254,7 @@ etaFinish(date), etaBehind(days), etaAhead(days), weeklyHintToEstimate
 |---|---|---|---|
 | 1 | §9 T17「**三个**测试文件补齐（画像 / 简历 / 消费点）」 | **2 个**：`tests/learner-profile.test.ts`（画像 / 难度先验 / ETA / 规划档位 / 存储往返）+ `tests/resume-parse.test.ts`（掩码 / 简历解析 / 上下文注入 / 零回归）。消费点用例并入前两者 | 消费点（出卷形状、ETA、prompt 字节比对）与画像/简历强耦合，拆第三个文件反而要复制同一批 fixture；§12 全部用例仍有覆盖 |
 | 2 | §9 T4「四处调用点改 `bandForChapter`」 | 除四处 objective 出卷点外，`createRetakePaper` **也显式透传 `profile`**（原描述只提 `createPaper`） | 重考卷同样走无障碍证据先验；不透传会出现「首考按画像、重考回退 band1」的不一致 |
-| 3 | §8.13 `resume-import.ts` 复用 `extractPdfText` | pdf 错误按 **`err.name`** 判定（非 `instanceof`）：`PdfNoTextError` / `PdfTooLargeError` | `pdf.ts` 是运行时动态 `import()`（避免单测进程拉起 pdfjs），`instanceof` 在 node 单测下不可靠 |
+| 3 | §8.13 `resume-import.ts` 复用 `extractPdfText` | pdf 错误按 **`err.name`** 判定（非 `instanceof`）：`PdfNoTextError` / `PdfTooLargeError` | `extractText` 可由调用方**注入**（单测 / 其它抽取后端），不保证错误对象是本模块 import 到的那一个类实例 ⇒ 按 `name` 判定对「谁来抛」不做假设（`tests/resume-parse.test.ts:162` 即以 `Object.assign(new Error(), {name:"PdfNoTextError"})` 模拟）。⚠️ **2026-09-28 更正**：原理由「`pdf.ts` 是运行时动态 `import()`（避免单测进程拉起 pdfjs），`instanceof` 在 node 单测下不可靠」已随 `pdf.ts` 改为**内部按需加载 pdfjs** 而失效；结论不变，属刻意保留（同族 `local-files.ts:109-110` 用 `instanceof`） |
 | 4 | §8.19 弹窗错误状态 | `ResumeImportErrorKind` 用 **kebab-case**（`ai-not-configured` / `pdf-no-text` …）；UI 侧 `ResumeErrorKey = ResumeImportErrorKind \| "needLevel"` 同口径 | 服务层只产分类、UI 侧统一映射；camelCase 与 kebab 混用会被 `typecheck` 拦下（实施中已修） |
 
 ### 14.2 验收结果

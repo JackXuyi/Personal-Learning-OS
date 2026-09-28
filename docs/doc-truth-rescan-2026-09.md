@@ -66,7 +66,7 @@
 原文称：扫描件 PDF 返回 0 字符后会「走进"仅保存文档不写章节"分支（`pipeline.ts:124`），用户看到"导入成功但没有章节"」。
 
 实测：**该路径不可达** —— 空文本在 `import/pdf.ts:83` 就抛 `PdfNoTextError`，UI 明确提示「疑似扫描件，请改用粘贴文本」；
-`profile` 侧的简历导入走同一 kind（`resume-import.ts:76` 按 `err.name` 判定，避免把 pdfjs 拖进单测进程）。
+`profile` 侧的简历导入走同一 kind（`resume-import.ts::kindOf` 按 `err.name` 判定；原注「避免把 pdfjs 拖进单测进程」已于 **2026-09-28** 由 `pdf.ts` 内部按需加载 pdfjs 取代，判定口径不变）。
 
 → 已把 F8 的「范围 1」标为 ✅ **已实现**、更正现状证据；**F8 其余两条实测为真**（`import/` 目录只有 md/txt/pdf/github 四路；`package.json` 无 mammoth / epub / readability 类依赖），F8 仍作为整体保留在规划里（范围 2–5 未做）。
 

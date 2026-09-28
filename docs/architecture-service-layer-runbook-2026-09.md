@@ -64,7 +64,7 @@
 ### T9 — 全量门禁 + 逐提交实测 + 提交
 
 - **Status:** done
-- **Outcome:** 见下方「通过标准」与「提交重排记录」。`typecheck` **exit 0** · `layer:check` **exit 0**（严格档）· `build` **exit 0**（绕沙箱，`✓ built in 3.09s`；本批相关 `INEFFECTIVE_DYNAMIC_IMPORT` 警告已消除，余 1 条既有的 `resume-import.ts → import/pdf.ts` 不属本批）· **全量 47 个套件 47/47 绿（`TOTAL_FAIL=0`）**。
+- **Outcome:** 见下方「通过标准」与「提交重排记录」。`typecheck` **exit 0** · `layer:check` **exit 0**（严格档）· `build` **exit 0**（绕沙箱，`✓ built in 3.09s`；本批相关 `INEFFECTIVE_DYNAMIC_IMPORT` 警告已消除，余 1 条既有的 `resume-import.ts → import/pdf.ts` 不属本批；**该余项已于 2026-09-28 第 4 批收口**，现在 `npm run build` **零 `INEFFECTIVE_DYNAMIC_IMPORT`**）· **全量 47 个套件 47/47 绿（`TOTAL_FAIL=0`）**。
 - **Notes:** ⚠️ **方案 §8.24 漏报 3 个测试文件 5 处旧路径**（首轮 `test:retrieval` / `test:embed` / `test:rag` 三红，`ERR_MODULE_NOT_FOUND: src/features/learn/index-service.ts`）：
 
   | 文件 | 行 | 形态 |

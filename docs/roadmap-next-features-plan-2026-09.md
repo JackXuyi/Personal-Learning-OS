@@ -388,7 +388,7 @@ F1 画像 ✅  →  F7 章节编辑 ◐ 范围 1 已落地（2026-09-14）  → 
 **范围**（每条独立，可增量交付）
 
 1. ~~**0 字符检测 + 明确提示**~~ ✅ **已实现（2026-09-21 实测）** —— 空文本即抛 `PdfNoTextError` → `pdf-no-text` → UI 提示；
-   `profile` 侧的简历导入走同一 kind（`resume-import.ts:76` 按 `err.name` 判定，不 `instanceof`）。**无需再做**。
+   `profile` 侧的简历导入走同一 kind（`resume-import.ts::kindOf` 按 `err.name` 判定，不 `instanceof`）。**无需再做**。
 2. **OCR 兜底**：Tauri 侧接本地 OCR（如系统 Vision / tesseract）
 3. ~~**DOCX 解析** → 复用既有 md 标题提升逻辑~~ ✅ **已实现（2026-09-23）** —— 方案 `docs/library-import-docx-design-2026-09.md` ·
    runbook `docs/library-import-docx-task-runbook-2026-09.md`。⚠️ **做法与原设想不同（实测更正）**：4/4 份真实 DOCX 的标题

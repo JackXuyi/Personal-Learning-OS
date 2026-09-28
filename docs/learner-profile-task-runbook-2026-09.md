@@ -55,7 +55,8 @@
 
 1. **测试文件数 3 → 2**：方案 §9 T17 写「三个测试文件」，实际落地 `tests/learner-profile.test.ts`（画像 / 难度先验 / ETA / 规划档位 / 存储往返）+ `tests/resume-parse.test.ts`（掩码 / 简历解析 / 上下文注入 / 零回归）。消费点用例与画像/简历共用同一批 fixture，拆第三个文件徒增重复；§12 全部用例仍有覆盖。
 2. **重考卷也透传 `profile`**：方案 §9 T4 只提 `createPaper` 四处调用点，实际 `createRetakePaper` 亦显式透传 `profile`（否则重考会回退 band1，与首考口径不一致）。
-3. **pdf 错误按 `err.name` 判定**：`resume-import.ts::kindOf` 用 `err.name === "PdfNoTextError" / "PdfTooLargeError"`，不用 `instanceof` —— `pdf.ts` 是运行时动态 `import()`，`instanceof` 在 node 单测进程下不可靠。
+3. **pdf 错误按 `err.name` 判定**：`resume-import.ts::kindOf` 用 `err.name === "PdfNoTextError" / "PdfTooLargeError"`，不用 `instanceof` —— `extractText` 可由调用方**注入**（单测 / 其它抽取后端），不保证错误对象是本模块 import 到的那一个类实例 ⇒ 按 `name` 判定对「谁来抛」不做假设。
+   ⚠️ **2026-09-28 更正**：原写「`pdf.ts` 是运行时动态 `import()`，`instanceof` 在 node 单测进程下不可靠」—— 该理由已随 `pdf.ts` 改为**内部按需加载 pdfjs** 而失效（`resume-import.ts` 现为静态 import `pdf.ts`）；判定口径不变，属刻意保留。
 4. **UI 错误键口径**：`ResumeImportErrorKind` 为 kebab-case（`ai-not-configured` / `pdf-no-text` …），`ResumeErrorKey = ResumeImportErrorKind | "needLevel"`；实施中一度误写 camelCase `aiFailed`，被 `typecheck` 拦下后统一为 kebab。
 
 ## Tasks

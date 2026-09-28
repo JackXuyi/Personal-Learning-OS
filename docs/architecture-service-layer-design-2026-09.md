@@ -87,7 +87,7 @@
 
 | 类型 | 描述 |
 |------|------|
-| **主要目标** | ① 建立 `src/services/` 层并在 `rules/` + `AGENTS.md` 中定义层序；② `src/stores/**`、`src/components/**` → `src/features/**` 的 import **归零**（当前 6 行）；③ `src/engine/**` 对 `src/i18n/messages/zh` 的**值**引用归零（当前 2 文件），4 处 `= zh` 默认值删除、`m` 变必填；④ 新增可执行门禁 `npm run layer:check`，把「层序」从散文变成机器可查；⑤ `npm run build` 不再出现 `INEFFECTIVE_DYNAMIC_IMPORT` |
+| **主要目标** | ① 建立 `src/services/` 层并在 `rules/` + `AGENTS.md` 中定义层序；② `src/stores/**`、`src/components/**` → `src/features/**` 的 import **归零**（当前 6 行）；③ `src/engine/**` 对 `src/i18n/messages/zh` 的**值**引用归零（当前 2 文件），4 处 `= zh` 默认值删除、`m` 变必填；④ 新增可执行门禁 `npm run layer:check`，把「层序」从散文变成机器可查；⑤ `npm run build` 不再出现 `INEFFECTIVE_DYNAMIC_IMPORT`（⚠️ 2026-09-24 首轮只达成一半 —— 关掉 `useIndexStore` 一处，`features/profile/resume-import.ts` 仍在；**余项 2026-09-28 第 4 批收口**，见「变更记录」） |
 | **非目标** | ① **不迁** `features/` 下其余 12 个 `*-service.ts`（清单见 §3.1.3，独立批次）；② **不改** `NextAction.reasons` 的形态（决策 D2 选 A 档，B 档「engine 只产 key/params」已否决）；③ **不动** `ai → engine` 同层横向（`ai/pipelines.ts:34-35`、`ai/refine-batch.ts:18`，实测无环）；④ **不迁** `memory-samples.ts` / `memory-import.ts` / `memory-texts.ts` / `desktop-memory-doc.ts`（理由见 §4.2）；⑤ **不动** `src-tauri/**` 与 Rust 侧 `embed_default_model` 单侧孤儿（另开一轮）；⑥ **零 UI / 交互 / 文案变化** |
 | **成功标准** | 见 §11.3（可执行、可观察） |
 
@@ -887,6 +887,7 @@ export type IndexOffReason = "preview" | "disabled" | "no-model";
 2. `npm run layer:check` → **exit 0**（A1–A6 全绿）
 3. 全部 `test:*` 套件 → **0 fail**
 4. `npm run build` → **exit 0**，且输出**不含** `INEFFECTIVE_DYNAMIC_IMPORT`
+   ⚠️ **本条 2026-09-24 未达成**：首轮只关掉 `useIndexStore.ts` 一处，`features/profile/resume-import.ts`（动态 import `learn/import/pdf.ts`）仍在 ⇒ 属**未兑现的验收条件**。**2026-09-28 第 4 批收口**（`resume-import.ts` 改静态 + `pdf.ts` 内部运行时懒加载 pdfjs），详见上文「变更记录」与 `docs/code-gap-review-2026-09.md` §五
 5. `grep -rn '"\.\./features' src/stores/ src/components/` → **0 命中**
 6. `grep -rn 'from "\.\./i18n/messages/zh"' src/engine/` → **0 命中**；`grep -n '= zh' src/engine/*.ts` → **0 命中**
 7. 逐提交实测：每条 commit 单独 checkout 后 `typecheck` exit 0，且该提交相关的 `test:*` 套件绿
@@ -943,4 +944,5 @@ export type IndexOffReason = "preview" | "disabled" | "no-model";
 |------|------|------|
 | 2026-09-24 | 初稿（D1–D4 四项经用户确认：新建 services 层 / 去默认值 + type-only / 报告范围 5 模块 / 加脚本门禁） | Agent |
 | 2026-09-24 | 实施期追加「实现偏离记录」3 条（A5 既存环实测推翻 §4.1 断言 · A3 扩含 `components ↛ features` · 目标② components 部分入基线不修） | Agent |
-| 2026-09-24 | 收尾追加「实现偏离记录」第 4、5 条（§8.24 漏报 3 个测试文件 5 处旧路径 · §10 提交分组重排 + 历史重写）；§11.3 七条通过标准全部满足（全量 47/47 套件绿） | Agent |
+| 2026-09-24 | 收尾追加「实现偏离记录」第 4、5 条（§8.24 漏报 3 个测试文件 5 处旧路径 · §10 提交分组重排 + 历史重写）；§11.3 通过标准：①–③、⑤–⑦ 满足（全量 47/47 套件绿）。⛔ **④ 当时并未满足**（只关掉 `useIndexStore` 一处，`features/profile/resume-import.ts` 仍在）—— 该「七条全部满足」的表述系收尾时的错误汇总，2026-09-28 更正 | Agent |
+| 2026-09-28 | **第 4 批收口**：§2 目标⑤ / §11.3 第 ④ 条**达成** —— `resume-import.ts` 动态 import 归零（改静态 import `pdf.ts` + `pdf.ts` 内部运行时 `await import("pdfjs-dist")`），`npm run build` 输出**不再含** `INEFFECTIVE_DYNAMIC_IMPORT`，且 pdfjs 拆出独立 chunk。同批抽 3 组逐字重复（`shortDate` / AI 失败分类器 / `aliveRef`）。处置明细见 `docs/code-gap-review-2026-09.md` §四 / §五 / §七 | Agent |

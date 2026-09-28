@@ -12,7 +12,7 @@
 2. **缺口集中在四类，都不是「主链路漏了一段」**：
    - **A 已实现但零接线**（14 个符号 + 1 个孤儿文件 + 1 个整模块；含 D3 修复后**连带产生**的 2 个）—— 有实现、有单测、无人用 → ✅ **2026-09-24 清完（第 2 批，见 §二）**
    - **B 同族越层**（`stores → features`、`engine → i18n`、`ai → engine`）—— 正式规则的三条之外，实际存在的反向依赖 → ✅ **2026-09-24 收口（第 3 批，见 §三）**；其中 `ai → engine` 是同层互换，**刻意保留**
-   - **C 重复实现 ≥3 处**（7 组）—— 违反「同一逻辑跨 ≥3 处必抽取」→ 第 4 批
+   - **C 重复实现 ≥3 处**（7 组）—— 违反「同一逻辑跨 ≥3 处必抽取」→ **逐字相同、零语义风险的 3 组已于 2026-09-28 抽取（第 4 批，见 §四）**；余 4 组属 UI 层 `className` / 弹窗 props / `import type` 巨块，需按 `skills/plos-ui-system` 抽公共组件，另批办理
    - **D 文档与代码相反**（3 处）—— 会误导后来者重复造轮子 / 误判门禁状态 → ✅ **2026-09-24 收口（第 1 批，见 §一）**
 3. **最该先动的是 D，不是 A —— ✅ 已于 2026-09-24 收口**（详见 §一）。死代码只是浪费，反向文档会**主动误导**：`tech-debt-closeout §6.1` 声称「无历史时未用 `profile.level` 定 band」，而代码早已用（且 roadmap 把它列为已实施）——两文档自相矛盾。**D1/D2 改文档、D3 改代码**（删死代码后 `typecheck` 归零，README 无需改动即成立）。
 4. **8 项 README `[ ]` 功能缺口逐条实测，全部属实，无一项「已悄悄做完」。**
@@ -131,15 +131,18 @@
 
 ## 四、🟠 中：重复实现（同一逻辑 ≥3 处，违反「先抽取」）
 
-| 组 | 处数 | 位置 |
-|---|---|---|
-| `shortDate` 逐字相同 | 3 | `features/learn/library/shared.ts:47`（**已 export**）· `ChapterReaderPage.tsx:619` · `reader/ChapterRestatementPanel.tsx:649` —— 后两处仍留私有副本 |
-| AI 错误分类器（自认「照抄 / 同口径」） | 3 | `learn/chapter-qa-service.ts:176` · `learn/restatement-service.ts:271` · `goals/capability-service.ts:608` |
-| `aliveRef` 卸载守卫 7 行 | 3 | `reader/ChapterQaPanel.tsx:51` · `reader/ChapterRestatementPanel.tsx:66` · `study/CardSession.tsx:65` |
-| 分段 Tab 三元 className | 3（+2 相似） | `settings/AIModelsSection.tsx:86` · `settings/SettingsPage.tsx:273, 378` |
-| 长 className 串 | 6 | `"rounded-xl border border-line bg-subtle/60 px-4 py-3"`：`ImportModal.tsx:481/494/529/599/647` + `library/dialogs.tsx:371`；另一串 `border-dashed border-line` 亦 6 处 |
-| 弹窗 props 签名 | 4（同文件） | `library/dialogs.tsx:58/122/212/411` |
-| storage 适配器 `import type` 巨块 | 3~4 | `storage/types.ts:11` · `local.ts:8` · `memory.ts:10` · `tauri.ts:26` |
+> **第 4 批（2026-09-28）** 已处置**逐字相同、零语义风险**的 3 组（见下表中 ✅）。
+> 余 4 组属 UI 层 `className` 串 / 弹窗 props 签名 / `import type` 巨块 —— 抽取要连带定义组件或类型契约，**不属于「纯结构重构、零行为变化」**，需按 `skills/plos-ui-system` 另批办理。
+
+| 组 | 处数 | 位置 | 处置 |
+|---|---|---|---|
+| `shortDate` 逐字相同 | 3 → 1 | 已抽到 `features/learn/library/shared.ts`（**本就有 export**）；`ChapterReaderPage.tsx` · `reader/ChapterRestatementPanel.tsx` 的私有副本已删，改为 import | ✅ 第 4 批 2026-09-28 |
+| AI 错误分类器（自认「照抄 / 同口径」） | 3 → 1 | 新 `src/ai/failure-kind.ts`（`AiFailureKind` + `aiFailureKindOf`）；`learn/chapter-qa-service.ts` · `learn/restatement-service.ts` · `goals/capability-service.ts` 的 3 个私有 `classify*` 已删（5 个调用点改指），并清 3 处随之未用的 `AiProviderError` 值导入 | ✅ 第 4 批 2026-09-28 |
+| `aliveRef` 卸载守卫 7 行 | 3 → 1 | 新 `src/hooks/useAliveRef.ts`；`reader/ChapterQaPanel.tsx` · `reader/ChapterRestatementPanel.tsx` · `study/CardSession.tsx` 的 `useRef(true)+useEffect` 双行组合已替换 | ✅ 第 4 批 2026-09-28 |
+| 分段 Tab 三元 className | 3（+2 相似） | `settings/AIModelsSection.tsx:86` · `settings/SettingsPage.tsx:273, 378` | 待 UI 批次 |
+| 长 className 串 | 6 | `"rounded-xl border border-line bg-subtle/60 px-4 py-3"`：`ImportModal.tsx:481/494/529/599/647` + `library/dialogs.tsx:371`；另一串 `border-dashed border-line` 亦 6 处 | 待 UI 批次 |
+| 弹窗 props 签名 | 4（同文件） | `library/dialogs.tsx:58/122/212/411` | 待 UI 批次 |
+| storage 适配器 `import type` 巨块 | 3~4 | `storage/types.ts:11` · `local.ts:8` · `memory.ts:10` · `tauri.ts:26` | 待评估（动 `tauri.ts` 须连带 `src-tauri/**`） |
 
 ---
 
@@ -153,7 +156,7 @@
 | locale 脆弱匹配 | `learn/library/dialogs.tsx:295` `msg.includes("上限") \|\| msg.includes("limit")` | 对错误串做中文子串匹配 |
 | 原生 `<select>` | `features/progress/ProgressPage.tsx:200-213` | `react.mdc` 要求走 `components/ui/select.tsx`；全仓唯一一处 |
 | `@/` alias 空配 | `tsconfig.json:19-21` · `vite.config.ts:10-14` 声明了 alias，`src` 内 **0 次使用** | 可保留（shadcn 生成层豁免位），但属死配置 |
-| 无效动态 import —— ✅ **第 3 批消除 1 处** | ~~`useIndexStore.ts:54`（`index-service`）~~ 已随 store 纯化归零 · 余 `features/profile/resume-import.ts`（`learn/import/pdf.ts`） | `npm run build` 报 `[INEFFECTIVE_DYNAMIC_IMPORT]`：目标模块同时被静态 import ⇒ 拆不出 chunk，动态写法只增复杂度。**余 1 处待第 4 批** |
+| 无效动态 import —— ✅ **已归零（2026-09-28，第 4 批）** | ~~`useIndexStore.ts:54`（`index-service`）~~ 已随 store 纯化归零（第 3 批）· ~~`features/profile/resume-import.ts`（`learn/import/pdf.ts`）~~ 已收口（第 4 批） | 尾项定案 **方案 B**：`resume-import.ts` 改**静态** import `pdf.ts`（原动态 import 是无效写法 —— `local-files.ts:16` 已静态 import 同一模块），并把 pdfjs 的加载下沉为 `pdf.ts` **内部运行时 `await import("pdfjs-dist")`**。实测三条同时成立：① node 单测进程加载 `pdf.ts` **不再拉起 pdfjs**（隔离保住）；② `npm run build` **无 `[INEFFECTIVE_DYNAMIC_IMPORT]`**；③ pdfjs 拆出独立 chunk `pdf-*.js`。⚠️ **反例已实测**：只改静态而保留顶层 `import * as pdfjs` ⇒ pdfjs 被拖进单测进程（输出现 `legacy` 警告），故该写法不可行 |
 | 单 chunk >500 kB | `npm run build` 警告（主 chunk 2.35 MB / gzip 718 kB） | 无代码分割，属性能优化项非缺口 |
 
 ---
@@ -199,9 +202,16 @@
   ⚠️ 未纳入本批：components → features 余 3 条 · 2 组既存环（见 §3.2）
   ⚠️ 仍未迁：features/ 下其余 12 个 *-service.ts（方案 §3.1.3，按需另批）
 
-第 4 批（抽取重复）
-  shortDate / AI 错误分类器 / aliveRef —— 3 组均为逐字相同，抽取零语义风险
-  ⤴ 另含 §五「无效动态 import」余 1 处（features/profile/resume-import.ts）
+第 4 批 —— ✅ 已完成 2026-09-28
+  4.1 `shortDate` 3 → 1：落 `features/learn/library/shared.ts` 既有 export（删两处私有副本）
+  4.2 AI 失败分类器 3 → 1：新 `src/ai/failure-kind.ts`（`AiFailureKind` + `aiFailureKindOf`），
+      5 个调用点改指，连带清 3 处未用 `AiProviderError` 值导入
+  4.3 `aliveRef` 3 → 1：新 `src/hooks/useAliveRef.ts`
+  4.4 收口 §五「无效动态 import」余 1 处：定案 **方案 B**（`resume-import.ts` 改静态 +
+      `pdf.ts` 内部运行时 `await import("pdfjs-dist")`）
+      ⇒ 兑现 `architecture-service-layer-design-2026-09.md` §目标⑤「build 无 INEFFECTIVE_DYNAMIC_IMPORT」验收
+  门禁：`typecheck` exit 0 · `layer:check` 无违规 / 无新增环 · **全部 47 个 `test:*` 套件绿** · `npm run build` exit 0
+  ⚠️ 未纳入本批：§四 余 4 组（UI `className` / 弹窗 props / `import type` 巨块 → 走 `plos-ui-system` 抽组件）
 
 第 5 批（功能增量）
   F7-c 学习单元实体 · 章节拆分 · EPUB / URL 抓取 · OCR —— 均为 P2，按产品需要排
