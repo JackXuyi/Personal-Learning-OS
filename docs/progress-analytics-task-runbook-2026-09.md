@@ -100,3 +100,13 @@ evidence 上限常量 500 → 5000。
 | `npm run test:library` | 全链 ALL PASS |
 | 零改动区 | `src-tauri/**` · `src/storage/tauri.ts` · `src/storage/local.ts` · `src/domain/**` · `src/stores/**` 实测 `git status` 为空 |
 | 造浏览器校验 | 未执行（`rules/no-headless-browser-validation.mdc`）→ 已登记 4 项待人工核对（方案 §13.5） |
+
+## 追记（2026-09-29 · 渲染层换库）
+
+本文 T4 交付的三个手写 SVG 组件（`DiscoveryHeatmap` / `TrendChart` / `TimelineChart`）
+已于 2026-09-29 被 `docs/progress-chart-library-design-2026-09.md` **整体替换渲染实现**：
+折线（趋势 / 时间线）改用 **recharts**，热力图改用 **react-activity-calendar**；
+组件契约（props 形态 + 3 个 `data-testid`）保持不变，派生层 `analytics.ts` 零改动。
+
+上文 T4 的 Outcome 是**当时的历史记录**（保留不删）；现行实现以换库方案及其
+runbook（`docs/progress-chart-library-runbook-2026-09.md`）为准。

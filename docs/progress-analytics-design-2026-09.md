@@ -58,7 +58,7 @@ Personal Learning OS 已经把「学习证据」这件事做实了：判卷、�
 | `features/learner/aggregate.ts` | **同层姊妹模块** —— 沿用其「纯函数 + `titleOf` 解析器由页面传入」的模式 |
 | `features/learner/LearnerPage.tsx` | 加**一个入口卡**指向 `/progress`（D1） |
 | `storage/memory.ts` | 只改**一个常量**（evidence 上限 500 → 5000，D2） |
-| `lib/` SVG 图表 | 全仓首个手写 SVG 图表（无图表库，见 §3.3） |
+| `lib/` SVG 图表 | 全仓首个手写 SVG 图表（无图表库，见 §3.3）。⚠️ **2026-09-29 起该结论已被 `docs/progress-chart-library-design-2026-09.md` 推翻**：三块可视化改由 recharts（折线）+ react-activity-calendar（热力图）渲染 |
 
 ### 1.4 不做会有什么影响
 
@@ -74,7 +74,7 @@ Personal Learning OS 已经把「学习证据」这件事做实了：判卷、�
 | 类型 | 描述 |
 |------|------|
 | **主要目标** | 新增 `/progress` 页，呈现四块：**学习活动热力图**（按天聚合证据条数）、**掌握度趋势曲线**（判卷时点序列）、**弱点排行**（三因子综合分 + 跳转）、**目标进度时间线**（readiness 近似重建 + 截止日参照）。全部为**纯只读派生**，不写任何状态。 |
-| **非目标** | ① 不改 `EvidenceEntry` 类型、不新增 `EvidenceKind`；② **不新增任何 storage 方法**、不改 `local.ts` / `tauri.ts` / `src-tauri/**`；③ 不做数据导出（F4 范围）；④ 不引入图表库；⑤ 不做「自动生成复盘报告」类 AI 功能；⑥ 不实现 streak（连续天数）—— 它是热力图的衍生指标，留待后续单项评估；⑦ 不改 `applyForgetting` 或任何掌握度写入口径。 |
+| **非目标** | ① 不改 `EvidenceEntry` 类型、不新增 `EvidenceKind`；② **不新增任何 storage 方法**、不改 `local.ts` / `tauri.ts` / `src-tauri/**`；③ 不做数据导出（F4 范围）；④ 不引入图表库（⚠️ **2026-09-29 已被 `progress-chart-library-design-2026-09.md` 推翻** —— 三块可视化现由 recharts + react-activity-calendar 渲染）；⑤ 不做「自动生成复盘报告」类 AI 功能；⑥ 不实现 streak（连续天数）—— 它是热力图的衍生指标，留待后续单项评估；⑦ 不改 `applyForgetting` 或任何掌握度写入口径。 |
 | **成功标准** | ① 有数据时四块都渲染且数字可指到 domain 字段；② 空数据 / 单条数据有明确空态，**不出现分不清的空白图表**；③ 新增纯函数有单测（含边界与回归）；④ `npm run typecheck` 仅余 3 条既存 `AIModelsSection` 错误；⑤ `src-tauri/**`、`src/storage/tauri.ts`、`src/storage/local.ts` 零改动（仅 `memory.ts` 改一个常量）；⑥ 全部测试套件全绿。 |
 
 ---
@@ -94,7 +94,7 @@ Personal Learning OS 已经把「学习证据」这件事做实了：判卷、�
 | G7 | 趋势权威源：`PaperResult.createdAt` + `perChapter[chapterId].{previousMastery,mastery,score}` | `domain/quiz.ts:98-130` |
 | G8 | ⚠️ `TauriStorage extends LocalStorageAdapter`，**Evidence / Paper / Goal / LearnerState 全由父类承载**，只有 RAG 五类实体走 SQLite | `storage/tauri.ts:229`、`:4-8` 头注 |
 | G9 | `listEvidence()` / `listPaperResults()` / `getLearnerState()` / `listGoals()` **均已存在** | `storage/types.ts:123,150,159,184` |
-| G10 | 无图表库：依赖里只有 `mermaid`（文档渲染）与 `@xyflow/react`（知识图谱） | `package.json` |
+| G10 | 无图表库：依赖里只有 `mermaid`（文档渲染）与 `@xyflow/react`（知识图谱）。⚠️ **该论据 2026-09-29 起失效**：d3 早已随上述两包进入依赖树（`package-lock.json` 实测 d3 7.9.0 全家桶）；且 `progress-chart-library-design-2026-09.md` 已引入 recharts + react-activity-calendar | `package.json` |
 | G11 | 阈值：`MASTERY_THRESHOLD`=0.8、`MASTERY_FLOOR`=0.6 | `domain/plan.ts:49-50` |
 | G12 | ⚠️ 遗忘衰减是**读时计算**（`applyForgetting`），不落库 → 曲线画的是「判卷当时」的快照 | `LearnerPage.tsx:71` |
 | G13 | 导航是 `NAV_ITEMS` 数组 + `NavKey` 编译期约束（`Messages["nav"]` 里含 `label`/`hint` 的键） | `components/layout/nav-items.ts:38-52` |
@@ -125,7 +125,7 @@ Personal Learning OS 已经把「学习证据」这件事做实了：判卷、�
 |------|------|
 | 零改动区 | **`src-tauri/**`**（Rust）与 **`src/storage/tauri.ts`** —— 本方案不碰。`local.ts` 也不碰（上限常量在上游 `memory.ts`）。 |
 | 唯一存储改动 | `memory.ts` 的 500 → 5000（**一个常量**） |
-| 无新增依赖 | 图表手写 SVG。理由：热力图 = 网格、趋势 = 一条折线、时间线 = 一条折线 + 竖线 —— 这个规模引 recharts（+d3 系传递依赖）不划算，且项目至今零可视化依赖 |
+| ~~无新增依赖~~ ⚠️ **2026-09-29 被推翻** | 三块可视化改由 recharts + react-activity-calendar 渲染（新增 2 个直接依赖 / +19 包，体积实测登记在换库 runbook）。原「d3 系传递依赖不划算」论据失效：d3 早已在依赖树内；recharts 3.x 的 d3 由 `victory-vendor` 内含、不在直接依赖里。见 `progress-chart-library-design-2026-09.md` §3.3 |
 | 时区 | 热力图的「天」按**本地时区**切分（与用户日历一致），周首 = **周一** |
 | 性能 | 上限 5000 条 evidence 的派生 = 一次 O(n) 分桶 + 一次 O(n) 排序；趋势 = O(R·C)，R=判卷次数、C=涉及章数 |
 | 兼容性 | `subjectKind` 缺省 `"chapter"`（旧数据零回归）；本方案**不改** `EvidenceEntry` |
@@ -151,7 +151,7 @@ flowchart TB
 
   subgraph UI["视图层（新）"]
     P["ProgressPage.tsx<br/>加载 + 编排 + 空态 + 弱点榜"]
-    C["charts.tsx<br/>Heatmap / TrendChart / TimelineChart（手写 SVG）"]
+    C["charts.tsx<br/>Heatmap / TrendChart / TimelineChart<br/>（2026-09-29 起三块改由<br/>recharts + react-activity-calendar 渲染）"]
     N["nav-items.ts + App.tsx<br/>导航项 + 路由"]
     LP["LearnerPage.tsx<br/>入口卡"]
   end
@@ -818,6 +818,11 @@ async appendEvidence(entry: EvidenceEntry): Promise<void> {
 ### 8.3 `src/features/progress/charts.tsx`（新增，约 330 行）
 
 **改动说明**：三个**纯展示** SVG 组件。不取数、不算数、不取 `Date.now()`（时间一律由 props 传入）。
+
+> ⚠️ **2026-09-29 起，本节伪代码与下方头注均为历史快照**：三块渲染层已被
+> `docs/progress-chart-library-design-2026-09.md` 换为第三方图表库（折线 = recharts、
+> 热力图 = react-activity-calendar），组件契约（props 形态与 3 个 `data-testid`）未变。
+> 本节仅存档，勿按此实施。
 
 ```tsx
 /**
