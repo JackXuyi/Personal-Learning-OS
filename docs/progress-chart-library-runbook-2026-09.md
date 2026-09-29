@@ -134,8 +134,9 @@
 | 2026-09-29 | T3 适配器 + 16 条单测全绿（首跑 1 红，判为实现错：`isFinite` 误伤 `Infinity`，改为只特判 NaN）；T4/T5 折线换 recharts；T6 热力图换 react-activity-calendar；T7 CSS 2 条 + i18n 零改动 |
 | 2026-09-29 | T8 全门禁绿（typecheck/layer/ui + test:chart 16 + test:progress 35 + test:library 全链 + build 1.66s）；dist 8.7M→9.1M |
 | 2026-09-29 | T9 回扫完成（8 处处置 + 1 处待核实测不存在 + 全仓重扫零残留）；待 C1–C4 提交与 T10 用户目测 |
+| 2026-09-29 | **T10 反馈第 1 轮落地**（`3275bc2`）：① 热力图铺满卡片 —— ResizeObserver 实测外层宽度反算 blockSize（变化 5 就此关闭，退路 R3 不再触发）；② 折线 linear→monotone + strokeLinecap round（用户拍板，推翻「不用 monotone」注释）。门禁全绿（typecheck/ui/layer + test:progress 35/35 + build 1.68s） |
 
 ### T10 — 用户目测确认（`npm run dev` → localhost:1420）
 - **Status:** blocked
 - **Outcome:** —
-- **Notes:** blocked on：用户按 §7.4 的 8 条变化逐项目测（禁自动化截图，`no-headless-browser-validation`）。重点：① 热力图不再铺满卡片宽度（P3 风险 R3）；② 折线多出水平网格线；③ 两处 tooltip 的文案与配色；④ 系统切暗色后热力图不变色（G20 对策）。若「不铺满」不可接受 → 先调大 `blockSize`，仍不行再走 §10.2 热力图退路。
+- **Notes:** blocked on：用户按 §7.4 的 8 条变化逐项目测（禁自动化截图，`no-headless-browser-validation`）。~~① 热力图不再铺满卡片宽度~~（**已修**：ResizeObserver 反算 blockSize）；② 折线多出水平网格线；③ 两处 tooltip 的文案与配色；④ 系统切暗色后热力图不变色（G20 对策）。折线平滑度用户已拍板 monotone。
