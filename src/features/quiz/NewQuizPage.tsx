@@ -357,8 +357,11 @@ export default function NewQuizPage() {
       </Card>
 
       {/* Step 3 · 生成并开始
-          ⚠️ sticky 容器禁用 backdrop-filter（残影瓦片 bug，详见 QuizAnswerPage 底栏注释）。 */}
-      <div className="sticky bottom-4 flex transform-gpu items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-3.5 shadow-lg">
+          ⚠️ sticky 底栏文案随选择变化 → key 重挂载防 WKWebView 残影瓦片（详见 QuizAnswerPage 底栏注释）。 */}
+      <div
+        key={`${mode ?? "none"}:${sortedSelected.length}`}
+        className="sticky bottom-4 flex transform-gpu items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-3.5 shadow-lg"
+      >
         <p className="text-xs text-slate-500">
           {mode
             ? np.footerSummary(

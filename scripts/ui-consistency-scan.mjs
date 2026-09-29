@@ -13,12 +13,15 @@
  *   4) 裸字号 text-[Npx] 分布
  *   5) 原生下拉控件：<select> / <option> / <datalist> → 必须为 0
  *      （唯一来源是 components/ui/select；口径见 rules/dropdown-select.mdc）
- *   6) sticky + backdrop-filter 组合 → 必须为 0
- *      （macOS WKWebView 残影瓦片 bug；口径见 rules/react.mdc §Styling）
+ *   6) sticky 残影防护（macOS WKWebView 脏区不重绘，口径 rules/react.mdc §Styling）：
+ *      ① sticky + backdrop-filter 组合 → 0；
+ *      ② sticky bottom 条（内容随状态变化的底栏形态）开标签缺 `key=` 重挂载 → 0
+ *        （仅去 backdrop-filter 不充分——2026-09-29 实测残影仍在；key 重挂载才是根治）
  *
  * ⚠️ 第 5、6 类是「有过一次清理、又复发」的那类问题：2026-09-09 的 M2 声明「原生 select
  * 归零」，2026-09 后期 F3 开发又新引入 1 处；2026-09-28 答题页底栏残影暴露 sticky+blur
- * 组合在 3 个页面共存。一次性清理必须配可反复执行的判据。
+ * 组合在 3 个页面共存，2026-09-29 再次实测证明**仅去 backdrop-filter 不充分**（残影仍在），
+ * 根治 = sticky bottom 条随状态 key 重挂载。一次性清理必须配可反复执行的判据。
  *
  * 用法：
  *   node scripts/ui-consistency-scan.mjs                    # 出报告，退出码恒 0
@@ -27,7 +30,7 @@
  *   node scripts/ui-consistency-scan.mjs --min-files=4      # 只报跨 ≥4 文件的模式
  *   node scripts/ui-consistency-scan.mjs --fail-on=3        # 存在跨 ≥3 文件模式 → 退出码 1
  *   node scripts/ui-consistency-scan.mjs --fail-on-native   # 存在原生下拉控件 → 退出码 1
- *   node scripts/ui-consistency-scan.mjs --fail-on-sticky-glass  # sticky+backdrop-filter → 退出码 1
+ *   node scripts/ui-consistency-scan.mjs --fail-on-sticky-glass  # sticky+backdrop / bottom 条缺 key → 退出码 1
  *   node scripts/ui-consistency-scan.mjs --json             # 机器可读输出
  *
  * 退出码：0 = 报告模式（或达标）；1 = 命中 --fail-on / --fail-on-native 阈值；2 = 参数/运行错误。
@@ -116,7 +119,35 @@ function stickyGlassHitsOf(tokens, file, line) {
     const head = t.includes(":") ? t.slice(t.lastIndexOf(":") + 1) : t;
     return head === "backdrop-filter" || head.startsWith("backdrop-blur");
   });
-  return hasSticky && hasBackdrop ? [{ file, line }] : [];
+  return hasSticky && hasBackdrop ? [{ file, line, kind: "backdrop" }] : [];
+}
+
+/**
+ * sticky bottom 条缺 `key` 重挂载的判定（行级启发式）：
+ * className 同串含 `sticky` + `bottom-*`（内容随状态变化的底栏形态）→ 在开标签邻近行
+ * （className 行上 3 行 / 下 1 行）内找不到 `key=` 即命中。本仓库惯例 key 就写在
+ * className 邻近行；静态内容（永不变化）的 sticky 底条请写 `key="static"` 显式豁免。
+ * 局限：跨多行的模板串 className 不识别（现仓 3 处底栏均为单行字符串，够用）。
+ */
+function stickyNoKeyHitsOf(src, file) {
+  const lines = src.split("\n");
+  const attrRe = /className=(["'`])([^"'`\n]*)\1/;
+  const hits = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const m = attrRe.exec(lines[i]);
+    if (!m) continue;
+    const tokens = tokenize(m[2]);
+    if (!tokens.includes("sticky") || !tokens.some((t) => t.startsWith("bottom-"))) continue;
+    let hasKey = false;
+    for (let j = Math.max(0, i - 3); j <= Math.min(lines.length - 1, i + 1); j += 1) {
+      if (/\bkey=/.test(lines[j])) {
+        hasKey = true;
+        break;
+      }
+    }
+    if (!hasKey) hits.push({ file, line: i + 1, kind: "no-key" });
+  }
+  return hits;
 }
 
 /** @param {string[]} argv */
@@ -311,9 +342,10 @@ function scanFile(file, gramSize) {
     for (let i = 0; i + gramSize <= tokens.length; i += 1) {
       grams.add(tokens.slice(i, i + gramSize).join(" "));
     }
-    // 第 6 类：sticky 容器 + backdrop-filter（残影瓦片 bug，口径 rules/react.mdc §Styling）。
+    // 第 6 类：sticky 残影防护（口径 rules/react.mdc §Styling）。
     stickyGlass.push(...stickyGlassHitsOf(tokens, file, lineOf(src, lit.index)));
   }
+  stickyGlass.push(...stickyNoKeyHitsOf(src, file));
 
   let m;
   BANNED_RE.lastIndex = 0;
@@ -451,15 +483,17 @@ function renderMarkdown(report, opts) {
   }
   p();
 
-  p(`## 6. sticky + backdrop-filter 组合（应为 0）`);
+  p(`## 6. sticky 残影防护（应为 0）`);
   if (report.stickyGlass.length === 0) {
-    p(`✅ 0 命中 —— sticky 容器未使用 \`backdrop-blur\` / \`backdrop-filter\`（WKWebView 残影瓦片 bug）。`);
+    p(`✅ 0 命中 —— sticky 容器未用 \`backdrop-blur\`，且 sticky bottom 条均已 \`key\` 重挂载（WKWebView 脏区不重绘）。`);
     p(`口径见 \`rules/react.mdc\` §Styling；模态遮罩等 fixed 浮层不受限。`);
   } else {
-    p(`合计 **${report.stickyGlass.length}** 处 —— sticky 容器禁用 backdrop-filter（macOS WKWebView 会留上一帧残影瓦片），改不透明底色 + \`transform-gpu\`。`);
-    p(`| 文件 | 行 |`);
-    p(`|------|----|`);
-    for (const n of report.stickyGlass) p(`| \`${n.file}\` | ${n.line} |`);
+    p(`合计 **${report.stickyGlass.length}** 处 —— sticky 残影两条硬口径：禁 backdrop-filter（不透明底 + transform-gpu）+ 内容随状态变化的 bottom 条 \`key\` 重挂载。`);
+    p(`| 文件 | 行 | 类型 |`);
+    p(`|------|----|------|`);
+    for (const n of report.stickyGlass) {
+      p(`| \`${n.file}\` | ${n.line} | ${n.kind === "backdrop" ? "sticky+backdrop-filter" : "bottom 条缺 key 重挂载"} |`);
+    }
   }
   p();
   return lines.join("\n");
@@ -538,7 +572,7 @@ function main() {
   }
   if (opts.failOnStickyGlass && stickyGlass.length > 0) {
     process.stderr.write(
-      `[ui-scan] 门禁未通过：${stickyGlass.length} 处 sticky + backdrop-filter 组合（WKWebView 残影瓦片 bug，rules/react.mdc §Styling）\n`,
+      `[ui-scan] 门禁未通过：${stickyGlass.length} 处 sticky 残影隐患（backdrop-filter / bottom 条缺 key 重挂载，rules/react.mdc §Styling）\n`,
     );
     process.exit(1);
   }

@@ -196,10 +196,15 @@ export default function QuizAnswerPage() {
       ) : null}
 
       {/* 底部：上一题 / 下一题 / 交卷。
-          ⚠️ sticky 容器禁用 backdrop-filter（backdrop-blur）：macOS WKWebView 会把
-          bar 内未重绘的区域留成上一帧的残影瓦片——实测表现为第 2 题的「下一题」按钮
-          残影从第 3 题的「交卷」左侧露出来。用不透明底色 + transform-gpu 自成合成层。 */}
-      <div className="sticky bottom-4 z-10 mt-6 flex transform-gpu items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-3.5 shadow-lg">
+          ⚠️ WKWebView 残影瓦片（2026-09-28/29 两次实测）：sticky 容器换内容时——换题导致
+          提示文案更换、右侧按钮在「下一题/交卷」间切换——容器内**腾空的条带不会被重绘**，
+          上一帧按钮像素残留在新按钮旁。去 backdrop-blur + 不透明底 + transform-gpu 只是
+          必要条件，压不住脏区不重绘 ⇒ 关键是 key={index}：换题即整条重挂载（换 DOM 节点
+          = 换合成层），残影无从产生。禁 backdrop-filter 的要求仍需保持（见 react.mdc）。 */}
+      <div
+        key={index}
+        className="sticky bottom-4 z-10 mt-6 flex transform-gpu items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-3.5 shadow-lg"
+      >
         <button
           onClick={() => setIndex((i) => Math.max(0, i - 1))}
           disabled={index === 0}

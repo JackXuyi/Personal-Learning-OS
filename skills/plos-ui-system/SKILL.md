@@ -48,14 +48,14 @@ node scripts/ui-consistency-scan.mjs                    # 出报告，退出码�
 node scripts/ui-consistency-scan.mjs --top=30 --min-files=4
 node scripts/ui-consistency-scan.mjs --fail-on=3        # 当有 ≥3 文件重复 → 退出码 1
 node scripts/ui-consistency-scan.mjs --fail-on-native   # 存在原生 <select>/<option> → 退出码 1
-node scripts/ui-consistency-scan.mjs --fail-on-sticky-glass  # sticky+backdrop-filter → 退出码 1
+node scripts/ui-consistency-scan.mjs --fail-on-sticky-glass  # sticky+backdrop / bottom 条缺 key → 退出码 1
 node scripts/ui-consistency-scan.mjs --json             # 机器可读
 ```
 
-扫描 `src/` 下全部 `.ts`/`.tsx`，输出六类：重复类串候选 / 硬编码调色板色 / focus 环透明度分布 / 裸 px 字号分布 / **原生下拉控件** / **sticky+backdrop-filter 组合**。
+扫描 `src/` 下全部 `.ts`/`.tsx`，输出六类：重复类串候选 / 硬编码调色板色 / focus 环透明度分布 / 裸 px 字号分布 / **原生下拉控件** / **sticky 残影防护**。
 **基线（2026-09-11）**：454 处硬编码色（16 文件）· 84 条跨 ≥3 文件重复模式 · focus 环 4 种透明度 · 83 处裸 px 字号。
 **第 5 类基线（2026-09-28）**：**0 命中** ⇒ `npm run ui:check` 已可作硬门禁直接接入 CI（口径见 [`rules/dropdown-select.mdc`](../../rules/dropdown-select.mdc)）。
-**第 6 类基线（2026-09-28）**：**0 命中**（sticky 容器禁用 backdrop-filter —— macOS WKWebView 残影瓦片 bug，口径见 [`rules/react.mdc`](../../rules/react.mdc) §Styling）。
+**第 6 类基线（2026-09-29）**：**0 命中**。两条硬口径：① sticky 容器禁 backdrop-filter；② **内容随状态变化的 sticky bottom 条必须 `key` 重挂载**——2026-09-29 实测推翻「仅去 backdrop-filter 即可」（残影仍在），根因是 WKWebView 对 sticky 容器脏区不重绘（口径见 [`rules/react.mdc`](../../rules/react.mdc) §Styling）。
 `--fail-on=3` 当前必然失败 —— 这是真实状况，不是脚本有问题。台账清到阈值以下之后再把它接进 CI。
 
 ## 审稿门禁（改 UI 的 PR 必须逐条回答）

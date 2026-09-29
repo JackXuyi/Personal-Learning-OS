@@ -544,8 +544,11 @@ export default function ChapterReaderPage() {
       </div>
 
       {/* 底部主行动：窄屏换行，按钮不挤压提示文案
-          ⚠️ sticky 容器禁用 backdrop-filter（残影瓦片 bug，详见 QuizAnswerPage 底栏注释）。 */}
-      <div className="sticky bottom-4 z-10 mt-6 flex transform-gpu flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-3.5 shadow-lg sm:px-5">
+          ⚠️ sticky 底栏内容随章节/复习态变化 → key 重挂载防 WKWebView 残影瓦片（详见 QuizAnswerPage 底栏注释）。 */}
+      <div
+        key={`${chapter.id}:${chapter.status}:${dueReview ? "due" : "ok"}`}
+        className="sticky bottom-4 z-10 mt-6 flex transform-gpu flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-3.5 shadow-lg sm:px-5"
+      >
         <div className="min-w-0">
           <p className="hidden text-xs text-ink-3 sm:block">
             {dueReview
