@@ -3,7 +3,7 @@
  *
  * 交互（docs §4.2 P4）：
  * - 逐题流：进度 x/y + 范围标签；← 上一题 / → 下一题；
- * - 控件按题型：选择 / 判断 → 同一套行式选项（判断固定 ✓ / ✗ 两行，键盘 1–2；文字保留在 aria-label）；
+ * - 控件按题型：选择 / 判断 → 同一套行式选项（徽标 A/B/C/D…，判断固定 A ✓ / B ✗ 两行；键盘 1–N 与行序对应；文字保留在 aria-label）；
  *   问答与应用 → textarea；
  * - 草稿：每答一题自动暂存（storage.savePaperDraft），中途离开可续答；
  * - 交卷（T7 判卷流）：存最终草稿 → paper.status=grading → 跳 /quiz/:paperId/grading，
@@ -285,8 +285,13 @@ const JUDGE_OPTIONS = [
   { val: "false", glyph: "✗" },
 ] as const;
 
+/** 选项徽标字母：A/B/C/D…（考试惯例；键盘快捷键仍是 1–N 与行序对应）。 */
+function optionBadge(i: number): string {
+  return String.fromCharCode(65 + i);
+}
+
 /**
- * 选项行（单选与判断**共用**）：序号徽标 + 内容，选中态高亮。
+ * 选项行（单选与判断**共用**）：字母徽标 + 内容，选中态高亮。
  * 抽成一个组件是为了让两种题型走同一条渲染路径——交互一致不能靠「两处保持同步」。
  */
 function OptionRow({
@@ -296,7 +301,7 @@ function OptionRow({
   ariaLabel,
   children,
 }: {
-  badge: number;
+  badge: string;
   selected: boolean;
   onClick: () => void;
   ariaLabel?: string;
@@ -365,7 +370,7 @@ function QuestionCard({
             {(q.options ?? []).map((opt, i) => (
               <OptionRow
                 key={i}
-                badge={i + 1}
+                badge={optionBadge(i)}
                 selected={value === String(i)}
                 onClick={() => onChange(String(i))}
               >
@@ -380,7 +385,7 @@ function QuestionCard({
             {JUDGE_OPTIONS.map((o, i) => (
               <OptionRow
                 key={o.val}
-                badge={i + 1}
+                badge={optionBadge(i)}
                 selected={value === o.val}
                 onClick={() => onChange(o.val)}
                 ariaLabel={o.val === "true" ? a.trueLabel : a.falseLabel}
