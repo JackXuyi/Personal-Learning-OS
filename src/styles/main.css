@@ -97,3 +97,21 @@ body,
 .react-flow__node {
   font-family: inherit;
 }
+
+/*
+ * ============================================================
+ * /progress 热力图色阶（react-activity-calendar 的格子）
+ * ============================================================
+ * 库给每个格子渲染 `<rect class="plos-heat" data-level="0..4"
+ * fill="<库色值>" fill-opacity="<HEAT_OPACITY[n]>">`（charts.tsx 经 renderBlock 注入
+ * className 与 fillOpacity）。两条分工，**勿合并**：
+ * - **fill（用哪个 token）只在此处** —— CSS 规则优先于 presentation attribute；
+ * - **fill-opacity（色阶档位）只由 charts.tsx 的 HEAT_OPACITY 注入** ——
+ *   此处若再写 fill-opacity 就是同一规则散两处（漂移源）。
+ */
+.plos-heat {
+  fill: var(--color-primary);
+}
+.plos-heat[data-level="0"] {
+  fill: var(--color-line);
+}

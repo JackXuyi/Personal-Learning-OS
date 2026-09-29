@@ -1,15 +1,43 @@
 /**
- * 复盘与趋势的图表组件（手写 SVG）—— docs/progress-analytics-design-2026-09.md §8.3。
+ * 复盘与趋势的图表组件 —— 折线（趋势 / 时间线）= **recharts**，热力图 = **react-activity-calendar**。
+ * 换库方案与决策记录：docs/progress-chart-library-design-2026-09.md。
  *
  * 约定（三条，实施时不得放宽）：
  * 1. 组件只吃 analytics **已算好的结构** —— 不取数、不算数、不读 storage；
  * 2. **不取 `Date.now()`**：时间一律由 props 传入，日期/数字格式化由页面注入
  *    （组件不碰 i18n，文案全部来自调用方）；
- * 3. 不引图表库：热力图 = 网格、趋势 = 一条折线、时间线 = 折线 + 竖线
- *    （方案 §3.3 —— 这个规模引 recharts + d3 传递依赖不划算）。
+ * 3. ⚠️ **本文件的原第 3 条「不引图表库：热力图 = 网格、趋势 = 一条折线、时间线 =
+ *    折线 + 竖线（方案 §3.3 —— 这个规模引 recharts + d3 传递依赖不划算）」已于
+ *    2026-09-29 被 docs/progress-chart-library-design-2026-09.md 推翻**。两句论据
+ *    **均已失效**：d3 早已随 `mermaid` / `@xyflow/react` 进入依赖树；recharts 3.x 的
+ *    d3 由 `victory-vendor` 内含、不在直接依赖里。现三块全走库，代价（新增直接依赖
+ *    与包体，已实测登记在 runbook）与收益（内建 Tooltip / ReferenceLine / 坐标层）
+ *    见该方案 §3.3。
+ *
+ * ⚠️ 色值纪律：一律**不传色值**。折线 / 参考线 / 点的 `stroke` / `fill` 走
+ * `currentColor`，颜色由 `className`（Tailwind 文本色类）提供；热力图格子走
+ * `main.css` 的 `.plos-heat[data-level]`。色值真源仍是 `src/styles/main.css`。
+ * **不得**给两库传 `stroke="var(--x)"`（presentation attribute 的 `var()` 行为
+ * 规范未定，方案 G26）。
  */
+import { cloneElement } from "react";
+import type { ReactNode } from "react";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceDot,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { ActivityCalendar } from "react-activity-calendar";
 import type { Heatmap, ProgressTimeline } from "./analytics";
-import { heatLevel } from "./analytics";
+import { HEAT_MAX_LEVEL, toActivityCells } from "./chart-adapters";
+import type { LineSeries, RefLine } from "./chart-adapters";
+import { toLineSeries, toReferenceLines } from "./chart-adapters";
 
 const CELL = 11;
 const GAP = 2;
@@ -21,10 +49,20 @@ const HEAT_OPACITY = [0.5, 0.15, 0.35, 0.6, 1] as const;
 /* ------------------------------------------------------------------ */
 
 /**
- * 26 周 × 7 天网格。列 = 周（周一首），行 = 周一..周日。
+ * 26 周活动热力图 —— 渲染交给 `react-activity-calendar`（换库方案 §8.3a）。
  *
- * 空格（0 条）用 `text-line` 浅底而非留白 —— 留白会被误读为「学了但没记录」；
- * 未来日期由 analytics 输出 `undefined`，这里直接不渲染。
+ * ⚠️ 三个「必须显式关掉」的库默认值（都来自拆包实测，方案 G18–G20）：
+ * - `weekStart={1}`：库默认 0（周日），PLOS 是周一首；
+ * - `colorScheme="light"`：库默认跟随系统 `prefers-color-scheme`，暗色系统会串色；
+ * - `showTotalCount={false}`：库默认渲染「N activities in YYYY」，与页面
+ *   「近 26 周 · N 条」重复。
+ *
+ * 色阶分工（避免同一规则散两处）：**颜色**（用哪个 token）走 `main.css` 的
+ * `.plos-heat[data-level]`；**透明度档位**（色阶语义）仍由本文件的 `HEAT_OPACITY`
+ * 经 `renderBlock` 注入 —— 两边各只有一份真源。
+ *
+ * 图例**保留自绘**（偏离 P2，runbook 有登记）：`showColorLegend={false}` +
+ * 沿用现有 12 行 span —— 零 CSS、零 `renderColorLegend`、位置与现状一致。
  */
 export function DiscoveryHeatmap({
   heatmap,
@@ -36,36 +74,45 @@ export function DiscoveryHeatmap({
   labelOf: (dateKey: string, count: number) => string;
   legend: { less: string; more: string };
 }) {
-  const cols = heatmap.weeks.length;
-  const width = cols * (CELL + GAP);
-  const height = 7 * (CELL + GAP);
+  const cells = toActivityCells(heatmap);
+
+  // ⚠️ 库对空 data 直接 `throw`（G19，不是渲染空图）⇒ 必须在这里拦住。
+  // 正常路径走不到（页面在无记录时已切空态）—— 这是防御性兜底。
+  if (cells.length === 0) {
+    return <div data-testid="progress-heatmap" />;
+  }
 
   return (
     <div data-testid="progress-heatmap">
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full">
-        {heatmap.weeks.map((col, x) =>
-          col.map((day, y) => {
-            // 未来日期：不渲染（画成 0 条会谎报「那天学了但没记录」）。
-            if (!day) return null;
-            const level = heatLevel(day.count);
-            return (
-              <rect
-                key={`${x}-${y}`}
-                x={x * (CELL + GAP)}
-                y={y * (CELL + GAP)}
-                width={CELL}
-                height={CELL}
-                rx={2}
-                fill="currentColor"
-                fillOpacity={HEAT_OPACITY[level]}
-                className={level === 0 ? "text-line" : "text-primary"}
-              >
-                <title>{labelOf(day.dateKey, day.count)}</title>
-              </rect>
-            );
-          }),
-        )}
-      </svg>
+      {/*
+       * 库容器是 `width: max-content`（不吃 viewBox 自适应）⇒ 不再铺满卡片宽度
+       * （方案 §7.4 变化 5，D4=A 已知悉；`blockSize` 观感由目测确认后再调）。
+       */}
+      <ActivityCalendar
+        data={cells}
+        weekStart={1}
+        colorScheme="light"
+        minLevel={0}
+        maxLevel={HEAT_MAX_LEVEL}
+        blockSize={CELL}
+        blockMargin={GAP}
+        blockRadius={2}
+        showTotalCount={false}
+        showColorLegend={false}
+        showMonthLabels={false}
+        showWeekdayLabels={false}
+        tooltips={{ activity: { text: (a) => labelOf(a.date, a.count) } }}
+        renderBlock={(block, activity) =>
+          // ① `style: {}` 清掉库的内联描边（cloneElement 对 props 浅合并，style 整体替换）；
+          // ② `className: "plos-heat"` 供 main.css 的 `fill` 覆盖库的 attribute 色；
+          // ③ `fillOpacity` 沿用 HEAT_OPACITY（透明度档位的真源仍是这一份数组）。
+          cloneElement(block, {
+            className: "plos-heat",
+            fillOpacity: HEAT_OPACITY[activity.level],
+            style: {},
+          })
+        }
+      />
       <div className="mt-2 flex items-center justify-between gap-3 text-xs text-ink-3">
         <span className="flex items-center gap-1">
           <span>{legend.less}</span>
@@ -86,83 +133,145 @@ export function DiscoveryHeatmap({
 }
 
 /* ------------------------------------------------------------------ */
-/* 折线图共用坐标映射（趋势 / 时间线同构，实现只写一次）                 */
+/* 折线图共用画布（趋势 / 时间线同构，配置只写一次）                     */
 /* ------------------------------------------------------------------ */
 
-const W = 600;
-const H = 160;
-const PAD = { t: 8, r: 8, b: 20, l: 34 };
 /** y 轴刻度（0..1；含 0.6 / 0.8 两条语义线，与方案 §7.1 线框一致）。 */
-const Y_TICKS = [0, 0.4, 0.6, 0.8, 1] as const;
+const Y_TICKS: number[] = [0, 0.4, 0.6, 0.8, 1];
 
-const SPAN_X = W - PAD.l - PAD.r;
-const SPAN_Y = H - PAD.t - PAD.b;
+/** 折线区块高度 —— ⚠️ `ResponsiveContainer` 要求父容器有**确定高度**（方案 §7.4 变化 1）。 */
+const CHART_BOX = "h-44 w-full text-line"; // text-line 同时给网格线兜底色（见下）
 
-/** x 轴线性映射；跨度 0（单点）时居中，避免除零。 */
-function xAt(at: number, minX: number, maxX: number): number {
-  return maxX === minX
-    ? PAD.l + SPAN_X / 2
-    : PAD.l + ((at - minX) / (maxX - minX)) * SPAN_X;
-}
-
-/** y 轴映射（0..1 → 底部..顶部）。 */
-function yAt(value: number): number {
-  return PAD.t + (1 - value) * SPAN_Y;
-}
-
+/** y 轴百分比标签（0 / 40 / 60 / 80 / 100）。 */
 function pctLabel(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
-/** y 轴刻度 + 左侧标签（0 / 40 / 60 / 80 / 100）。 */
-function YAxis() {
+/**
+ * 单点时给 x 域加 1ms 边距。
+ *
+ * `domain` 两端相等会让 recharts 得到零宽区间，点会贴到轴的一端；加 1ms（对月级
+ * 时间轴无视觉影响）只为让区间非零、点落在正中。
+ */
+function xDomainOf(series: LineSeries): [number, number] {
+  return series.isSinglePoint
+    ? [series.xDomain[0] - 1, series.xDomain[1] + 1]
+    : series.xDomain;
+}
+
+/**
+ * 折线画布：网格 + 双轴 + tooltip 的配置在趋势与时间线之间**必须一致**，
+ * 故只写一次；曲线与附加标记由 `children` 决定。
+ *
+ * ⚠️ 三个「不许让库自作主张」的点：
+ * 1. x 轴 `type="number"` + **显式 domain/ticks** —— 不许用 `scale="time"` 让 recharts
+ *    自选 nice 刻度（会破坏「首中尾 3 刻度」的现口径）；
+ * 2. y 轴固定 `[0, 1]` + 显式 ticks（掌握度本身有界，自适应缩放会放大噪声）；
+ * 3. `isAnimationActive={false}` 由调用方给（D4：动画关）。
+ */
+function LineCanvas({
+  series,
+  refs,
+  axisLabelOf,
+  children,
+}: {
+  series: LineSeries;
+  refs: RefLine[];
+  axisLabelOf: (at: number) => string;
+  children: ReactNode;
+}) {
   return (
-    <>
-      {Y_TICKS.map((v) => (
-        <text
-          key={v}
-          x={PAD.l - 6}
-          y={yAt(v)}
-          textAnchor="end"
-          dominantBaseline="middle"
-          fontSize={9}
-          fill="currentColor"
-          className="text-ink-3"
-        >
-          {pctLabel(v)}
-        </text>
-      ))}
-    </>
+    <div className={CHART_BOX}>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={series.data} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
+          {/*
+           * ⚠️ 水平网格线（D4 选择「网格开」）。CartesianGrid **不合并 className**
+           * （库源码硬写 `className="recharts-cartesian-grid"`），故色只能经 `stroke`
+           * 走 `currentColor`，继承自本组件根 div 的 `text-line`。
+           */}
+          <CartesianGrid vertical={false} stroke="currentColor" />
+
+          {/*
+           * ⚠️ 必须显式传 `stroke`：CartesianAxis 把 `stroke` 当作刻度文字的 `fill`
+           * （库源码 `{ stroke: 'none', fill: stroke }`），不传就是库自带的 `#666`。
+           */}
+          <XAxis
+            dataKey="at"
+            type="number"
+            domain={xDomainOf(series)}
+            ticks={series.xTicks}
+            tickFormatter={axisLabelOf}
+            tickLine={false}
+            axisLine={{ stroke: "currentColor" }}
+            stroke="currentColor"
+            className="text-ink-3"
+          />
+          <YAxis
+            domain={[0, 1]}
+            ticks={Y_TICKS}
+            width={34}
+            tickFormatter={pctLabel}
+            tickLine={false}
+            axisLine={{ stroke: "currentColor" }}
+            stroke="currentColor"
+            className="text-ink-3"
+          />
+
+          {/*
+           * 悬停 tooltip（D5=B）：位置与渲染由库负责（**不手写浮层**），只注入文案 ——
+           * 第一行 = x 轴日期（`labelFormatter`），第二行 = 数值（`formatter` 返回
+           * `[值, null]`，name 为 null 时库不渲染名称与分隔符）。
+           */}
+          <Tooltip
+            labelFormatter={(label) => axisLabelOf(Number(label))}
+            formatter={(value) => [
+              typeof value === "number" ? value.toFixed(2) : String(value),
+              null,
+            ]}
+            contentStyle={{
+              background: "var(--color-surface)",
+              border: "1px solid var(--color-line)",
+              borderRadius: 8,
+              padding: "6px 10px",
+              fontSize: 12,
+              whiteSpace: "nowrap",
+            }}
+            labelStyle={{ color: "var(--color-ink-2)", marginBottom: 2 }}
+            itemStyle={{ color: "var(--color-ink-1)", padding: 0 }}
+            cursor={{ stroke: "currentColor", strokeDasharray: "3 3" }}
+          />
+
+          {/* 语义参考线：`tone` 仍是 Tailwind 类 → className + currentColor（零色值）。 */}
+          {refs.map((r) => (
+            <ReferenceLine
+              key={`${r.y}-${r.tone}`}
+              y={r.y}
+              className={r.tone}
+              stroke="currentColor"
+              strokeWidth={1}
+              strokeDasharray={r.dashed ? "3 3" : undefined}
+            />
+          ))}
+
+          {children}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
-/** x 轴首 / 中 / 尾三个刻度标签（跨度 0 时只画居中的那一个）。 */
-function XAxis({ minX, maxX, labelOf }: { minX: number; maxX: number; labelOf: (at: number) => string }) {
-  const mid = (minX + maxX) / 2;
-  const ticks =
-    maxX === minX
-      ? [{ at: mid, anchor: "middle" as const }]
-      : [
-          { at: minX, anchor: "start" as const },
-          { at: mid, anchor: "middle" as const },
-          { at: maxX, anchor: "end" as const },
-        ];
+/** 折线本身（单点不画线；点一律由调用方用 `ReferenceDot` 逐个画，见下）。 */
+function SeriesLine() {
   return (
-    <>
-      {ticks.map((t, i) => (
-        <text
-          key={i}
-          x={xAt(t.at, minX, maxX)}
-          y={H - 6}
-          textAnchor={t.anchor}
-          fontSize={9}
-          fill="currentColor"
-          className="text-ink-3"
-        >
-          {labelOf(t.at)}
-        </text>
-      ))}
-    </>
+    <Line
+      type="linear" /* ⚠️ 不用 monotone：平滑曲线会改变「折线」的数据表达 */
+      dataKey="value"
+      className="text-primary"
+      stroke="currentColor"
+      strokeWidth={2}
+      dot={false} /* 点改由 ReferenceDot 画（需要按值分档时 Line 无法逐点着色） */
+      isAnimationActive={false} /* D4：入场动画关 */
+    />
   );
 }
 
@@ -184,48 +293,26 @@ export function TrendChart({
   lines: { value: number; dashed?: boolean; tone: string }[];
   axisLabelOf: (at: number) => string;
 }) {
-  if (points.length === 0) return null;
-  const xs = points.map((p) => p.at);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
+  const series = toLineSeries(points);
+  if (!series) return null;
 
   return (
-    <svg data-testid="progress-trend" viewBox={`0 0 ${W} ${H}`} className="h-auto w-full">
-      <YAxis />
-      {lines.map((l) => (
-        <line
-          key={l.value}
-          x1={PAD.l}
-          x2={W - PAD.r}
-          y1={yAt(l.value)}
-          y2={yAt(l.value)}
-          stroke="currentColor"
-          strokeWidth={1}
-          strokeDasharray={l.dashed === false ? undefined : "3 3"}
-          className={l.tone}
-        />
-      ))}
-      {points.length >= 2 ? (
-        <polyline
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          className="text-primary"
-          points={points.map((p) => `${xAt(p.at, minX, maxX)},${yAt(p.value)}`).join(" ")}
-        />
-      ) : null}
-      {points.map((p, i) => (
-        <circle
-          key={i}
-          cx={xAt(p.at, minX, maxX)}
-          cy={yAt(p.value)}
-          r={3}
-          fill="currentColor"
-          className="text-primary"
-        />
-      ))}
-      <XAxis minX={minX} maxX={maxX} labelOf={axisLabelOf} />
-    </svg>
+    <div data-testid="progress-trend">
+      <LineCanvas series={series} refs={toReferenceLines(lines)} axisLabelOf={axisLabelOf}>
+        {series.isSinglePoint ? null : <SeriesLine />}
+        {series.data.map((p, i) => (
+          <ReferenceDot
+            key={i}
+            x={p.at}
+            y={p.value}
+            r={3}
+            className="text-primary"
+            fill="currentColor"
+            stroke="none"
+          />
+        ))}
+      </LineCanvas>
+    </div>
   );
 }
 
@@ -256,58 +343,45 @@ export function TimelineChart({
   const pts = timeline.points;
   if (pts.length === 0) return null;
 
-  const xs = pts.map((p) => p.at);
-  const minX = Math.min(...xs);
-  const lastAt = Math.max(...xs);
-  const maxX = Math.max(lastAt, now, timeline.deadlineAt ?? 0);
-  const deadlineX = timeline.deadlineAt !== undefined ? xAt(timeline.deadlineAt, minX, maxX) : undefined;
+  // 右端至少到 now 与 deadline（G4 的刻意口径），点本身的范围由 toLineSeries 取。
+  const rightEdge = Math.max(now, timeline.deadlineAt ?? 0, ...pts.map((p) => p.at));
+  const series = toLineSeries(
+    pts.map((p) => ({ at: p.at, value: p.readiness })),
+    { extendRightTo: rightEdge },
+  );
+  if (!series) return null;
 
   return (
-    <svg data-testid="progress-timeline" viewBox={`0 0 ${W} ${H}`} className="h-auto w-full">
-      <YAxis />
-      {deadlineX !== undefined ? (
-        <>
-          <line
-            x1={deadlineX}
-            x2={deadlineX}
-            y1={PAD.t}
-            y2={H - PAD.b}
+    <div data-testid="progress-timeline">
+      <LineCanvas series={series} refs={[]} axisLabelOf={axisLabelOf}>
+        {timeline.deadlineAt !== undefined ? (
+          <ReferenceLine
+            x={timeline.deadlineAt}
+            className="text-state-failed"
             stroke="currentColor"
             strokeWidth={1}
-            className="text-state-failed"
+            label={{
+              value: deadlineLabel,
+              position: "insideTopRight",
+              fill: "currentColor",
+              fontSize: 9,
+            }}
           />
-          <text
-            x={deadlineX - 3}
-            y={PAD.t + 9}
-            textAnchor="end"
-            fontSize={9}
+        ) : null}
+        {series.isSinglePoint ? null : <SeriesLine />}
+        {/* 点色随 readiness 变档：达标（≥1）走 state-mastered，其余随主线。 */}
+        {series.data.map((p, i) => (
+          <ReferenceDot
+            key={i}
+            x={p.at}
+            y={p.value}
+            r={3}
+            className={pts[i].readiness >= 1 ? "text-state-mastered" : "text-primary"}
             fill="currentColor"
-            className="text-state-failed"
-          >
-            {deadlineLabel}
-          </text>
-        </>
-      ) : null}
-      {pts.length >= 2 ? (
-        <polyline
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          className="text-primary"
-          points={pts.map((p) => `${xAt(p.at, minX, maxX)},${yAt(p.readiness)}`).join(" ")}
-        />
-      ) : null}
-      {pts.map((p, i) => (
-        <circle
-          key={i}
-          cx={xAt(p.at, minX, maxX)}
-          cy={yAt(p.readiness)}
-          r={3}
-          fill="currentColor"
-          className={p.readiness >= 1 ? "text-state-mastered" : "text-primary"}
-        />
-      ))}
-      <XAxis minX={minX} maxX={maxX} labelOf={axisLabelOf} />
-    </svg>
+            stroke="none"
+          />
+        ))}
+      </LineCanvas>
+    </div>
   );
 }
