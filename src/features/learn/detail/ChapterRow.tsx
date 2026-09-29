@@ -19,6 +19,7 @@ import { ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '../../../i18n';
 import { Button } from '../../../components/ui/button';
+import { Progress } from '../../../components/ui/progress';
 import { chapterBadge } from '../chapter-badge';
 import { chapterCharCount, chapterPreviewOf } from '../chapter-preview';
 import { pickRenderer } from '../render/renderer-registry';
@@ -79,12 +80,7 @@ export function ChapterRow({ chapter, index, learner, doc }: ChapterRowProps) {
 
         {/* 掌握度进度条：窄屏隐藏，避免与标题争宽（TC-UC05-03） */}
         <div className="hidden shrink-0 items-center gap-2 sm:flex">
-          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-subtle">
-            <div
-              className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
-            />
-          </div>
+          <Progress value={Math.min(100, Math.max(0, pct))} className="w-16" />
           <div className="min-w-8 text-right text-xs font-semibold text-ink-3">{pct}%</div>
         </div>
 

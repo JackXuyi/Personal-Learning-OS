@@ -26,6 +26,7 @@ import {
 } from "../../ai/builtin";
 import { useI18n, type Messages } from "../../i18n";
 import { ConfirmDialog } from "../../components/ui/confirm-dialog";
+import { Progress } from "../../components/ui/progress";
 
 function formatSize(bytes: number, b: Messages["settings"]["models"]["builtin"]): string {
   const gb = bytes / 1_000_000_000;
@@ -280,12 +281,12 @@ export default function BuiltinModelsPanel({
 
                 {!blocked && isDownloading ? (
                   <div className="w-28">
-                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
-                      <div
-                        className="h-full rounded-full bg-indigo-500 transition-all"
-                        style={{ width: `${pct ?? 0}%` }}
-                      />
-                    </div>
+                    {/* 该面板整体走 slate/indigo 独立配色，故覆写轨道与填充色 */}
+                    <Progress
+                      value={pct ?? 0}
+                      className="bg-slate-200"
+                      indicatorClassName="bg-indigo-500"
+                    />
                     <p className="mt-1 text-right text-[10px] text-indigo-600">{pct}%</p>
                   </div>
                 ) : !blocked ? (

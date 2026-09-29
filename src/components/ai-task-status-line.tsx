@@ -12,6 +12,7 @@
  */
 import { useI18n } from "../i18n";
 import { cn } from "../lib/utils";
+import { Progress } from "./ui/progress";
 import { isTerminalFresh } from "../stores/ai-task-types";
 import type { AiTaskStatus } from "../stores/ai-task-types";
 
@@ -60,12 +61,7 @@ export function AiTaskStatusLine({
           {pct !== undefined ? ` ${pct}%` : ""}
         </p>
         {pct !== undefined && (
-          <div className="mt-1.5 h-1 w-full max-w-xs overflow-hidden rounded-full bg-subtle">
-            <div
-              className="h-full rounded-full bg-primary transition-all duration-300"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
+          <Progress value={pct} className="mt-1.5 h-1 max-w-xs" indicatorClassName="duration-300" />
         )}
       </div>
     );

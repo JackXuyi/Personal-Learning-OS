@@ -16,6 +16,7 @@ import { useI18n } from '../../../i18n';
 import { Button } from '../../../components/ui/button';
 import { Checkbox } from '../../../components/ui/checkbox';
 import { Input } from '../../../components/ui/input';
+import { Progress } from '../../../components/ui/progress';
 import { cn } from '../../../lib/utils';
 import { chapterBadge } from '../chapter-badge';
 import type { Chapter, LearnerState } from '../../../domain';
@@ -158,12 +159,7 @@ export function ChapterEditRow({
         </span>
 
         <div className="hidden shrink-0 items-center gap-2 sm:flex">
-          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-subtle">
-            <div
-              className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
-            />
-          </div>
+          <Progress value={Math.min(100, Math.max(0, pct))} className="w-16" />
           <div className="min-w-8 text-right text-xs font-semibold text-ink-3">{pct}%</div>
         </div>
       </div>

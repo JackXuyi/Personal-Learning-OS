@@ -3,6 +3,7 @@ import type { MasteryBand } from "../engine";
 import { useI18n } from "../i18n";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
+import { Progress } from "./ui/progress";
 
 /**
  * 公共 UI 原语（B 案语义 token，docs/ui-workbench-plan-2026-09.md §5）。
@@ -92,12 +93,11 @@ export function Bar({
   const { m } = useI18n();
   return (
     <div className="relative">
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-subtle">
-        <div
-          className={`h-full rounded-full transition-all ${className || "bg-primary"}`}
-          style={{ width: `${Math.min(100, pct)}%` }}
-        />
-      </div>
+      {/* 轨道/填充由 UI Kit `ui/progress` 承载；className 契约不变（作用于填充色）。 */}
+      <Progress
+        value={Math.min(100, Math.max(0, pct))}
+        indicatorClassName={className}
+      />
       {targetPct !== undefined ? (
         <div
           className="absolute top-1/2 z-10 h-3.5 w-0.5 -translate-y-1/2 rounded-full bg-ink-3"

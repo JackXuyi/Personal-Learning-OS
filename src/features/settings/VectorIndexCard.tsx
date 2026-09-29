@@ -21,6 +21,7 @@ import { Card } from "../../components/primitives";
 import { Button } from "../../components/ui/button";
 import { ConfirmDialog } from "../../components/ui/confirm-dialog";
 import { Checkbox } from "../../components/ui/checkbox";
+import { Progress } from "../../components/ui/progress";
 import {
   EMBED_DOWNLOAD_PROGRESS_EVENT,
   embedCancelDownload,
@@ -264,12 +265,7 @@ export default function VectorIndexCard() {
 
         {/* 下载进度条 */}
         {downloading ? (
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-subtle">
-            <div
-              className="h-full rounded-full bg-primary transition-[width]"
-              style={{ width: `${percent ?? 0}%` }}
-            />
-          </div>
+          <Progress value={percent ?? 0} className="mt-2" />
         ) : null}
 
         <p className="mt-2 text-xs text-ink-3">{t.localNote}</p>
@@ -307,14 +303,10 @@ export default function VectorIndexCard() {
 
       {/* 索引进度条（仅运行中） */}
       {running && lastProgress ? (
-        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-subtle">
-          <div
-            className="h-full rounded-full bg-primary transition-[width]"
-            style={{
-              width: `${Math.round((progress.done / Math.max(1, progress.total)) * 100)}%`,
-            }}
-          />
-        </div>
+        <Progress
+          value={Math.round((progress.done / Math.max(1, progress.total)) * 100)}
+          className="mt-2"
+        />
       ) : null}
 
       {/* 反馈区：本地错误 / store 错误 / 部分失败 / 全部完成 */}
