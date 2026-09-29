@@ -20,7 +20,7 @@
  * **不得**给两库传 `stroke="var(--x)"`（presentation attribute 的 `var()` 行为
  * 规范未定，方案 G26）。
  */
-import { cloneElement } from "react";
+import { cloneElement, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   CartesianGrid,
@@ -43,6 +43,34 @@ const CELL = 11;
 const GAP = 2;
 /** 色阶 fillOpacity（索引即 `heatLevel` 档位；0 档另有专门处理）。 */
 const HEAT_OPACITY = [0.5, 0.15, 0.35, 0.6, 1] as const;
+
+/**
+ * 实测容器宽度（ResizeObserver）—— 热力图铺满卡片宽度的取宽来源。
+ *
+ * 返回 `[ref, width]`：`width` 首帧为 `undefined`（未测量前按默认格子渲染，
+ * 测量完成后重渲染，客户端页面可接受这一次跳变）。观测的是**外层块级容器**，
+ * 其宽度由卡片决定、与子元素（`width: max-content` 的库容器）无关 —— 无反馈回路。
+ */
+function useMeasuredWidth(): [
+  (el: HTMLDivElement | null) => void,
+  number | undefined,
+] {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w !== undefined) setWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return [(el) => (ref.current = el), width];
+}
 
 /* ------------------------------------------------------------------ */
 /* [1] 学习活动热力图                                                   */
@@ -75,6 +103,18 @@ export function DiscoveryHeatmap({
   legend: { less: string; more: string };
 }) {
   const cells = toActivityCells(heatmap);
+  const weeks = heatmap.weeks.length;
+
+  // 铺满卡片宽度：库容器是 `width: max-content`、不吃自适应（方案 §7.4 变化 5），
+  // 故实测外层宽度反算 blockSize：total = weeks*size + (weeks-1)*gap。
+  // 全部标签已关（showWeekday/Month/Total 均否），宽度无其它项。
+  const [wrapRef, width] = useMeasuredWidth();
+  const size =
+    width !== undefined
+      ? Math.max(6, Math.floor((width - (weeks - 1) * GAP) / weeks))
+      : CELL;
+  // 格子放大后圆角随尺寸走，避免大格子出现「锐角方块」观感。
+  const radius = size >= 16 ? 4 : 2;
 
   // ⚠️ 库对空 data 直接 `throw`（G19，不是渲染空图）⇒ 必须在这里拦住。
   // 正常路径走不到（页面在无记录时已切空态）—— 这是防御性兜底。
@@ -84,35 +124,33 @@ export function DiscoveryHeatmap({
 
   return (
     <div data-testid="progress-heatmap">
-      {/*
-       * 库容器是 `width: max-content`（不吃 viewBox 自适应）⇒ 不再铺满卡片宽度
-       * （方案 §7.4 变化 5，D4=A 已知悉；`blockSize` 观感由目测确认后再调）。
-       */}
-      <ActivityCalendar
-        data={cells}
-        weekStart={1}
-        colorScheme="light"
-        minLevel={0}
-        maxLevel={HEAT_MAX_LEVEL}
-        blockSize={CELL}
-        blockMargin={GAP}
-        blockRadius={2}
-        showTotalCount={false}
-        showColorLegend={false}
-        showMonthLabels={false}
-        showWeekdayLabels={false}
-        tooltips={{ activity: { text: (a) => labelOf(a.date, a.count) } }}
-        renderBlock={(block, activity) =>
-          // ① `style: {}` 清掉库的内联描边（cloneElement 对 props 浅合并，style 整体替换）；
-          // ② `className: "plos-heat"` 供 main.css 的 `fill` 覆盖库的 attribute 色；
-          // ③ `fillOpacity` 沿用 HEAT_OPACITY（透明度档位的真源仍是这一份数组）。
-          cloneElement(block, {
-            className: "plos-heat",
-            fillOpacity: HEAT_OPACITY[activity.level],
-            style: {},
-          })
-        }
-      />
+      <div ref={wrapRef} className="w-full">
+        <ActivityCalendar
+          data={cells}
+          weekStart={1}
+          colorScheme="light"
+          minLevel={0}
+          maxLevel={HEAT_MAX_LEVEL}
+          blockSize={size}
+          blockMargin={GAP}
+          blockRadius={radius}
+          showTotalCount={false}
+          showColorLegend={false}
+          showMonthLabels={false}
+          showWeekdayLabels={false}
+          tooltips={{ activity: { text: (a) => labelOf(a.date, a.count) } }}
+          renderBlock={(block, activity) =>
+            // ① `style: {}` 清掉库的内联描边（cloneElement 对 props 浅合并，style 整体替换）；
+            // ② `className: "plos-heat"` 供 main.css 的 `fill` 覆盖库的 attribute 色；
+            // ③ `fillOpacity` 沿用 HEAT_OPACITY（透明度档位的真源仍是这一份数组）。
+            cloneElement(block, {
+              className: "plos-heat",
+              fillOpacity: HEAT_OPACITY[activity.level],
+              style: {},
+            })
+          }
+        />
+      </div>
       <div className="mt-2 flex items-center justify-between gap-3 text-xs text-ink-3">
         <span className="flex items-center gap-1">
           <span>{legend.less}</span>
@@ -264,7 +302,11 @@ function LineCanvas({
 function SeriesLine() {
   return (
     <Line
-      type="linear" /* ⚠️ 不用 monotone：平滑曲线会改变「折线」的数据表达 */
+      // 平滑曲线（2026-09-29 用户拍板，推翻本行原「linear」选择）。选 monotone
+      // 而非 natural/spline：单调三次插值**严格过每个数据点且不过冲**，
+      // 「折线表达数据」的口径不失真；圆角端点让短线段衔接不生硬。
+      type="monotone"
+      strokeLinecap="round"
       dataKey="value"
       className="text-primary"
       stroke="currentColor"
