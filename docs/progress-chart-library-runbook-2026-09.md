@@ -135,8 +135,9 @@
 | 2026-09-29 | T8 全门禁绿（typecheck/layer/ui + test:chart 16 + test:progress 35 + test:library 全链 + build 1.66s）；dist 8.7M→9.1M |
 | 2026-09-29 | T9 回扫完成（8 处处置 + 1 处待核实测不存在 + 全仓重扫零残留）；待 C1–C4 提交与 T10 用户目测 |
 | 2026-09-29 | **T10 反馈第 1 轮落地**（`3275bc2`）：① 热力图铺满卡片 —— ResizeObserver 实测外层宽度反算 blockSize（变化 5 就此关闭，退路 R3 不再触发）；② 折线 linear→monotone + strokeLinecap round（用户拍板，推翻「不用 monotone」注释）。门禁全绿（typecheck/ui/layer + test:progress 35/35 + build 1.68s） |
+| 2026-09-30 | **T10 反馈第 2 轮落地**（`ca5b3da` + 回扫 `635ba5c`）：折线 x 轴**最小时间窗 15 日**（`MIN_X_WINDOW_MS`，跨度不足向左回退、右端语义不动）—— 判卷稀疏时横轴过窄、读不出「日」尺度密度。单点走同一规则（删除 ±1ms 零宽补丁）。同步改被推翻的 4 条断言（原单点「域两端相等 / 1 刻度」）+ 新增 3 条（回退 / 边界 / 与 extendRightTo 并存）⇒ test:chart **19/19**；方案文档 4 处回扫（含**上一轮 monotone 漏扫**的 TC-UC02-04「直线段」）。门禁全绿，build 1.87s |
 
 ### T10 — 用户目测确认（`npm run dev` → localhost:1420）
 - **Status:** blocked
 - **Outcome:** —
-- **Notes:** blocked on：用户按 §7.4 的 8 条变化逐项目测（禁自动化截图，`no-headless-browser-validation`）。~~① 热力图不再铺满卡片宽度~~（**已修**：ResizeObserver 反算 blockSize）；② 折线多出水平网格线；③ 两处 tooltip 的文案与配色；④ 系统切暗色后热力图不变色（G20 对策）。折线平滑度用户已拍板 monotone。
+- **Notes:** blocked on：用户按 §7.4 的 8 条变化逐项目测（禁自动化截图，`no-headless-browser-validation`）。~~① 热力图不再铺满卡片宽度~~（**已修**：ResizeObserver 反算 blockSize）；② 折线多出水平网格线；③ 两处 tooltip 的文案与配色；④ 系统切暗色后热力图不变色（G20 对策）。折线平滑度用户已拍板 monotone；折线 x 轴已加最小 15 日窗（第 2 轮）——目测时留意稀疏数据下点是否靠右分布（这是「右端锚定」的预期表现，不是 bug）。
