@@ -269,11 +269,15 @@ export interface ActivityCell { date: string; count: number; level: 0 | 1 | 2 | 
 export function toActivityCells(h: Heatmap): ActivityCell[];
 
 /* --- 折线 → recharts --- */
-/** ⚠️ **xTicks 必须显式给出**：不许让 recharts 自选 nice 刻度（会破坏「首中尾 3 刻度」现口径）。 */
+/** ⚠️ **xTicks 必须显式给出**：不许让 recharts 自选 nice 刻度（会破坏「首中尾 3 刻度」现口径）。
+ *  ⚠️ **x 域最小时间窗 = 15 日**（2026-09-29 用户要求「折线至少展示 15 日的数据」）：
+ *  判卷跨度不足 15 日时**向左扩展**补齐（右端语义不动），单点同规则。 */
+export const MIN_X_WINDOW_MS = 15 * 24 * 60 * 60 * 1000;
+
 export interface LineSeriesShape {
   data: { at: number; value: number }[];
-  xDomain: [number, number];
-  xTicks: number[];          // 首中尾（单点时只给 1 个，避免重复标签）
+  xDomain: [number, number]; // 跨度恒 ≥ MIN_X_WINDOW_MS
+  xTicks: number[];          // 首中尾（2026-09-29 更正：最小窗下域恒非零宽，单点也给 3 个）
   isSinglePoint: boolean;
 }
 
@@ -320,7 +324,7 @@ export function toReferenceLines(
 |------|----------|----------|---------|
 | 全空 | `entries.length === 0 && results.length === 0` | 整页空态（**不变**，不渲染空坐标系）。⚠️ **必须拦住**：热力图传空 data 会 throw（G19） | 既有空态卡 + 去规划 CTA |
 | 热力图无任何证据 | `toActivityCells()` 返回 `[]` | **不挂载** `ActivityCalendar`（渲染既有空态文案）——这是 G19 的唯一对策 | 既有空态文案 |
-| 单点 | 折线点数为 1 | **不画线**，只画点并保留居中处理（现口径；用 `ReferenceDot` 或等价手段） | 页脚提示「再测一次才有趋势」（既有文案） |
+| 单点 | 折线点数为 1 | **不画线**，只画点（现口径；用 `ReferenceDot` 或等价手段）；x 域走**最小 15 日窗**（2026-09-29 更正：原「居中处理」已废，右端 = 该点） | 页脚提示「再测一次才有趋势」（既有文案） |
 | 未来格 | `Heatmap.weeks` 中 `undefined` | **不产行** ⇒ 库也不渲染该格（G17 已核对：库只填充首末之间） | 无 |
 | 上限截断 | `entries.length >= EVIDENCE_LOG_MAX` | 显示诚实性告警（既有） | `⚠ heatmapTruncated` |
 | 章已删除 | `titleOf(id) === undefined` | 折线游标仍在（历史保留），下钻 Select 用「章已不存在」兜底文案（**绝不显示裸 id**） | 既有兜底 |
@@ -537,13 +541,16 @@ export function toActivityCells(h: Heatmap) {
 export function toLineSeries(points: { at: number; value: number }[]) {
   if (points.length === 0) return undefined;
   const xs = points.map((p) => p.at);
-  const min = Math.min(...xs);
-  const max = Math.max(...xs);
+  let min = Math.min(...xs);
+  let max = Math.max(...xs);
+  if (opts.extendRightTo > max) max = opts.extendRightTo;   // 时间线 G4 口径
+  // 最小时间窗（2026-09-29）：跨度不足 15 日 → 左端回退，右端不动
+  if (max - min < MIN_X_WINDOW_MS) min = max - MIN_X_WINDOW_MS;
   return {
     data: points,
     xDomain: [min, max] as [number, number],
-    // 首中尾 3 刻度（现口径）；单点只给 1 个，避免重复标签
-    xTicks: min === max ? [min] : [min, min + (max - min) / 2, max],
+    // 首中尾 3 刻度（现口径）；最小窗下域恒非零宽（单点也给 3 个）
+    xTicks: [min, min + (max - min) / 2, max],
     isSinglePoint: points.length === 1,
   };
 }
@@ -827,10 +834,10 @@ import { toActivityCells, toLineSeries, toReferenceLines } from "../src/features
 | TC-UC01-04 | UC-01 | 渲染热力图 | 26 周全有数据 | 网格 26 列、**周一首对齐**；5 档色阶与 token 一致 | 手工 |
 | TC-UC01-05 | UC-01 | 悬停某格 | count=3 | Tooltip 文案 = 页面注入的 `heatmapCell(date,3)` | 手工 |
 | TC-UC01-06 | UC-01 | 系统切暗色模式后查看 | — | 热力图配色**不变**（`colorScheme="light"` 生效，G20） | 手工 |
-| TC-UC02-01 | UC-02 | 调用 `toLineSeries` | 单点 | `isSinglePoint === true`，`xDomain[0] === xDomain[1]`，`xTicks.length === 1` | 单元 |
+| TC-UC02-01 | UC-02 | 调用 `toLineSeries` | 单点 | `isSinglePoint === true`；x 域为**最小 15 日窗**（右端 = 该点，2026-09-29 更正：原「xDomain 两端相等、xTicks 只 1 个」已被最小窗口径取代） | 单元 |
 | TC-UC02-02 | UC-02 | 调用 `toLineSeries` | ≥3 点 | `xTicks` = [min, mid, max]（**首中尾现口径**） | 单元 |
 | TC-UC02-03 | UC-02 | 渲染趋势 | 1 个点 | 只画点、不画线，页脚提示出现 | 手工 |
-| TC-UC02-04 | UC-02 | 渲染趋势 | ≥2 点 | 曲线 + 0.6/0.8 两条参考线（配色来自 token）+ 水平网格线；**折线为直线段（非平滑曲线）**；**无入场动画** | 手工 |
+| TC-UC02-04 | UC-02 | 渲染趋势 | ≥2 点 | 曲线 + 0.6/0.8 两条参考线（配色来自 token）+ 水平网格线；折线**平滑**（`type="monotone"`，2026-09-29 用户拍板，原「直线段」口径作废）；**无入场动画** | 手工 |
 | TC-UC02-05 | UC-02 | 悬停折线某点 | — | Tooltip 出现，显示「日期 + 数值」，文案来自注入的 `axisLabelOf` | 手工 |
 | TC-UC02-06 | UC-02 | 下钻选择 | 选某章 | 曲线换为该章序列；章已删 → 兜底文案（非裸 id） | 手工 |
 | TC-UC03-01 | UC-03 | 渲染时间线 | `deadlineAt` 在未来 | x 轴右端含 deadline；竖线可见 | 手工 |
