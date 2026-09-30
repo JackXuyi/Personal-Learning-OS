@@ -19,6 +19,7 @@ mod db;
 mod llm;
 mod logging;
 mod memory_doc;
+mod tray;
 mod vault;
 
 use db::init_db;
@@ -100,7 +101,23 @@ pub fn run() {
                     &format!("local LLM init skipped: {err}"),
                 );
             }
+            // 菜单栏常驻图标（tray.rs）：失败不阻塞启动，仅记录。
+            if let Err(err) = tray::init(app.handle()) {
+                logging::log_line(
+                    logging::LogLevel::Warn,
+                    "app",
+                    &format!("tray init skipped: {err}"),
+                );
+            }
             Ok(())
+        })
+        // 窗口左上角红色关闭按钮 → 最小化而非退出（2026-09-30 用户确认）。
+        // 真正退出走托盘菜单「退出」或 ⌘Q，二者都绕过 CloseRequested。
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.minimize();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             app_status,
