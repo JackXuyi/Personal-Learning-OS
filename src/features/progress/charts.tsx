@@ -186,18 +186,6 @@ function pctLabel(value: number): string {
 }
 
 /**
- * 单点时给 x 域加 1ms 边距。
- *
- * `domain` 两端相等会让 recharts 得到零宽区间，点会贴到轴的一端；加 1ms（对月级
- * 时间轴无视觉影响）只为让区间非零、点落在正中。
- */
-function xDomainOf(series: LineSeries): [number, number] {
-  return series.isSinglePoint
-    ? [series.xDomain[0] - 1, series.xDomain[1] + 1]
-    : series.xDomain;
-}
-
-/**
  * 折线画布：网格 + 双轴 + tooltip 的配置在趋势与时间线之间**必须一致**，
  * 故只写一次；曲线与附加标记由 `children` 决定。
  *
@@ -236,7 +224,9 @@ function LineCanvas({
           <XAxis
             dataKey="at"
             type="number"
-            domain={xDomainOf(series)}
+            /* ⚠️ 域由适配器给（含最小 15 日窗，G-with-minwindow）：不必再做零宽补丁 ——
+               适配器保证跨度 ≥ MIN_X_WINDOW_MS。 */
+            domain={series.xDomain}
             ticks={series.xTicks}
             tickFormatter={axisLabelOf}
             tickLine={false}

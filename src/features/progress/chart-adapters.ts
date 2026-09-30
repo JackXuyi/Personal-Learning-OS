@@ -90,21 +90,37 @@ export function toActivityCells(heatmap: Heatmap): ActivityCell[] {
 /** 折线入参：recharts `LineChart` 的 `data` + **显式**的 x 定义域与刻度。 */
 export interface LineSeries {
   data: { at: number; value: number }[];
-  /** x 轴定义域。 ⚠️ 显式给出 —— 不许让 recharts 自选 nice 刻度（会破坏现口径）。 */
+  /** x 轴定义域。 ⚠️ 显式给出 —— 不许让 recharts 自选 nice 刻度（会破坏现口径）；
+   *  跨度恒 ≥ `MIN_X_WINDOW_MS`（最小时间窗，见该常量）。 */
   xDomain: [number, number];
-  /** x 轴刻度 = 首 / 中 / 尾（现口径）；单点时只给一个，避免重复标签。 */
+  /** x 轴刻度 = 首 / 中 / 尾（现口径）；域为零宽时退化成一个（最小窗下不可达，防御性）。 */
   xTicks: number[];
   /** 单点退化：**不画线、只画点**（现口径，页面另附引导语）。 */
   isSinglePoint: boolean;
 }
 
 /**
+ * x 轴**最小时间窗 = 15 日**（2026-09-29 用户要求「折线至少展示 15 日的数据」）。
+ *
+ * 判卷点稀疏时（如实测样本：8 次判卷集中在 13 天内），按「首末点」取域会让横轴
+ * 过窄 —— 用户读不出「日」尺度的密度。不足 15 日时**向左扩展**补齐，数据点因此
+ * 靠右分布；**右端语义刻意不动**：
+ * - 趋势图右端 = 末次判卷（不右移到 `now`：本组件不取时钟，页面的 `now` 只喂时间线）；
+ * - 时间线右端 = `max(now, deadline)`（G4 刻意口径，`extendRightTo` 已表达）。
+ *
+ * 单点也走同一规则（15 日窗的右端 = 该点）—— 不给单点做居中特例：与时间线的
+ * 「右端锚定」保持一致，避免同一坐标系出现两套锚定语义。
+ */
+export const MIN_X_WINDOW_MS = 15 * 24 * 60 * 60 * 1000;
+
+/**
  * 点序列 → 折线入参。
  *
  * - 空序列 → `undefined`（调用方据此返回 `null`，与现状一致）；
- * - 单点 → `isSinglePoint` 为真、`xDomain` 两端相等、`xTicks` 只一个；
+ * - 单点 → `isSinglePoint` 为真（调用方不画线）、`xTicks` 随最小窗给 3 个；
  * - `opts.extendRightTo`：把 x 域右端**至少**扩展到该值。时间线用它把 `now` 与
- *   未来截止日纳入范围（方案 G4 的刻意口径：「曲线离截止还有多远」必须可见）。
+ *   未来截止日纳入范围（方案 G4 的刻意口径：「曲线离截止还有多远」必须可见）；
+ * - 跨度不足 `MIN_X_WINDOW_MS` → 左端回退到 `右端 - MIN_X_WINDOW_MS`。
  */
 export function toLineSeries(
   points: readonly { at: number; value: number }[],
@@ -121,11 +137,13 @@ export function toLineSeries(
   if (opts.extendRightTo !== undefined && opts.extendRightTo > max) {
     max = opts.extendRightTo;
   }
+  // 最小时间窗：跨度不足 15 日 → 左端回退（右端不再变）。
+  if (max - min < MIN_X_WINDOW_MS) min = max - MIN_X_WINDOW_MS;
 
   return {
     data: [...points],
     xDomain: [min, max],
-    // 单点 / 跨度为 0：只给一个刻度（三个同值刻度会叠成一条黑边）。
+    // 域零宽只可能出现在窗口为 0 的假设下（防御性保留：三个同值刻度会叠成黑边）。
     xTicks: min === max ? [min] : [min, min + (max - min) / 2, max],
     isSinglePoint: points.length < 2,
   };

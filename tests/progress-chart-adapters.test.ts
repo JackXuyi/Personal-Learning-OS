@@ -21,11 +21,16 @@ import {
   toLineSeries,
   toReferenceLines,
   HEAT_MAX_LEVEL,
+  MIN_X_WINDOW_MS,
 } from "../src/features/progress/chart-adapters.ts";
 import type { ActivityDay, Heatmap } from "../src/features/progress/analytics.ts";
 
 const results: string[] = [];
 let failures = 0;
+
+/** 固定时间基准（**不取真实时钟**）；量级与真实 epoch 一致，便于最小窗断言。 */
+const T0 = 1_700_000_000_000;
+const DAY = 24 * 60 * 60 * 1000;
 
 async function check(name: string, fn: () => Promise<void> | void) {
   try {
@@ -121,58 +126,101 @@ await check("TC-LINE-01 空序列 → undefined（调用方返回 null，与现�
   assert.equal(toLineSeries([]), undefined);
 });
 
-await check("TC-LINE-02 单点 → isSinglePoint 且 xDomain 两端相等、只一个刻度", () => {
-  const s = toLineSeries([{ at: 1000, value: 0.5 }]);
+await check("TC-LINE-02 单点 → isSinglePoint；x 域仍是完整最小窗（右端 = 该点）", () => {
+  const s = toLineSeries([{ at: T0, value: 0.5 }]);
   assert.ok(s, "非空序列必有值");
   assert.equal(s.isSinglePoint, true);
-  assert.deepEqual(s.xDomain, [1000, 1000]);
-  assert.deepEqual(s.xTicks, [1000], "单点只给一个刻度（三个同值刻度会叠成黑边）");
-  assert.deepEqual(s.data, [{ at: 1000, value: 0.5 }]);
+  assert.deepEqual(
+    s.xDomain,
+    [T0 - MIN_X_WINDOW_MS, T0],
+    "最小 15 日窗：右端锚在点上，左端回退补齐（不做居中特例）",
+  );
+  assert.deepEqual(s.xTicks, [T0 - MIN_X_WINDOW_MS, T0 - MIN_X_WINDOW_MS / 2, T0], "窗口够宽，仍给首中尾三刻度");
+  assert.deepEqual(s.data, [{ at: T0, value: 0.5 }]);
 });
 
-await check("TC-LINE-03 三点 → xTicks = 首 / 中 / 尾（现口径）", () => {
+await check("TC-LINE-03 三点跨 20 日 → xTicks = 首 / 中 / 尾（现口径），域不动", () => {
   const s = toLineSeries([
-    { at: 100, value: 0.2 },
-    { at: 200, value: 0.4 },
-    { at: 300, value: 0.6 },
+    { at: T0, value: 0.2 },
+    { at: T0 + 10 * DAY, value: 0.4 },
+    { at: T0 + 20 * DAY, value: 0.6 },
   ]);
   assert.ok(s);
   assert.equal(s.isSinglePoint, false);
-  assert.deepEqual(s.xDomain, [100, 300]);
-  assert.deepEqual(s.xTicks, [100, 200, 300], "首中尾三刻度");
+  assert.deepEqual(s.xDomain, [T0, T0 + 20 * DAY], "跨度已 ≥ 15 日 ⇒ 最小窗不介入");
+  assert.deepEqual(s.xTicks, [T0, T0 + 10 * DAY, T0 + 20 * DAY], "首中尾三刻度");
 });
 
 await check("TC-LINE-04 乱序输入 → 域按极值算，中点仍居中", () => {
   const s = toLineSeries([
-    { at: 300, value: 0.6 },
-    { at: 100, value: 0.2 },
-    { at: 200, value: 0.4 },
+    { at: T0 + 20 * DAY, value: 0.6 },
+    { at: T0, value: 0.2 },
+    { at: T0 + 10 * DAY, value: 0.4 },
   ]);
   assert.ok(s);
-  assert.deepEqual(s.xDomain, [100, 300], "域取极值，与输入顺序无关");
-  assert.deepEqual(s.xTicks, [100, 200, 300]);
+  assert.deepEqual(s.xDomain, [T0, T0 + 20 * DAY], "域取极值，与输入顺序无关");
+  assert.deepEqual(s.xTicks, [T0, T0 + 10 * DAY, T0 + 20 * DAY]);
 });
 
 await check("TC-LINE-05 extendRightTo 把 x 域右端扩展（时间线纳入 now / 未来截止日，G4）", () => {
-  const s = toLineSeries([{ at: 100, value: 0.5 }, { at: 200, value: 0.8 }], { extendRightTo: 500 });
+  const s = toLineSeries([{ at: T0, value: 0.5 }, { at: T0 + 2 * DAY, value: 0.8 }], {
+    extendRightTo: T0 + 30 * DAY,
+  });
   assert.ok(s);
-  assert.deepEqual(s.xDomain, [100, 500], "右端扩到 500");
-  assert.deepEqual(s.xTicks, [100, 300, 500], "刻度随域重算");
+  assert.deepEqual(s.xDomain, [T0, T0 + 30 * DAY], "右端扩到指定值（跨度 30 日 ⇒ 左端不回退）");
+  assert.deepEqual(s.xTicks, [T0, T0 + 15 * DAY, T0 + 30 * DAY], "刻度随域重算");
   assert.equal(s.isSinglePoint, false);
 });
 
 await check("TC-LINE-06 extendRightTo 小于最大值时不缩域，等于最大值时无变化", () => {
-  const a = toLineSeries([{ at: 100, value: 0 }, { at: 400, value: 1 }], { extendRightTo: 200 });
+  const a = toLineSeries([{ at: T0, value: 0 }, { at: T0 + 20 * DAY, value: 1 }], {
+    extendRightTo: T0 + 5 * DAY,
+  });
   assert.ok(a);
-  assert.deepEqual(a.xDomain, [100, 400], "更小的 extendRightTo 不得缩域");
+  assert.deepEqual(a.xDomain, [T0, T0 + 20 * DAY], "更小的 extendRightTo 不得缩域");
 
-  const b = toLineSeries([{ at: 100, value: 0 }, { at: 400, value: 1 }], { extendRightTo: 400 });
+  const b = toLineSeries([{ at: T0, value: 0 }, { at: T0 + 20 * DAY, value: 1 }], {
+    extendRightTo: T0 + 20 * DAY,
+  });
   assert.ok(b);
-  assert.deepEqual(b.xDomain, [100, 400], "相等时不变");
+  assert.deepEqual(b.xDomain, [T0, T0 + 20 * DAY], "相等时不变");
+});
+
+await check("TC-LINE-08 ⚠️ 最小时间窗：跨度 3 日 → 左端回退到 15 日（右端 = 末点不动）", () => {
+  const s = toLineSeries([{ at: T0, value: 0.3 }, { at: T0 + 3 * DAY, value: 0.9 }]);
+  assert.ok(s);
+  assert.equal(s.xDomain[1], T0 + 3 * DAY, "右端仍是末次判卷（不右移到 now）");
+  assert.equal(
+    s.xDomain[1] - s.xDomain[0],
+    MIN_X_WINDOW_MS,
+    "跨度刚好补齐到 15 日",
+  );
+  assert.equal(s.xDomain[0], T0 + 3 * DAY - MIN_X_WINDOW_MS, "补的是左端");
+  assert.deepEqual(s.data, [{ at: T0, value: 0.3 }, { at: T0 + 3 * DAY, value: 0.9 }], "数据点不因扩窗而增删");
+});
+
+await check("TC-LINE-09 最小窗边界：恰好 15 日不扩、15 日 + 1ms 不扩", () => {
+  const exact = toLineSeries([{ at: T0, value: 0 }, { at: T0 + MIN_X_WINDOW_MS, value: 1 }]);
+  assert.ok(exact);
+  assert.deepEqual(exact.xDomain, [T0, T0 + MIN_X_WINDOW_MS], "恰好 15 日：不动（边界不误扩）");
+
+  const over = toLineSeries([{ at: T0, value: 0 }, { at: T0 + MIN_X_WINDOW_MS + 1, value: 1 }]);
+  assert.ok(over);
+  assert.deepEqual(over.xDomain, [T0, T0 + MIN_X_WINDOW_MS + 1], "超过 15 日：不动");
+});
+
+await check("TC-LINE-10 最小窗与 extendRightTo 并存：右端取 extendRightTo，左端按 15 日回退", () => {
+  const s = toLineSeries([{ at: T0 + 2 * DAY, value: 0.5 }], {
+    extendRightTo: T0 + 2 * DAY,
+  });
+  assert.ok(s);
+  assert.equal(s.xDomain[1], T0 + 2 * DAY, "右端 = extendRightTo（此处与点同值）");
+  assert.equal(s.xDomain[1] - s.xDomain[0], MIN_X_WINDOW_MS, "左端仍补齐到 15 日");
+  assert.equal(s.isSinglePoint, true, "单点标记不受扩窗影响（调用方据此不画线）");
 });
 
 await check("TC-LINE-07 纯函数：不改写调用方的数组", () => {
-  const input = [{ at: 100, value: 0.2 }, { at: 300, value: 0.6 }];
+  const input = [{ at: T0, value: 0.2 }, { at: T0 + 20 * DAY, value: 0.6 }];
   const snapshot = JSON.stringify(input);
   const s = toLineSeries(input);
   assert.ok(s);
