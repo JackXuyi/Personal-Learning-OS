@@ -4,7 +4,7 @@
 |------|------|
 | 作者 | Agent（WorkBuddy） |
 | 日期 | 2026-09-09 |
-| 状态 | 已确认 · 执行中（2026-09-09，runbook: `docs/knowledge-import-task-runbook.md`） |
+| 状态 | **已实施**（2026-09-09，T1–T10 全部完成；runbook: `docs/knowledge-import-task-runbook.md`）<br>⚠️ 2026-10-09 回扫补正 —— 原值「已确认 · 执行中」 |
 | 关联需求 | 用户需求：知识库需支持导入 GitHub 连接与本地 PDF、MD 文件 |
 | 决策依据 | 用户已确认：GitHub「整库导入为主」· 仅公开仓库 · 文本型 PDF（无 OCR）· Tauri 桌面优先（浏览器预览降级） |
 

@@ -1,6 +1,6 @@
 # Personal Learning OS · 学习方案 V2 设计（章节学习 + 试卷测评 + AI 判卷驱动）
 
-> 状态：**设计稿 v0.2（章节建模决策已定，可开工 N0）** · 2026-09-07
+> 状态：**设计稿 v0.2（章节建模决策已定）** · 2026-09-07 —— ⚠️ 2026-10-09 回扫补正：原值「可开工 N0」易被读成**尚未开工**，实际已实施（见下一行实施状态）
 > 实施状态：V2 核心 N 系列已落地（2026-09-07~09-08：章级学→测→判→计划闭环、遗忘衰减/到期复习、补考卷调度、AI 判分回填、概念层回归 `27ae610`）；其后 i18n / UI Workbench 为独立轨道，见对应文档
 > ⚠️ **补齐（2026-09-20）**：§5.3 / T3 的「`applyKeyPointRating` 替换 `applyRating`」当时**只切了 `ChapterReaderPage::markReviewed`，漏了 `useLoopStore::submitAnswer` 的 rating 分支** —— 于是「同一自评动作、两个入口、两种掌握度后果」的状态持续了约 3 个月，「双证据原则」在自评这条路径上并未真正成立。已补齐（两种会话模式统一走 `applyKeyPointRating` + 证据 `delta: 0`），回归锁 `tests/session-rating.test.ts`（9 项）；`DeltaBadge` 同步新增**中性态**（增量为 0 时不再渲染绿色的「+0%」）。
 > 关联：`docs/interaction-design-research-2026-09.md`（P0/P1/P2 建议）、`docs/interaction-design-spec-2026-09.md`（S0-S6 文字原型）、`docs/business-logic-review-2026-09.md`（业务逻辑评审 P0-P2）

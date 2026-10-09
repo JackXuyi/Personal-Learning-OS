@@ -4,7 +4,7 @@
 |------|------|
 | 作者 | WorkBuddy |
 | 日期 | 2026-09-10 |
-| 状态 | ✅ 已确认 · 执行阶段 · 用户确认时间 2026-09-10 13:20 UTC+8 |
+| 状态 | ✅ 已确认并**已实施**（T1–T10 全部落地，见 `docs/storage-architecture-rag-task-runbook.md`）· 用户确认时间 2026-09-10 13:20 UTC+8<br>⚠️ 2026-10-09 回扫补正 —— 原值「已确认 · 执行阶段」 |
 | 关联需求 | 用户文档：《RAG & Knowledge Retrieval Architecture Spec v1.0》 · 完整五层存储 + 双后端适配 |
 | 决策依据 | 完整方案 + 完整章节化存储 + 立即 SQLite 迁移 |
 | **确认决策** | ① Chunk 产生：两阶段切分（Chapter 现状 + semanticChunk 异步）② Rust 库：sqlx + Tokio ③ 向量库：P1 决策，现在占位 |

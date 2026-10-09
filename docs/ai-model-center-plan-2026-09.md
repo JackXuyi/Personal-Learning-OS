@@ -1,6 +1,7 @@
 # AI 模型中心方案:本地模型 × API 模型(交互 + 设置页重构)
 
-> 状态:M0-M2 已落地(2026-09-07)· M3 收尾(验证/文档/提交)跟进中 · 日期:2026-09-07
+> 状态:M0-M3 已落地(2026-09-07)· 日期:2026-09-07
+> ⚠️ 2026-10-09 回扫补正:原值「M3 收尾(验证/文档/提交)跟进中」—— M3 的「方案状态回填」正是当时漏做的一步,代码侧 M0-M2 已全部落地
 > 上游依据:`docs/local-llm-loading-plan-2026-09.md`(本地推理已落地 N0-N3)
 > 参考对象:meetily 的 `ModelSettingsModal` / `BuiltInModelManager` / `ModelDownloadProgress`(MIT)
 

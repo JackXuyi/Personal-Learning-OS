@@ -16,10 +16,10 @@
 - **Status:** done
 - **Outcome:** `domain/document.ts` 增加可选 `analysis`（chaptersAt/conceptsAt/model）；`storage/types.ts` 契约新增 `getDocument` / `deletePaper`；`memory.ts` 实现（deletePaper 级联清草稿+结果）；`local.ts` override `deletePaper` 落盘。
 
-### T2 —
-- **Status:** in_progress
+### T2 — `resplit-mastery.ts`：区间重叠匹配 + `LearnerState` 键迁移（纯函数）
+- **Status:** done
 - **Outcome:** overlapRatio（min 分母）/ matchResplit（0.6 贪心）/ remapLearnerStateOnResplit（max 分数、sum 计数、max 时间、Bloom 取高、误解并集 cap 8）已落地，纯函数无 IO
-- **Notes:** overlapRatio / matchResplit（阈值 0.6 贪心）/ remapLearnerStateOnResplit（max/sum/max/并集）
+- **Notes:** overlapRatio / matchResplit（阈值 0.6 贪心）/ remapLearnerStateOnResplit（max/sum/max/并集）；⚠️ 2026-10-09 回扫补正 —— 状态原为 `in_progress` 但 Outcome 已记落地，属收口遗漏
 
 ### T3 —
 - **Status:** done
