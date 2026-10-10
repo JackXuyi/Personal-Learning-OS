@@ -300,6 +300,7 @@ export const en: Messages = {
           capabilityItems: "capability items",
           capabilityRuns: "capability runs",
           capabilityReports: "capability reports",
+          prereqOverrides: "prereq overrides",
         },
         errNotJson: "The file is not valid JSON.",
         errNotBackup: "This is not a PLOS backup file.",
@@ -1248,7 +1249,7 @@ export const en: Messages = {
       /* Provenance line (F10): imported from someone else's community knowledge pack. */
       fromPack: (title: string, author?: string) =>
         `From community pack “${title}”${author ? ` · ${author}` : ""}`,
-      tabs: { overview: "Overview", content: "Content", split: "Chapters", knowledge: "Key points", papers: "Papers" },
+      tabs: { overview: "Overview", content: "Content", split: "Chapters", knowledge: "Key points", prereq: "Prerequisites", papers: "Papers" },
       /* Document ⇄ goal wiring (review M1-1). */
       linkGoals: "Link goals",
       linkGoalsWithCount: (n: number) => `Link goals (${n})`,
@@ -1340,6 +1341,26 @@ export const en: Messages = {
           "The original chapter keeps its mastery and history; the new chapter starts fresh.",
         splitOk: "Split",
         splitNotice: "Chapter split",
+      },
+      /** Prerequisites (F7 scope 4): derived + manual override. */
+      prereq: {
+        desc: "Chapter ordering is derived from concept relations by default; this page lets you correct it. An unmastered prerequisite only pushes this chapter later within its own queue class and adds a reason (soft ordering) — it never blocks you.",
+        scopeNote: "Prerequisites can only be set between chapters of the same document.",
+        empty: "At least 2 chapters are needed to set prerequisites",
+        emptyDesc: "Split the document in the Chapters tab first.",
+        none: "None",
+        adjust: "Adjust",
+        originAuto: "Auto",
+        originManual: "Manual",
+        dialogTitle: (chapter: string) => `Prerequisites of “${chapter}”`,
+        dialogDesc:
+          "Checked = this chapter should be studied after that one. Defaults come from concept relations; your picks are layered on top.",
+        dialogEmpty: "No other chapters in this document.",
+        reset: "Reset to auto",
+        saved: "Prerequisites updated",
+        resetNotice: "Reverted to automatic derivation",
+        noDerivedHint:
+          "No concept relations extracted yet, so nothing is derived automatically — you can still pick prerequisites by hand.",
       },
       metaLine: (source: string, imported: string, chars: number) =>
         `${source} · imported ${imported} · ${chars} chars`,

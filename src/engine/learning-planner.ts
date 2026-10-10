@@ -25,6 +25,7 @@
  */
 import type {
   Chapter,
+  ChapterPrereqOverride,
   KnowledgeGraph,
   LearnerState,
   LearningGoal,
@@ -160,6 +161,13 @@ export interface ChapterPlanInput {
    * 缺省 = 现状行为（向后兼容：无图/空图与不传等价）。
    */
   graph?: KnowledgeGraph;
+  /**
+   * 可选：章级前置的**人工覆盖**（F7 范围 4）。key = `Chapter.id`。
+   *
+   * 与 `graph` **各自独立**：只有人工覆盖、没有图时照样生效（用户手挑的前置不该
+   * 依赖概念抽取是否跑过）；两者都缺省 = 现状行为（零回归）。
+   */
+  prereqOverrides?: ReadonlyMap<string, ChapterPrereqOverride>;
   /**
    * 可选：学习偏好（F1）。只消费 `depth` —— `style` 不参与排序
    * （状态机已定死 action kind，硬塞排序会产出「填了没用」的伪效果）。
@@ -310,11 +318,16 @@ export function buildChapterPlan(
   input: ChapterPlanInput,
   m: Messages,
 ): NextAction[] {
-  const { learnerState, now = Date.now(), graph } = input;
+  const { learnerState, now = Date.now(), graph, prereqOverrides } = input;
   // F1：偏好的档位覆盖（默认恒等 → 零回归）。
   const rank = clsRankMap(input.prefs?.depth);
-  // D2：概念 prerequisite 边 → 章级前置（未传图则为 undefined，全程不参与）。
-  const prereqMap = graph ? chapterPrerequisiteIds(graph, input.chapters) : undefined;
+  // D2：概念 prerequisite 边 → 章级前置；F7 范围 4：再叠加人工覆盖。
+  // ⚠️ 门不能只看 graph —— 用户手挑的前置（override）在图缺失/为空时同样要生效，
+  // 故两者都无才关掉这条链（关掉 = 现状行为，零回归）。
+  const prereqMap =
+    graph !== undefined || (prereqOverrides?.size ?? 0) > 0
+      ? chapterPrerequisiteIds(graph ?? { units: [], relations: [] }, input.chapters, prereqOverrides)
+      : undefined;
   const chapterById = new Map(input.chapters.map((c) => [c.id, c]));
   const masteryOfChapter = (id: string): number => learnerState.byUnit[id]?.mastery ?? 0;
 

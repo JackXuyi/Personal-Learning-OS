@@ -21,7 +21,13 @@ import type {
   SourceDocument,
   UnitMastery,
 } from "../domain";
-import { COGNITIVE_BASE_LEVEL, MASTERY_THRESHOLD, RAG_UNIT_IDS, sortChaptersByOrder } from "../domain";
+import {
+  COGNITIVE_BASE_LEVEL,
+  MASTERY_THRESHOLD,
+  RAG_UNIT_IDS,
+  prereqOverrideMap,
+  sortChaptersByOrder,
+} from "../domain";
 import type { StorageAdapter } from "../storage";
 import type { Messages } from "../i18n/types";
 import { applyForgetting } from "./learner-model";
@@ -253,7 +259,7 @@ export async function runChapterLoop(
   m: Messages,
   goalId?: string,
 ): Promise<ChapterLoopSnapshot> {
-  const [goals, docs, rawLearner, graph, profile] = await Promise.all([
+  const [goals, docs, rawLearner, graph, profile, prereqOverrides] = await Promise.all([
     storage.listGoals(),
     storage.listDocuments(),
     storage.getLearnerState(),
@@ -261,6 +267,8 @@ export async function runChapterLoop(
     storage.getGraph(),
     // 学习者画像（F1）：计划档位覆盖的输入；未填写 → undefined → 零回归。
     storage.getProfile(),
+    // 章级前置的人工覆盖（F7 范围 4）：空数组 → 空 Map（等价于零回归）。
+    storage.listPrereqOverrides(),
   ]);
   // 读时遗忘衰减（V2 T9）：章级规划与就绪度基于衰减视图（幂等，不写回）。
   const learner = applyForgetting(rawLearner, Date.now());
@@ -302,6 +310,7 @@ export async function runChapterLoop(
       chapters: allChapters,
       learnerState: learner,
       graph,
+      prereqOverrides: prereqOverrideMap(prereqOverrides),
       ...(profile ? { prefs: profile.preferences } : {}),
     },
     m,

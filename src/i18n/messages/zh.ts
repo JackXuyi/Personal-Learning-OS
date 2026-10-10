@@ -307,6 +307,7 @@ export const zh = {
           capabilityItems: "能力项",
           capabilityRuns: "能力评测",
           capabilityReports: "能力报告",
+          prereqOverrides: "前置修正",
         },
         errNotJson: "文件不是合法 JSON。",
         errNotBackup: "这不是 PLOS 备份文件。",
@@ -1229,7 +1230,7 @@ export const zh = {
       /** 溯源行（F10）：这份资料是从别人分享的社区知识包里导入的（仅在有记录时渲染）。 */
       fromPack: (title: string, author?: string) =>
         `来自社区知识包《${title}》${author ? ` · ${author}` : ""}`,
-      tabs: { overview: "概览", content: "资料内容", split: "章节列表", knowledge: "关键知识点", papers: "章节测评试卷" },
+      tabs: { overview: "概览", content: "资料内容", split: "章节列表", knowledge: "关键知识点", prereq: "前置关系", papers: "章节测评试卷" },
       /** 资料 ⇄ 目标双向接线（评审 M1-1）。 */
       linkGoals: "关联目标",
       linkGoalsWithCount: (n: number) => `关联目标（${n}）`,
@@ -1316,6 +1317,24 @@ export const zh = {
         splitConfirmNote: "原章保留其掌握度与学习记录，新章从零开始。",
         splitOk: "拆分",
         splitNotice: "章节已拆分",
+      },
+      /** 前置关系（F7 范围 4）：自动推导 + 人工修正。 */
+      prereq: {
+        desc: "章与章的先后关系默认由概念关系自动推导；此页可人工修正。前置未掌握时，本章只会在计划队列的同类档位内后移并标注理由（软排序），不会阻断你执行。",
+        scopeNote: "只能在同一份资料内的章之间设置前置关系。",
+        empty: "至少需要 2 章才能设置前置关系",
+        emptyDesc: "先在「章节列表」完成切分。",
+        none: "无前置",
+        adjust: "调整",
+        originAuto: "自动",
+        originManual: "人工",
+        dialogTitle: (chapter: string) => `《${chapter}》的前置章节`,
+        dialogDesc: "勾选 = 本章要先学该章；默认值来自概念关系的自动推导，你的勾选会叠加在它之上。",
+        dialogEmpty: "本资料没有其它章节可选。",
+        reset: "恢复自动",
+        saved: "前置关系已更新",
+        resetNotice: "已恢复为自动推导",
+        noDerivedHint: "本资料尚未抽取概念关系，因此没有自动推导出的前置；你仍可手工指定。",
       },
       metaLine: (source: string, imported: string, chars: number) =>
         `${source} · 导入于 ${imported} · ${chars} 字`,

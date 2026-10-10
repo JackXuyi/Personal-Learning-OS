@@ -12,6 +12,7 @@ import type { ImportedPackRecord } from '../../storage/types';
 import ContentTab from './detail/ContentTab';
 import SplitTab from './detail/SplitTab';
 import KnowledgeTab from './detail/KnowledgeTab';
+import PrereqTab from './detail/PrereqTab';
 import PapersTab from './detail/PapersTab';
 import OverviewTab from './detail/OverviewTab';
 import GoalLinkDialog from './library/GoalLinkDialog';
@@ -23,12 +24,12 @@ import GoalLinkDialog from './library/GoalLinkDialog';
  * 的无校验断言，`?tab=foo` 会让 `Tabs.Root` 的 value 匹配不到任何 Panel ——
  * 页面**所有 Panel 都不渲染**（整页空白）。
  */
-const TAB_VALUES = ['overview', 'content', 'split', 'knowledge', 'papers'] as const;
+const TAB_VALUES = ['overview', 'content', 'split', 'knowledge', 'prereq', 'papers'] as const;
 type TabValue = (typeof TAB_VALUES)[number];
 const isTabValue = (v: string | null): v is TabValue =>
   v !== null && (TAB_VALUES as readonly string[]).includes(v);
 
-/** 资料详情页：5 个 Tab（概览 / 资料内容 / 章节列表 / 关键知识点 / 章节测评试卷） */
+/** 资料详情页：6 个 Tab（概览 / 资料内容 / 章节列表 / 关键知识点 / 前置关系 / 章节测评试卷） */
 export default function DocumentDetailPage() {
   const navigate = useNavigate();
   const { docId } = useParams<{ docId: string }>();
@@ -193,6 +194,7 @@ export default function DocumentDetailPage() {
             { value: 'content', label: t.learn.detail.tabs.content },
             { value: 'split', label: t.learn.detail.tabs.split },
             { value: 'knowledge', label: t.learn.detail.tabs.knowledge },
+            { value: 'prereq', label: t.learn.detail.tabs.prereq },
             { value: 'papers', label: t.learn.detail.tabs.papers },
           ].map((item) => (
             <TabsTab key={item.value} value={item.value}>
@@ -213,6 +215,9 @@ export default function DocumentDetailPage() {
         </TabsPanel>
         <TabsPanel value="knowledge" className="mt-4">
           <KnowledgeTab doc={doc} chapters={chapters} graph={graph} learner={learner} onChanged={handleRefresh} />
+        </TabsPanel>
+        <TabsPanel value="prereq" className="mt-4">
+          <PrereqTab chapters={chapters} graph={graph} />
         </TabsPanel>
         <TabsPanel value="papers" className="mt-4">
           <PapersTab doc={doc} chapters={chapters} learner={learner} />

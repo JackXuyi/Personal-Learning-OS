@@ -32,6 +32,7 @@ import type {
   Paper,
   PaperAnswers,
   PaperResult,
+  ChapterPrereqOverride,
   Restatement,
   Section,
   SourceDocument,
@@ -312,8 +313,9 @@ export interface StorageAdapter {
    * 清空整库（replace 导入的唯一手段，见
    * docs/data-portability-export-import-design-2026-09.md §4.3.2）。
    *
-   * 语义边界：只清**本适配器负责的实体**（即导出白名单 20 项，见
-   * `features/data/portability/backup-format.ts::BACKUP_FIELDS`）；
+   * 语义边界：只清**本适配器负责的实体**（即导出白名单 21 项，见
+   * `features/data/portability/backup-format.ts::BACKUP_FIELDS`；其中 1 项为可选字段，见该文件
+   * `FIELD_SPECS` 的 `optional: true`）；
    * **不碰** UI 偏好（`plos:settings:v1` / `plos:lang:v1`）、**不碰**密钥
    * （Keychain）、**不碰**内部迁移标记（`plos.rag.migrated.v1` /
    * `plos.graph.migrated.v2`）与 Rust 侧日志配置。幂等。
@@ -352,4 +354,21 @@ export interface StorageAdapter {
    * 幂等：记录不存在时静默返回。
    */
   deleteImportedPack(contentHash: string): Promise<void>;
+
+  // ===== 章级前置人工覆盖（F7 范围 4；缺省 = 无人工干预，绝不自动生成）=====
+  /**
+   * 全部人工覆盖记录。无记录返回空数组（不抛错）。
+   *
+   * ⚠️ 独立实体、**不是 `Chapter` 字段**（存储层给 `Chapter` 加字段要连带改
+   * `src-tauri/**` 的列式表结构与迁移，见 `ChapterPrereqOverride` 的类型注释）。
+   * 主键 = `chapterId`，所以「同资料」由调用方按章集合过滤，本层不做资料维度索引。
+   *
+   * ⚠️ 与证据流同口径：**不随资料删除而级联清理** —— 记录里的 `chapterId` 失效后
+   * 是惰性孤儿（消费侧按「章是否还在」兜底），清掉反而会改写用户历史。
+   */
+  listPrereqOverrides(): Promise<ChapterPrereqOverride[]>;
+  /** 按 `chapterId` upsert。⚠️ `added` / `removed` 双空**不应**入库（先 `delete`）。 */
+  savePrereqOverride(override: ChapterPrereqOverride): Promise<void>;
+  /** 按 `chapterId` 删除（回到纯自动）。幂等：不存在时静默返回。 */
+  deletePrereqOverride(chapterId: string): Promise<void>;
 }

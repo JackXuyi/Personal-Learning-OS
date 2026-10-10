@@ -30,6 +30,7 @@ import type {
   Paper,
   PaperAnswers,
   PaperResult,
+  ChapterPrereqOverride,
   Restatement,
   Section,
   SourceDocument,
@@ -94,6 +95,8 @@ export class InMemoryStorage implements StorageAdapter {
   protected memoryMeta: MemoryDocMeta = { lastWritten: {}, dismissed: [], lastMergedAt: 0 };
   /** 已导入的社区知识包记录（F10）。key = 包内容指纹（`contentHash`）。 */
   protected importedPacks = new Map<string, ImportedPackRecord>();
+  /** 章级前置人工覆盖（F7 范围 4）。key = `chapterId`（每章至多一条）。 */
+  protected prereqOverrides = new Map<string, ChapterPrereqOverride>();
 
   // RAG 存储层：Section / Chunk / Knowledge / Relation / Embedding
   protected sections = new Map<string, Section>();
@@ -590,6 +593,9 @@ export class InMemoryStorage implements StorageAdapter {
     this.memoryMeta = keptMemory.meta;
     // F10：已导入包记录属「可再生的学习资产」（D6）—— 整份清掉，不保留。
     this.importedPacks = new Map();
+    // F7 范围 4：人工覆盖是用户的手工修正，但**依赖已清掉的章 id** —— 清库后
+    // 全是孤儿（消费侧按「章是否还在」兜底），留着只会让新库带一堆无效记录。
+    this.prereqOverrides = new Map();
   }
 
   // ===== 学习者记忆（F9）=====
@@ -629,6 +635,30 @@ export class InMemoryStorage implements StorageAdapter {
   /** 幂等删除；**不删资料**。 */
   async deleteImportedPack(contentHash: string): Promise<void> {
     this.importedPacks.delete(contentHash);
+  }
+
+  // ===== 章级前置人工覆盖（F7 范围 4）=====
+  /**
+   * ⚠️ 返回**深拷贝**（`added` / `removed` 也是新数组）：调用方拿到独立对象，
+   * 改它不会污染存储内部状态（与 `getMemoryMeta` / `listChapterPrereqs` 同形态）。
+   * 按 `chapterId` 升序，保证确定性。
+   */
+  async listPrereqOverrides(): Promise<ChapterPrereqOverride[]> {
+    return [...this.prereqOverrides.values()]
+      .map((o) => ({ chapterId: o.chapterId, added: [...o.added], removed: [...o.removed] }))
+      .sort((a, b) => (a.chapterId < b.chapterId ? -1 : a.chapterId > b.chapterId ? 1 : 0));
+  }
+  /** 按 `chapterId` upsert。 */
+  async savePrereqOverride(override: ChapterPrereqOverride): Promise<void> {
+    this.prereqOverrides.set(override.chapterId, {
+      chapterId: override.chapterId,
+      added: [...override.added],
+      removed: [...override.removed],
+    });
+  }
+  /** 幂等删除（回到纯自动）。 */
+  async deletePrereqOverride(chapterId: string): Promise<void> {
+    this.prereqOverrides.delete(chapterId);
   }
 }
 

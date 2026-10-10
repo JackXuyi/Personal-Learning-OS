@@ -26,6 +26,7 @@ import type {
   Paper,
   PaperAnswers,
   PaperResult,
+  ChapterPrereqOverride,
   Restatement,
   Section,
   SourceDocument,
@@ -78,6 +79,17 @@ const KEY_MEMORY_META = "plos.memory.meta.v1";
  * 下次打开会看到「清空了的库里仍列着已导入的包」（F9 的两个记忆 key 踩过同一个坑）。
  */
 const KEY_IMPORTED_PACKS = "plos.knowledge-packs.v1";
+/**
+ * 章级前置人工覆盖（F7 范围 4）：新 key，无旧数据 → 零迁移。
+ *
+ * ⚠️ 它**不是** `Chapter` 的字段（那个要连带改 `src-tauri/**` 的列式表 + 迁移），
+ * 而是一个独立实体；`TauriStorage` 只覆写了 `persistDocuments()`，故本 key 在
+ * 桌面端同样由继承来的 `persistRest()` 落 localStorage。
+ *
+ * ⚠️ **必须进 `ALL_KEYS`** —— 否则 `clearAll()`（replace 导入 / 清库）跑完它还在盘上
+ * （F9 两个记忆 key、F10 包记录都踩过同一个坑）。
+ */
+const KEY_PREREQ_OVERRIDES = "plos.chapter-prereq-overrides.v1";
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -154,6 +166,10 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     this.importedPacks = new Map(
       load<ImportedPackRecord[]>(KEY_IMPORTED_PACKS, []).map((r) => [r.contentHash, r]),
     );
+    // 章级前置人工覆盖（F7 范围 4）：数组 → Map（key = chapterId）
+    this.prereqOverrides = new Map(
+      load<ChapterPrereqOverride[]>(KEY_PREREQ_OVERRIDES, []).map((o) => [o.chapterId, o]),
+    );
   }
 
   /**
@@ -186,7 +202,7 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
   }
 
   /**
-   * 其余 key（22 个）。逐行原样搬自原 `persist()` —— **不改任何一行**。
+   * 其余 key（23 个）。逐行原样搬自原 `persist()` —— **不改任何一行**。
    *
    * 与 `persistDocuments()` 的边界是「是否属于已下沉 SQLite 的实体」：
    * 将来再有实体下沉时，从这里移出去即可，`persist()` 本身不用动。
@@ -239,6 +255,11 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     localStorage.setItem(KEY_MEMORY_META, JSON.stringify(this.memoryMeta));
     // 已导入的社区知识包（F10）
     localStorage.setItem(KEY_IMPORTED_PACKS, JSON.stringify([...this.importedPacks.values()]));
+    // 章级前置人工覆盖（F7 范围 4）
+    localStorage.setItem(
+      KEY_PREREQ_OVERRIDES,
+      JSON.stringify([...this.prereqOverrides.values()]),
+    );
   }
 
   protected persist() {
@@ -465,6 +486,17 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     this.persist();
   }
 
+  // ===== 章级前置人工覆盖（F7 范围 4）写操作 override =====
+  // （`listPrereqOverrides` 是只读，无需 override —— 落盘只在写点触发。）
+  override async savePrereqOverride(override: ChapterPrereqOverride): Promise<void> {
+    await super.savePrereqOverride(override);
+    this.persist();
+  }
+  override async deletePrereqOverride(chapterId: string): Promise<void> {
+    await super.deletePrereqOverride(chapterId);
+    this.persist();
+  }
+
   /**
    * 本适配器负责的全部 key（清库真源）。
    *
@@ -499,13 +531,14 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
     KEY_MEMORY_DOC,
     KEY_MEMORY_META,
     KEY_IMPORTED_PACKS,
+    KEY_PREREQ_OVERRIDES,
   ];
 
   /**
    * 清空整库（replace 导入用）。
    *
    * 内存侧走基类的重建，落盘侧**逐个 `removeItem`** —— 刻意不调 `persist()`：
-   * 那会把 24 个 key 写成 `"[]"` 垃圾值（且 `profile` 分支走 removeItem，
+   * 那会把 25 个 key 写成 `"[]"` 垃圾值（且 `profile` 分支走 removeItem，
    * 同一方法里两种语义混淆）。清完就是「这台机器上没安装过数据」的状态，
    * 与 `load()` 的 `raw ? … : fallback` 回落语义一致。
    *
