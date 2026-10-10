@@ -198,6 +198,10 @@ export interface BackupFile {
 
 `BackupData` 字段 ↔ `StorageAdapter` 方法的完整映射（**这是白名单，多一个字段都要走决策**）：
 
+> **2026-10-10 追加**：F7 范围 4（前置关系人工调整）带来**第 21 项** `prereqOverrides`（`optional: true`）。
+> 这是本白名单**首次**由**其它特性**扩充 —— 处置口径：**不升 `EXPORT_VERSION`**（新键只影响计数），
+> `countsEqual` 对缺键按 `0` 容错（旧包仍可导入，只提示「较旧包」），并新增 `TC-UC06-06` 正反两面锁住。
+
 | # | 字段 | 来源方法 | 目标方法（导入） | 备注 |
 |---|------|----------|------------------|------|
 | 1 | `documents: SourceDocument[]` | `listDocuments()` | `saveDocument()` | 含 `textPreview`（正文快照）与 `overview`（AI 概览） |
@@ -220,6 +224,7 @@ export interface BackupFile {
 | 18 | `capabilityItems: Record<string, CapabilityItem[]>` | 逐 `goal.id` `listCapabilityItems(goalId)` | `saveCapabilityItems(goalId, items)` | 整批覆盖语义/目标 |
 | 19 | `capabilityRuns: CapabilityRun[]` | 逐 `goal.id` `listCapabilityRuns(goalId)` | `saveCapabilityRun()` | 接口按 goalId 过滤 → 逐目标遍历 |
 | 20 | `capabilityReports: CapabilityReport[]` | 逐 `goal.id` `listCapabilityReports(goalId)` | `saveCapabilityReport()` | 同上 |
+| 21 | `prereqOverrides?: ChapterPrereqOverride[]` | `listPrereqOverrides()` | `savePrereqOverride()` 逐条 | **F7-d 追加（2026-10-10）**：章级前置的**人工增删**覆盖（`added` / `removed`，增量叠加在自动推导之上）。⚠️ `optional: true` —— 旧备份无此键，见上方 2026-10-10 注；导入侧按 `chapterIds` 过滤孤儿（章不存在则丢弃） |
 
 **刻意不导出**（每一条都要有理由，别在实施时"顺手加上"）：
 
@@ -618,7 +623,7 @@ sequenceDiagram
   /**
    * 清空整库（replace 导入的唯一手段）。
    *
-   * 语义边界：只清**本适配器负责的实体**（见 §4.3.1 白名单 20 项）；
+   * 语义边界：只清**本适配器负责的实体**（见 §4.3.1 白名单 21 项）；
    * 不碰 UI 偏好（`plos:settings:v1` / `plos:lang:v1`）、不碰密钥（Keychain）、
    * 不碰内部迁移标记。幂等。
    *
@@ -754,7 +759,7 @@ export const EXPORT_VERSION = 1;
 export type BackupErrorKind =
   | "not-json" | "not-backup" | "version-newer" | "corrupt" | "unsupported-version";
 
-export interface BackupData { /* §4.3.1 的 20 个字段 */ }
+export interface BackupData { /* §4.3.1 的 21 个字段 */ }
 export interface BackupFile { /* kind / exportVersion / appVersion / exportedAt / backend / counts / data */ }
 
 /** 导入前校验（纯函数，可单测）。绝不抛错 —— 回判别式结果。 */
@@ -1018,7 +1023,7 @@ note: "导出/导入与整库替换都在上方卡片里。整库清空只作为
 ### 11.2 测试环境与数据
 
 - 全部自动用例跑在 `InMemoryStorage` 上（零 IO、零 IPC、零浏览器）。
-- fixture：一个 `makeFullSample(storage)` 构造器写入**全部 20 类实体**（每类 ≥2 条，且含**同一段正文重复出现**的章、含 `undefined` 画像、含同 id 冲突的 `UnitMastery`）—— 这份样本同时充当「白名单完整性」的守卫：**新增实体若忘了加进导出，本用例不会失败，因此另加一条「白名单覆盖率」断言**：`Object.keys(data)` 的长度与 `BACKUP_FIELDS` 常量一致，且 `BACKUP_FIELDS` 每一项都有非空样本。
+- fixture：一个 `makeFullSample(storage)` 构造器写入**全部 21 类实体**（每类 ≥2 条，且含**同一段正文重复出现**的章、含 `undefined` 画像、含同 id 冲突的 `UnitMastery`）—— 这份样本同时充当「白名单完整性」的守卫：**新增实体若忘了加进导出，本用例不会失败，因此另加一条「白名单覆盖率」断言**：`Object.keys(data)` 的长度与 `BACKUP_FIELDS` 常量一致，且 `BACKUP_FIELDS` 每一项都有非空样本。
 - 不纳入 CI（本仓库无 CI 配置）；门禁＝手动跑 `npm run typecheck` + `npm run test:portability`。
 
 ### 11.3 通过标准
@@ -1035,7 +1040,7 @@ note: "导出/导入与整库替换都在上方卡片里。整库清空只作为
 | ID | 关联 UC | 步骤 | 输入/操作 | 期望结果 | 类型 |
 |----|---------|------|-----------|----------|------|
 | TC-UC01-01 | UC-01 | 造全量样本 → `exportBackup` | `InMemoryStorage` + `makeFullSample` | 返回合法 JSON；`kind=plos.backup`；`exportVersion=1`；`backend="memory"` | 单元 |
-| TC-UC01-02 | UC-01 | 比对 `counts` 与 `data` | 同上 | 20 个字段逐一相等（**不变量 1**） | 单元 |
+| TC-UC01-02 | UC-01 | 比对 `counts` 与 `data` | 同上 | 21 个字段逐一相等（**不变量 1**；后 1 项为可选字段，缺键按 0） | 单元 |
 | TC-UC01-03 | UC-01 | 空库导出 | 空 `InMemoryStorage` | 成功；所有 counts 为 0；`documents=[]` | 单元 |
 | TC-UC02-01 | UC-02 | 非 Tauri 落盘 | `isTauri()` = false | 走 Blob 路径（构造 `Blob` 的调用被断言一次）；不调用 `invoke` | 单元（mock） |
 | TC-UC03-01 | UC-03 | 导出 → 空库 → merge 导入 | 全量样本 | 导入后逐字段与样本一致（本机为空时 merge ≡ replace） | 单元 |
@@ -1069,7 +1074,7 @@ note: "导出/导入与整库替换都在上方卡片里。整库清空只作为
 | TC-EDGE-02 | 证据去重 | 同样本 merge 导入两次 → 第二次 `evidenceSkipped == 样本条数`，库内不翻倍 |
 | TC-EDGE-03 | 孤儿 Section/Chunk | 备份含孤儿 → 导入**不重建**；`stats.orphansSkipped` 如实计数 |
 | TC-EDGE-04 | 空备份导入 | `data` 全空、counts 全 0 → merge 下为 no-op（库不变），replace 下清空库 |
-| TC-EDGE-05 | `clearAll` 后 `local` key 残留 | 断言 22 个 `plos.*` key 全不存在，`plos:settings:v1` / `plos:lang:v1` / 两个迁移 flag **仍存在** |
+| TC-EDGE-05 | `clearAll` 后 `local` key 残留 | 断言全部 `plos.*` key（`ALL_KEYS`，现 **26** 项）全不存在，`plos:settings:v1` / `plos:lang:v1` / 两个迁移 flag **仍存在** |
 | TC-EDGE-06 | 白名单覆盖率 | `BACKUP_FIELDS` 每项在 `makeFullSample` 中都有非空样本（防"加了实体忘了导出"） |
 | TC-EDGE-07 | 导出不写入 | 断言导出过程中 storage 的写方法零调用（导出是纯读） |
 | TC-EDGE-08 | 两把尺子回归 | `counts` 与结果面板展示的数字来自**同一对象**（断言 UI 层未另起一次 `listXxx`） |
@@ -1132,3 +1137,4 @@ note: "导出/导入与整库替换都在上方卡片里。整库清空只作为
 | 2026-09-17 | 初稿（12 章齐全 + D1–D6 决策点表） | Agent |
 | 2026-09-17 | 决策确认：D1＝自建 `backup.rs`（零新 crate）、D3＝允许改 `src-tauri`（`clearAll` + `db_clear_rag`）、D4＝导出不含向量本体、D6＝v1 范围＝全量导出 + 导入恢复 + 单章 Markdown。状态 → 已确认 | 许一 / Agent |
 | 2026-09-17 | **实施完成**：T1–T13 全部落地（runbook 见 `docs/data-portability-export-import-runbook-2026-09.md`）；状态 → 已实施；新增 §13 实施偏差记录（14 条）；单测 `npm run test:portability` 30/30、`cargo test --lib` 50/50、`npm run typecheck` 零新增 error；README 双语两条 `P0` 勾选、统计行实测同步为 35 shipped · 10 not yet | Agent |
+| 2026-10-10 | **白名单由 F7 范围 4 扩充至 21 项**（后续追加，非 F4 本体改动）：新增可选字段 `prereqOverrides?: ChapterPrereqOverride[]`（章级前置人工覆盖）。处置口径 **不升 `EXPORT_VERSION`**（新键只影响 `counts`）+ `countsEqual` 缺键按 `0` 容错（旧包仍可导入）+ 新用例 `TC-UC06-06` 锁旧包兼容正反两面；同步 `FIELD_SPECS` / `COUNT_KEYS` / `countsOf` / `EntityCounts`。改点：§4.3.1 表加第 21 行 + 追加注、§8.1 伪代码注释、§8.7 伪代码注释、§11.2 fixture（20→21 类）、§12.1 `TC-UC01-02`（20→21）、§12.1 `TC-EDGE-05`（22→`ALL_KEYS` 26）。⚠️ 唯一真源：`src/features/data/portability/backup-format.ts::FIELD_SPECS` | Agent |

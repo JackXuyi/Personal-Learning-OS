@@ -15,7 +15,7 @@
    - **C 重复实现 ≥3 处**（7 组）—— 违反「同一逻辑跨 ≥3 处必抽取」→ **逐字相同、零语义风险的 3 组已于 2026-09-28 抽取（第 4 批，见 §四）**；余 4 组属 UI 层 `className` / 弹窗 props / `import type` 巨块，需按 `skills/plos-ui-system` 抽公共组件，另批办理
    - **D 文档与代码相反**（3 处）—— 会误导后来者重复造轮子 / 误判门禁状态 → ✅ **2026-09-24 收口（第 1 批，见 §一）**
 3. **最该先动的是 D，不是 A —— ✅ 已于 2026-09-24 收口**（详见 §一）。死代码只是浪费，反向文档会**主动误导**：`tech-debt-closeout §6.1` 声称「无历史时未用 `profile.level` 定 band」，而代码早已用（且 roadmap 把它列为已实施）——两文档自相矛盾。**D1/D2 改文档、D3 改代码**（删死代码后 `typecheck` 归零，README 无需改动即成立）。
-4. **8 项 README `[ ]` 功能缺口逐条实测，全部属实，无一项「已悄悄做完」。**
+4. **8 项 README `[ ]` 功能缺口逐条实测，全部属实，无一项「已悄悄做完」。**（**时点注**：该 8 项为 2026-09-24 快照；其中 **#4 手动拆分章节**（F7-b，2026-10-10）、**#6 前置关系人工调整**（F7-d，2026-10-10）已交付 ⇒ README `[ ]` 现为 **6 项**。剩余 6 项仍属实。）
 5. **A 类已于 2026-09-24 清完（第 2 批）**：删 14 个零消费导出 + `assessment-engine` / `knowledge-engine` **两个整模块** + `separator.tsx` + 一组从未接线的「历史 provider 兜底标签」+ **33 个孤儿 i18n 键**。其中 `canStartCapabilityRun` 走**接线**而非删除（3 处内联判据收归一个门禁 ⇒ 消「两把尺子」）。门禁：`typecheck` exit 0 · 48/48 套件绿 · `npm run build` exit 0。
    ⚠️ **本轮实测推翻了原报告的一处计数**：`settings.models` 下的孤儿 i18n 键不是 8 个而是 **33 个**（`banner` 8 + 早期设置页重构遗留的「运行状态 / 当前配置」卡片文案 25，含整个 `kv{}` 子对象）—— 见 §二 末「漏报更正」。
 
@@ -165,14 +165,16 @@
 
 **全部属实，无一项「悄悄做完」。**
 
+> **时点注（2026-10-10）**：本表为 2026-09-24 快照。**#4**（F7-b 章节拆分）与 **#6**（F7-d 前置关系人工调整）**已于 2026-10-10 交付**，下表两行已标 ✅；README `[ ]` 由 8 项降为 **6 项**（#1 OCR / #2 EPUB / #3 URL / #5 F7-c / #7 跨文档图谱视图 / #8 加密同步）。原证据句**保留**（记录当时实测），只在结论列加时点标记。
+
 | # | 条目 | 代码证据 | 结论 |
 |---|------|----------|------|
 | 1 | 扫描件 PDF OCR 兜底 | `features/learn/import/pdf.ts:14` 注释「扫描件抛 `PdfNoTextError`，**不做 OCR**」；全仓无 `ocr`/`tesseract` | 未实现 |
 | 2 | EPUB 解析 | 仅类型占位：`domain/document.ts:12` 联合成员 `"epub"` + i18n 标签 + renderer 注释；无解析器，`ImportModal.tsx:144-149` `FORMAT_OPTIONS` 无 epub | 未实现（仅占位） |
 | 3 | URL 抓取网页 | `ImportModal.tsx:147` 的 `web` 是**粘贴**格式；全仓唯一抓取是 `import/github.ts`（`:77` 限 `hostname === "github.com"`） | 未实现 |
-| 4 | 手动把一章拆成两章 | `engine/chapter-edit-engine.ts` 仅 `renumberChapters`/`renameChapter`/`mergeChapterRange`/`reorderChapters`，**无 split** | 未实现 |
+| 4 | 手动把一章拆成两章 | `engine/chapter-edit-engine.ts` 仅 `renumberChapters`/`renameChapter`/`mergeChapterRange`/`reorderChapters`，**无 split** | ✅ **已交付（F7-b，2026-10-10）** —— 引擎新增 `splitChapterAt` / `splitCandidatesOf`，`ChapterEdit` union 加 `split` 分支，编辑态 `ChapterSplitDialog`；原证据已过时（见 `docs/chapter-edit-design-2026-09.md §13`） |
 | 5 | 跨文档学习单元 / 学习路径（F7-c） | 无 `learningUnit`/`learningPath` 编组实体；`GoalDetailPage.tsx:424` 的「LEARNING PATH」是目标范围内章的**只读展示** | 未实现（仅只读视图） |
-| 6 | 人工调整章节前置关系 | 前置边仅由 AI 概念图自动生成（`ai/concept-map-reduce.ts:73`）+ `domain/knowledge.ts:93` 自动抬升；`GraphView.tsx` 只渲染 | 未实现 |
+| 6 | 人工调整章节前置关系 | 前置边仅由 AI 概念图自动生成（`ai/concept-map-reduce.ts:73`）+ `domain/knowledge.ts:93` 自动抬升；`GraphView.tsx` 只渲染 | ✅ **已交付（F7-d，2026-10-10）** —— 新增独立持久化实体 `ChapterPrereqOverride`（`added`/`removed` 增量叠加在自动抬升之上）+ 资料详情页「前置」Tab；原证据已过时（见 `docs/chapter-prereq-override-design-2026-09.md`） |
 | 7 | 跨文档概念图谱 | 唯一图谱页 `knowledge/ChapterGraphPage.tsx:26` 按章 `subgraphOf` 裁剪；全局图 `storage.getGraph()` 有数据但**无全局视图页** | 未实现 |
 | 8 | 加密同步 | 全仓无 `encrypt`/`aes`/`crypto.subtle`/密文逻辑；无同步后端 | 未实现 |
 
@@ -214,7 +216,9 @@
   ⚠️ 未纳入本批：§四 余 4 组（UI `className` / 弹窗 props / `import type` 巨块 → 走 `plos-ui-system` 抽组件）
 
 第 5 批（功能增量）
-  F7-c 学习单元实体 · 章节拆分 · EPUB / URL 抓取 · OCR —— 均为 P2，按产品需要排
+  F7-c 学习单元实体 · EPUB / URL 抓取 · OCR —— 均为 P2，按产品需要排
+  （⚠️ 2026-10-10 更新：原列的「章节拆分」已交付 F7-b；「前置人工调整」已交付 F7-d，
+   均参见 §六 #4 / #6）
 ```
 
 ---

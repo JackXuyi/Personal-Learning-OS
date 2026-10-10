@@ -2,6 +2,8 @@
 
 > **状态：全部完成（2026-09-17）**。T1–T13 全部 done，验证门禁全绿。
 > 实施偏差不在此重复登记 —— **唯一真源**：方案文档 `docs/data-portability-export-import-design-2026-09.md` §13。
+>
+> ⚠️ **2026-10-10 时点注**：下文 T1 / T7 / T8 等 Outcome 里出现的「`BackupData` **20** 字段」「**20** 键 `countLabels`」「**20** 类实体」是 **2026-09-17 交付时**的计数，属历史记录，**不回改**。2026-10-10 起（F7 范围 4）白名单为 **21 项**；唯一真源仍是方案 §4.3.1 与 `features/data/portability/backup-format.ts::FIELD_SPECS`。
 
 ## Goal
 
@@ -123,3 +125,4 @@
 | 2026-09-17 | 建立 runbook（方案 D1–D6 确认后） |
 | 2026-09-17 | T1–T13 全部 done（每项带 Outcome 与实施期发现）；验证门禁全绿：`typecheck` 零新增 error、`test:portability` 30/30、`test:library` 18 组、`cargo test --lib` 50/50 |
 | 2026-09-17 | 回填收工清单（8 条分层提交哈希 + 逐组可编译的留证说明） |
+| 2026-10-10 | 顶部加**时点注**：T1/T7/T8 Outcome 里的 `20 字段 / 20 类` 为交付时计数（不回改），当前白名单为 21 项（F7 范围 4 追加 `prereqOverrides`）。本 runbook 的 T 表**不因后续特性回改**；差异一律记在方案文档 §4.3.1 与变更记录 |

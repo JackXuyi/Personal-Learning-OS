@@ -151,8 +151,9 @@
    > **仍为真的是**：`bandOfMastery` 本体只看 `mastery`，未引入 `cognitiveLevel` 权重。
 2. **#10 的调用边界已写进注释**，但没有机器可验的约束（例如把 `buildPlan` 的适用范围做成类型）。
    当前靠代码评审；若将来出现「误用」，再考虑加护栏。
-3. 其它仍在 `roadmap` 的项：F5 `D1-C`/`D5-C`（**刻意不做**）、F7 范围 4、F8 范围 2–5、
-   E5 收口、F10 §12.3 手工验收（**需桌面端实跑**）。（时点注：F7 范围 2 章节拆分已于 2026-10-10 落地。）
+3. 其它仍在 `roadmap` 的项：F5 `D1-C`/`D5-C`（**刻意不做**）、F8 范围 2–5、
+   E5 收口、F10 §12.3 手工验收（**需桌面端实跑**）。（时点注：F7 范围 2 章节拆分与范围 4
+   前置关系人工调整**均已**于 2026-10-10 落地，F7 仅余 **F7-c 独立学习单元实体**。）
 
 ---
 
@@ -162,3 +163,4 @@
 |---|---|---|
 | 2026-09-22 | v1 | 立项并实施：#11 消「两把尺子」（次序真源 + 起始档位读持久化值）；#10 语义归位（4 处注释）。新增 `tests/cognitive-level.test.ts`（12 例）并完成三组负向验证 |
 | 2026-09-24 | v1.1 | **§6.1 反向结论校正**（文档纠偏 · `docs/code-gap-review-2026-09.md` D1）：原写「#11 的另一层……无历史时也**未**用 `profile.level` 定 band」—— 实测**与代码相反**（`engine/profile-band.ts::bandForChapter()` 在无掌握度证据时按 `bandForLevel(profile?.level)` 定带；F1 已交付，`roadmap §F1` 亦列为已实施）。已删该句并换为校正注；**保留仍成立的那一半**（`bandOfMastery` 本体只看 `mastery`、未引入 `cognitiveLevel` 权重，待产品拍板） | `docs/code-gap-review-2026-09.md` · `docs/roadmap-next-features-plan-2026-09.md` §F1 |
+| 2026-10-10 | v1.2 | **§6.3 遗留清单同步**：F7 范围 4（前置关系人工调整）已交付 ⇒ 从「仍在 roadmap 的项」移除；时点注扩为「范围 2 + 范围 4 均已落地，F7 仅余 F7-c」。⚠️ 本文件**不是** F7-d 的方案真源，方案见 `docs/chapter-prereq-override-design-2026-09.md` | `docs/chapter-prereq-override-design-2026-09.md` · `docs/roadmap-next-features-plan-2026-09.md` §F7 |

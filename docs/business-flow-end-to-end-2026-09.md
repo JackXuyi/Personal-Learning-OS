@@ -188,7 +188,7 @@ Document ──splitDocument──▶ Chapter[]
 | **UI** | `detail/SplitTab.tsx` —— 「重新切分」(`:65 runSplit`) / 「AI 精修」(`:97 runAnalyze`) |
 | **章级 AI 产物** | 统一在 `analyze-service.ts` 写 `doc.analysis.*`：<br/>· `analyzeChaptersNow:131` → 重写 `title`/`keyPoints`，写 `analysis.chaptersAt`<br/>· `analyzeKeyPointsNow:287` → `extractKeyPointsMapped`（`ai/chapter-map-reduce.ts`）→ `keyPointRefs` + `keyPoints`，写 `analysis.keyPointsAt`<br/>· `analyzeConceptsNow:183` → `extractConceptsMapped`（`ai/concept-map-reduce.ts`）→ `KnowledgeUnit` + `KnowledgeRelation` → `graph-engine.replaceChapterConcepts:223` 写图并回填 `Chapter.unitIds`<br/>· `generateOverviewNow:408` → `summarizeDocumentWithAi`（`ai/overview-pipeline.ts`）→ `doc.overview` |
 | **AI 锚定护栏** | ②③ 的原文引用由 `evidence-anchor.ts` `anchorToDocument` 注入 —— **AI 不得自造引文**；引文锚不上时回退代码级合并 `mergeFallbacks`（引用式归并不变量：`body.slice(start,end) === quote`） |
-| ~~🔴 **缺口**~~ ✅ **已交付（F7-a 章节编辑）** | ~~**人工微调原语已实现但完全未接线**：`renameChapter:462` / `mergeChapters:470` / `reorderChapters:491` 全仓 grep 仅命中定义处，**零 UI 调用点**。用户当前只能"重新切分"或"AI 精修"，无法手动改名/合并/调序~~ → **已接线**：`detail/SplitTab.tsx` 引入 `chapter-edit-service.applyChapterEdit`，支持**改名**（`kind: 'rename'`）、**区间合并**（`kind: 'merge'`，带确认框并显式告知实际合并章数）、**拖拽排序**（`kind: 'reorder'`），操作即落库（i18n `learn.detail.chaptersEdit.*`）。⚠️ 原引行号 `:462/:470/:491` 已漂移，且 `mergeChapters` 已更名 **`mergeChapterRange`** 并迁至 `engine/chapter-edit-engine.ts` |
+| ~~🔴 **缺口**~~ ✅ **已交付（F7-a / F7-b 章节编辑）** | ~~**人工微调原语已实现但完全未接线**：`renameChapter:462` / `mergeChapters:470` / `reorderChapters:491` 全仓 grep 仅命中定义处，**零 UI 调用点**。用户当前只能"重新切分"或"AI 精修"，无法手动改名/合并/调序~~ → **已接线**：`detail/SplitTab.tsx` 引入 `chapter-edit-service.applyChapterEdit`，支持**改名**（`kind: 'rename'`）、**区间合并**（`kind: 'merge'`，带确认框并显式告知实际合并章数）、**拖拽排序**（`kind: 'reorder'`）、**手动拆分成两章**（`kind: 'split'`，2026-10-10 补，`ChapterSplitDialog`），操作即落库（i18n `learn.detail.chaptersEdit.*`）。⚠️ 原引行号 `:462/:470/:491` 已漂移，且 `mergeChapters` 已更名 **`mergeChapterRange`** 并迁至 `engine/chapter-edit-engine.ts` |
 
 ---
 
@@ -377,7 +377,7 @@ applyPaperResult / applyKeyPointRating  ──写入──▶  UnitMastery.nextR
 | **动作种类** | `ChapterActionSpec.kind`：`learn-chapter` / `chapter-quiz` / `retake-quiz` / `review-points`（`:155`） |
 | **优先级类 `cls`** | **0 重学弱章 > 1 补考 > 2 复习要点 > 3 测已学章 > 4 到期复习 > 5 推进未学章** |
 | **排序规则** | `:299-307` —— `cls` → 前置未掌握者后移（`blocked`）→ `dueAt` → `mastery` 升序 → `order` |
-| **前置依赖** | 章级前置由 `chapterPrerequisiteIds`（`domain/knowledge.ts:93-115`）**把概念层 prerequisite 边抬升而来**；D2 章级软排序（标注而非硬阻断，`:289-295`） |
+| **前置依赖** | 章级前置由 `chapterPrerequisiteIds`（`domain/knowledge.ts`）**把概念层 prerequisite 边抬升而来**；D2 章级软排序（标注而非硬阻断，`:289-295`）。**F7-d（2026-10-10）起可人工增删覆盖** —— `ChapterPrereqOverride`（`added`/`removed`）**增量叠加在自动推导之上**（与自动项一致则不落记录），消费方 (`learning-planner.ts::buildChapterPlan` / 三个 `runChapterLoop` 入口) 取值门已拓宽为「有图 **或** 有人工覆盖」 |
 | **reasons 生成** | 概念层由 i18n key 生成：`engine.goalRequired` / `currentMastery` / `bottleneckPrereq` / `knownMisconception`（`:106-118`）→ 即 UI 上的 "why now" |
 | **概念层排序（并行存在）** | `createLearningPlanner().buildPlan`（`:53-133`）：severity 分档 `not-started(0) > learning(1) > proficient(2)`，再 mastery 升序（`:71-76`）；对缺口做 **DFS**，用 `prerequisitesOf`（`domain/knowledge.ts:75-80`）把先决缺口提前（`:82-92`） |
 | **ETA 估算** | `features/plan/chapter-action.ts:102-116 estimateEtaMin`：quiz 用 `PAPER_MODE_DURATION_MIN`；`review-points = clamp(章字符 / 800, 2, 12)`；`learn-chapter = clamp(章字符 / 350, 5, 40)`；兜底 8 分钟 |
@@ -540,6 +540,10 @@ not-started ──打开阅读──▶ learning ──标记学完(markReady)�
 > ⚠️ **2026-09-22 再追加**：上面这段诊断**自己**也过时了一处 —— **#10 已收口**（语义归位）、
 > **#11 已部分收口**（消掉「两把尺子」）。此刻真正仍开放的是：**#11 的出卷难度权重那一层**、
 > **达标收口两项**、以及 `roadmap` 的 F7 / F8 余项。见 `docs/tech-debt-closeout-2026-09.md`。
+>
+> ⚠️ **2026-10-10 三追加**：上一段的「`roadmap` 的 F7 余项」进一步收窄 —— **F7 范围 2（章节拆分）
+> 与范围 4（前置关系人工调整）均已交付**，F7 只剩 **F7-c 独立学习单元实体**；F8 仍余 OCR / EPUB / URL。
+> 本文件 §六 缺口清单 #4（章节人工微调）与 §S2 行已同步。
 
 ---
 

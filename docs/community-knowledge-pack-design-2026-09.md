@@ -47,7 +47,7 @@
 | 1 | README 已把该能力列为待交付项 | `README.md:476` `- [ ] Community knowledge packs \`P2\``／`README.zh-CN.md:481` `- [ ] 社区知识包 \`P2\`` |
 | 2 | 但它**从未被规划** | `docs/roadmap-next-features-plan-2026-09.md` 的八候选 + 后补 F9 里**没有**这一项；全仓 `docs/` 仅 README 与 F4 文档提到「社区知识包」 |
 | 3 | F4 已**显式**把它划出去 | `docs/data-portability-export-import-design-2026-09.md:47` 非目标④：「不做加密包、不做云同步、**不做「社区知识包」**（README 里的 `P2` 项）」 |
-| 4 | F4 的导出白名单**方向相反** | `features/data/portability/backup-format.ts::FIELD_SPECS` 20 项，**包含** `learnerState` / `evidence` / `annotations` / `papers` / `goals` / `capability*` 等个人数据 —— 而社区包必须**排除**它们 |
+| 4 | F4 的导出白名单**方向相反** | `features/data/portability/backup-format.ts::FIELD_SPECS` **21 项**（2026-10-10 F7-d 后；本方案写作时为 20 项），**包含** `learnerState` / `evidence` / `annotations` / `papers` / `goals` / `capability*` 等个人数据 —— 而社区包必须**排除**它们 |
 | 5 | 正文真源是 `doc.textPreview` | `domain/document.ts:40`；`Chapter.contentRef`、`KeyPointRef`、`Annotation`、`CardState` 的偏移**全部**基于它（`domain/chapter.ts:53`、`domain/annotation.ts:15`、`domain/flashcard.ts:48`、`domain/knowledge.ts:20`）→ **带着正文送人，偏移全套仍然有效** |
 | 6 | 落盘通道已存在但有后缀白名单 | `src-tauri/src/backup.rs:24` `BACKUP_SUFFIX=".plosbak.json"`、`:54` `MARKDOWN_SUFFIX=".md"`；读路径 `safe_name`（:45）**只认**备份后缀，写路径 `safe_save_name`（:62）才额外允许 `.md` |
 | 7 | 网络拉取有现成范式 | `src/features/learn/import/github.ts`：`FetchLike` 可注入 fetch、`GhErrorKind` 语言中立错误分类、体积护栏集中在 `LIMITS`（`import/types.ts`）、并发上限 4、单测 mock 不触网 |
@@ -84,7 +84,7 @@
 
 | 区域 | 现状 | 本方案的关系 |
 |---|---|---|
-| `features/data/portability/backup-format.ts` | `BACKUP_KIND="plos.backup"`、`EXPORT_VERSION=1`、`BACKUP_SUFFIX=".plosbak.json"`、`FIELD_SPECS` 20 项、`countsOf` / `countsEqual` / `parseBackup` / `migrateBackup` | **范式直接复用，格式不复用**（白名单方向相反） |
+| `features/data/portability/backup-format.ts` | `BACKUP_KIND="plos.backup"`、`EXPORT_VERSION=1`、`BACKUP_SUFFIX=".plosbak.json"`、`FIELD_SPECS` **21 项**（2026-10-10 起；写作时 20）、`countsOf` / `countsEqual` / `parseBackup` / `migrateBackup` | **范式直接复用，格式不复用**（白名单方向相反） |
 | `.../export-service.ts` | `collectSnapshot(storage)` 逐层遍历 + 孤儿计数；`counts` 由同一次读取派生（不变量 1） | 导出侧**复用同一条遍历思路**，但读取范围收窄到选中资料 |
 | `.../import-service.ts` | `importBackup(storage, raw, {mode, preBackup})`；末尾 `saveGraph(库内全量)` 收口；`mergeById`；`evidenceKey` 去重；`isQuotaError` | 导入侧**复用收口规则与 quota 分类**；去掉 clearAll 与个人数据分支 |
 | `.../desktop-backup.ts` | 5 条命令的薄封装 + `isTauri()` 守卫 + `downloadText` 兜底 | 增加「知识包」的列表分流，其余原样 |
@@ -228,7 +228,7 @@
 |---|---|---|
 | `kind` | `"plos.backup"` | `"plos.pack"` |
 | 版本字段 | `exportVersion` | `packVersion`（**独立演进**） |
-| 数据白名单 | 20 项（含个人数据） | **6 项**（绝不含个人数据） |
+| 数据白名单 | **21 项**（含个人数据；2026-10-10 起，写作时 20） | **6 项**（绝不含个人数据） |
 | 校验重点 | `counts` 与 `data` 自洽 | 同上 **+** 泄漏兜底（见 TC-LEAK-01） |
 
 - 独立 `kind` 的价值：把备份当包导入、把包当备份导入，都在**写入之前**给出明确拒绝（`not-pack` / `not-backup`），而不是静默写进去一半。
@@ -448,7 +448,7 @@ export interface PackManifest {
   contentHash: string;
 }
 
-/** ⚠️ 白名单 6 项 —— 多一个字段都要走决策（与备份的 20 项互为反向）。 */
+/** ⚠️ 白名单 6 项 —— 多一个字段都要走决策（与备份的 21 项互为反向）。 */
 export interface PackData {
   documents: SourceDocument[];
   chaptersByDocument: Record<string, Chapter[]>;
@@ -2347,3 +2347,4 @@ tx.commit().await.map_err(|e| db_err("提交事务", e))
 | 2026-09-21 | **v0.3 · 范围扩展（用户指令：把 `Document`/`Chapter` 下沉纳入本方案，让 100 MiB 真正可导入）**：① 新增 **D12–D16**（下沉策略与取消写兜底 · 大库代价与后续项 · 迁移幂等/次序/自等待陷阱 · 清库与命令重命名 · 容量语义收口）；② 新增 **§8.19**（11 个文件的落点：`errors.ts` 新 · `memory.ts` 抽 3 个 protected 纯方法 · `local.ts` 拆 `persist()` · `tauri.ts` 覆写 6 方法 + `ensureDocs` + 迁移工具 + 可注入 `invoke` · `schema.sql` **v5** 两表 · `models/commands/mod/lib.rs` **+5 条命令、+`migrate_v5`、`clear_rag` → `clear_library`（9 表单事务）**）；③ 新增 **T15–T17** 与 §10 的三组前置提交（**逐提交运行时安全**）；④ 新增 `TC-DOC-01..10` / `TC-RUST-04..08` / `TC-VOL-07`，并**实测确认** node 侧可 `new TauriStorage()`（假 `invoke` 注入这条测试路径成立）；⑤ `storeCapacityBytes` 由 `number` 改为 **可选**、桌面端 `undefined`（**否决 v0.2 的 `Infinity`**），③ 层随之改为条件判定；⑥ **修正 v0.2 遗留的 6 处过期文案**（异常表 / 线框 / 交互说明 / 两处服务层代码 / `sizeWarn` 模板 / TC-VOL-02）—— 它们都建立在「桌面端同样受 localStorage 制约」这个**已不成立**的前提上；⑦ **解除**「`src/storage/tauri.ts` 与 `src-tauri/**` 零改动」约束（F3 时期口径，被本次用户指令显式覆盖） | 实测：`src/storage/tauri.ts:4-7,12-13,194-202,229-331,340`（无 `document` override / 迁移链 / 自等待陷阱）· `src/storage/memory.ts:54-55,90-115,527-548` · `src/storage/local.ts:160-211,429-454` · `src-tauri/src/db/schema.sql`（**当前 v4**，头部自述 documents/chapters 待接管）· `src-tauri/src/db/mod.rs:81-189`（migrate 链）· `src-tauri/src/db/commands.rs:627-653`（`clear_rag` 7 表）· `src-tauri/src/lib.rs:105-170` · `tests/data-portability.test.ts:553-583`（localStorage 替身先例） |
 | 2026-09-21 | **v0.4 · 实施收口**：T1–T17 **全部落地**，文件头状态由「方案待确认」改为「✅ 已实施并收口」；§9 任务表 17 项状态改 `✅ done`；§1.2 第 2 行（「但它**从未被规划**」）加**过时标注**并保留原行（已后补登记为 **F10**）。**共 14 组提交**（§10 提交表 13 组 + 1 组实施期抽离）：`d8b6443`（T16 · Rust）→ `6355ad4`（T15 · TS）→ `97ff3c1`（T17 · 存储单测 16 例 + 注释/引用回扫）→ `9bc8ae6`（T1）→ `f3c8eaf`（T2）→ `9b30787`（T3）→ `5df7b1d`（T4+T5）→ `b9f7ca6`（T7+T8）→ `fa09052`（T6）→ `14bc8bd`（T9）→ `72ccfff`（T12 · i18n）→ `eeb8c84`（T10+T11 · UI）→ `3becb27`（**实施期抽离** `pack-texts.ts`）→ `8bdfa82`（T13 · 包单测 40 例）；T14 收口（README 双语顶部统计行实测 + roadmap §F10 + 本文）同批落地。**三处刻意偏离原稿**见文件头 v0.4 条（751 行超限拆分 / round-trip 改「序号重写」/ 源码守卫「先去注释再断言」）。全链 `npm run test:library`（26 组脚本，末位 `test:pack`）**零失败**、`typecheck` 仅剩既存 3 条 | 已落地真源：`src/domain/knowledge-pack.ts` · `src/features/data/portability/{pack-format,pack-export-service,pack-import-service,pack-remote,pack-registry,pack-texts}.ts` · `KnowledgePackCard.tsx` · `src/storage/{errors,types,memory,local,tauri}.ts` · `src-tauri/src/db/{schema.sql,mod.rs,models.rs,commands.rs}` · `tests/knowledge-pack.test.ts`（**40 例**）· `tests/storage-documents.test.ts`（**16 例**） |
 | 2026-09-22 | **v0.4 补 · 实施期补漏（§12.2 的 🟠 项关闭）**：实测 T17 只落了存储层用例与 runbook 回扫，**未动**它在 §12.2 承诺确认的两个页面 —— `LibraryPage.load()` 仍是裸 `await`，SQLite 故障时落到「还没有资料」空态（与空库**同一个页面**，用户会以为资料丢了）。已补：① `fb7410d` i18n 文案先行（`learn.library.loadFailedTitle` / `loadFailedDesc`，zh/en 成对）；② `f481577` 资料库页最小错误态（`loadError` state + `load()` try/catch + 错误态**排在空态之前** + 失败时不显示副标题，全部数据就位后才清错）；③ `4db6610` 守卫 `TC-PAGE-01`（包测试 **40 → 41 例**；负向验证过 —— 顺序对调或去掉 `catch` 都会变红）。实测 **`HomePage` 无需改动**（错误态由 `useLoopStore.refresh` 的 `catch → set({ error })` 承担）。⚠️ 根因：该承诺只写在 §12.2 的风险表里、**没进 §9 任务表** —— 与 T17 漏改 `docs/storage-architecture-rag-2026-09.md` 主文档**同一个病**，「顺带确认」型承诺必漏 | `src/features/learn/LibraryPage.tsx` · `src/i18n/messages/zh.ts` · `src/i18n/messages/en.ts` · `tests/knowledge-pack.test.ts` |
+| 2026-10-10 | **外部依赖计数同步（非本特性改动）**：F7 范围 4 把 F4 备份白名单由 20 项扩到 **21 项**（新增 `prereqOverrides`）⇒ 本文 4 处对「备份白名单 = 20 项」的比较计数同步为 21（§1.2 第 4 行、§3.1 表、D9 对比表、§8.3 伪代码注释）。⚠️ **结论不变** —— 白名单方向相反、社区包 6 项绝不含个人数据，两处仍互为反向；新增项也不含个人数据 | `docs/data-portability-export-import-design-2026-09.md` §4.3.1 · `src/features/data/portability/pack-format.ts` |

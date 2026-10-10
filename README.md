@@ -411,7 +411,7 @@ never depend on a network call.
 Every capability the project intends to ship — this doubles as the roadmap.
 `[x]` = shipped · `[ ]` = not yet · `P0` / `P1` / `P2` = priority of the unshipped items.
 
-**39 shipped · 7 not yet.**
+**40 shipped · 6 not yet.**
 
 ### 📥 Ingestion
 
@@ -430,7 +430,7 @@ Every capability the project intends to ship — this doubles as the roadmap.
 - [x] Rename / merge / drag-reorder chapters — edit mode on the chapter list, saved on every action
 - [x] Manually split a chapter in two — pick a paragraph boundary in edit mode to cut one chapter into two; the original keeps its mastery and history, the new chapter starts fresh
 - [ ] Cross-document study unit / learning path `P2`
-- [ ] Manual override of chapter prerequisites `P2`
+- [x] Manual override of chapter prerequisites — a Prerequisites tab per document: derived from concept relations, correct it by checking/unchecking chapters; manual corrections layer on top of the derived ones
 
 ### 📖 Study
 
