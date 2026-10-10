@@ -346,6 +346,14 @@ F1 画像 ✅  →  F7 章节编辑 ◐ 范围 1 已落地（2026-09-14）  → 
 
 1. ✅ **接线既有原语**：SplitTab 增加改名 / 合并 / 拖拽排序（2026-09-14 已落地）
 2. **章节拆分**：把一章手动切两半（原语缺失，需新增）
+   > ⚠️ **2026-10-09 实测落点**（全仓核验，可直接开工）：`engine/chapter-edit-engine.ts` 现有导出原语**仅 5 个**
+   > —— `renumberChapters` / `renameChapter` / `mergeChapterRange` / `reorderChapters` + 常量 `MERGED_KEY_POINTS_CAP`，
+   > **无任何 split**（全仓 `Grep splitChapter` 零命中）；`splitter-engine.ts:60 splitDocument` 是导入期「文档 → 章节」，
+   > 该文件 `:482` 注释自述「rename / merge / reorder 已迁出，本模块无章节级 split」。需补齐四处：
+   > ① 引擎新增 `splitChapterAt`（按 `contentRef` 切正文区间，并拆 `keyPoints` / `keyPointRefs` / `unitIds` 的归属）；
+   > ② `features/learn/chapter-edit-service.ts:24` 的 `ChapterEdit` union 加 `{ kind:"split" }` 并在 `:87` switch 补分支；
+   > ③ `detail/SplitTab.tsx`（现仅 `:177` reorder / `:187` rename / `:195` merge）增拆分入口；
+   > ④ i18n `chaptersEdit` 块补键（`zh.ts` / `en.ts` 成对，现块内无「拆分」语义键）。
 3. **跨文档组合**：把多个文档的章节组成一个自定义学习单元 / 学习路径
    > ⚠️ **2026-09-22 实测更正 —— 本条含两层，勿混读**：
    > - **能力层（早已交付）**：在目标里跨文档勾章即可组成跨文档学习范围，下游全部按它裁剪。
@@ -358,6 +366,15 @@ F1 画像 ✅  →  F7 章节编辑 ◐ 范围 1 已落地（2026-09-14）  → 
    >   （可在资料库侧创建、被多个目标引用）。`chapter-edit-design-2026-09.md §2.2` 将其列为非目标，
    >   理由是「涉及新的领域对象」。
 4. **前置关系人工调整**：当前 `chapterPrerequisiteIds` 由概念 prerequisite 边自动抬升，不允许人工修正
+   > ⚠️ **2026-10-09 实测**：`chapterPrerequisiteIds` 是**纯派生函数**（`domain/knowledge.ts:93`，签名
+   > `(graph, chapters: Pick<Chapter,"id"|"unitIds">[]) => Map<string,string[]>`，函数体 `:103-113` 只从
+   > `relation.type === "prerequisite"` 的边抬升），**不是 `Chapter` 上的存储字段**
+   > （`domain/chapter.ts:59-80` 无 prerequisite 字段）。唯一消费方 `engine/learning-planner.ts:317`；
+   > 边来源是 AI 抽取（`ai/concept-map-reduce.ts:73` 提示词限定 `prerequisite/related/parent-child`）；
+   > `saveRelation(s)` 在 `src/` 下的调用点**只有数据迁移与知识包导入**（`portability/import-service.ts:194`、
+   > `pack-import-service.ts:295`），**无任何人工增删入口** ⇒ 现状＝「完全自动、用户不可改」。
+   > 要做人工覆盖**必须先新增持久化载体**（如 `Chapter.prerequisiteOverrideIds`，或独立章级前置表），
+   > 再让该函数支持「人工覆盖优先于自动抬升」的合并语义。
 
 **依赖**：无
 
@@ -539,7 +556,7 @@ flowchart LR
 
 > **评测这条腿已闭环，学习这条腿长出一半；计划开始带上时间，投入也能带走了，系统对"你是谁"的理解开始会自己长了。**
 > 已收口：让系统知道你**是谁**（F1 ✅）、让计划带上**时间**（F2 ✅ 2026-09-15）、让你在学习时**能动手**（F5 ✅ —— 提问 / 划线笔记 / 费曼复述 / 自测卡**四项全落地**，2026-09-14～09-16）、回答"**我够格了吗**"（F6 ✅ 2026-09-15）、让积累的证据**看得见**（F3 ✅ 2026-09-16）、把章节结构的控制权交给你（F7 ◐ —— 重命名 / 合并 / 拖拽排序已做）、让投入**带得走**（F4 ✅ 2026-09-17 —— README 产品原则 #1 不再是空头承诺）、让系统对你的理解**随用随长且始终可改**（F9 ✅ 2026-09-18 —— 行级三态合并，改过的不覆盖、删掉的不复活）、让整理好的知识资产**可以按份给出去**（F10 ✅ 2026-09-21 —— 一份 `.ploskp.json` 单文件，只带知识资产、绝不带学习痕迹，导入零 AI 零外发）。
-> 仍未做：**F8 导入覆盖面**（0 字符检测已于 2026-09-21 交付、**DOCX 解析已于 2026-09-23 交付**，仍开放的是 OCR / EPUB / URL 三项）· **F7 范围 2 / 4**（章节拆分 / 前置关系人工调整）+ **F7-c 独立学习单元实体**（跨文档**圈选**自 V2 起已具备，2026-09-22 实测更正）· **F5 两处可见性**（D1-C 章级队列纳入到期卡 / D5-C 首页卡片入口）。
+> 仍未做：**F8 导入覆盖面**（0 字符检测已于 2026-09-21 交付、**DOCX 解析已于 2026-09-23 交付**，仍开放的是 OCR / EPUB / URL 三项）· **F7 范围 2 / 4**（章节拆分 / 前置关系人工调整）+ **F7-c 独立学习单元实体**（跨文档**圈选**自 V2 起已具备，2026-09-22 实测更正）· **F5 两处可见性**（D1-C 章级队列纳入到期卡 / D5-C 首页卡片入口）· **E5 剩余收口**（证书 / 达标总结页 / 下一目标引导；⚠️「可复用产出」一层已部分交付）· **README 的「跨文档概念图谱」**（2026-10-09 实测：**数据层已具备** —— 图谱本就是全局单图、`subgraphOf(graph, unitIds)` 接受任意文档单元；缺的只是跨文档视图页。⚠️ 该条在本文**无 Feature 编号**，属 README 独有待办，见 §附 2026-10-09 补测）。
 
 ---
 
@@ -549,6 +566,12 @@ flowchart LR
 - 复核到的"已完成"项（**计数已于 2026-09-21 重测**）：`buildActiveProvider` ~~6 处~~ → **17 个文件**消费点、`EvidenceEntry` ~~3 写 2 读~~ → **7 写 5 读**（且新增原子方法 `appendEvidenceUnless`）、`hybridSearch` ~~2 处~~ → **3 处**消费
 - 复核到的"未实现"项：~~`LearnerProfile` 不存在~~（**F1 已交付 2026-09-14**）、~~`StorageAdapter` 无导出方法~~（**F4 已交付 2026-09-17**）、`deadlineAt` 零消费点（**F1 后已过期，F2 起参与配额摊派**）、章节编辑原语零 UI 调用点（**F7-a 后已过期**）、~~全仓无 trend/heatmap/streak~~（**F3 已交付 2026-09-16** —— `buildTrend` / `buildHeatmap` 均已落地；「streak」仍无**学习连续天数**口径，`AssessmentSession` 的 `streakUp` 是「连续答对升难度」，与前者无关）
 - **2026-09-22 补测**：~~「跨文档组合学习单元 / 学习路径」完全未做~~ → **能力层早已交付**（`requiredChapterIds` 自 V2 起即「跨文档章节集合」/ `loadChapterRows` 读全库 / `GoalFormPage` 按资料分组跨文档勾选 / `scopeOf` 按范围裁剪）；真正未做的是**独立领域对象**（F7-c）。⚠️ **README 双语的两条复选框并不重叠**（`[x] 章节圈定` ＝目标范围字段 ／ `[ ] Cross-document study unit / learning path` ＝独立实体），故 **README 不改、计数 37 / 9 不变**（该日基线；**2026-09-23 DOCX 交付后实测为 `[x]` 38 · `[ ]` 8**）。
+- **2026-10-09 补测**（技术债 / 路线图缺口逐条实测，本轮**未改任何生产代码**）：
+  ① **README「跨文档概念图谱」属过度保守** —— 数据层早已具备：store 里只有**一份全局** `KnowledgeGraph`（`storage/memory.ts:381-386`）；`graph-engine.ts:18-21 subgraphOf(graph, unitIds)` 接受**任意** unitIds 集合；存储层 `listKnowledgeUnits(documentId?)` 不传参即全量、`listRelations(unitId?)` 同理。消费侧两处都**自行限定了范围**（`features/knowledge/ChapterGraphPage.tsx:82` 单章、`features/learn/detail/KnowledgeTab.tsx:87-90` 单份资料全部章）⇒ **缺的只是跨文档视图页**。处置：README 双语**保持 `[ ]`**（UI 确实没做，不虚报）但**描述改写**为「数据层已具备、缺视图」（计数不变，两版对齐）。
+  ② **E5 的「可复用产出」已部分交付** —— 报告 append-only 持久化 + 随 F4 整库备份迁移 + 每次评测追加 `kind:"capability"` 证据流；已同步 `tech-debt-closeout` §4 与 `business-flow-end-to-end` §E5 两处。
+  ③ **`#11` 另一层实测属实** —— `bandOfMastery`（`quiz-engine.ts:39-44`）确只看 `mastery`；但顺带发现**同形态的第二条派生链**（题目档位 `mastery → bandOfMastery → cognitiveOf`，与学习者档位链互不引用），已登记 `tech-debt-closeout` §6。
+  ④ **三项「未做」记账准确** —— 手动拆分章节 / 前置关系人工调整 / URL 抓取正文**均为完全未做**（另 OCR / EPUB 亦然），本轮只补了**精确落点**（F7 范围 2 / 4），未改结论。
+  ⑤ **F5 `D1-C` / `D5-C` 复核仍为「刻意取舍」** —— 定案 A 原文未变、未被推翻；卡到期实测确只显示在两处（`ChapterReaderPage.tsx:435` / `detail/KnowledgeTab.tsx:273`），planner 与资料库卡面确实不显示 ⇒ **不排期**。
 - 本文件为**规划文档**，未修改任何生产代码；每个 feature 实施前需按 `skills/pre-task-technical-design` 单独出技术方案
 
 ---

@@ -100,7 +100,8 @@
 |---|---|---|
 | **F5 `D1-C` / `D5-C`** | `learn-flashcard-design:1185-1189` **定案 A**：「到期数只在**两处入口**显示……planner / 资料库卡面**不动**」；「B（改 planner 纳入卡到期）与 C（首页新增卡片入口）**待实际用起来后再评估，不预先实现**」 | 这是**白纸黑字的既定取舍**，不是漏做。改它 = 推翻一个已定案的决策，需先有「实际用起来后」的证据 |
 | ~~**⑤ `deleteDocumentCascade` 证据流清理**~~ | `raw-id-label-fix:141`「孤儿引用清理策略**仍未定**……是否补证据流清理**仍待拍板**」；`evidence-log-idempotency-fix:196` 同口径 | ~~**待拍板**项，不是可直接实施的债。`learner.byUnit` 走 (c) 档 append-only 是**刻意的**~~ → ❌ **已失效**（2026-09-22）：实测后**证据流不清**（行为历史，见 `document-cascade-cleanup-2026-09.md` §3），而同族 6 项派生态**已补齐**（含 `learner.byUnit` —— 它是「过滤不是清理」的典型，消费方过滤是兜底） |
-| **E5 剩余收口** | 能力证书 / 可复用产出、下一目标引导、达标总结页 | 属**功能开发**，不是债；有独立设计文档 `goal-capability-assessment-design-2026-09.md` |
+| **E5 剩余收口** | 能力证书 / 可复用产出、下一目标引导、达标总结页 | 属**功能开发**，不是债；有独立设计文档 `goal-capability-assessment-design-2026-09.md`。⚠️ **2026-10-09 实测精确化**：「**可复用产出**」这一层**已部分交付** —— 报告 append-only 持久化（`storage/local.ts:63`）、已入 F4 整库备份导出/导入（`portability/export-service.ts:96-100,123`）、每次评测已追加 `kind:"capability"` 证据流（`features/goals/capability-service.ts:472-480`）⇒ 排期时**只算面向用户的导出/复制/证书形态**，勿从零建。证书 / 达标总结页 / 下一目标引导仍为**零交付**（后者的文案已备未接线，见本表末行） |
+| **`goals.doneAll` / `doneAllSub` 孤儿 i18n 键** | 「下一目标引导」的文案（`zh.ts:621-622` / `en.ts:629-630`：「🎉 范围内章节已全部达标」「可新建下一个目标，或继续导入新资料扩展范围。」） | 实测全仓**零消费方**。⚠️ 勿与 `settings.vectorIndex.doneAll`（`zh.ts:528`，被 `settings/VectorIndexCard.tsx:324` 消费）混为一谈 —— **同名不同命名空间**。**不删**：它是 E5「下一目标引导」（上文）的**预置文案**，删了待做项还得重写 ⇒ 登记为**知情的残留**。⚠️ `test:i18n` 只锁 zh/en 成对、**不报孤儿键**，故它不会触发任何门禁 |
 
 ---
 
@@ -134,6 +135,13 @@
 
 1. **#11 的另一层**：`quiz-engine.ts::bandOfMastery` **函数本体仍只看 `mastery`**，未引入 `cognitiveLevel`
    权重。**属产品决策**（难度是否该随认知层级上升），未拍板 → 保持现状并登记。
+
+   > ⚠️ **2026-10-09 实测补记（同形态的残余）**：`bandOfMastery`（`quiz-engine.ts:39-44`）确只看 `mastery`，与上文一致。
+   > 但实测发现**第二条派生链**：出卷时「题目认知层级」由 `mastery → bandOfMastery → cognitiveOf(type, band)`
+   > **重算了一遍**（`quiz-engine.ts:47-58` 的 `cognitiveOf` 只吃 band；写入题目在 `:193/218/237`），
+   > 与学习者档位链（`mastery → nextCognitiveLevel → UnitMastery.cognitiveLevel`，`learner-model.ts:280-296`）**互不引用**。
+   > ⇒ 学习者档位这条「两把尺子」已于 2026-09-22 收口（唯一真源 `domain/learner.ts::sessionLevelIndexOf`），
+   > 但**题目档位**这条仍在，属同一形态的残余。若将来拍板「难度随认知层级上升」，两条链需一起改。
 
    > ⚠️ **校正（2026-09-24 实测纠偏）**：此处早前作「无历史时也**未**用 `profile.level` 定 band」——
    > **与代码相反，该句已删**。F1 已落地 `engine/profile-band.ts::bandForChapter()`：无掌握度证据

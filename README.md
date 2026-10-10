@@ -440,7 +440,7 @@ Every capability the project intends to ship — this doubles as the roadmap.
 - [x] Highlights and notes — select text to highlight it, optionally attach a note; the side panel lists them and jumps back to the passage (zero AI, not written to the evidence log, no mastery change; re-anchored automatically after a re-split or chapter merge)
 - [x] Feynman restatement — explain a chapter in your own words; the AI diffs it against the chapter text (covered / missed / got wrong, each anchored back to the source) and can schedule a review without moving mastery
 - [x] Flashcards from key points — one click sends a chapter's quoted key points into a card-level spaced-repetition queue (four-grade self-rating, 1/2/4/7-day intervals, no mastery change, **works fully offline / without AI**)
-- [ ] Cross-document concept graph `P2`
+- [ ] Cross-document concept graph `P2` — the data layer is already global (one `KnowledgeGraph` in the store; `subgraphOf(graph, unitIds)` accepts units from **any** document), so what's missing is a cross-document **view** — the chapter graph page is single-chapter and the document "Concepts" tab is single-document
 
 ### 📝 Assessment
 
