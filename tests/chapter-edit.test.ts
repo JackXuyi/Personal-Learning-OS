@@ -8,7 +8,9 @@
  *     （含三处原语缺陷的修复断言：中间章要点保留、unitIds 并集、refs 对齐）；
  *  B. 掌握度局部迁移 —— remapMasteryOnChapterEdit（关键：未涉及的键完全不变）；
  *  C. 服务层 —— applyChapterEdit 的短路、落库、错误类型（注入 InMemoryStorage）；
- *  D. 边界 —— 单章合并、切片契约、章数不变量。
+ *  D. 边界 —— 单章合并、切片契约、章数不变量；
+ *  E. 拆分原语 —— splitChapterAt（字段归属 / 无效偏移 no-op）与 splitCandidatesOf（候选切点）；
+ *  F. 拆分服务 —— applyChapterEdit split 分支（落库 / 重建 chunk / 掌握度不受影响 / 错误）。
  */
 import assert from "node:assert/strict";
 import type { Chapter, KeyPointRef, UnitMastery } from "../src/domain/index.ts";
@@ -18,6 +20,8 @@ import {
   renameChapter,
   reorderChapters,
   renumberChapters,
+  splitCandidatesOf,
+  splitChapterAt,
 } from "../src/engine/chapter-edit-engine.ts";
 import {
   applyChapterEdit,
@@ -385,6 +389,199 @@ function testChapterCountInvariants(): void {
   assert.equal(m.chapters.length, cs.length - m.absorbedIds.length); // merge 减被吞数
 }
 
+// ============================================================ E. 拆分原语（F7-b）
+
+function testSplitProducesTwoChapters(): void {
+  const cs = fiveChapters();
+  const r = splitChapterAt(cs, "c2", 150);
+  assert.equal(r.chapters.length, 6);
+  assert.ok(r.newChapterId);
+  assert.deepEqual(r.chapters.map((c) => c.order), [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(r.chapters.map((c) => c.id), ["c1", "c2", r.newChapterId, "c3", "c4", "c5"]);
+  assert.deepEqual(r.chapters[1].contentRef, { start: 100, end: 150 }); // 上半
+  assert.deepEqual(r.chapters[2].contentRef, { start: 150, end: 200 }); // 下半
+  // 入参不被修改。
+  assert.equal(cs.length, 5);
+  assert.deepEqual(cs[1].contentRef, { start: 100, end: 200 });
+}
+
+function testSplitHeadKeepsIdentityTailResets(): void {
+  const cs = [
+    ...fiveChapters().slice(0, 1),
+    ch("c2", 2, { title: "原章", status: "mastered", createdAt: 1234, unitIds: ["u2a", "u2b"] }),
+    ...fiveChapters().slice(2),
+  ];
+  const r = splitChapterAt(cs, "c2", 150, "新章");
+  const head = r.chapters[1];
+  const tail = r.chapters[2];
+  assert.equal(head.id, "c2");
+  assert.equal(head.title, "原章");
+  assert.equal(head.status, "mastered"); // 状态保留
+  assert.equal(head.createdAt, 1234);
+  assert.deepEqual(head.unitIds, ["u2a", "u2b"]); // 概念无偏移 → 全部留上半
+  assert.equal(tail.id, r.newChapterId);
+  assert.notEqual(tail.id, head.id);
+  assert.equal(tail.title, "新章");
+  assert.equal(tail.status, "not-started"); // 新章从零开始
+  assert.equal(tail.createdAt, 1234); // 内容自那时起存在
+  assert.deepEqual(tail.unitIds, []);
+}
+
+function testSplitKeyPointsByRefOffset(): void {
+  const cs = [
+    ...fiveChapters().slice(0, 1),
+    ch("c2", 2, {
+      keyPoints: ["AA", "BB", "CC"],
+      keyPointRefs: [ref("AA", 110, 115), ref("BB", 160, 165), ref("CC", 190, 195)],
+    }),
+    ...fiveChapters().slice(2),
+  ];
+  const r = splitChapterAt(cs, "c2", 150);
+  const head = r.chapters[1];
+  const tail = r.chapters[2];
+  assert.deepEqual(head.keyPoints, ["AA"]);
+  assert.deepEqual(tail.keyPoints, ["BB", "CC"]);
+  // refs 与 keyPoints 逐条对齐（同步契约）。
+  assert.deepEqual(head.keyPointRefs?.map((x) => x.point), ["AA"]);
+  assert.deepEqual(tail.keyPointRefs?.map((x) => x.point), ["BB", "CC"]);
+}
+
+function testSplitUnattributedKeyPointsStayOnHead(): void {
+  const cs = [
+    ...fiveChapters().slice(0, 1),
+    ch("c2", 2, { keyPoints: ["AA", "BB"] }), // 本地兜底要点：无 refs
+    ...fiveChapters().slice(2),
+  ];
+  const r = splitChapterAt(cs, "c2", 150);
+  assert.deepEqual(r.chapters[1].keyPoints, ["AA", "BB"]);
+  assert.equal(r.chapters[1].keyPointRefs, undefined);
+  assert.deepEqual(r.chapters[2].keyPoints, []);
+}
+
+function testSplitInvalidOffsetIsNoop(): void {
+  const cs = fiveChapters();
+  for (const bad of [100, 200, 99, 201, NaN]) {
+    const r = splitChapterAt(cs, "c2", bad);
+    assert.equal(r.newChapterId, undefined, `offset=${bad} 应无效`);
+    assert.equal(r.chapters, cs); // 同一引用，未改数据
+  }
+  assert.equal(splitChapterAt(cs, "ghost", 150).chapters, cs); // 章不存在同样 no-op
+}
+
+function testSplitTitleFallback(): void {
+  const cs = fiveChapters();
+  assert.equal(splitChapterAt(cs, "c2", 150, "  ").chapters[2].title, "第 2 章"); // 空白 → 沿用原名
+  assert.equal(splitChapterAt(cs, "c2", 150).chapters[2].title, "第 2 章"); // 缺省 → 沿用原名
+}
+
+function testSplitRangeAndSliceContract(): void {
+  const cs = fiveChapters();
+  const r = splitChapterAt(cs, "c2", 150);
+  const head = r.chapters[1];
+  const tail = r.chapters[2];
+  assert.equal(head.contentRef.start, cs[1].contentRef.start);
+  assert.equal(tail.contentRef.end, cs[1].contentRef.end);
+  assert.equal(head.contentRef.end, tail.contentRef.start); // 无缝相接
+  // 两段拼回 == 原区间（正文零丢失）。
+  assert.equal(
+    TEXT.slice(head.contentRef.start, head.contentRef.end) +
+      TEXT.slice(tail.contentRef.start, tail.contentRef.end),
+    TEXT.slice(cs[1].contentRef.start, cs[1].contentRef.end),
+  );
+}
+
+function testSplitCandidatesParaBoundaries(): void {
+  const text = "p1\n\np2\n\np3"; // 空行分段处优先
+  assert.deepEqual(splitCandidatesOf(text, { start: 0, end: text.length }), [4, 8]);
+}
+
+function testSplitCandidatesNewlineFallback(): void {
+  const text = "a\nb\nc"; // 无空行 → 退化到单换行
+  assert.deepEqual(splitCandidatesOf(text, { start: 0, end: text.length }), [2, 4]);
+}
+
+function testSplitCandidatesMidpointFallback(): void {
+  const text = "abcdefgh"; // 无换行 → 区间中点
+  assert.deepEqual(splitCandidatesOf(text, { start: 0, end: text.length }), [4]);
+}
+
+function testSplitCandidatesClampAndSampling(): void {
+  const text = Array.from({ length: 10 }, (_, i) => `p${i}`).join("\n\n");
+  const all = splitCandidatesOf(text, { start: 0, end: text.length });
+  assert.equal(all.length, 9); // 10 段 → 9 个边界
+  const sampled = splitCandidatesOf(text, { start: 0, end: text.length }, 3);
+  assert.equal(sampled.length, 3);
+  assert.equal(sampled[0], all[0]); // 保留首
+  assert.equal(sampled[2], all[all.length - 1]); // 保留尾
+  // 越界区间夹取到合法范围（不抛错），结果一致。
+  assert.deepEqual(splitCandidatesOf(text, { start: -5, end: text.length + 5 }, 3), sampled);
+  // 区间过短 → 无候选。
+  assert.deepEqual(splitCandidatesOf(text, { start: 0, end: 1 }), []);
+}
+
+// ============================================================ F. 拆分服务（F7-b）
+
+async function testServiceSplitPersistsAndKeepsMastery(): Promise<void> {
+  const storage = new CountingStorage();
+  await storage.saveChapters("doc1", fiveChapters());
+  await storage.saveLearnerState({
+    byUnit: { c2: unit({ mastery: 0.9, attempts: 3 }), c9: unit({ mastery: 0.7 }) },
+  });
+  storage.resetCounters();
+
+  const r = await applyChapterEdit(
+    { id: "doc1", textPreview: TEXT },
+    {
+      storage,
+      chapters: await storage.listChapters("doc1"),
+      edit: { kind: "split", chapterId: "c2", offset: 150, newTitle: "下半" },
+    },
+  );
+
+  assert.equal(r.chapters.length, 6);
+  assert.equal(storage.chapterSaves, 1);
+  assert.ok(r.chunks > 0); // chunk 已重建
+
+  const persisted = await storage.listChapters("doc1");
+  assert.deepEqual(persisted.map((c) => c.id), r.chapters.map((c) => c.id));
+  const head = persisted.find((c) => c.id === "c2")!;
+  assert.deepEqual(head.contentRef, { start: 100, end: 150 });
+  const tail = persisted.find((c) => c.title === "下半")!;
+  assert.ok(tail);
+  assert.equal(tail.status, "not-started");
+
+  // 掌握度不受影响：head 保留原 id → 键不动；未涉及的键不动；零掌握度写盘。
+  assert.equal(storage.learnerSaves, 0);
+  const learner = await storage.getLearnerState();
+  assert.equal(learner.byUnit.c2.mastery, 0.9);
+  assert.equal(learner.byUnit.c2.attempts, 3);
+  assert.deepEqual(learner.byUnit.c9, unit({ mastery: 0.7 }));
+}
+
+async function testServiceSplitRejectsInvalidTarget(): Promise<void> {
+  const storage = new CountingStorage();
+  await storage.saveChapters("doc1", fiveChapters());
+  storage.resetCounters();
+
+  await assert.rejects(
+    () =>
+      applyChapterEdit(
+        { id: "doc1", textPreview: TEXT },
+        { storage, chapters: fiveChapters(), edit: { kind: "split", chapterId: "c2", offset: 100 } },
+      ),
+    (e: unknown) => e instanceof ChapterEditError && e.kind === "invalid-range",
+  );
+  await assert.rejects(
+    () =>
+      applyChapterEdit(
+        { id: "doc1", textPreview: TEXT },
+        { storage, chapters: fiveChapters(), edit: { kind: "split", chapterId: "ghost", offset: 150 } },
+      ),
+    (e: unknown) => e instanceof ChapterEditError && e.kind === "chapter-not-found",
+  );
+  assert.equal(storage.chapterSaves, 0); // 校验失败不写盘
+}
+
 // ------------------------------------------------------------- 执行
 
 const tests: [string, () => Promise<void> | void][] = [
@@ -415,6 +612,19 @@ const tests: [string, () => Promise<void> | void][] = [
   ["C/服务层 非法编辑抛类型化错误且不写盘", testServiceRejectsInvalidEdits],
   ["D/切片契约：合并区间 == 各章正文拼接", testSliceContractAfterMerge],
   ["D/章数不变量（rename/merge/reorder）", testChapterCountInvariants],
+  ["E/splitChapterAt 拆出两章（id/range/order）", testSplitProducesTwoChapters],
+  ["E/splitChapterAt 上半保身份、下半重置", testSplitHeadKeepsIdentityTailResets],
+  ["E/splitChapterAt 要点按 ref 偏移归属", testSplitKeyPointsByRefOffset],
+  ["E/splitChapterAt 无引用要点保守留上半", testSplitUnattributedKeyPointsStayOnHead],
+  ["E/splitChapterAt 无效偏移 no-op", testSplitInvalidOffsetIsNoop],
+  ["E/splitChapterAt 下半标题缺省沿用原名", testSplitTitleFallback],
+  ["E/splitChapterAt 区间无缝相接且零丢失", testSplitRangeAndSliceContract],
+  ["E/splitCandidatesOf 空行分段处优先", testSplitCandidatesParaBoundaries],
+  ["E/splitCandidatesOf 退化到单换行", testSplitCandidatesNewlineFallback],
+  ["E/splitCandidatesOf 退化到区间中点", testSplitCandidatesMidpointFallback],
+  ["E/splitCandidatesOf 夹取与等距采样", testSplitCandidatesClampAndSampling],
+  ["F/服务层 拆分落库并重建 chunk、掌握度不受影响", testServiceSplitPersistsAndKeepsMastery],
+  ["F/服务层 拆分非法目标抛类型化错误且不写盘", testServiceSplitRejectsInvalidTarget],
 ];
 
 let failed = 0;

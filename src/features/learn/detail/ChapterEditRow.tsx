@@ -9,7 +9,7 @@
  * 避免「Enter 提交后 blur 再提交一次」的双写。
  */
 import { useEffect, useRef } from 'react';
-import { GripVertical, Pencil } from 'lucide-react';
+import { GripVertical, Pencil, Scissors } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useI18n } from '../../../i18n';
@@ -35,6 +35,8 @@ interface ChapterEditRowProps {
   onStartRename: () => void;
   onCommitRename: (title: string) => void;
   onCancelRename: () => void;
+  /** 打开拆分选点对话框（F7-b）。 */
+  onSplit: () => void;
 }
 
 export function ChapterEditRow({
@@ -48,6 +50,7 @@ export function ChapterEditRow({
   onStartRename,
   onCommitRename,
   onCancelRename,
+  onSplit,
 }: ChapterEditRowProps) {
   const { m } = useI18n();
   const t = m.learn.detail.chaptersEdit;
@@ -147,6 +150,17 @@ export function ChapterEditRow({
               onClick={onStartRename}
             >
               <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              disabled={busy}
+              aria-label={t.splitChapter}
+              data-testid="chapter-split-btn"
+              className="size-7 shrink-0"
+              onClick={onSplit}
+            >
+              <Scissors className="h-3.5 w-3.5" />
             </Button>
           </>
         )}

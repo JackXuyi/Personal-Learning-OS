@@ -1330,6 +1330,16 @@ export const en: Messages = {
         renamedNotice: "Title updated",
         reorderedNotice: "Order updated",
         stale: "Chapters changed — refresh and retry",
+        splitChapter: "Split",
+        splitChapterTitle: "Split chapter",
+        splitChapterDesc: (title: string) =>
+          `Split “${title}” into two chapters at the position you choose.`,
+        splitPickBoundary: "Choose a split point (text after it starts the new chapter):",
+        splitNewTitle: (title: string) => `${title} (cont.)`,
+        splitConfirmNote:
+          "The original chapter keeps its mastery and history; the new chapter starts fresh.",
+        splitOk: "Split",
+        splitNotice: "Chapter split",
       },
       metaLine: (source: string, imported: string, chars: number) =>
         `${source} · imported ${imported} · ${chars} chars`,

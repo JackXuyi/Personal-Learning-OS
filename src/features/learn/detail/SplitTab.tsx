@@ -8,7 +8,7 @@
  * 分工（docs/library-module-design-2026-09.md v2 硬契约）：
  * - 切分 = 代码（splitDocumentNow，确定性、无重试）；
  * - 精修 = AI（analyzeChaptersNow，可重跑，读全局配置 useAiReady）；
- * - 编辑 = 代码（applyChapterEdit，重命名 / 区间合并 / 排序，操作即保存）。
+ * - 编辑 = 代码（applyChapterEdit，重命名 / 区间合并 / 排序 / 拆分，操作即保存）。
  */
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -43,6 +43,7 @@ import { analyzeChaptersNow } from '../analyze-service';
 import { chapterCharCount } from '../chapter-preview';
 import { ChapterRow } from './ChapterRow';
 import { ChapterEditRow } from './ChapterEditRow';
+import { ChapterSplitDialog } from './ChapterSplitDialog';
 import type { SourceDocument, Chapter, LearnerState } from '../../../domain';
 
 interface SplitTabProps {
@@ -67,6 +68,8 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmMerge, setConfirmMerge] = useState(false);
+  // 正在选拆分的章（非空 → 打开选点对话框）。
+  const [splitTarget, setSplitTarget] = useState<Chapter | null>(null);
 
   // 全局 AI 配置（响应式）：替代原 ai/active 的恒 null stub（B2 修复）
   const aiReady = useAiReady();
@@ -96,6 +99,7 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
       return next.size === prev.size ? prev : next;
     });
     setRenamingId((prev) => (prev && !chapters.some((c) => c.id === prev) ? null : prev));
+    setSplitTarget((prev) => (prev && !chapters.some((c) => c.id === prev.id) ? null : prev));
   }, [chapters]);
 
   // ---- 编辑动作 ----
@@ -197,10 +201,22 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
     );
   };
 
+  /** 拆分选点确认（F7-b）：offset 为 textPreview 绝对偏移，newTitle 为下半章标题。 */
+  const confirmSplitEdit = (offset: number, newTitle: string) => {
+    const target = splitTarget;
+    if (!target) return;
+    setSplitTarget(null);
+    void runEdit(
+      { kind: 'split', chapterId: target.id, offset, newTitle },
+      () => t.learn.detail.chaptersEdit.splitNotice,
+    );
+  };
+
   const toggleEditing = () => {
     setEditing((v) => !v);
     setSelectedIds(new Set());
     setRenamingId(null);
+    setSplitTarget(null);
   };
 
   // ---- 切分 / 精修 ----
@@ -395,6 +411,7 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
                   onStartRename={() => setRenamingId(ch.id)}
                   onCommitRename={(title) => commitRename(ch.id, title)}
                   onCancelRename={() => setRenamingId(null)}
+                  onSplit={() => setSplitTarget(ch)}
                 />
               ))}
             </div>
@@ -461,6 +478,20 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
           confirmLabel={t.learn.detail.chaptersEdit.mergeOk}
           cancelLabel={t.common.cancel}
           onConfirm={confirmMergeEdit}
+        />
+      )}
+
+      {/* 拆分选点对话框（F7-b）：从章内候选切点里选一处，拆成两章 */}
+      {splitTarget && (
+        <ChapterSplitDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setSplitTarget(null);
+          }}
+          chapter={splitTarget}
+          doc={doc}
+          busy={saving}
+          onConfirm={confirmSplitEdit}
         />
       )}
     </div>

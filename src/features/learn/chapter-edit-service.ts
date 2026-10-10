@@ -15,6 +15,7 @@ import {
   mergeChapterRange,
   renameChapter,
   reorderChapters,
+  splitChapterAt,
 } from "../../engine/chapter-edit-engine";
 import { rebuildChunks } from "./index-chunks";
 import { relinkAnnotations } from "./annotation-service";
@@ -24,7 +25,12 @@ import { remapMasteryOnChapterEdit } from "./resplit-mastery";
 export type ChapterEdit =
   | { kind: "rename"; chapterId: string; title: string }
   | { kind: "merge"; fromId: string; toId: string }
-  | { kind: "reorder"; orderedIds: string[] };
+  | { kind: "reorder"; orderedIds: string[] }
+  /**
+   * 把一章按绝对偏移拆为两章（F7-b）。`offset` 是 `doc.textPreview` 绝对偏移，
+   * 由 UI 从 `splitCandidatesOf` 给出的候选里选；`newTitle` 是下半章标题（缺省沿用原章标题）。
+   */
+  | { kind: "split"; chapterId: string; offset: number; newTitle?: string };
 
 export type ChapterEditErrorKind = "no-chapters" | "chapter-not-found" | "invalid-range";
 
@@ -59,7 +65,7 @@ export interface ChapterEditResult {
   /**
    * 【F5 第 2 条】划线批注按 `quote` 重新定位成功的条数。
    *
-   * 只有 merge 会改 `contentRef`（rename 改 heading、reorder 改顺序 → 区间不动），
+   * merge 与 split 都会改 `contentRef`（rename 改 heading、reorder 改顺序 → 区间不动），
    * 故 rename / reorder 恒为 0；但统一调用一次 `relinkAnnotations` 而不是按操作
    * 分支判断 —— 少一个分支就少一类漏迁移（与「结构已变必重建 chunk」同思路）。
    */
@@ -71,7 +77,7 @@ export interface ChapterEditResult {
 /**
  * 应用一次章节编辑并落库。
  *
- * 校验失败（无章节 / 章 id 不存在 / 合并区间无效）抛 `ChapterEditError`，
+ * 校验失败（无章节 / 章 id 不存在 / 合并区间无效 / 拆分位置无效）抛 `ChapterEditError`，
  * **不写入任何数据**；rename 与 reorder 检测到无实际变化时短路返回（零写盘）。
  */
 export async function applyChapterEdit(
@@ -115,6 +121,18 @@ export async function applyChapterEdit(
       if (next.every((c, i) => c.id === chapters[i].id)) {
         return unchanged(chapters);
       }
+      break;
+    }
+    case "split": {
+      if (!chapters.some((c) => c.id === edit.chapterId)) {
+        throw new ChapterEditError("chapter-not-found", "章节不存在。");
+      }
+      const r = splitChapterAt([...chapters], edit.chapterId, edit.offset, edit.newTitle);
+      // offset 未落在章区间内部（落在端点 / 越界）→ 会产生空章 = 无效拆分。
+      if (!r.newChapterId) {
+        throw new ChapterEditError("invalid-range", "拆分位置无效。");
+      }
+      next = r.chapters;
       break;
     }
   }
