@@ -245,6 +245,19 @@ async function writeBackup(
     bump("annotations");
   }
 
+  // ===== 章级前置人工覆盖（F7 范围 4）=====
+  // 与 sections / restatements 同口径：章不在文件里 → 跳过并计数。
+  // 冲突规则 = 「同 id 取导入侧」（覆盖记录无时间戳可比，与 chapters 的 mergeById 同款）；
+  // `added` / `removed` 里指向范围外章的条目**不过滤** —— 它们是惰性孤儿，
+  // 消费侧（计划引擎）本来就按「章是否还在」兜底，此处过滤反而会静默丢人工意图。
+  const prereqOverrides = (data.prereqOverrides ?? []).filter((o) =>
+    keep(o.chapterId, chapterIds, stats),
+  );
+  for (const override of prereqOverrides) {
+    await storage.savePrereqOverride(override);
+    bump("prereqOverrides");
+  }
+
   // ===== 目标 =====
   for (const goal of data.goals) {
     await storage.saveGoal(goal);

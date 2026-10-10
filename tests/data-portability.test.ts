@@ -72,7 +72,7 @@ function errText(err: unknown): string {
 const PARA = "编码器把输入序列映射为隐向量，再由解码器逐词生成输出。";
 const FULL_TEXT = `${PARA}\n\n中间插一段别的说明。\n\n${PARA}\n`;
 
-/** 一个覆盖全部 20 类实体的样本（每类 ≥2 条）。 */
+/** 一个覆盖全部 21 类实体的样本（每类 ≥2 条）。 */
 async function makeFullSample(storage: StorageAdapter): Promise<void> {
   // 1 documents（2 份；一含 overview/analysis，一含 textPreview）
   await storage.saveDocument({
@@ -492,6 +492,13 @@ async function makeFullSample(storage: StorageAdapter): Promise<void> {
     objective: { paperId: "paper-2", totalScore: 0.72 },
     createdAt: 1_700_003_900_000,
   });
+
+  // 21 prereqOverrides（F7 范围 4：章级前置的人工覆盖）
+  await storage.savePrereqOverride({
+    chapterId: "ch-2",
+    added: ["ch-1"],
+    removed: [],
+  });
 }
 
 /** 只含空库能承载的最小备份（用于「空备份」用例）。 */
@@ -585,8 +592,9 @@ await check("TC-UC01-02 counts 与 data 同源（不变量 1）+ 派生口径正
   assert.equal(file.counts.capabilityItems, 2);
   assert.equal(file.counts.learnerUnits, 2);
   assert.equal(file.counts.profile, 1);
-  assert.equal(COUNT_KEYS.length, 20);
-  assert.equal(BACKUP_FIELDS.length, 20);
+  assert.equal(file.counts.prereqOverrides, 1);
+  assert.equal(COUNT_KEYS.length, 21);
+  assert.equal(BACKUP_FIELDS.length, 21);
 });
 
 await check("TC-UC01-03 空库可导出（所有 counts 为 0）", async () => {
@@ -607,7 +615,7 @@ await check("TC-UC02-01 非 Tauri 环境不触碰桌面通道（守卫返回兜�
   assert.deepEqual(await backupList(), []);
 });
 
-await check("TC-EDGE-06 白名单覆盖率：20 个字段在样本里都有非空内容", async () => {
+await check("TC-EDGE-06 白名单覆盖率：21 个字段在样本里都有非空内容", async () => {
   const s = new InMemoryStorage();
   await makeFullSample(s);
   const { file } = await exportBackup(s);
@@ -961,6 +969,33 @@ await check("TC-UC06-01…04 四类非法输入各自归类", async () => {
   assert.equal(ancient.ok ? "" : ancient.kind, "unsupported-version");
 });
 
+await check("TC-UC06-06 旧包缺 prereqOverrides 键仍可导入（缺键 ≡ 空集合）", async () => {
+  // `prereqOverrides` 是 2026-10-10（F7 范围 4）才进白名单的 —— 早于它的 v1 备份
+  // `data` 与 `counts` 里都没有这个键。校验必须放行：否则「防静默丢数据」的守卫
+  // 会反过来拒收合法旧包（把能导入的包判成 corrupt）。
+  const s = new InMemoryStorage();
+  await makeFullSample(s);
+  const { json } = await exportBackup(s);
+  const legacy = JSON.parse(json) as Record<string, unknown>;
+  delete (legacy.data as Record<string, unknown>).prereqOverrides;
+  delete (legacy.counts as Record<string, unknown>).prereqOverrides;
+
+  const parsed = parseBackup(JSON.stringify(legacy));
+  assert.ok(parsed.ok, `旧包应可解析，实际：${parsed.ok ? "" : parsed.kind}`);
+
+  // 端到端：旧包导入不得因缺键而抛错，且不产生任何覆盖记录。
+  const target = new InMemoryStorage();
+  const imported = await importBackup(target, JSON.stringify(legacy), { mode: "merge" });
+  assert.ok(imported.ok, "旧包应可导入");
+  assert.equal((await target.listPrereqOverrides()).length, 0);
+
+  // 容错不得削弱守卫：声明缺失但实际有内容 → 仍被判 corrupt。
+  const tampered = JSON.parse(json) as Record<string, unknown>;
+  delete (tampered.counts as Record<string, unknown>).prereqOverrides;
+  const caught = parseBackup(JSON.stringify(tampered));
+  assert.equal(caught.ok ? "" : caught.kind, "corrupt", "未声明的有内容字段必须被抓");
+});
+
 await check("TC-UC06-05 拒绝发生在写入之前（写方法零调用 + 库逐字节不变）", async () => {
   const s = new InMemoryStorage();
   await makeFullSample(s);
@@ -1101,7 +1136,7 @@ await check("TC-EDGE-04 空备份：merge 是 no-op，replace 清空", async () 
   assert.equal((await replaceTarget.listEvidence()).length, 0);
 });
 
-await check("TC-EDGE-05 clearAll 在 local 后端：22 个 key 全清、偏好与迁移标记保留", async () => {
+await check("TC-EDGE-05 clearAll 在 local 后端：全部 plos key 清空、偏好与迁移标记保留", async () => {
   const { LocalStorageAdapter } = await import("../src/storage/local.ts");
   const store = installFakeLocalStorage();
   try {

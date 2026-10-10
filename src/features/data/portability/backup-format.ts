@@ -29,6 +29,7 @@ import type {
   Paper,
   PaperAnswers,
   PaperResult,
+  ChapterPrereqOverride,
   Restatement,
   Section,
   SourceDocument,
@@ -84,6 +85,15 @@ export interface BackupData {
   capabilityItems: Record<string, CapabilityItem[]>;
   capabilityRuns: CapabilityRun[];
   capabilityReports: CapabilityReport[];
+  /**
+   * 章级前置的人工覆盖（F7 范围 4）。
+   *
+   * ⚠️ 类型上**可选**：本键是本轮（2026-10-10）才进白名单的，之前导出的 v1 包不含它。
+   * `EXPORT_VERSION` 不进版本号是**刻意**的 —— 语义是「新增一个缺省即空的可选集合」，
+   * 旧包缺键与空数组等价，无需迁移；若升版本反而会把「能导入的旧包」变成
+   * `unsupported-version`（详见 `countsEqual` 的容错说明）。
+   */
+  prereqOverrides?: ChapterPrereqOverride[];
 }
 
 /** 各实体条数 —— 导入前的预检真源（由 `countsOf` 从 `data` 派生）。 */
@@ -110,6 +120,7 @@ export interface EntityCounts {
   capabilityItems: number;
   capabilityRuns: number;
   capabilityReports: number;
+  prereqOverrides: number;
 }
 
 /** 完整导出包。 */
@@ -165,6 +176,8 @@ const FIELD_SPECS: readonly FieldSpec[] = [
   { key: "capabilityItems", shape: "record" },
   { key: "capabilityRuns", shape: "array" },
   { key: "capabilityReports", shape: "array" },
+  // F7 范围 4：本轮新增 → 旧包缺此键，故 optional（缺省 ≡ 空集合）。
+  { key: "prereqOverrides", shape: "array", optional: true },
 ];
 
 /** 白名单字段名（顺序与 `FIELD_SPECS` 一致）。 */
@@ -192,6 +205,7 @@ export const COUNT_KEYS: readonly (keyof EntityCounts)[] = [
   "capabilityItems",
   "capabilityRuns",
   "capabilityReports",
+  "prereqOverrides",
 ];
 
 /** 解析结果（判别式，不用异常做控制流）。 */
@@ -234,12 +248,24 @@ export function countsOf(data: BackupData): EntityCounts {
     capabilityItems,
     capabilityRuns: data.capabilityRuns.length,
     capabilityReports: data.capabilityReports.length,
+    // `?? 0`：`countsOf` 也会被 `parseBackup` 用在**旧包**上（那时本键不存在）。
+    prereqOverrides: data.prereqOverrides?.length ?? 0,
   };
 }
 
-/** 两个 counts 是否逐字段相等（导入完整性校验用）。 */
+/**
+ * 两个 counts 是否逐字段相等（导入完整性校验用）。
+ *
+ * ⚠️ **缺键按 0 计**（`?? 0`）是刻意的向后兼容：新版本给 `EntityCounts` 加了键之后，
+ * 旧版本导出的包其 `counts` 里没有该键 —— 严格 `===` 会把它判成 `corrupt`，
+ * 于是「防静默丢数据」的守卫反过来**拒收合法旧包**。
+ *
+ * 这不削弱守卫：被校验的 `a` 一律由 `countsOf(data)` 现算，
+ * 「文件声明缺失 + 实际有内容」仍然会被抓（`5 !== 0`）；只有
+ * 「缺失 + 实际为空」才放行，而两者本就是同一信息。
+ */
 export function countsEqual(a: EntityCounts, b: EntityCounts): boolean {
-  return COUNT_KEYS.every((k) => a[k] === b[k]);
+  return COUNT_KEYS.every((k) => (a[k] ?? 0) === (b[k] ?? 0));
 }
 
 /** 补零到两位（文件名里的时间戳）。 */

@@ -76,6 +76,8 @@ export async function collectSnapshot(storage: StorageAdapter): Promise<Snapshot
   // 全量读取的三类（不传维度参数 = 全量）
   const knowledgeUnits = await storage.listKnowledgeUnits();
   const knowledgeRelations = await storage.listRelations();
+  // 章级前置人工覆盖（F7 范围 4）：同为「不分文档」的全量实体，读回即按 chapterId 有序。
+  const prereqOverrides = await storage.listPrereqOverrides();
   // ⚠️ D4：默认**不含向量本体**。读路径本就不回传 vector，这里再显式剥一次，
   // 保证「无论哪个适配器实现都不把 MB 级向量带进包」。
   const embeddings: Embedding[] = (await storage.listEmbeddings()).map(
@@ -121,6 +123,7 @@ export async function collectSnapshot(storage: StorageAdapter): Promise<Snapshot
     capabilityItems,
     capabilityRuns,
     capabilityReports,
+    prereqOverrides,
   };
 
   // 孤儿检测：用全量表与「遍历收集到的父级 id 集合」做差集。

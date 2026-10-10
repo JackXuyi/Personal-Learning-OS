@@ -76,7 +76,7 @@ export interface PackManifest {
   contentHash: string;
 }
 
-/** ⚠️ 白名单 6 项 —— 多一个字段都要走决策（与备份的 20 项互为反向）。 */
+/** ⚠️ 白名单 6 项 —— 多一个字段都要走决策（与备份的 21 项互为反向）。 */
 export interface PackData {
   documents: SourceDocument[];
   chaptersByDocument: Record<string, Chapter[]>;
