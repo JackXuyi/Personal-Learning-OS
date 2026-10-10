@@ -32,7 +32,7 @@
 | 阶段 | 名称 | 闭环可跑通 | 关键缺口 |
 |---|---|---|---|
 | S1 | 导入资料 | ✅ | ~~扫描件 PDF 解析为 0 字符（pdfjs 局限）~~ ✅ **已收口（2026-09-21 实测）**：空文本抛 `PdfNoTextError` → `pdf-no-text` → UI 明确提示「疑似扫描件，请改用粘贴文本」；**仍无 OCR**（只是不再静默） |
-| S2 | 切分成章节 | ✅ | ~~🌕 **人工微调原语已实现但无 UI**（rename/merge/reorder 零调用点）~~ ✅ **已交付（F7-a 章节编辑）**：`SplitTab` 已接线改名 / 区间合并 / 拖拽排序（`kind: 'rename' \| 'merge' \| 'reorder'`，见 `detail/SplitTab.tsx:177/187/195`） |
+| S2 | 切分成章节 | ✅ | ~~🌕 **人工微调原语已实现但无 UI**（rename/merge/reorder 零调用点）~~ ✅ **已交付（F7-a/F7-b 章节编辑）**：`SplitTab` 已接线改名 / 区间合并 / 拖拽排序（`kind: 'rename' \| 'merge' \| 'reorder'`，见 `detail/SplitTab.tsx`）+ **手动拆分**（`kind: 'split'`，2026-10-10，`ChapterSplitDialog`） |
 | S3 | 章节学习 | ✅ | 章内概念图谱需手动触发（**仍开放**） |
 | S4 | 章节测试 | ✅ | 主观题强依赖 AI，无 AI 时剔除不计分（**仍开放**） |
 | S5 | 整本综合测 | ✅ | 同上（**仍开放**） |
@@ -508,7 +508,7 @@ not-started ──打开阅读──▶ learning ──标记学完(markReady)�
 
 | # | 缺口 | 证据 | 建议 |
 |---|---|---|---|
-| ~~4~~ | ~~**章节人工微调无 UI**~~ ✅ **已交付（F7-a 章节编辑）** | 原证据：`renameChapter` / `mergeChapters` / `reorderChapters` 零调用点（行号已漂移；`mergeChapters` 已更名 `mergeChapterRange`） | ✅ 已按原建议在 `SplitTab` 加**改名 / 区间合并 / 拖拽排序**，操作即落库 |
+| ~~4~~ | ~~**章节人工微调无 UI**~~ ✅ **已交付（F7-a / F7-b 章节编辑）** | 原证据：`renameChapter` / `mergeChapters` / `reorderChapters` 零调用点（行号已漂移；`mergeChapters` 已更名 `mergeChapterRange`） | ✅ 已按原建议在 `SplitTab` 加**改名 / 区间合并 / 拖拽排序**（F7-a），并补**手动拆分**（F7-b，2026-10-10），操作即落库 |
 | ~~5~~ | ~~**`deadlineAt` 不参与排程**~~ ✅ **已交付（F2 时间维度）** | 原证据：`estimateEtaMin` 无 deadline 输入 | ✅ 已按原建议加「按截止期反推每日配额」（`plan-quota.ts::dueTodayMin`）+ 落后预警（`plan.behindWarning`）；见 `docs/plan-time-dimension-design-2026-09.md` |
 | ~~6~~ | ~~**扫描件 PDF 解析为 0 字符**~~ ✅ **已交付（0 字符检测）** | 原证据：`pdf.ts` 仅 pdfjs 提取，无 OCR | ✅ 已按原建议加 0 字符检测 → `PdfNoTextError` → UI 提示「疑似扫描件，请改用粘贴文本」。⚠️ **OCR 兜底仍未做**（属 `roadmap` F8 范围 2，仍在规划） |
 | ~~7~~ | ~~**达标后无收口**~~ **部分交付（2026-09-21 实测）** | 原证据：`GoalDetailPage` 仅显示就绪度 | **已具备**：全达标态（首页 / `/plan` 的 🎉 卡 +「去测评巩固」）、复盘材料（F3 `/progress` 趋势与弱点榜、F6 能力报告）。**仍开放**：无能力证书 / 可复用产出清单、无「下一步目标」引导、无达标总结页（原建议的「下一目标建议」仍未做） |

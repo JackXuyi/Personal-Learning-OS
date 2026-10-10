@@ -1,11 +1,11 @@
-# 章节人工编辑（重命名 / 合并 / 拖拽排序）技术方案
+# 章节人工编辑（重命名 / 合并 / 拖拽排序 / 拆分）技术方案
 
 | 字段 | 内容 |
 |------|------|
 | 作者 | Agent / 许一 |
-| 日期 | 2026-09-14 |
-| 状态 | 已实施（2026-09-14） |
-| 关联需求 | `docs/roadmap-next-features-plan-2026-09.md` F7-a（P2 · 小~中）；`docs/business-flow-end-to-end-2026-09.md` 缺口 #4 |
+| 日期 | 2026-09-14（F7-b 拆分追加于 2026-10-10，见 §13） |
+| 状态 | 已实施（2026-09-14；F7-b 章节拆分 2026-10-10） |
+| 关联需求 | `docs/roadmap-next-features-plan-2026-09.md` F7-a / F7-b（P2 · 小~中）；`docs/business-flow-end-to-end-2026-09.md` 缺口 #4 |
 
 ---
 
@@ -63,7 +63,7 @@
 | 不做项 | 理由 / 归属 |
 |--------|-------------|
 | 删除章节 | 用户未要求；且删除涉及试卷/证据级联，语义需单独定义 → 留给 F7 后续迭代 |
-| 手动拆分一章为两章 | 引擎无原语，需新算法 → F7-b |
+| ~~手动拆分一章为两章~~ | ✅ **已于 2026-10-10 交付（F7-b）** —— 引擎补 `splitChapterAt` 原语 + 编辑模式选点对话框，详见 §13 |
 | 跨文档组合学习单元/路径 | 涉及新的领域对象 → F7-c |
 | 撤销 / 重做 | 操作即保存模型下需引入编辑栈；本次不做 |
 | 批量重命名、编辑历史审计 | 无需求 |
@@ -1066,3 +1066,85 @@ export default function SplitTab({ doc, chapters, learner, onChanged }) {
 
 - **typecheck 非 0 error**：`src/features/settings/AIModelsSection.tsx:55-57` 的 `bannerTitle` / `bannerDesc` / `bannerTone` 声明未使用，属 **HEAD 既存债**（该文件最后修改于 `a230655` / 2026-09-11，与本次改动无关），未顺手修改。
 - **UI 端到端未由 Agent 验证**：按 `rules/no-headless-browser-validation`，编辑模式的实际交互（拖拽手感、确认框、刷新持久化）需用户启动 `npm run dev` / `npm run tauri dev` 手工验收（见 §2.3 清单）。
+
+---
+
+## 13. 追加：F7-b 章节拆分（2026-10-10）
+
+> 本节是 §2.2 里被列为「非目标 → F7-b」的**手动拆分**的补做记录。F7-a（重命名 / 合并 / 排序）
+> 的决策与契约全部沿用，本节只描述拆分新增的部分。
+
+### 13.1 决策
+
+| # | 决策项 | 结论 | 理由 |
+|---|--------|------|------|
+| D7 | 拆分位置怎么选 | **对话框列出章内候选切点，用户点选** | 拆分位置本质是一个**正文偏移**，用户要先看到「从这里之后的文本成为新章」才好判断；行内放不下 |
+| D8 | 候选切点从哪来 | **空行分段处优先 → 单个换行 → 区间中点**（引擎纯函数 `splitCandidatesOf`） | 与 `splitDocument` 的分段口径一致；总能给出至少一个候选（中点兜底），不会出现「无从下手」 |
+| D9 | 掌握度归属 | **原章保留 id ⇒ 掌握度与学习历史天然留在上半章；新章从零开始**，不做任何掌握度迁移 | `learnerState.byUnit` 以 `chapterId` 为键；保留 id 是最省且最符合直觉的语义（重切分的 1→2 匹配同此结论） |
+| D10 | 新章标题 | UI 传 `splitNewTitle(原标题)`（zh「X（续）」/ en「X (cont.)」），引擎缺省沿用原标题 | 两章同名会让列表难辨；文案由 UI 映射（引擎不 import i18n 值） |
+
+### 13.2 引擎 API（`src/engine/chapter-edit-engine.ts` 追加）
+
+```ts
+export interface SplitChapterResult {
+  chapters: Chapter[];
+  /** 新建的下半章 id；offset 无效 / 章不存在而未拆分时为 undefined。 */
+  newChapterId?: string;
+}
+
+/** 按绝对偏移把一章切为两章（纯函数，不改入参）。offset 须严格落在 contentRef 内部。 */
+export function splitChapterAt(
+  chapters: Chapter[],
+  chapterId: string,
+  offset: number,
+  newTitle?: string,
+): SplitChapterResult;
+
+/** 章内可拆分候选（绝对偏移，升序去重，严格落在区间内部）；空行 → 换行 → 中点。 */
+export function splitCandidatesOf(
+  text: string,
+  range: ChapterRange,
+  max?: number, // 默认 SPLIT_CANDIDATE_LIMIT = 40
+): number[];
+```
+
+### 13.3 字段归属契约（逐字段）
+
+| 字段 | 上半章（保留原 id） | 下半章（新 id） |
+|------|---------------------|-----------------|
+| `id` | **原 id 不变** | `newId("chp")` |
+| `title` | 原标题不变 | `newTitle`（空 / 缺省 → 沿用原标题） |
+| `contentRef` | `{ start, offset }` | `{ offset, end }`（两段无缝相接、并集 = 原区间） |
+| `keyPoints` / `keyPointRefs` | 有引用的按 `ref.start < offset` 归属；**无引用的要点无偏移信息 → 保守留上半**；两两对齐保持同步契约 | 同上按偏移归属；无引用则为 `[]` |
+| `unitIds` | **全部保留**（概念无偏移信息） | `[]` |
+| `status` | 原状态不变 | `not-started` |
+| `createdAt` | 原值 | 取原章 `createdAt`（内容自那时起存在） |
+| `order` | 由 `renumberChapters` 重写 1..n | 同左 |
+
+**offset 无效**（`≤ start` 或 `≥ end`，或 `NaN`，或章不存在）→ 引擎**原样返回**（`newChapterId` 为 undefined），服务层据此抛 `ChapterEditError("invalid-range")`，不写任何数据。
+
+### 13.4 服务层与 UI
+
+- `chapter-edit-service.ts`：`ChapterEdit` union 增 `{ kind: "split"; chapterId; offset; newTitle? }`，`switch` 补分支；执行序与 rename / merge / reorder **完全一致**（校验 → 纯函数 → 掌握度迁移（拆分恒为 no-op）→ `saveChapters` → `rebuildChunks` → `relinkAnnotations`）。拆分也改 `contentRef`，故 `annotationsRelinked/dropped` 可能非 0（划线段落并未移动，通常为 0，但统一走一次重定位，不按操作分支裁剪）。
+- `detail/ChapterEditRow.tsx`：非重命名态在重命名按钮右侧加**拆分按钮**（`Scissors`，`data-testid="chapter-split-btn"`）。
+- `detail/ChapterSplitDialog.tsx`（新增）：列出 `splitCandidatesOf` 的候选（数字序号 + 该位置起的新章开头预览），单选后确认。
+- `detail/SplitTab.tsx`：`splitTarget` 状态 + `ChapterSplitDialog` 挂载 + `confirmSplitEdit` 出口（走 `runEdit`，与其他编辑同一出口）。
+- i18n `learn.detail.chaptersEdit` 补 8 键（zh / en 成对）。
+
+### 13.5 成功标准（验收）
+
+1. 编辑模式下任意章出现拆分按钮；打开对话框能看到候选切点与各自的新章开头预览；
+2. 选中并确认后，章数 +1，两章区间无缝相接（`上半.end === 下半.start`），正文零丢失；
+3. **原章掌握度与学习记录完全不变**（id 未变），其他章的掌握度也不受影响；新章 `status` 为 `not-started`；
+4. 拆分后该文档 chunk 已重建；
+5. `npm run typecheck` 0 error；`npm run test:chapters` 全绿；`npm run test:library` 不回归；`npm run test:i18n` 通过。
+
+### 13.6 测试与门禁
+
+- `tests/chapter-edit.test.ts` 增 **E 组**（引擎拆分原语 + 候选切点，13 项）与 **F 组**（服务层拆分落库 / 掌握度不受影响 / 错误，2 项），合计 **40 项通过**。
+- 门禁实测：`typecheck` 0 error · `layer:check` 违规 0 / 新增环 0 · `ui:check` 原生下拉 0 / sticky 残影 0 · `test:i18n` 通过。
+- ⚠️ UI 交互（对话框选点、刷新持久化）仍按 `rules/no-headless-browser-validation` 由用户手工验收。
+
+### 13.7 有意不做（沿用本方案口径）
+
+- **撤销 / 重做**、**按标题 / 句号自动切**：前者需编辑栈（同 §2.2），后者会把「用户选区」变成算法猜测，本次只给「分段边界 + 中点兜底」的显式候选。
