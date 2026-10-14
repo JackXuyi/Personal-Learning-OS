@@ -200,7 +200,7 @@ Document ──splitDocument──▶ Chapter[]
 | **阅读页行为** | 打开即 `not-started → learning` 状态流转（`ChapterReaderPage.tsx:60-64`）；左侧章正文（`contentRef` 切片，不复制原文）；右侧要点卡 |
 | **标记学完** | `markReady:104` → `status: ready` |
 | **章级复习入口** | `ChapterReaderPage.tsx:116 markReviewed` → 调 `applyKeyPointRating`（**这里是对的**：只写调度 + confidence，不动 mastery） |
-| **概念图谱** | `/learn/chapter/:chapterId/graph`（`ChapterGraphPage`），基于 `KnowledgeUnit` + `KnowledgeRelation`，react-flow 渲染 |
+| **概念图谱** | 章级：`/learn/chapter/:chapterId/graph`（`ChapterGraphPage`）；跨资料：`/graph`（`CrossDocGraphPage`，2026-10-14 交付，按资料筛选 + 核心子图）。两者同源于全局 `KnowledgeGraph`（`KnowledgeUnit` + `KnowledgeRelation`），react-flow 渲染 |
 | **检索辅助** | `hybridSearch`（`ai/retrieval/hybrid-search.ts:63`）：FTS `fullTextSearch:76` + 向量 `cosineTopK:89` → `fuseRankings`（`rrf.ts`），RRF 融合，失败静默降级 FTS。调用点 `LibraryPage:131`、`CommandPalette:123` |
 
 ---
@@ -468,6 +468,7 @@ not-started ──打开阅读──▶ learning ──标记学完(markReady)�
 | `/learn/doc/:docId` | DocumentDetailPage | S2 | 切分预览 / AI 分析（SplitTab 等） |
 | `/learn/chapter/:chapterId` | ChapterReaderPage | S3 | 阅读 + 标记学完 + 要点复习 |
 | `/learn/chapter/:chapterId/graph` | ChapterGraphPage | S2/S3 | 章内概念图谱 |
+| `/graph` | CrossDocGraphPage | S2/S3 | 跨资料概念图谱（2026-10-14）：按资料筛选 / 单击聚焦 / 双击回原文 / 发起概念复习 |
 | `/quiz` | QuizCenterPage | S4/S5 | 试卷中心（历史/继续） |
 | `/quiz/new` | NewQuizPage | S4/S5 | 三步出卷向导 |
 | `/quiz/:paperId` | QuizAnswerPage | S4 | 作答（草稿/键盘流） |
@@ -544,6 +545,13 @@ not-started ──打开阅读──▶ learning ──标记学完(markReady)�
 > ⚠️ **2026-10-10 三追加**：上一段的「`roadmap` 的 F7 余项」进一步收窄 —— **F7 范围 2（章节拆分）
 > 与范围 4（前置关系人工调整）均已交付**，F7 只剩 **F7-c 独立学习单元实体**；F8 仍余 OCR / EPUB / URL。
 > 本文件 §六 缺口清单 #4（章节人工微调）与 §S2 行已同步。
+>
+> ⚠️ **2026-10-14 追加**：概念层多了一个**跨资料口径**的出口 —— `/graph`（`CrossDocGraphPage`）
+> 把全库概念放上同一张图（按资料筛选 / 单击聚焦一跳邻域 / 双击回来源资料 / 侧栏发起概念复习）。
+> 它不新建实体、不写库、不调用 AI，纯读既有全局 `KnowledgeGraph`；本文件 §S3「概念图谱」行与
+> §五 路由表已同步。⚠️ 实施期发现的真根因：`KnowledgeUnit.sourceDocumentId` 在真实数据里
+> **恒为 `undefined`**（两条概念抽取管道都不写它）⇒「节点 → 归属资料」链此前根本没接上，
+> 故归属改为三级回退（见 `docs/cross-document-concept-graph-design-2026-10.md` §3.3.1）。
 
 ---
 

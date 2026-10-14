@@ -680,6 +680,13 @@ await check("TC-FLOW-02 关系类型过滤", () => { /* … */ });
 
 `src/features/knowledge/layout.ts`、`ChapterGraphPage.tsx`、`src/features/learn/detail/KnowledgeTab.tsx`、`src/engine/graph-engine.ts`、`src/storage/*`、`src/i18n/messages/*`、`src/domain/*`。
 
+> ⚠️ **时点注（2026-10-14）**：上表是**本方案**（React Flow 绘制层改造）的范围边界，仍成立。
+> 但 `GraphView.tsx` 此后被**另一个特性**改过 —— 跨文档概念图谱页给它加了两个**可选**注入：
+> `documentIdOf?`（宿主提供「单元 → 归属资料」解析，替代 `unit.sourceDocumentId`）与
+> D6-A 修正（侧栏副标题改用不回落裸 id 的 `unitAlias()`；关系清单目标名改用 `other.title`）。
+> 本文件的 §8.5 伪代码与 §8.7 均未包含这两处，属正常演进而非本方案被推翻；见
+> `docs/cross-document-concept-graph-design-2026-10.md` §3.3.1 / §8.4。
+
 ## 9. 任务清单（Tasks）
 
 | ID | 任务 | 依赖 | 复杂度 |
@@ -773,3 +780,4 @@ await check("TC-FLOW-02 关系类型过滤", () => { /* … */ });
 |------|------|------|
 | 2026-09-13 | 初稿（基于用户需求 + 3 项已确认决策 D1/D2/D3） | Agent |
 | 2026-09-13 | 已实施。实施偏差三处（记录于 runbook T2 Notes）：① `NodeVisual` 返回 token 派生 CSS 值而非 Tailwind class（节点主体用内嵌 SVG 精确复刻扁菱形）；② 箭头 marker 由组件层注入（模型层不得 import `MarkerType` 运行时值）；③ `UnitNodeData` 用 type alias 满足 `Record<string, unknown>` 约束。依赖装至 `^12.11.6` | Agent |
+| 2026-10-14 | **§8.7 补时点注**（跨文档概念图谱特性给 `GraphView.tsx` 加了两个可选注入：`documentIdOf?` 与 D6-A 副标题/关系名修正）。本方案结论未被推翻，仅范围边界需说明后续演进 | Agent |

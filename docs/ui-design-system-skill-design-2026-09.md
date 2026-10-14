@@ -203,7 +203,7 @@ NavItemRow / IconTextRow
 | 键盘可达 | 所有可点元素必须有 `focus-visible:ring-2 ring-ring/50`；禁用项用 `<div aria-disabled cursor-not-allowed>`，不进 Tab 序列 |
 | 浮层 | 统一 `overlayBase`/`contentBase`（`ui/dialog.tsx` 导出）或自身纯 CSS 方案；必须 `pointer-events-none`（提示型）或可聚焦（操作型）二选一，不混用 |
 | 状态点 | AI 就绪 = `h-1.5 w-1.5 rounded-full bg-state-mastered`（侧栏）/ `h-2 w-2`（Header），**同一状态在同层级尺寸必须一致** |
-| `data-testid` | 沿用 `playwright-test-ids` 约定：`<区域>-<语义>`，如 `nav-settings`、`nav-graph-placeholder` |
+| `data-testid` | 沿用 `playwright-test-ids` 约定：`<区域>-<语义>`，如 `nav-settings`、`crossdoc-graph-page` |
 
 ---
 
