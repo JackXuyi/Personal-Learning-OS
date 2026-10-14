@@ -11,6 +11,10 @@
  * 绘制层为 React Flow（`@xyflow/react` v12）：平移 / 缩放 / 适配视图由库提供，
  * 布局仍用自研 `computeLayout`（确定性力导向）。图谱 → 元素的映射收在
  * `graph-flow-model.ts`（纯函数，可 node 直跑单测）。
+ *
+ * 归属资料解析：「双击回原文」与侧栏「查看原文」都走 `ownerDocIdOf` —— 优先用宿主
+ * 注入的 `documentIdOf`，缺省才回落 `unit.sourceDocumentId`（跨文档图谱页必须注入，
+ * 见 `docs/cross-document-concept-graph-design-2026-10.md` §3.3.1）。
  */
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -30,7 +34,7 @@ import { relationsOf } from "../../domain";
 import { BandBadge } from "../../components/primitives";
 import { useI18n } from "../../i18n";
 import { bandOf } from "../../engine";
-import { unitTitle } from "../units";
+import { unitAlias } from "../units";
 import { MarkdownBlock } from "../learn/render/markdown-core";
 import { computeLayout, degreeOf, neighborsOf } from "./layout";
 import {
@@ -68,13 +72,25 @@ interface GraphViewProps {
   requiredUnitIds: string[];
   /** 导入后新写入的单元 id（琥珀色虚线外圈提示）。 */
   highlightIds?: string[];
-  /** Detail 态：切到列表并高亮该来源文档（unit.sourceDocumentId 存在时调用）。 */
+  /** Detail 态：双击节点跳到该单元的来源资料（归属解析见 `documentIdOf`）。 */
   onOpenDocument?: (docId: string) => void;
   /**
    * N5 概念层回归：替代默认「/study/session?unit=」跳转，由宿主（章图谱页）
    * 注入带章上下文的复习入口（?chapterId=&unit=）。缺省回退 V1 直链。
    */
   onReviewUnit?: (unitId: string) => void;
+  /**
+   * 宿主注入的「单元 → 归属资料 id」解析（跨文档图谱页必需）。
+   *
+   * ⚠️ 真实数据里 `KnowledgeUnit.sourceDocumentId` **恒为 `undefined`**（两条概念抽取
+   * 管道都不写它，见 `docs/cross-document-concept-graph-design-2026-10.md` §3.3.1），
+   * 所以「双击回原文」与侧栏「查看原文」这两条既有路径在本组件里全靠它判定；
+   * 跨文档页必须注入，否则两个入口会静默失效。
+   *
+   * 缺省回退 `unit.sourceDocumentId`（既有行为）—— 章图谱页 / 资料「概念」Tab
+   * 不传此 prop，行为与改造前逐字节一致。
+   */
+  documentIdOf?: (unit: KnowledgeUnit) => string | undefined;
 }
 
 export default function GraphView({
@@ -84,11 +100,16 @@ export default function GraphView({
   highlightIds = [],
   onOpenDocument,
   onReviewUnit,
+  documentIdOf,
 }: GraphViewProps) {
   const navigate = useNavigate();
   const { m } = useI18n();
   const k = m.knowledge;
   const [focusId, setFocusId] = useState<string | undefined>();
+
+  /** 归属资料的唯一取值口：先问宿主注入，再回落既有字段。 */
+  const ownerDocIdOf = (u?: KnowledgeUnit): string | undefined =>
+    u ? (documentIdOf ? documentIdOf(u) : u.sourceDocumentId) : undefined;
 
   const visibleRelations = useMemo(
     () => graph.relations.filter((r) => isVisibleLink(r.type)),
@@ -130,6 +151,8 @@ export default function GraphView({
 
   const focusUnit = focusId ? graph.units.find((u) => u.id === focusId) : undefined;
   const focusRelations = focusId ? relationsOf(graph, focusId) : [];
+  /** 已知别名的副标题；未命中时整段省略 —— 绝不显示裸 id（AI 提炼的概念不在别名表里）。 */
+  const focusAlias = focusUnit ? unitAlias(focusUnit.id) : undefined;
 
   const relationUnit = (r: KnowledgeRelation): KnowledgeUnit | undefined =>
     graph.units.find((u) => u.id === r.fromId || u.id === r.toId);
@@ -160,9 +183,9 @@ export default function GraphView({
           proOptions={PRO_OPTIONS}
           onNodeClick={(_, node) => setFocusId((prev) => (prev === node.id ? prev : node.id))}
           onNodeDoubleClick={(_, node) => {
-            const unit = graph.units.find((u) => u.id === node.id);
-            if (unit?.sourceDocumentId && onOpenDocument) {
-              onOpenDocument(unit.sourceDocumentId);
+            const docId = ownerDocIdOf(graph.units.find((u) => u.id === node.id));
+            if (docId && onOpenDocument) {
+              onOpenDocument(docId);
             }
           }}
           onPaneClick={() => setFocusId(undefined)}
@@ -196,7 +219,8 @@ export default function GraphView({
                 <BandBadge band={bandOf(masteryByUnit[focusUnit.id] ?? 0)} />
               </div>
               <p className="mt-1 text-xs text-slate-400">
-                {unitTitle(focusUnit.id)} · {k.masteryOf(Math.round((masteryByUnit[focusUnit.id] ?? 0) * 100), degreeOf(graph.relations, focusUnit.id))}
+                {focusAlias ? `${focusAlias} · ` : ""}
+                {k.masteryOf(Math.round((masteryByUnit[focusUnit.id] ?? 0) * 100), degreeOf(graph.relations, focusUnit.id))}
               </p>
               {focusUnit.summary ? (
                 <MarkdownBlock
@@ -217,9 +241,9 @@ export default function GraphView({
                 >
                   {k.review}
                 </button>
-                {focusUnit.sourceDocumentId ? (
+                {ownerDocIdOf(focusUnit) ? (
                   <button
-                    onClick={() => onOpenDocument?.(focusUnit.sourceDocumentId!)}
+                    onClick={() => onOpenDocument?.(ownerDocIdOf(focusUnit)!)}
                     className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
                   >
                     {k.viewSource}
@@ -250,7 +274,7 @@ export default function GraphView({
                           onClick={() => setFocusId(r.fromId === focusUnit.id ? r.toId : r.fromId)}
                           className="min-w-0 truncate text-slate-700 hover:text-indigo-600"
                         >
-                          {other && other.id !== focusUnit.id ? unitTitle(other.id) : other?.title}
+                          {other ? other.title : ""}
                         </button>
                         <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">
                           {label}

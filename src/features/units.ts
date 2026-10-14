@@ -4,8 +4,8 @@
  * i18n 收敛（docs/i18n-design-2026-09.md §5）：
  * - 枚举 UI 标签（kind / action / goalType / importance）已全部迁入字典
  *   `m.units.*`，本文件不再持有任何标签表；
- * - 仅保留「数据性」工具：单元标题回退（unitTitle，内容数据不随界面语言切换）
- *   与达标阈值（GOAL_TARGET）。
+ * - 仅保留「数据性」工具：单元标题回退（unitTitle / unitAlias，内容数据不随界面
+ *   语言切换）与达标阈值（GOAL_TARGET）。
  */
 import { MASTERY_THRESHOLD } from "../domain";
 
@@ -27,6 +27,18 @@ const UNIT_TITLES: Record<string, string> = {
 /** 知识单元中文名（回退到原始 id）—— 数据性回退，不随界面语言切换。 */
 export function unitTitle(unitId: string): string {
   return UNIT_TITLES[unitId] ?? unitId;
+}
+
+/**
+ * 已知别名的单元 id → 中文别名；**未知返回 `undefined`（不回落 id）**。
+ *
+ * 与 `unitTitle` 的分工：`unitTitle` 是「总要给个名字」的回退（`?? unitId`），供
+ * CommandPalette / ReviewSession / Assessment 等需要占位的场景；`unitAlias` 是
+ * 「没有别名就不显示」，供图谱侧栏这类**显示裸 id 反而更糟**的场景 —— AI 从正文
+ * 提炼的概念（绝大多数）不在静态别名表里，回落 id 就是一串 `unit_m8f2k1…`。
+ */
+export function unitAlias(unitId: string): string | undefined {
+  return UNIT_TITLES[unitId];
 }
 
 /**
