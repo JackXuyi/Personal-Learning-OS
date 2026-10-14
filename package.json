@@ -59,6 +59,7 @@
     "test:ai": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/ai-pipeline.test.ts",
     "test:graph": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/graph-split.test.ts",
     "test:flow": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/graph-flow-model.test.ts",
+    "test:xdoc": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/cross-doc-graph.test.ts",
     "test:prereq": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/planner-prereq.test.ts",
     "test:prereqoverride": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/chapter-prereq-override.test.ts",
     "test:aitask": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/ai-task.test.ts",

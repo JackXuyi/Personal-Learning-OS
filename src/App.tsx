@@ -6,6 +6,7 @@ import LibraryPage from "./features/learn/LibraryPage";
 import DocumentDetailPage from "./features/learn/DocumentDetailPage";
 import ChapterReaderPage from "./features/learn/ChapterReaderPage";
 import ChapterGraphPage from "./features/knowledge/ChapterGraphPage";
+import CrossDocGraphPage from "./features/knowledge/CrossDocGraphPage";
 import LegacyLearnRedirect from "./features/learn/LegacyLearnRedirect";
 import QuizCenterPage from "./features/quiz/QuizCenterPage";
 import NewQuizPage from "./features/quiz/NewQuizPage";
@@ -43,6 +44,8 @@ export default function App() {
           {/* 旧路径兼容：/learn/<id> 与 /learn/<id>/graph 自动判定为章节链接或资料详情 */}
           <Route path="learn/:legacyId" element={<LegacyLearnRedirect />} />
           <Route path="learn/:legacyId/graph" element={<LegacyLearnRedirect variant="graph" />} />
+          {/* 跨资料概念图谱：原侧栏 N5 占位项激活（单章 / 单资料图谱各有既有页面） */}
+          <Route path="graph" element={<CrossDocGraphPage />} />
           {/* V2 试卷中心（P3/P4/P5/P6；出卷向导 / 答题 / 判卷 / 报告） */}
           <Route path="quiz" element={<QuizCenterPage />} />
           <Route path="quiz/new" element={<NewQuizPage />} />

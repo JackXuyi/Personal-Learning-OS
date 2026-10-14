@@ -7,18 +7,16 @@
  * - 图标着色由 `NavLink` 的函数式 children 拿到 `isActive` 决定（className 回调
  *   取不到 children 内部，故不能只靠 className）；
  * - `<nav>` **不得**设 `overflow-*`：CSS 规范中一个方向非 visible 会把另一个方向的
- *   visible 计算成 auto，右侧浮层会被裁切。8 项固定，无需内部滚动。
+ *   visible 计算成 auto，右侧浮层会被裁切。9 项固定，无需内部滚动。
  */
 import { NavLink } from "react-router-dom";
 import { useI18n } from "../../i18n";
 import { useSettingsStore } from "../../stores/useSettingsStore";
-import { NAV_COMING, NAV_ITEMS } from "./nav-items";
+import { NAV_ITEMS } from "./nav-items";
 
 export default function NavSidebar() {
   const { m } = useI18n();
   const providerReady = useSettingsStore((s) => s.providerReady);
-  const ComingIcon = NAV_COMING.icon;
-  const comingEntry = m.nav[NAV_COMING.navKey];
 
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-surface">
@@ -73,18 +71,6 @@ export default function NavSidebar() {
             </NavLink>
           );
         })}
-        <div
-          aria-disabled
-          title={comingEntry.hint}
-          data-testid={`nav-${NAV_COMING.navKey}-placeholder`}
-          className="flex cursor-not-allowed items-center gap-2.5 rounded-md px-3 py-2 text-ink-3"
-        >
-          <ComingIcon className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
-          <span className="truncate text-sm">{comingEntry.label}</span>
-          <span className="ml-auto rounded border border-line bg-subtle px-1.5 py-0.5 font-mono text-[10px]">
-            {NAV_COMING.badge}
-          </span>
-        </div>
       </nav>
       <div className="flex items-center justify-between border-t border-line px-4 py-2.5 text-xs text-ink-3">
         <span>{m.nav.footerHint}</span>

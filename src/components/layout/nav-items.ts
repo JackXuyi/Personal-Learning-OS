@@ -50,13 +50,17 @@ export interface NavItemSpec {
 
 /**
  * 平铺顺序 = 学习闭环，而非模块归类：
- * 今日（现在做什么）→ 计划（接下来学什么）→ 资料库（看什么）→ 测评（检验）
- * → 目标（为何而学）→ 我的画像（我是谁）→ 复盘（过去做得怎么样）→ 设置（系统）。
+ * 今日（现在做什么）→ 计划（接下来学什么）→ 资料库（看什么）→ 图谱（看懂了什么）
+ * → 测评（检验）→ 目标（为何而学）→ 我的画像（我是谁）→ 复盘（过去做得怎么样）
+ * → 设置（系统）。
  */
 export const NAV_ITEMS: NavItemSpec[] = [
   { to: "/", navKey: "home", icon: House, end: true },
   { to: "/plan", navKey: "plan", icon: CalendarDays },
   { to: "/learn", navKey: "library", icon: Library },
+  /* 跨文档概念图谱（原 N5 占位项激活）。
+     方案：docs/cross-document-concept-graph-design-2026-10.md */
+  { to: "/graph", navKey: "graph", icon: Network },
   { to: "/quiz", navKey: "quiz", icon: ClipboardCheck },
   { to: "/goals", navKey: "goals", icon: Target },
   { to: "/learner", navKey: "learner", icon: UserRound },
@@ -66,13 +70,3 @@ export const NAV_ITEMS: NavItemSpec[] = [
   { to: "/memory", navKey: "memory", icon: BrainCircuit },
   { to: "/settings", navKey: "settings", icon: Settings, readyDot: true },
 ];
-
-export interface NavComingSpec {
-  navKey: NavKey;
-  icon: LucideIcon;
-  /** 右侧里程碑徽标。 */
-  badge: string;
-}
-
-/** 占位项：概念图谱（N5 上线前不可点）；渲染为 `<div aria-disabled>`，不进 Tab 序列。 */
-export const NAV_COMING: NavComingSpec = { navKey: "graph", icon: Network, badge: "N5" };
