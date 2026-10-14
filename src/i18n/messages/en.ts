@@ -57,7 +57,7 @@ export const en: Messages = {
     settings: { label: "Settings", hint: "Local-first & AI" },
     /* Enabled later: library (U5 · /learn upgrade); graph (N5 · global graph); learner (U6 · profile) */
     library: { label: "Library", hint: "Documents · import" },
-    graph: { label: "Graph", hint: "Concept relations · soon" },
+    graph: { label: "Graph", hint: "Concept relations across documents" },
     learner: { label: "My Learner", hint: "How the system sees you" },
     /* F3 progress analytics (standalone /progress page). */
     progress: { label: "Progress", hint: "See your growth" },
@@ -1847,6 +1847,31 @@ export const en: Messages = {
       emptyDesc:
         "Once AI is ready, tap “Extract chapter concepts” in the top-right to split this chapter into individually memorable and reviewable concepts (with prerequisite/related links). Without AI configured the concept layer stays empty — nothing is fabricated.",
       goConfigure: "Configure AI →",
+    },
+    /* Cross-document concept graph (README-only entry; docs/cross-document-concept-graph-design-2026-10.md). */
+    crossDoc: {
+      title: "Cross-document concept graph",
+      subtitle:
+        "All concepts from every document on one canvas: filter by document, click to focus, double-click to open the source.",
+      opening: "Opening the concept graph…",
+      stats: (units: number, rels: number, docs: number) =>
+        `${units} concept(s) · ${rels} relation(s) · across ${docs} document(s)`,
+      filterLabel: "Documents",
+      filterAll: "All",
+      filterUnlinked: "Unlinked",
+      filterChip: (title: string, count: number) => `${title} (${count})`,
+      truncated: (shown: number, total: number) =>
+        `Showing the ${shown} most connected concepts (${total} total) · narrow the range with the document filter above to see more`,
+      emptyTitle: "No cross-document concepts yet",
+      emptyDesc:
+        "Concepts are extracted by AI from each chapter body. Until extraction runs this stays empty — nothing is fabricated.",
+      goLibrary: "Go to library →",
+      noSelectionTitle: "No documents selected",
+      noSelectionDesc: "Select at least one document above to see its concept graph.",
+      selectAll: "Select all",
+      loadFailedTitle: "Couldn't load the graph data",
+      retry: "Retry",
+      backToLibrary: "← Back to library",
     },
   },
 

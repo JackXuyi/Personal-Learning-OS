@@ -62,7 +62,7 @@ export const zh = {
     settings: { label: "设置", hint: "本地优先与 AI" },
     /* U5 启用：资料库（升级 /learn 观感）；N5 启用：全局图谱；U6 启用：我的画像 */
     library: { label: "资料库", hint: "文档 · 导入与探索" },
-    graph: { label: "图谱", hint: "概念关系 · 即将上线" },
+    graph: { label: "图谱", hint: "跨资料的概念关系" },
     learner: { label: "我的画像", hint: "系统如何理解我" },
     /* F3 复盘与趋势（独立分析页 /progress）。 */
     progress: { label: "复盘", hint: "看得见成长" },
@@ -1803,6 +1803,29 @@ export const zh = {
       emptyDesc:
         "AI 就绪后点击右上角「提炼本章概念」，把这一章拆成可单独记忆与复习的知识概念（含前置/相关关系）。未配置 AI 时概念层保持空白，不凭空生成。",
       goConfigure: "去配置 AI →",
+    },
+    /* 跨文档概念图谱（README 独有条目；docs/cross-document-concept-graph-design-2026-10.md）。 */
+    crossDoc: {
+      title: "跨资料概念图谱",
+      subtitle: "把全库概念放在一张图上：按资料筛选、单击聚焦、双击回到原文。",
+      opening: "正在打开概念图谱…",
+      stats: (units: number, rels: number, docs: number) =>
+        `${units} 个概念 · ${rels} 条关系 · 覆盖 ${docs} 份资料`,
+      filterLabel: "资料",
+      filterAll: "全部",
+      filterUnlinked: "未关联资料",
+      filterChip: (title: string, count: number) => `${title} (${count})`,
+      truncated: (shown: number, total: number) =>
+        `已显示关联度最高的 ${shown} 个概念（共 ${total} 个）· 用上方资料筛选收窄范围可看到更多`,
+      emptyTitle: "还没有跨资料的概念",
+      emptyDesc: "概念由 AI 从各章正文提炼。提炼完成前这里是空的，不会凭空生成。",
+      goLibrary: "去资料库 →",
+      noSelectionTitle: "未选择任何资料",
+      noSelectionDesc: "勾选上方至少一份资料即可查看它的概念图谱。",
+      selectAll: "全选",
+      loadFailedTitle: "没能读取图谱数据",
+      retry: "重试",
+      backToLibrary: "← 返回资料库",
     },
   },
 
