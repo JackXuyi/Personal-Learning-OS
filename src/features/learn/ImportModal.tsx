@@ -16,6 +16,11 @@
  * 任务 —— 已配 AI 且开关为开时，用 AI 读正文生成资料标题（仅当原标题是兜底值）
  * 与整篇概览。不阻塞结果卡、不进入五阶段进度；由 `auto-enrich.ts` 串行排队，
  * 完成后广播 DOCS_CHANGED_EVENT 刷新资料库列表。
+ *
+ * V5 变更（docs/url-import-design-2026-10.md，F8 范围 5）：新增**第四个**来源 Tab
+ * 「网页」。抓取、编码判定与正文提取全部发生在 `WebPanel` + `web-page.ts` 纯逻辑层，
+ * 本文件只负责「取用面板备好的 unit」—— 查重面板 / 五阶段进度 / 后台向量化 /
+ * 后台 AI 整理因此与其他来源完全一致（零重复实现）。
  */
 import { useEffect, useState } from "react";
 import type { DocumentFormat, SourceDocument } from "../../domain";
@@ -26,6 +31,7 @@ import { useI18n } from "../../i18n";
 import { useAiReady } from "../../hooks/useAiReady";
 import LocalFilePanel from "./import/LocalFilePanel";
 import GithubPanel from "./import/GithubPanel";
+import WebPanel from "./import/WebPanel";
 import type { ImportTab, ImportUnit, ImportSummary, DuplicateAction } from "./import/types";
 import { LIMITS } from "./import/types";
 import { runUnitImport, runBatchImport } from "./import/pipeline";
@@ -149,9 +155,11 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
   ];
   const splitFormat = FORMAT_OPTIONS.find((o) => o.value === format)?.split ?? "auto";
 
-  // --- 本地 / GitHub 面板提升状态 ---
+  // --- 本地 / GitHub / 网页面板提升状态 ---
   const [localFiles, setLocalFiles] = useState<File[]>([]);
   const [ghPreview, setGhPreview] = useState<GithubPreview | undefined>();
+  /** 网页面板抓取成功后上抛的「可导入单位」（null → undefined）。 */
+  const [webUnit, setWebUnit] = useState<ImportUnit | undefined>();
 
   const setPhase = (key: ImportPhaseKey, status: PhaseStatus) =>
     setPhases((prev) => prev.map((s, i) => (PHASE_ORDER[i] === key ? status : s)));
@@ -328,7 +336,12 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
       return;
     }
     // github：解析预览已有 → 拉取正文并合并为一份资料。
-    if (ghPreview) {
+    // ⚠️ 必须带 `tab === "github"` 判断：`ghPreview` 在切走 Tab 后**不会清空**
+    //    （`GithubPanel` 的清空 effect 只依赖 url）。三来源时代每个分支都提前
+    //    return，落不到这里；新增「网页」Tab 后，跑过 github 解析再抓网页会出现
+    //    「点主按钮导入了 github 内容」的错配 —— 这是本次新增第四个来源才暴露的
+    //    既有 fallthrough 隐患，一并收口。
+    if (tab === "github" && ghPreview) {
       setNotice(undefined);
       try {
         const unit = await buildGithubUnit((input, init) => fetch(input, init), ghPreview);
@@ -344,6 +357,21 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
         // 文案由 kind 决定（G2）：不再直接展示错误对象的 message。
         setNotice(githubErrorText(err, fmt.github.errors));
       }
+      return;
+    }
+    // web：正文已在面板侧抓取 + 提取完成，这里只取用已备好的 unit。
+    // ⚠️ 查重必须与 github 分支同构地走一遍 `findConflicts`：那是**导入前**的既有闸门，
+    //    只调 `runSingleImport` 会静默绕过「跳过 / 覆盖 / 仍新建」面板。
+    if (tab === "web" && webUnit) {
+      setNotice(undefined);
+      const conflicts = await findConflicts([webUnit]);
+      if (conflicts.length > 0) {
+        setConflicts(conflicts);
+        setConflictChoices({});
+        setPendingRun({ units: [webUnit], preFailed: [], single: true });
+        return;
+      }
+      await runSingleImport(webUnit);
     }
   }
 
@@ -392,7 +420,8 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
     (tab === "paste" && !content.trim()) ||
     pasteOverLimit ||
     (tab === "local" && localFiles.length === 0) ||
-    (tab === "github" && !ghPreview);
+    (tab === "github" && !ghPreview) ||
+    (tab === "web" && !webUnit);
 
   // 完成态：单份结果卡（含章）→ 开始学习直达首章；否则回资料库。
   const done = single || summary;
@@ -422,6 +451,9 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
           disabled={busy}
         />
       );
+    }
+    if (tab === "web") {
+      return <WebPanel onUnit={(u) => setWebUnit(u ?? undefined)} disabled={busy} />;
     }
     // 粘贴（现状表单）
     return (
@@ -748,6 +780,7 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
               ["paste", fmt.sourceTab.paste],
               ["local", fmt.sourceTab.local],
               ["github", fmt.sourceTab.github],
+              ["web", fmt.sourceTab.web],
             ] as const
           ).map(([key, label]) => (
             <button
