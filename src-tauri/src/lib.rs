@@ -19,6 +19,7 @@ mod db;
 mod llm;
 mod logging;
 mod memory_doc;
+mod net;
 mod tray;
 mod vault;
 
@@ -197,6 +198,10 @@ pub fn run() {
             // documents / chapters）—— 与前端 `tauri.ts::clearAll` 的调用点同一批改，
             // 否则中间态就是运行时 Command not found。
             db::commands::db_clear_library,
+            // 网页抓取（docs/url-import-design-2026-10.md §8.1）
+            // ⚠️ 本仓库唯一一条**用户任意 URL** 的出网命令：webview 的 fetch 受
+            // CORS 约束，任意站点读不到响应体 ⇒ 只能由 Rust 发请求。
+            net::fetch_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the Personal Learning OS shell");

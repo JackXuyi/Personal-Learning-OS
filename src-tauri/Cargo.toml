@@ -32,6 +32,9 @@ dirs = "5"
 tokio = { version = "1", features = ["sync", "time", "process", "io-util", "macros", "rt"] }
 reqwest = { version = "0.12", default-features = false, features = ["stream", "rustls-tls"] }
 futures-util = "0.3"
+# 网页抓取（net.rs）的字节回传编码。0.22.1 本就是 reqwest 的传递依赖
+# （见 Cargo.lock），此处只是提升为直接依赖 ⇒ 零新增 crate。
+base64 = "0.22"
 # RAG 存储层（T5–T6）：SQLite + FTS5 全文检索。
 # 用 query() 运行时 SQL 而非 query!() 宏，故不依赖 DATABASE_URL（离线可编译）；
 # macros 仍需要——models.rs 用 `#[derive(sqlx::FromRow)]` 做行映射。
