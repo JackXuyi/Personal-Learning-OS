@@ -411,7 +411,7 @@ never depend on a network call.
 Every capability the project intends to ship — this doubles as the roadmap.
 `[x]` = shipped · `[ ]` = not yet · `P0` / `P1` / `P2` = priority of the unshipped items.
 
-**41 shipped · 5 not yet.**
+**42 shipped · 4 not yet.**
 
 ### 📥 Ingestion
 
@@ -421,7 +421,7 @@ Every capability the project intends to ship — this doubles as the roadmap.
 - [ ] OCR fallback for scanned PDFs `P2` — pdfjs returns 0 characters on image-only PDFs
 - [x] DOCX parsing — headings recovered from Word style *and* font-size evidence, tables converted to GFM, images skipped (never inlined as base64); legacy `.doc` / encrypted files are rejected with an actionable hint
 - [ ] EPUB parsing `P2`
-- [ ] Fetch a web page by URL `P2`
+- [x] Web page import by URL — the article body is extracted with Readability and heading levels are normalized, so the page's own sections become chapters; sites that need JavaScript rendering fail with an actionable hint instead of importing an empty document
 
 ### ✂️ Splitting & structure
 

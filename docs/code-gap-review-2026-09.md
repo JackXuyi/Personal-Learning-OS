@@ -15,7 +15,7 @@
    - **C 重复实现 ≥3 处**（7 组）—— 违反「同一逻辑跨 ≥3 处必抽取」→ **逐字相同、零语义风险的 3 组已于 2026-09-28 抽取（第 4 批，见 §四）**；余 4 组属 UI 层 `className` / 弹窗 props / `import type` 巨块，需按 `skills/plos-ui-system` 抽公共组件，另批办理
    - **D 文档与代码相反**（3 处）—— 会误导后来者重复造轮子 / 误判门禁状态 → ✅ **2026-09-24 收口（第 1 批，见 §一）**
 3. **最该先动的是 D，不是 A —— ✅ 已于 2026-09-24 收口**（详见 §一）。死代码只是浪费，反向文档会**主动误导**：`tech-debt-closeout §6.1` 声称「无历史时未用 `profile.level` 定 band」，而代码早已用（且 roadmap 把它列为已实施）——两文档自相矛盾。**D1/D2 改文档、D3 改代码**（删死代码后 `typecheck` 归零，README 无需改动即成立）。
-4. **8 项 README `[ ]` 功能缺口逐条实测，全部属实，无一项「已悄悄做完」。**（**时点注**：该 8 项为 2026-09-24 快照；其中 **#4 手动拆分章节**（F7-b，2026-10-10）、**#6 前置关系人工调整**（F7-d，2026-10-10）、**#7 跨文档概念图谱**（2026-10-14）已交付 ⇒ README `[ ]` 现为 **5 项**。剩余 5 项仍属实。）
+4. **8 项 README `[ ]` 功能缺口逐条实测，全部属实，无一项「已悄悄做完」。**（**时点注**：该 8 项为 2026-09-24 快照；其中 **#4 手动拆分章节**（F7-b，2026-10-10）、**#6 前置关系人工调整**（F7-d，2026-10-10）、**#7 跨文档概念图谱**（2026-10-14）、**#3 URL 抓取网页**（2026-10-16）已交付 ⇒ README `[ ]` 现为 **4 项**。剩余 4 项仍属实。）
 5. **A 类已于 2026-09-24 清完（第 2 批）**：删 14 个零消费导出 + `assessment-engine` / `knowledge-engine` **两个整模块** + `separator.tsx` + 一组从未接线的「历史 provider 兜底标签」+ **33 个孤儿 i18n 键**。其中 `canStartCapabilityRun` 走**接线**而非删除（3 处内联判据收归一个门禁 ⇒ 消「两把尺子」）。门禁：`typecheck` exit 0 · 48/48 套件绿 · `npm run build` exit 0。
    ⚠️ **本轮实测推翻了原报告的一处计数**：`settings.models` 下的孤儿 i18n 键不是 8 个而是 **33 个**（`banner` 8 + 早期设置页重构遗留的「运行状态 / 当前配置」卡片文案 25，含整个 `kv{}` 子对象）—— 见 §二 末「漏报更正」。
 
@@ -161,19 +161,21 @@
 
 ---
 
-## 六、功能缺口（README 8 项 `[ ]`，逐条实测）
+## 六、功能缺口（README `[ ]` 逐条实测 —— 基线 8 项，现余 4 项）
 
 **全部属实，无一项「悄悄做完」。**
 
 > **时点注（2026-10-10）**：本表为 2026-09-24 快照。**#4**（F7-b 章节拆分）与 **#6**（F7-d 前置关系人工调整）**已于 2026-10-10 交付**，下表两行已标 ✅；README `[ ]` 由 8 项降为 **6 项**（#1 OCR / #2 EPUB / #3 URL / #5 F7-c / #7 跨文档图谱视图 / #8 加密同步）。原证据句**保留**（记录当时实测），只在结论列加时点标记。
 >
 > **时点注（2026-10-14）**：**#7**（跨文档概念图谱）**已交付** ⇒ README `[ ]` 由 6 项降为 **5 项**（#1 OCR / #2 EPUB / #3 URL / #5 F7-c / #8 加密同步）。⚠️ 实施期发现本表「代码证据」列漏了一层根因：全局图虽有数据，但 `KnowledgeUnit.sourceDocumentId` **在真实数据里恒为 `undefined`**（两条概念抽取管道都不写它）⇒ 「节点 → 归属资料」这条链根本没接上，光补一个视图页不够。见 `docs/cross-document-concept-graph-design-2026-10.md` §3.3.1。原证据句保留。
+>
+> **时点注（2026-10-16）**：**#3**（URL 抓取网页）**已交付** ⇒ README `[ ]` 由 5 项降为 **4 项**（#1 OCR / #2 EPUB / #5 F7-c / #8 加密同步）。⚠️ 原「代码证据」列点到的 `ImportModal.tsx` 的 `web` 是**粘贴格式**这一点仍然成立且未改动 —— 网页来源是**新增的第四个 Tab**，不是把粘贴的格式选项改掉；新增链路为 `WebPanel.tsx` + `web-page.ts` + `html-markdown.ts` + Rust `net::fetch_url`。⚠️ 另一处原证据的隐含前提也被推翻：抓取**不能**复用 `import/github.ts` 那条 webview `fetch` 路径（GitHub 能用只因对方主动发 `Access-Control-Allow-Origin`），任意站点必须落 Rust。见 `docs/url-import-design-2026-10.md`。
 
 | # | 条目 | 代码证据 | 结论 |
 |---|------|----------|------|
 | 1 | 扫描件 PDF OCR 兜底 | `features/learn/import/pdf.ts:14` 注释「扫描件抛 `PdfNoTextError`，**不做 OCR**」；全仓无 `ocr`/`tesseract` | 未实现 |
 | 2 | EPUB 解析 | 仅类型占位：`domain/document.ts:12` 联合成员 `"epub"` + i18n 标签 + renderer 注释；无解析器，`ImportModal.tsx:144-149` `FORMAT_OPTIONS` 无 epub | 未实现（仅占位） |
-| 3 | URL 抓取网页 | `ImportModal.tsx:147` 的 `web` 是**粘贴**格式；全仓唯一抓取是 `import/github.ts`（`:77` 限 `hostname === "github.com"`） | 未实现 |
+| 3 | URL 抓取网页 | `ImportModal.tsx:147` 的 `web` 是**粘贴**格式；全仓唯一抓取是 `import/github.ts`（`:77` 限 `hostname === "github.com"`） | ✅ **已交付（2026-10-16）** —— 第四个来源 Tab「网页」：Rust `net::fetch_url`（本仓库唯一一条用户任意 URL 的出网命令）+ TS 侧编码判定 + `@mozilla/readability` 提正文 + DOM→Markdown 输出层（标题层级归一化）；`ImportModal.tsx:147` 的粘贴格式选项**未动**（新来源是另一个 Tab）。原证据已过时（见 `docs/url-import-design-2026-10.md`） |
 | 4 | 手动把一章拆成两章 | `engine/chapter-edit-engine.ts` 仅 `renumberChapters`/`renameChapter`/`mergeChapterRange`/`reorderChapters`，**无 split** | ✅ **已交付（F7-b，2026-10-10）** —— 引擎新增 `splitChapterAt` / `splitCandidatesOf`，`ChapterEdit` union 加 `split` 分支，编辑态 `ChapterSplitDialog`；原证据已过时（见 `docs/chapter-edit-design-2026-09.md §13`） |
 | 5 | 跨文档学习单元 / 学习路径（F7-c） | 无 `learningUnit`/`learningPath` 编组实体；`GoalDetailPage.tsx:424` 的「LEARNING PATH」是目标范围内章的**只读展示** | 未实现（仅只读视图） |
 | 6 | 人工调整章节前置关系 | 前置边仅由 AI 概念图自动生成（`ai/concept-map-reduce.ts:73`）+ `domain/knowledge.ts:93` 自动抬升；`GraphView.tsx` 只渲染 | ✅ **已交付（F7-d，2026-10-10）** —— 新增独立持久化实体 `ChapterPrereqOverride`（`added`/`removed` 增量叠加在自动抬升之上）+ 资料详情页「前置」Tab；原证据已过时（见 `docs/chapter-prereq-override-design-2026-09.md`） |
@@ -223,6 +225,8 @@
    均参见 §六 #4 / #6）
   （⚠️ 2026-10-14 更新：「跨文档概念图谱」本体不在本批清单内（它是 README 独有条目、
    无 Feature 编号），现已交付，参见 §六 #7）
+  （⚠️ 2026-10-16 更新：本批列的「URL 抓取」已交付，参见 §六 #3；
+   本批现存 **F7-c 学习单元实体 · EPUB · OCR** 三项 —— 均为 P2，按产品需要排）
 ```
 
 ---
