@@ -1,7 +1,7 @@
 /**
  * 导入适配层（src/features/learn/import/）—— 统一类型与护栏常量。
  *
- * 使命：把「粘贴 / 本地文件 / GitHub 仓库」三类来源归一化为 ImportUnit，
+ * 使命：把「粘贴 / 本地文件 / GitHub 仓库 / 网页链接」四类来源归一化为 ImportUnit，
  * 交给 pipeline.ts 的共享管道（save → split → refine → saveChapters）。
  * 本模块为纯 TS：不触碰 React / DOM / fetch / pdf.js，node 单测可直跑。
  *
@@ -11,7 +11,7 @@ import type { DocumentFormat } from "../../../domain";
 import type { SplitFormat } from "../../../engine";
 
 /** 导入弹窗的来源 Tab。 */
-export type ImportTab = "paste" | "local" | "github";
+export type ImportTab = "paste" | "local" | "github" | "web";
 
 /** 各来源体积护栏（localStorage 占位后端的安全线；SQLite 落地后可放宽）。 */
 export const LIMITS = {
@@ -41,6 +41,14 @@ export const LIMITS = {
    * 不是文件字节线 —— 放错组会让人以为它是 `.docx` 的大小上限（那由 `localDocxBytes` 管）。
    */
   docxMaxChars: 1_500_000,
+  /**
+   * 网页正文入库字符护栏（F8 范围 5）。
+   * ⚠️ 与 `pasteMaxChars` / `githubTotalChars` / `docxMaxChars` 是**同一把尺子**
+   *   （「入库正文体量」这条线），**不是** HTML 字节线 —— 后者是 Rust
+   *   `net.rs::MAX_FETCH_BYTES` 的**传输**护栏，目的不同（防内存暴涨），
+   *   不是第二把产品尺子。
+   */
+  webMaxChars: 1_500_000,
 } as const;
 
 /**
@@ -66,7 +74,7 @@ export interface ImportUnit {
    * 资料被手动改名后（RenameDocDialog）语义已由用户接管，无需持久化标记。
    */
   titleSource?: "user" | "derived";
-  /** SourceDocument.format：pdf | markdown | txt。 */
+  /** SourceDocument.format：pdf | markdown | note | txt | web。 */
   format: DocumentFormat;
   /** 交给 splitDocument 的格式：md 合并文本 → "markdown"；PDF 抽取 → "txt"。 */
   splitFormat: SplitFormat;
@@ -75,10 +83,11 @@ export interface ImportUnit {
   /** 出处：GitHub 仓库 URL / 本地文件名（写入 SourceDocument.source）。 */
   source?: string;
   /**
-   * 抽取元信息（结果卡可观测性，G6）：仅本地文件来源填充。
+   * 抽取元信息（结果卡可观测性，G6）：本地文件来源与网页来源填充。
    * - `pages` / `nonEmptyPages`：PDF 总页数与抽到文本的页数（差值大 → 疑似扫描件）；
-   * - `encoding`：md 实际采用的解码名（非 utf-8 时提示，避免静默乱码，G4）；
-   * - `headings` / `tables`：DOCX 识别到的标题数与 GFM 表格数（`headings = 0` ⇒ 切分降级为段落聚类）。
+   * - `encoding`：md / 网页实际采用的解码名（非 utf-8 时提示，避免静默乱码，G4）；
+   * - `headings` / `tables`：DOCX 识别到的标题数与 GFM 表格数、
+   *   网页输出层产出的标题数与表格数（`headings = 0` ⇒ 切分降级为段落聚类）。
    */
   extract?: {
     pages?: number;

@@ -9,11 +9,15 @@
 import { GithubImportError } from "./github";
 import type { GhErrorKind } from "./github";
 import type { LocalFileError, LocalFileErrorKind } from "./local-files";
+import { WebImportError } from "./web-error";
+import type { WebErrorKind } from "./web-error";
 
 /** GitHub 错误文案表（由 `m.learn.import.github.errors` 满足）。 */
 export type GithubErrorLabels = Record<GhErrorKind, string>;
 /** 本地文件错误文案表（由 `m.learn.import.local.errors` 满足）。 */
 export type LocalErrorLabels = Record<LocalFileErrorKind, string>;
+/** 网页抓取错误文案表（由 `m.learn.import.web.errors` 满足）。 */
+export type WebErrorLabels = Record<WebErrorKind, string>;
 
 /** 任意异常 → GitHub 文案（非 GithubImportError 走 message 兜底）。 */
 export function githubErrorText(err: unknown, labels: GithubErrorLabels): string {
@@ -24,4 +28,10 @@ export function githubErrorText(err: unknown, labels: GithubErrorLabels): string
 /** 本地文件转换失败 → 文案。 */
 export function localErrorText(err: LocalFileError, labels: LocalErrorLabels): string {
   return labels[err.error];
+}
+
+/** 任意异常 → 网页抓取文案（非 WebImportError 走 message 兜底）。 */
+export function webErrorText(err: unknown, labels: WebErrorLabels): string {
+  if (err instanceof WebImportError) return labels[err.kind];
+  return err instanceof Error ? err.message : String(err);
 }
