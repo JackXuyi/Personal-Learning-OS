@@ -1515,8 +1515,8 @@ export const en: Messages = {
     import: {
       title: "Import document",
       subtitle:
-        "Paste Markdown, or import from local files / public GitHub repos — it will be split into chapters, then learn chapter by chapter.",
-      sourceTab: { paste: "Paste", local: "Local files", github: "GitHub" },
+        "Paste Markdown, or import from local files / public GitHub repos / web pages — it will be split into chapters, then learn chapter by chapter.",
+      sourceTab: { paste: "Paste", local: "Local files", github: "GitHub", web: "Web page" },
       local: {
         dropTitle: "Drop .md / .txt / .pdf / .docx here, or click to select files",
         dropHint: "Multiple files supported; scanned PDFs are not supported (text PDFs work)",
@@ -1563,6 +1563,30 @@ export const en: Messages = {
           "merged-too-large": "Merged text exceeds the size limit — use a subdirectory or single-file link.",
           "fetch-failed": "Failed to fetch all Markdown files — check your network and retry.",
           empty: "No importable Markdown found in this scope.",
+        },
+      },
+      /** Web page panel (F8 scope 5). */
+      web: {
+        label: "Web page link",
+        placeholder: "https://example.com/article",
+        fetch: "Fetch",
+        fetching: "Fetching page…",
+        hint: "Extracts the article body and splits it into chapters; static HTML only (sites that need scripting will point you back to Paste)",
+        emptyPreview: "Paste a page link and hit “Fetch” to preview how much text will be imported",
+        desktopOnly: "Fetching pages requires the desktop app (browser preview cannot read cross-site pages)",
+        previewStat: (chars: number, headings: number) =>
+          `~${chars} chars · ${headings} heading(s) extracted`,
+        /** Fetch failure copy; keys mirror `WebErrorKind`. */
+        errors: {
+          invalid: "Cannot parse this link — paste an http(s) link like https://example.com/article.",
+          network: "Request failed — check your network and retry.",
+          "http-error": "The site returned an error — the page may be offline or require sign-in.",
+          "too-large": "This page is over the size limit and cannot be imported.",
+          "not-html":
+            "This link is not a web page (it may be a PDF / image / download) — import it as a local file instead.",
+          "no-text":
+            "Could not extract the article body (it may need scripting) — use “Paste” to import the text instead.",
+          "desktop-only": "Fetching web pages is only supported in the desktop app.",
         },
       },
       batch: {

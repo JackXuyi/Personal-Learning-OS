@@ -1484,9 +1484,9 @@ export const zh = {
     },
     import: {
       title: "导入资料",
-      subtitle: "粘贴 Markdown，或从本地文件 / GitHub 公开仓库导入资料，系统会切分成章节逐章学习。",
-      /** 三来源 Tab。 */
-      sourceTab: { paste: "粘贴", local: "本地文件", github: "GitHub" },
+      subtitle: "粘贴 Markdown，或从本地文件 / GitHub 公开仓库 / 网页链接导入资料，系统会切分成章节逐章学习。",
+      /** 四来源 Tab。 */
+      sourceTab: { paste: "粘贴", local: "本地文件", github: "GitHub", web: "网页" },
       /** 本地文件面板。 */
       local: {
         dropTitle: "拖拽 .md / .txt / .pdf / .docx 到此处，或点击选择文件",
@@ -1534,6 +1534,28 @@ export const zh = {
           "merged-too-large": "合并文本超过大小上限，请改用子目录或单文件链接。",
           "fetch-failed": "Markdown 拉取全部失败，请检查网络后重试。",
           empty: "该范围内没有可导入的 Markdown 文件。",
+        },
+      },
+      /** 网页抓取面板（F8 范围 5）。 */
+      web: {
+        label: "网页链接",
+        placeholder: "https://example.com/article",
+        fetch: "抓取",
+        fetching: "正在抓取网页…",
+        hint: "抓取正文并切分为章节；仅支持静态 HTML 页面（需要脚本渲染的站点会提示改用粘贴）",
+        emptyPreview: "粘贴网页链接后点「抓取」，可预览将导入的正文量",
+        desktopOnly: "抓取网页需要桌面端应用（浏览器预览无法跨站读取网页）",
+        previewStat: (chars: number, headings: number) =>
+          `约 ${chars} 字符 · 提取到 ${headings} 个标题`,
+        /** 抓取失败文案；键与 `WebErrorKind` 对齐（import/error-text.ts 消费）。 */
+        errors: {
+          invalid: "无法解析该链接：请粘贴形如 https://example.com/article 的 http(s) 链接。",
+          network: "网络请求失败，请检查网络后重试。",
+          "http-error": "目标站点返回错误状态，页面可能已下线或需要登录。",
+          "too-large": "页面体积超出上限，无法导入。",
+          "not-html": "该链接不是网页（可能是 PDF / 图片 / 下载文件），请改用本地文件导入。",
+          "no-text": "未能从该页面提取正文（可能需要脚本渲染），请改用「粘贴」导入正文。",
+          "desktop-only": "抓取网页仅支持桌面端应用。",
         },
       },
       /** 批量导入进度与汇总。 */
