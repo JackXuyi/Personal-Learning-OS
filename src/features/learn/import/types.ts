@@ -49,6 +49,25 @@ export const LIMITS = {
    *   不是第二把产品尺子。
    */
   webMaxChars: 1_500_000,
+  /**
+   * 单个 `.epub` ≤ 20MB（**文件字节线**，与 `localDocxBytes` 同级）。
+   * ⚠️ 与下面两条是**三把不同的尺子**，勿合并。
+   */
+  localEpubBytes: 20 * 1024 * 1024,
+  /**
+   * EPUB **解压后总量** ≤ 80MB（防 zip bomb）。
+   * 20MB 的 epub 可解压出 GB 级内容 ⇒ 必须逐条目累加卡住，不能只看文件大小。
+   * ⚠️ 与 `localEpubBytes` 是 4 倍关系（20MB 文件 → 80MB 解压），**不是**同一把尺子；
+   * 也绝不能写成 `Infinity`（那等于这条线不存在）。
+   */
+  epubUnzippedBytes: 80 * 1024 * 1024,
+  /**
+   * EPUB 入库正文字符护栏（F8 范围 4）。
+   * ⚠️ 与 `pasteMaxChars` / `githubTotalChars` / `docxMaxChars` / `webMaxChars`
+   *   是**同一把尺子**（「入库正文体量」这条线），不是文件字节线 ——
+   *   后者才由 `localEpubBytes` 管。
+   */
+  epubMaxChars: 1_500_000,
 } as const;
 
 /**

@@ -27,18 +27,29 @@ import mammoth from "mammoth";
 import type { MammothNode } from "./docx-markdown";
 
 /**
+ * mammoth 的入参类型（从函数签名取；`Input` 未从包根导出）。
+ *
+ * ⚠️ 它的 `BufferInput.buffer` 声明为 node 的 `Buffer`。**2026-10-19 之前**本仓编译期
+ *    没有 `Buffer` 全局（`tsconfig.types` 只有 `["vite/client"]`），这个不兼容是隐形的；
+ *    EPUB 导入引入 `jszip` 的类型后，其 d.ts 把 `@types/node` 的 `Buffer` 带进作用域，
+ *    不兼容立刻显形（TS2345）。故 node 分支显式 `as unknown as` 跨过 —— **运行时行为零变化**
+ *    （mammoth 内部对 `buffer` 只做通用字节读，传 `Uint8Array` 实测可行，`test:docx` 守护）。
+ */
+type MammothInput = Parameters<typeof mammoth.convertToHtml>[0];
+
+/**
  * 构造 mammoth 入参（**环境探测的唯一处**）。
  *
  * ⚠️ 用 `typeof window` 而不是 `process`：本仓 `tsconfig.types` 只有 `["vite/client"]`，
  *    实测 `process` 报 `TS2591: Cannot find name 'process'`（`lib` 含 `DOM`，`window` 类型安全）。
- * ⚠️ 返回型别写**显式字面量联合**，不引用 mammoth 的 `Input` —— 其 `BufferInput`
- *    依赖 `Buffer` 类型（本仓未引入 `@types/node` 的全局）。
  * ⚠️ 不切 `bytes.buffer`：`file.arrayBuffer()` 给出的就是精确长度的 `ArrayBuffer`，
  *    直接传递可省一次整篇拷贝（20MB 文档的峰值内存）。
  */
-export function mammothInput(buffer: ArrayBuffer): { buffer: Uint8Array } | { arrayBuffer: ArrayBuffer } {
+export function mammothInput(buffer: ArrayBuffer): MammothInput {
   // node（单测直跑）→ lib/unzip.js
-  if (typeof window === "undefined") return { buffer: new Uint8Array(buffer) };
+  if (typeof window === "undefined") {
+    return { buffer: new Uint8Array(buffer) } as unknown as MammothInput;
+  }
   // 浏览器 / Tauri WebView → browser/unzip.js
   return { arrayBuffer: buffer };
 }
