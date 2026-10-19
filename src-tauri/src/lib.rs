@@ -20,6 +20,7 @@ mod llm;
 mod logging;
 mod memory_doc;
 mod net;
+mod ocr;
 mod tray;
 mod vault;
 
@@ -220,6 +221,10 @@ pub fn run() {
             // ⚠️ 本仓库唯一一条**用户任意 URL** 的出网命令：webview 的 fetch 受
             // CORS 约束，任意站点读不到响应体 ⇒ 只能由 Rust 发请求。
             net::fetch_url,
+            // 扫描件 OCR（docs/pdf-ocr-design-2026-10.md §5）
+            // 图片字节 base64 → macOS Vision 文字识别。无 PDF 知识、无文件 IO、
+            // 无网络；页循环与上限在 TS（`import/pdf-ocr.ts`）。
+            ocr::ocr_image,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the Personal Learning OS shell");
