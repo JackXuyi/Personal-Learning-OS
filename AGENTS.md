@@ -29,7 +29,7 @@
 | `src/i18n` | 双语字典 `messages/zh.ts` + `messages/en.ts`（**UI 文案必须成对新增**） |
 | `src/styles/main.css` | `:root` PLOS 语义值 + `@theme inline`（PLOS token 原名 + shadcn 角色桥接）**唯一出处** |
 | `components.json` | shadcn CLI 配置（根；`style: base-*` Base UI 版式） |
-| `src-tauri/src` | `lib.rs`（`generate_handler!`）、`vault.rs`、`backup.rs`、`memory_doc.rs`、`net.rs`（**唯一一条用户任意 URL 的出网命令**，webview `fetch` 被 CORS 挡死）、`llm/` |
+| `src-tauri/src` | `lib.rs`（`generate_handler!`）、`vault.rs`、`backup.rs`、`memory_doc.rs`、`net.rs`（**唯一一条用户任意 URL 的出网命令**，webview `fetch` 被 CORS 挡死）、`ocr.rs`（**唯一一条「图片字节 → 文字」命令**，macOS Vision；无 PDF 知识、无文件 IO、无网络）、`llm/` |
 | `docs/` | 方案/计划/设计文档，命名如 `docs/ui-workbench-plan-2026-09.md` |
 | `tests/` | node 直跑纯逻辑单测（`npm run test:*`） |
 | `rules/` | 仓库约束（`*.mdc`，Cursor 兼容格式） |

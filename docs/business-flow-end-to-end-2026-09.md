@@ -31,7 +31,7 @@
 
 | 阶段 | 名称 | 闭环可跑通 | 关键缺口 |
 |---|---|---|---|
-| S1 | 导入资料 | ✅ | ~~扫描件 PDF 解析为 0 字符（pdfjs 局限）~~ ✅ **已收口（2026-09-21 实测）**：空文本抛 `PdfNoTextError` → `pdf-no-text` → UI 明确提示「疑似扫描件，请改用粘贴文本」；**仍无 OCR**（只是不再静默） |
+| S1 | 导入资料 | ✅ | ~~扫描件 PDF 解析为 0 字符（pdfjs 局限）~~ ✅ **已收口（2026-09-21 实测）**：空文本抛 `PdfNoTextError` → `pdf-no-text` → UI 明确提示「疑似扫描件，请改用粘贴文本」。**OCR 兜底已于 2026-10-19 交付**（显式开关 + 仅桌面端，见 `docs/pdf-ocr-design-2026-10.md`）—— 缺省仍不做 OCR，只在用户勾选后逐页识别 |
 | S2 | 切分成章节 | ✅ | ~~🌕 **人工微调原语已实现但无 UI**（rename/merge/reorder 零调用点）~~ ✅ **已交付（F7-a/F7-b 章节编辑）**：`SplitTab` 已接线改名 / 区间合并 / 拖拽排序（`kind: 'rename' \| 'merge' \| 'reorder'`，见 `detail/SplitTab.tsx`）+ **手动拆分**（`kind: 'split'`，2026-10-10，`ChapterSplitDialog`） |
 | S3 | 章节学习 | ✅ | 章内概念图谱需手动触发（**仍开放**） |
 | S4 | 章节测试 | ✅ | 主观题强依赖 AI，无 AI 时剔除不计分（**仍开放**） |
@@ -164,12 +164,12 @@ Document ──splitDocument──▶ Chapter[]
 | **目的** | 把外部知识变成系统的 `Document` 实体，成为后续一切流程的原料 |
 | **触发入口** | 全局 `ImportModal`（`src/features/learn/ImportModal.tsx`，挂载于 `AppShell.tsx:115`）。触发点：Header、`HomePage:480/512`、`LibraryPage:275/390`、`PlanPage`、`GoalsPage`、`CommandPalette:288` |
 | **输入来源** | 四 Tab（`ImportModal.tsx`；2026-10-16 起为四路）：① **粘贴**（markdown / note / web / txt，按类型分派 format）② **本地文件**（含 .docx / .epub）③ **GitHub** ④ **网页**（`WebPanel.tsx`，2026-10-16 新增） |
-| **格式支持** | MD / TXT → `decodeBytes`（`import/decode.ts`，BOM + UTF-8/GB18030 嗅探）；**PDF → `pdfjs-dist` `extractPdfText`（`import/pdf.ts`）+ `promotePdfHeadings`（`import/pdf-layout.ts`，把疑似标题提升为 md 标题）**；**DOCX → `extractDocxMarkdown`（`import/docx.ts` + `docx-markdown.ts`）**；**EPUB → `extractEpubMarkdown`（`import/epub.ts` + `epub-archive.ts`，jszip 解归档 → spine 逐项 → 复用 `html-markdown.ts`，2026-10-19 新增）**；GitHub → `buildGithubUnit`（`import/github.ts`）；**网页 → Rust `net::fetch_url` + `buildWebUnit`（`import/web-page.ts`，Readability 提正文 + `html-markdown.ts` 产 Markdown）**。统一护栏 `LIMITS`（`import/types.ts`） |
+| **格式支持** | MD / TXT → `decodeBytes`（`import/decode.ts`，BOM + UTF-8/GB18030 嗅探）；**PDF → `pdfjs-dist` `extractPdfText`（`import/pdf.ts`）+ `promotePdfHeadings`（`import/pdf-layout.ts`，把疑似标题提升为 md 标题）**；**DOCX → `extractDocxMarkdown`（`import/docx.ts` + `docx-markdown.ts`）**；**EPUB → `extractEpubMarkdown`（`import/epub.ts` + `epub-archive.ts`，jszip 解归档 → spine 逐项 → 复用 `html-markdown.ts`，2026-10-19 新增）**；GitHub → `buildGithubUnit`（`import/github.ts`）；**网页 → Rust `net::fetch_url` + `buildWebUnit`（`import/web-page.ts`，Readability 提正文 + `html-markdown.ts` 产 Markdown）**。**扫描件 PDF → OCR 兜底（显式开关）**：`pdf.ts::extractPdfText(buf, { ocr })` → `import/pdf-ocr.ts`（页循环/50 页上限/进度）→ `pdf-render.ts`（pdfjs `page.render` → JPEG）→ Rust `ocr::ocr_image`（macOS Vision）。统一护栏 `LIMITS`（`import/types.ts`） |
 | **处理管线** | `runUnitImport`（`import/pipeline.ts:62`）**七步**：<br/>① 同 source 查重（L77-98）<br/>② markdown 清洗 `stripMarkdownNoise`（L102 / `normalize-text.ts:33`，删 badge/img/链接 URL）<br/>③ `saveDocument`（L114）<br/>④ `splitDocument`（L116）<br/>⑤ **AI 精修** `refineSplitResult`（L132）<br/>⑥ `saveChapters`（L138）<br/>⑦ `rebuildChunks`（L140） |
 | **产物** | `Document`（`plos.documents`）+ `Chapter[]`（`plos.chapters`）+ `Chunk[]`/`Embedding[]`（SQLite） |
 | **异常分支** | 切分得 **0 章** → 仅保存 Document，不写 chapters（`pipeline.ts:124`）；同 source 已存在 → 走查重分支（更新而非新建）。⚠️ 该分支**现在只对「有文本但切不出章」成立** —— 抽出 **0 字符**的 PDF 在更早的抽取环节就抛 `PdfNoTextError`（`import/pdf.ts:83`），根本走不到这里 |
 | **降级行为** | 无 AI 时第 ⑤ 步跳过，用启发式切分结果直接落库 |
-| **已知局限** | ~~📕 **扫描件 / 纯图片 PDF 经 pdfjs 解析为 0 字符**（无 OCR 兜底），会走到「0 章仅保存」分支，用户看到的是"导入成功但没章节"~~ ✅ **已收口（2026-09-21 实测）**：**仍无 OCR**，但空文本抛 `PdfNoTextError` → `local-files.ts:74` 映射 `pdf-no-text` → UI 提示「这份 PDF 抽不出文字（可能是扫描件），请改用「粘贴文本」」。用户不会再看到"导入成功但没有章节"这种无解释的结果 |
+| **已知局限** | ~~📕 **扫描件 / 纯图片 PDF 经 pdfjs 解析为 0 字符**（无 OCR 兜底），会走到「0 章仅保存」分支，用户看到的是"导入成功但没章节"~~ ✅ **已收口（2026-09-21 实测）**：**缺省不做 OCR**（勾选面板开关后走 OCR 兜底，2026-10-19），但空文本抛 `PdfNoTextError` → `local-files.ts:74` 映射 `pdf-no-text` → UI 提示「这份 PDF 抽不出文字（可能是扫描件），请改用「粘贴文本」」。用户不会再看到"导入成功但没有章节"这种无解释的结果 |
 
 **关键设计约束**：切分归代码、零 AI —— 切分硬契约在 `index-chunks.ts` / `split-service.ts` 内**不得触发向量化**；AI 只在精修环节改标题与边界。
 
@@ -511,7 +511,7 @@ not-started ──打开阅读──▶ learning ──标记学完(markReady)�
 |---|---|---|---|
 | ~~4~~ | ~~**章节人工微调无 UI**~~ ✅ **已交付（F7-a / F7-b 章节编辑）** | 原证据：`renameChapter` / `mergeChapters` / `reorderChapters` 零调用点（行号已漂移；`mergeChapters` 已更名 `mergeChapterRange`） | ✅ 已按原建议在 `SplitTab` 加**改名 / 区间合并 / 拖拽排序**（F7-a），并补**手动拆分**（F7-b，2026-10-10），操作即落库 |
 | ~~5~~ | ~~**`deadlineAt` 不参与排程**~~ ✅ **已交付（F2 时间维度）** | 原证据：`estimateEtaMin` 无 deadline 输入 | ✅ 已按原建议加「按截止期反推每日配额」（`plan-quota.ts::dueTodayMin`）+ 落后预警（`plan.behindWarning`）；见 `docs/plan-time-dimension-design-2026-09.md` |
-| ~~6~~ | ~~**扫描件 PDF 解析为 0 字符**~~ ✅ **已交付（0 字符检测）** | 原证据：`pdf.ts` 仅 pdfjs 提取，无 OCR | ✅ 已按原建议加 0 字符检测 → `PdfNoTextError` → UI 提示「疑似扫描件，请改用粘贴文本」。⚠️ **OCR 兜底仍未做**（属 `roadmap` F8 范围 2，仍在规划） |
+| ~~6~~ | ~~**扫描件 PDF 解析为 0 字符**~~ ✅ **已交付（0 字符检测）** | 原证据：`pdf.ts` 仅 pdfjs 提取，无 OCR | ✅ 已按原建议加 0 字符检测 → `PdfNoTextError` → UI 提示「疑似扫描件，请改用粘贴文本」。✅ **OCR 兜底已于 2026-10-19 交付**（`roadmap` F8 范围 2；显式开关 + macOS Vision，缺省仍不做） |
 | ~~7~~ | ~~**达标后无收口**~~ **部分交付（2026-09-21 实测）** | 原证据：`GoalDetailPage` 仅显示就绪度 | **已具备**：全达标态（首页 / `/plan` 的 🎉 卡 +「去测评巩固」）、复盘材料（F3 `/progress` 趋势与弱点榜、F6 能力报告）。**仍开放**：无能力证书 / 可复用产出清单、无「下一步目标」引导、无达标总结页（原建议的「下一目标建议」仍未做） |
 | ~~8~~ | ~~**plan 优先级注释与代码矛盾**~~ ✅ **已修（2026-09-20，与 P2 #9 同批）** | ⚠️ **本条原归责描述写错了**：写反的是 `learning-planner.ts:161`（旧文把「到期复习」排在「测已学章」之前），**`:9-10` 一直是对的**；原文所引 `:154` 也已漂移到 `:161`。已改正 `:161` 并写明实测档位 | ✅ 已统一注释；**未**调整 `cls` 值（实测 0 重学弱章 / 1 补考 / 2 复习要点 / **3 测已学章 / 4 到期复习** / 5 推进未学章，**3 优先于 4** 是刻意设计，非遗漏） |
 
@@ -546,6 +546,7 @@ not-started ──打开阅读──▶ learning ──标记学完(markReady)�
 > 与范围 4（前置关系人工调整）均已交付**，F7 只剩 **F7-c 独立学习单元实体**；F8 仍余 OCR / EPUB / URL。
 > （**时点注 2026-10-16**：F8 的 URL 抓取已于本日交付 ⇒ 该句应读作「F8 仍余 **OCR / EPUB**」。）
 > （**时点注 2026-10-19**：F8 的 EPUB 解析已于本日交付 ⇒ 该句应读作「F8 仍余 **OCR** 一项」。）
+> （**时点注 2026-10-19 之二**：F8 的 OCR 兜底亦于本日交付 ⇒ **F8 五个范围全部收口**，该句不再有剩余项。）
 > 本文件 §六 缺口清单 #4（章节人工微调）与 §S2 行已同步。
 >
 > ⚠️ **2026-10-14 追加**：概念层多了一个**跨资料口径**的出口 —— `/graph`（`CrossDocGraphPage`）
@@ -559,6 +560,9 @@ not-started ──打开阅读──▶ learning ──标记学完(markReady)�
 > 收窄为 **OCR / EPUB 两项**。本文件 §S1 的「输入来源」与「格式支持」两行已同步为四来源。
 > ⚠️ **2026-10-19 追加**：F8 范围 4（EPUB 解析）已交付 ⇒ §七 各段所记「F8 仍余 OCR / EPUB」
 > 进一步收窄为 **OCR 一项**；§S1 的「输入来源」与「格式支持」两行已补 `.epub`。
+> ⚠️ **2026-10-19 之二**：F8 范围 2（OCR 兜底）交付 ⇒ **F8 无剩余项**。§S1 的「格式支持」行已补
+> OCR 链路（`import/pdf-ocr.ts` + `pdf-render.ts` + Rust `ocr::ocr_image`）；「输入来源」未变（仍是四个 Tab，
+> 开关在「本地文件」面板内）。
 > ⚠️ 该特性**首次在 `src-tauri/**` 开网络口**（`net.rs`，本仓库唯一一条用户任意 URL 出网命令）——
 > 原因不是「想放后端」，而是 webview 的 `fetch` 被 CORS 挡死：GitHub 导入能用 `fetch` 只因
 > `api.github.com` / `raw.githubusercontent.com` 主动发 `Access-Control-Allow-Origin`，任意站点不发。

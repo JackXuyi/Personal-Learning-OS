@@ -169,11 +169,13 @@
 >
 > **时点注（2026-10-14）**：**#7**（跨文档概念图谱）**已交付** ⇒ README `[ ]` 由 6 项降为 **5 项**（#1 OCR / #2 EPUB / #3 URL / #5 F7-c / #8 加密同步）。⚠️ 实施期发现本表「代码证据」列漏了一层根因：全局图虽有数据，但 `KnowledgeUnit.sourceDocumentId` **在真实数据里恒为 `undefined`**（两条概念抽取管道都不写它）⇒ 「节点 → 归属资料」这条链根本没接上，光补一个视图页不够。见 `docs/cross-document-concept-graph-design-2026-10.md` §3.3.1。原证据句保留。
 >
+> **时点注（2026-10-19）**：**#1**（OCR 兜底）与 **#2**（EPUB）**同日交付** ⇒ README `[ ]` **由 4 项降为 2 项**（#5 F7-c / #8 加密同步）。OCR 的实现形状与原设想**一致但不完整**：原句写「Tauri 侧接本地 OCR（如系统 Vision / tesseract）」—— 引擎确实取 Vision（`objc2-vision`，免模型分发），但**栅格化留在前端**（pdfjs `page.render`）而非 Rust，故 Rust 侧只有一个「图片 → 文字」命令，页循环/上限/进度全在 TS 可单测。见 `docs/pdf-ocr-design-2026-10.md`。
+>
 > **时点注（2026-10-16）**：**#3**（URL 抓取网页）**已交付** ⇒ README `[ ]` 由 5 项降为 **4 项**（#1 OCR / #2 EPUB / #5 F7-c / #8 加密同步）。⚠️ 原「代码证据」列点到的 `ImportModal.tsx` 的 `web` 是**粘贴格式**这一点仍然成立且未改动 —— 网页来源是**新增的第四个 Tab**，不是把粘贴的格式选项改掉；新增链路为 `WebPanel.tsx` + `web-page.ts` + `html-markdown.ts` + Rust `net::fetch_url`。⚠️ 另一处原证据的隐含前提也被推翻：抓取**不能**复用 `import/github.ts` 那条 webview `fetch` 路径（GitHub 能用只因对方主动发 `Access-Control-Allow-Origin`），任意站点必须落 Rust。见 `docs/url-import-design-2026-10.md`。
 
 | # | 条目 | 代码证据 | 结论 |
 |---|------|----------|------|
-| 1 | 扫描件 PDF OCR 兜底 | `features/learn/import/pdf.ts:14` 注释「扫描件抛 `PdfNoTextError`，**不做 OCR**」；全仓无 `ocr`/`tesseract` | 未实现 |
+| 1 | 扫描件 PDF OCR 兜底 | ~~`features/learn/import/pdf.ts:14` 注释「扫描件抛 `PdfNoTextError`，**不做 OCR**」；全仓无 `ocr`/`tesseract`~~ | ✅ **已交付 2026-10-19**（`src-tauri/src/ocr.rs` + `import/{pdf-ocr,pdf-render,desktop-ocr,ocr-error}.ts`；引擎取 macOS Vision，**仍无 `tesseract`**，注释已同步改写） |
 | 2 | EPUB 解析 | 仅类型占位：`domain/document.ts:12` 联合成员 `"epub"` + i18n 标签 + renderer 注释；无解析器，`ImportModal.tsx:144-149` `FORMAT_OPTIONS` 无 epub | ✅ **已交付（F8 范围 4，2026-10-19）** —— `import/{epub,epub-archive,html-parse}.ts`，输出层复用 `html-markdown.ts`；spine 项驱动章节边界（逐项标题归一化）、标题三级兜底、DRM 可行动拒绝、`jszip` 提为直接依赖（零新增包）。原证据已过时（见 `docs/epub-import-design-2026-10.md`） |
 | 3 | URL 抓取网页 | `ImportModal.tsx:147` 的 `web` 是**粘贴**格式；全仓唯一抓取是 `import/github.ts`（`:77` 限 `hostname === "github.com"`） | ✅ **已交付（2026-10-16）** —— 第四个来源 Tab「网页」：Rust `net::fetch_url`（本仓库唯一一条用户任意 URL 的出网命令）+ TS 侧编码判定 + `@mozilla/readability` 提正文 + DOM→Markdown 输出层（标题层级归一化）；`ImportModal.tsx:147` 的粘贴格式选项**未动**（新来源是另一个 Tab）。原证据已过时（见 `docs/url-import-design-2026-10.md`） |
 | 4 | 手动把一章拆成两章 | `engine/chapter-edit-engine.ts` 仅 `renumberChapters`/`renameChapter`/`mergeChapterRange`/`reorderChapters`，**无 split** | ✅ **已交付（F7-b，2026-10-10）** —— 引擎新增 `splitChapterAt` / `splitCandidatesOf`，`ChapterEdit` union 加 `split` 分支，编辑态 `ChapterSplitDialog`；原证据已过时（见 `docs/chapter-edit-design-2026-09.md §13`） |
@@ -227,7 +229,8 @@
    无 Feature 编号），现已交付，参见 §六 #7）
   （⚠️ 2026-10-16 更新：本批列的「URL 抓取」已交付，参见 §六 #3；）
   （⚠️ 2026-10-19 更新：本批列的「EPUB」已交付，参见 §六 #2；
-   本批现存 **F7-c 学习单元实体 · OCR** 两项 —— 均为 P2，按产品需要排）
+   本批列的「OCR」亦已交付，参见 §六 #1；
+   本批现存 **F7-c 学习单元实体** 一项 —— P2，按产品需要排）
 ```
 
 ---
