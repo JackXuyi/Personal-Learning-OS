@@ -20,6 +20,7 @@
     "test:import": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/import-core.test.ts",
     "test:extract": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/import-extract.test.ts",
     "test:docx": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/import-docx.test.ts",
+    "test:ocr": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/import-ocr.test.ts",
     "test:epub": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/import-epub.test.ts",
     "test:web": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/import-web.test.ts",
     "test:storage": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/storage-adapter.test.ts",
