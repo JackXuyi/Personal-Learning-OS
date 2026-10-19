@@ -1489,7 +1489,7 @@ export const zh = {
       sourceTab: { paste: "粘贴", local: "本地文件", github: "GitHub", web: "网页" },
       /** 本地文件面板。 */
       local: {
-        dropTitle: "拖拽 .md / .txt / .pdf / .docx 到此处，或点击选择文件",
+        dropTitle: "拖拽 .md / .txt / .pdf / .docx / .epub 到此处，或点击选择文件",
         dropHint: "支持批量选择多个文件；扫描版 PDF 暂不支持（文本型 PDF 可导入）",
         selected: (n: number) => `已选 ${n} 个文件`,
         importable: (n: number) => `其中 ${n} 份可导入`,
@@ -1499,10 +1499,11 @@ export const zh = {
         kindTxt: "纯文本",
         kindPdf: "PDF",
         kindDocx: "DOCX",
+        kindEpub: "EPUB",
         import: (n: number) => `保存并切分 ${n} 份资料`,
         /** 转换失败文案；键与 `LocalFileErrorKind` 对齐（import/error-text.ts 消费）。 */
         errors: {
-          unsupported: "不支持的类型（仅 .md / .txt / .pdf / .docx）",
+          unsupported: "不支持的类型（仅 .md / .txt / .pdf / .docx / .epub）",
           "too-large": "超出大小限制",
           "pdf-no-text": "未抽取到文本（可能为扫描件）",
           "pdf-too-large": "PDF 页数超出上限",
@@ -1511,6 +1512,10 @@ export const zh = {
           "docx-legacy": "这是旧版 .doc 或加密文档，请用 Word 另存为 .docx 后重试",
           "docx-bad-zip": "文档已损坏或不是有效的 .docx",
           "docx-no-text": "未抽取到文本（文档可能只含图片）",
+          /** ⚠️ 同样**可行动**：告诉用户「换无 DRM 版本」，而不是只说"不支持"。 */
+          "epub-drm": "这本书有加密保护（DRM），请换用无 DRM 的版本",
+          "epub-bad-zip": "文件已损坏或不是有效的 .epub",
+          "epub-no-text": "未从这本书抽取到正文（可能是纯图片排版）",
         },
       },
       /** GitHub 面板。 */

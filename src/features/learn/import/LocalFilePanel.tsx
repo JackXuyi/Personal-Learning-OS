@@ -1,5 +1,5 @@
 /**
- * 本地文件来源面板（拖拽/点选 .md / .txt / .pdf / .docx，批量）。
+ * 本地文件来源面板（拖拽/点选 .md / .txt / .pdf / .docx / .epub，批量）。
  *
  * 职责（docs/knowledge-import-design-2026-09.md §7.2 / §8.6）：
  * - 收集用户选中的「可导入」文件（受控，files 由 ImportModal 持有，便于底部
@@ -99,7 +99,7 @@ export default function LocalFilePanel({ files, onFilesChange, disabled }: Local
           ref={inputRef}
           type="file"
           multiple
-          accept=".md,.markdown,.mdown,.txt,.pdf,.docx"
+          accept=".md,.markdown,.mdown,.txt,.pdf,.docx,.epub"
           className="hidden"
           data-testid="local-file-input"
           disabled={disabled}
@@ -147,6 +147,7 @@ export default function LocalFilePanel({ files, onFilesChange, disabled }: Local
                     txt: fmt.local.kindTxt,
                     pdf: fmt.local.kindPdf,
                     docx: fmt.local.kindDocx,
+                    epub: fmt.local.kindEpub,
                   })}
                 </span>
                 <span className="shrink-0 tabular-nums text-ink-3">{formatBytes(row.file.size)}</span>

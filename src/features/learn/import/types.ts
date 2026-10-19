@@ -146,8 +146,8 @@ export interface ImportSummary {
   skipped: { title: string; source?: string }[];
 }
 
-/** 本地文件类型判定（纯文本类 .md / .txt + .pdf + .docx）。 */
-export type LocalFileKind = "md" | "txt" | "pdf" | "docx";
+/** 本地文件类型判定（纯文本类 .md / .txt + .pdf + .docx + .epub）。 */
+export type LocalFileKind = "md" | "txt" | "pdf" | "docx" | "epub";
 
 export interface LocalFileClassified {
   kind: LocalFileKind;
@@ -175,14 +175,18 @@ export function classifyLocalFile(file: { name: string; size: number }): LocalFi
   if (lower.endsWith(".docx")) {
     return { kind: "docx", overLimit: file.size > LIMITS.localDocxBytes };
   }
+  if (lower.endsWith(".epub")) {
+    return { kind: "epub", overLimit: file.size > LIMITS.localEpubBytes };
+  }
   // ⚠️ `.doc` / `.docm` / `.dotx` 明确不支持（OLE 二进制 / 宏 / 模板），由本函数拦下；
   //    「伪装成 .docx 的 OLE」扩展名骗得过去，只能在导入期按魔数判定（docx.ts）。
+  // ⚠️ `.mobi` / `.azw3` 同样不支持：不同容器格式，非 ZIP，魔数即会拦（epub-archive.ts）。
   return { error: "unsupported" };
 }
 
 /** 去掉文件扩展名作为默认资料标题。 */
 export function stripExtension(name: string): string {
-  return name.replace(/\.(md|markdown|mdown|txt|pdf|docx)$/i, "");
+  return name.replace(/\.(md|markdown|mdown|txt|pdf|docx|epub)$/i, "");
 }
 
 /** 文件大小格式化（B/KB/MB，无小数）。 */

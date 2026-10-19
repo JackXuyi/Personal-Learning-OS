@@ -1518,7 +1518,7 @@ export const en: Messages = {
         "Paste Markdown, or import from local files / public GitHub repos / web pages — it will be split into chapters, then learn chapter by chapter.",
       sourceTab: { paste: "Paste", local: "Local files", github: "GitHub", web: "Web page" },
       local: {
-        dropTitle: "Drop .md / .txt / .pdf / .docx here, or click to select files",
+        dropTitle: "Drop .md / .txt / .pdf / .docx / .epub here, or click to select files",
         dropHint: "Multiple files supported; scanned PDFs are not supported (text PDFs work)",
         selected: (n: number) => `${n} file(s) selected`,
         importable: (n: number) => `${n} importable`,
@@ -1528,10 +1528,11 @@ export const en: Messages = {
         kindTxt: "Plain text",
         kindPdf: "PDF",
         kindDocx: "DOCX",
+        kindEpub: "EPUB",
         import: (n: number) => `Save & split ${n} document(s)`,
         /** Conversion failure copy; keys mirror `LocalFileErrorKind`. */
         errors: {
-          unsupported: "Unsupported type (only .md / .txt / .pdf / .docx)",
+          unsupported: "Unsupported type (only .md / .txt / .pdf / .docx / .epub)",
           "too-large": "Exceeds the size limit",
           "pdf-no-text": "No extractable text (likely a scanned PDF)",
           "pdf-too-large": "PDF exceeds the page limit",
@@ -1540,6 +1541,10 @@ export const en: Messages = {
           "docx-legacy": "This is a legacy .doc or encrypted file — save it as .docx in Word and retry",
           "docx-bad-zip": "The file is corrupted or not a valid .docx",
           "docx-no-text": "No text extracted (the document may contain only images)",
+          /** Also **actionable**: names the fix ("use a DRM-free copy"), not just "unsupported". */
+          "epub-drm": "This book is DRM-protected — please use a DRM-free copy",
+          "epub-bad-zip": "The file is corrupted or not a valid .epub",
+          "epub-no-text": "No text extracted from this book (it may be an image-only layout)",
         },
       },
       github: {
