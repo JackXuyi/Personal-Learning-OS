@@ -19,14 +19,19 @@
  * 中文段落被逐视觉行硬换行。
  *
  * 范围护栏（docs/knowledge-import-design-2026-09.md §3.3）：
- * - 仅文本型 PDF；扫描件（抽不出文本）抛 PdfNoTextError，由 UI 提示，不做 OCR；
- * - 页数超过 LIMITS.pdfMaxPages 拒绝（内存/耗时护栏）。
+ * - 文本型 PDF 走 `getTextContent`；扫描件（整篇抽不出文本）默认抛
+ *   `PdfNoTextError` 由 UI 提示。**传了 `opts.ocr` 时改走 OCR 兜底**
+ *   （`pdf-ocr.ts`：逐页渲染 → 系统识别，F8 范围 2）—— 是否传由面板上的
+ *   显式开关决定，本模块不自己判断「该不该 OCR」；
+ * - 页数超过 LIMITS.pdfMaxPages 拒绝（内存/耗时护栏；OCR 另有自己的 50 页线）；
  *
  * 错误对象**不携带用户可见文案**（G2）：UI 按 `kind` 取 i18n，`message` 只作排障。
  */
 import { LIMITS } from "./types";
 import { joinPageLines, reflowPageItems, stripRunningHeads } from "./pdf-layout";
 import type { PdfTextItem } from "./pdf-layout";
+import { ocrPdf } from "./pdf-ocr";
+import type { PdfOcrDeps } from "./pdf-ocr";
 
 /**
  * Vite：worker 以 asset URL 形式随构建产物发布。
@@ -34,8 +39,14 @@ import type { PdfTextItem } from "./pdf-layout";
  */
 const WORKER_SRC = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
 
-/** 按需加载 pdfjs 并配置 worker（重复调用走 ESM 模块缓存，无额外开销）。 */
-async function loadPdfjs(): Promise<typeof import("pdfjs-dist")> {
+/**
+ * 按需加载 pdfjs 并配置 worker（重复调用走 ESM 模块缓存，无额外开销）。
+ *
+ * ⚠️ 导出而非模块私有：OCR 的栅格化层（`pdf-render.ts`）要用**同一份**
+ * worker 配置 —— 各写一份 `WORKER_SRC` 迟早会出现两处 URL 不一致，
+ * 而那种 bug 只在打包后的桌面端暴露（dev 下 Vite 会兜住）。
+ */
+export async function loadPdfjs(): Promise<typeof import("pdfjs-dist")> {
   const pdfjs = await import("pdfjs-dist");
   pdfjs.GlobalWorkerOptions.workerSrc = WORKER_SRC;
   return pdfjs;
@@ -64,18 +75,33 @@ export interface PdfExtractResult {
   pageCount: number;
   /** 抽到非空文本的页数（远小于总页数 → 疑似扫描件/图片页）。 */
   nonEmptyPages: number;
+  /** 正文来自 OCR 识别（而非 PDF 文本层），结果卡据此标「OCR」。 */
+  ocr?: boolean;
 }
 
-/** 抽取 PDF 全文为纯文本（不落盘；内存解析）。失败抛 PdfNoTextError / PdfTooLargeError。 */
-export async function extractPdfText(buffer: ArrayBuffer): Promise<PdfExtractResult> {
+/** 抽取选项：传 `ocr` 表示「文本层为空时允许走 OCR 兜底」（D3 显式开关）。 */
+export interface PdfExtractOptions {
+  ocr?: PdfOcrDeps;
+}
+
+/**
+ * 抽取 PDF 全文为纯文本（不落盘；内存解析）。
+ * 失败抛 PdfNoTextError / PdfTooLargeError（OCR 相关错误由 `pdf-ocr.ts` 定义）。
+ */
+export async function extractPdfText(
+  buffer: ArrayBuffer,
+  opts?: PdfExtractOptions,
+): Promise<PdfExtractResult> {
   const pdfjs = await loadPdfjs();
   const data = new Uint8Array(buffer);
   const doc = await pdfjs.getDocument({ data }).promise;
+  const pageCount = doc.numPages;
+  let text = "";
+  let nonEmptyPages = 0;
   try {
-    if (doc.numPages > LIMITS.pdfMaxPages) throw new PdfTooLargeError();
+    if (pageCount > LIMITS.pdfMaxPages) throw new PdfTooLargeError();
     const pages: string[][] = [];
-    let nonEmptyPages = 0;
-    for (let p = 1; p <= doc.numPages; p += 1) {
+    for (let p = 1; p <= pageCount; p += 1) {
       const page = await doc.getPage(p);
       try {
         const content = await page.getTextContent();
@@ -89,15 +115,23 @@ export async function extractPdfText(buffer: ArrayBuffer): Promise<PdfExtractRes
     }
     // 页眉/页脚去噪需要跨页证据，故先收集每页行数组、再统一过滤。
     const cleaned = stripRunningHeads(pages);
-    const text = cleaned
+    text = cleaned
       .map(joinPageLines)
       .filter((s) => s.trim())
       .join("\n\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
-    if (!text) throw new PdfNoTextError();
-    return { text, pageCount: doc.numPages, nonEmptyPages };
   } finally {
+    // ⚠️ 先释放解析器再走 OCR：`pdf-render.ts` 会为渲染重新打开同一份 PDF，
+    //    两份 doc 并存会让 30MB 的 PDF 峰值内存翻倍。
     await doc.destroy();
   }
+
+  // 整篇 0 字符 = 扫描件。开关开着才兜底（D3/D4），否则沿用原行为。
+  if (!text && opts?.ocr) {
+    const out = await ocrPdf(buffer, pageCount, opts.ocr);
+    return { text: out.text, pageCount, nonEmptyPages: out.ocrPages, ocr: true };
+  }
+  if (!text) throw new PdfNoTextError();
+  return { text, pageCount, nonEmptyPages };
 }

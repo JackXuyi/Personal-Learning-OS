@@ -68,6 +68,27 @@ export const LIMITS = {
    *   后者才由 `localEpubBytes` 管。
    */
   epubMaxChars: 1_500_000,
+  /**
+   * OCR 页数上限（F8 范围 2）。50 页 ≈ 25–50s（Vision Accurate 约 0.5–1s/页），
+   * 是「用户愿意等」的上限。
+   * ⚠️ 与 `pdfMaxPages`（500）是**两把尺子**：那条是 pdfjs 解析的内存/耗时护栏，
+   * 这条是「逐页渲染 + 逐页识别」的**人工等待**护栏 —— 两者差一个数量级是刻意的，
+   * 不要因为「都是页数」就统一。
+   * ⚠️ 超限**报错，绝不截断**：给出一本只有前 50 页的书比明确拒绝坏得多
+   * （数据层无从察觉少了半本）。
+   */
+  ocrMaxPages: 50,
+  /**
+   * OCR 入库正文字符护栏。
+   * ⚠️ 与 `pasteMaxChars` / `docxMaxChars` / `webMaxChars` / `epubMaxChars`
+   * 是**同一把尺子**（「入库正文体量」这条线），不是页数线。
+   */
+  pdfOcrMaxChars: 1_500_000,
+  /**
+   * OCR 渲染时图片**长边**上限（像素）。2400px ≈ 200 DPI 的 A4；
+   * Vision 在 150–300 DPI 区间精度已饱和，再高只是涨 IPC payload。
+   */
+  ocrMaxEdge: 2400,
 } as const;
 
 /**
@@ -114,6 +135,11 @@ export interface ImportUnit {
     encoding?: string;
     headings?: number;
     tables?: number;
+    /**
+     * 正文来自 OCR 识别（扫描件兜底，F8 范围 2）。
+     * 只在为真时才出现 —— 文本层抽出的文字不该背一个 `ocr: false`。
+     */
+    ocr?: boolean;
   };
 }
 

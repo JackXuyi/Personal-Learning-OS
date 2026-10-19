@@ -9,12 +9,16 @@
  * - pdf 经 pdf.ts 内存抽取文本（含版式后处理，G5），不落盘；
  * - docx 经 docx.ts 内存抽取（mammoth 取 AST + 自写 Markdown 输出层），不落盘；
  * - epub 经 epub.ts 内存抽取（jszip 解归档 + spine 遍历 + 复用网页输出层），不落盘；
+ * - pdf 文本层为空且传了 `ocr` 时，经 pdf-ocr.ts 逐页渲染 + Vision 识别兜底（F8 范围 2）；
  * - 本模块**不产出用户可见文案**（G2）：失败只回 `kind`，由 UI 经 error-text 取 i18n。
  */
 import { classifyLocalFile, stripExtension, LIMITS } from "./types";
 import type { ImportUnit, LocalFileKind } from "./types";
 import { decodeBytes } from "./decode";
 import { extractPdfText, PdfNoTextError, PdfTooLargeError } from "./pdf";
+import { PdfOcrNoTextError, PdfOcrTooLargeError, PdfOcrTooManyPagesError } from "./pdf-ocr";
+import type { PdfOcrDeps } from "./pdf-ocr";
+import { OcrError } from "./ocr-error";
 import { promotePdfHeadings } from "./pdf-layout";
 import {
   extractDocxMarkdown,
@@ -43,7 +47,11 @@ export type LocalFileErrorKind =
   | "docx-no-text"
   | "epub-drm"
   | "epub-bad-zip"
-  | "epub-no-text";
+  | "epub-no-text"
+  | "pdf-ocr-unavailable"
+  | "pdf-ocr-too-many-pages"
+  | "pdf-ocr-failed"
+  | "pdf-ocr-no-text";
 
 /**
  * 各类型的**文件字节线**（映射式：新增 kind 时 typecheck 强制补齐，不会静默套用别人的尺子）。
@@ -70,9 +78,12 @@ export interface LocalFileError {
  * 可选注入（仅测试用）。
  * ⚠️ EPUB 需要 DOM 解析器，而 node 下没有 `DOMParser` 全局 ⇒ 单测必须能换掉它。
  *    生产不传，缺省走 `browserHtmlParser`（Tauri WebView / 浏览器）。
+ * ⚠️ `ocr` 同时是**功能开关**：不传 = 不做 OCR 兜底（行为与 F8 范围 2 之前逐字节一致）。
+ *    生产由 `ImportModal` / `library.dialogs` 按面板上的勾选状态决定是否组装。
  */
 export interface LocalFileDeps {
   parseHtml?: HtmlParser;
+  ocr?: PdfOcrDeps;
 }
 
 function err(kind: LocalFileErrorKind, detail?: string): LocalFileError {
@@ -138,7 +149,10 @@ export async function fileToUnit(file: File, deps?: LocalFileDeps): Promise<Impo
         },
       };
     }
-    const out = await extractPdfText(await file.arrayBuffer());
+    const out = await extractPdfText(
+      await file.arrayBuffer(),
+      deps?.ocr ? { ocr: deps.ocr } : undefined,
+    );
     // PDF 无结构标记：识别出疑似标题行时提升为 md 标题，切分器才能识别出「第 X 章」（G5）。
     const promoted = promotePdfHeadings(out.text);
     return {
@@ -147,7 +161,12 @@ export async function fileToUnit(file: File, deps?: LocalFileDeps): Promise<Impo
       splitFormat: promoted.promoted > 0 ? "markdown" : "txt",
       text: promoted.text,
       source,
-      extract: { pages: out.pageCount, nonEmptyPages: out.nonEmptyPages },
+      extract: {
+        pages: out.pageCount,
+        nonEmptyPages: out.nonEmptyPages,
+        // OCR 来的文字与文本层抽出的文字可信度不同，结果卡要能分辨（D10）。
+        ...(out.ocr ? { ocr: true } : {}),
+      },
     };
   } catch (e) {
     // 单一错误漏斗：各抽取器的语义化错误在此映射为 kind（顺序无关，类型互斥）。
@@ -161,6 +180,21 @@ export async function fileToUnit(file: File, deps?: LocalFileDeps): Promise<Impo
     if (e instanceof EpubBadArchiveError) return err("epub-bad-zip", file.name);
     if (e instanceof EpubNoTextError) return err("epub-no-text", file.name);
     if (e instanceof EpubTooLargeError) return err("too-large", `${file.name}: ${e.message}`);
+    // OCR 兜底（F8 范围 2）：顺序在 PdfNoTextError **之后** —— `extractPdfText`
+    // 只在没走 OCR 时才抛它，两者互斥，放哪都行，但「先原生后兜底」更好读。
+    if (e instanceof OcrError) {
+      return err(
+        e.kind === "unavailable" ? "pdf-ocr-unavailable" : "pdf-ocr-failed",
+        e.detail ?? e.message,
+      );
+    }
+    if (e instanceof PdfOcrTooManyPagesError) {
+      return err("pdf-ocr-too-many-pages", `${file.name} pages>${LIMITS.ocrMaxPages}`);
+    }
+    if (e instanceof PdfOcrNoTextError) return err("pdf-ocr-no-text", file.name);
+    if (e instanceof PdfOcrTooLargeError) {
+      return err("too-large", `${file.name} chars>${LIMITS.pdfOcrMaxChars}`);
+    }
     return err("read-failed", `${file.name}: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
