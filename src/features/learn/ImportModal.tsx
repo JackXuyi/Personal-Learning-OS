@@ -47,6 +47,10 @@ import { Select } from "../../components/ui/select";
 import { Button } from "../../components/ui/button";
 import { Spinner } from "../../components/ui/spinner";
 import { fileToUnit } from "./import/local-files";
+import type { LocalFileDeps } from "./import/local-files";
+import { isOcrAvailable, recognizeImage } from "./import/desktop-ocr";
+import { renderPdfPages } from "./import/pdf-render";
+import type { PdfOcrDeps } from "./import/pdf-ocr";
 import { buildGithubUnit } from "./import/github";
 import type { GithubPreview } from "./import/github";
 import type { ImportPhaseKey } from "./import/pipeline";
@@ -160,9 +164,29 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
   const [ghPreview, setGhPreview] = useState<GithubPreview | undefined>();
   /** 网页面板抓取成功后上抛的「可导入单位」（null → undefined）。 */
   const [webUnit, setWebUnit] = useState<ImportUnit | undefined>();
+  /**
+   * 扫描件 OCR 开关（F8 范围 2）。**默认关**：30 页扫描件要等半分钟，
+   * 替用户决定「值得等」是错的；勾选这个动作本身就是等待预期的确认。
+   */
+  const [ocrEnabled, setOcrEnabled] = useState(false);
+  /** 识别进度（null = 没在识别；同时用来挡主按钮重复触发）。 */
+  const [ocrProgress, setOcrProgress] = useState<{ done: number; total: number } | null>(null);
 
   const setPhase = (key: ImportPhaseKey, status: PhaseStatus) =>
     setPhases((prev) => prev.map((s, i) => (PHASE_ORDER[i] === key ? status : s)));
+
+  /**
+   * 组装扫描件 OCR 依赖（生产实现）。
+   *
+   * 只有「勾选了 OCR 且本机支持」时才传进 `fileToUnit` —— 不传等于整条 OCR
+   * 路径不存在，文本型 PDF 与其它格式的行为因此逐字节不变。
+   */
+  const ocrDeps = (): PdfOcrDeps => ({
+    // 逐页渲染（异步迭代）：任一时刻只有一页位图存活。
+    renderPages: (buffer, pages) => renderPdfPages(buffer, pages),
+    recognize: recognizeImage,
+    onProgress: (done, total) => setOcrProgress({ done, total }),
+  });
 
   const resetRun = () => {
     setNotice(undefined);
@@ -313,10 +337,19 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
       // 预转换：把 File 归一化为 ImportUnit；转换失败（扫描件/读取失败）计入 failed。
       const units: ImportUnit[] = [];
       const failed: { title: string; reason: string }[] = [];
-      for (const file of localFiles) {
-        const out = await fileToUnit(file);
-        if ("error" in out) failed.push({ title: file.name, reason: localErrorText(out, fmt.local.errors) });
-        else units.push(out);
+      // OCR 依赖只在「勾选了 + 本机支持」时组装 —— 不传就是完全不走 OCR
+      //（文本型 PDF / 其它格式的行为逐字节不变）。
+      const deps: LocalFileDeps | undefined =
+        ocrEnabled && isOcrAvailable() ? { ocr: ocrDeps() } : undefined;
+      try {
+        for (const file of localFiles) {
+          const out = await fileToUnit(file, deps);
+          if ("error" in out) failed.push({ title: file.name, reason: localErrorText(out, fmt.local.errors) });
+          else units.push(out);
+        }
+      } finally {
+        // 无论成功/失败/抛错都要收起进度，否则会永远停在「识别中 x/y 页」。
+        setOcrProgress(null);
       }
       if (units.length === 0) {
         setNotice(fmt.batch.allFailed);
@@ -417,6 +450,8 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
   const pasteOverLimit = tab === "paste" && content.trim().length > LIMITS.pasteMaxChars;
   const primaryDisabled =
     busy ||
+    // OCR 正在跑（可达 30s+）：此时预转换还没结束，再点一次会重复识别同一份。
+    ocrProgress !== null ||
     (tab === "paste" && !content.trim()) ||
     pasteOverLimit ||
     (tab === "local" && localFiles.length === 0) ||
@@ -441,6 +476,10 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
           files={localFiles}
           onFilesChange={setLocalFiles}
           disabled={busy}
+          ocrEnabled={ocrEnabled}
+          onOcrEnabledChange={setOcrEnabled}
+          ocrAvailable={isOcrAvailable()}
+          ocrProgress={ocrProgress}
         />
       );
     }
@@ -643,6 +682,15 @@ export default function ImportModal({ onClose, onImported, onInspect }: ImportMo
           {/* 抽取量（G6）：抽取是否「抽全」在导入当刻可见 */}
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3">
             <span className="tabular-nums">{fmt.statChars(single.chars)}</span>
+            {/* OCR 来的正文与文本层抽出的可信度不同，必须能分辨（D10）。 */}
+            {ex?.ocr ? (
+              <span
+                className="rounded border border-line px-1.5 py-0.5 text-[10px] text-ink-2"
+                data-testid="result-ocr-tag"
+              >
+                {fmt.local.ocrTag}
+              </span>
+            ) : null}
             {ex?.pages ? (
               <span className="tabular-nums">{fmt.statPages(ex.nonEmptyPages ?? 0, ex.pages)}</span>
             ) : null}

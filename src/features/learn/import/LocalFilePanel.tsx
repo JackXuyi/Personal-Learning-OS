@@ -6,13 +6,16 @@
  *   主按钮计数与批量执行）；本面板只做选择交互 + 即时预校验展示；
  * - 预校验（classifyLocalFile）：扩展名白名单 + 大小护栏即时标红，超限/不支持
  *   的行仅展示不进入可导入列表；「扫描件 PDF」「非 ZIP / 旧版 .doc 改名」预校验
- *   不可知，导入期由 fileToUnit 判定并计入批量失败项。
+ *   不可知，导入期由 fileToUnit 判定并计入批量失败项；
+ * - **扫描件 OCR 开关**（F8 范围 2）也在这里。开关状态由父级持有（真正的兜底
+ *   发生在父级的 `fileToUnit` 调用里），本面板只渲染与上抛。
  *
  * 导入动作由 ImportModal 底部主按钮统一触发（本面板不直接写 storage）。
  */
 import { useRef, useState } from "react";
 import type { DragEvent } from "react";
 import { useI18n } from "../../../i18n";
+import { Checkbox } from "../../../components/ui/checkbox";
 import { classifyLocalFile, formatBytes } from "./types";
 import type { LocalFileClassified, LocalFileKind } from "./types";
 
@@ -22,6 +25,13 @@ interface LocalFilePanelProps {
   onFilesChange: (files: File[]) => void;
   /** 导入进行中禁用选择。 */
   disabled?: boolean;
+  /** 扫描件 OCR 开关（受控；父级持有，两处入口共用一份状态）。 */
+  ocrEnabled: boolean;
+  onOcrEnabledChange: (enabled: boolean) => void;
+  /** 本机能否做 OCR（浏览器预览为 false ⇒ 禁用 + 说明原因）。 */
+  ocrAvailable: boolean;
+  /** 识别进度（null = 当前没有在识别）。 */
+  ocrProgress: { done: number; total: number } | null;
 }
 
 /** 展示行：含预校验状态（ok / 超限 / 不支持）。 */
@@ -30,7 +40,15 @@ interface Row {
   state: LocalFileClassified | "unsupported";
 }
 
-export default function LocalFilePanel({ files, onFilesChange, disabled }: LocalFilePanelProps) {
+export default function LocalFilePanel({
+  files,
+  onFilesChange,
+  disabled,
+  ocrEnabled,
+  onOcrEnabledChange,
+  ocrAvailable,
+  ocrProgress,
+}: LocalFilePanelProps) {
   const { m } = useI18n();
   const fmt = m.learn.import;
   const inputRef = useRef<HTMLInputElement>(null);
@@ -111,6 +129,37 @@ export default function LocalFilePanel({ files, onFilesChange, disabled }: Local
         <p className="text-sm font-medium text-ink-1">{fmt.local.dropTitle}</p>
         <p className="mt-1 text-xs text-ink-3">{fmt.local.dropHint}</p>
       </label>
+
+      {/* 扫描件 OCR 开关（F8 范围 2）。默认关：勾了就是接受等待，不该替用户决定。 */}
+      <div className="rounded-xl border border-line bg-surface/60 px-3 py-2.5" data-testid="local-ocr">
+        <div className="flex items-start gap-2">
+          <Checkbox
+            checked={ocrEnabled}
+            onCheckedChange={(value) => onOcrEnabledChange(value === true)}
+            disabled={disabled || !ocrAvailable}
+            data-testid="local-ocr-toggle"
+            aria-label={fmt.local.ocrToggle}
+            className="mt-0.5"
+          />
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-ink-1">{fmt.local.ocrToggle}</p>
+            {/* 不可用时不给半句话：说明**为什么**不能用（浏览器预览 vs 系统不支持）。 */}
+            <p className="mt-0.5 text-[11px] leading-relaxed text-ink-3">
+              {ocrAvailable ? fmt.local.ocrHint : fmt.local.ocrDesktopOnly}
+            </p>
+          </div>
+        </div>
+        {ocrProgress ? (
+          <p
+            className="mt-2 text-[11px] tabular-nums text-ink-2"
+            data-testid="local-ocr-progress"
+            // 页级进度是「还要等多久」的唯一线索，读屏也要能听到变化。
+            aria-live="polite"
+          >
+            {fmt.local.ocrProgress(ocrProgress.done, ocrProgress.total)}
+          </p>
+        ) : null}
+      </div>
 
       {/* 已选列表 */}
       {rows.length > 0 ? (

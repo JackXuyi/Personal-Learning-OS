@@ -26,6 +26,10 @@ import { notifyDocsChanged } from "../../../components/layout/AppShell";
 import LocalFilePanel from "../import/LocalFilePanel";
 import GithubPanel from "../import/GithubPanel";
 import { fileToUnit } from "../import/local-files";
+import type { LocalFileDeps } from "../import/local-files";
+import { isOcrAvailable, recognizeImage } from "../import/desktop-ocr";
+import { renderPdfPages } from "../import/pdf-render";
+import type { PdfOcrDeps } from "../import/pdf-ocr";
 import { buildGithubUnit, GithubImportError } from "../import/github";
 import type { GithubPreview } from "../import/github";
 import { githubErrorText, localErrorText } from "../import/error-text";
@@ -230,6 +234,12 @@ export function UpdateDocModal({
   // 本地 / GitHub 面板
   const [files, setFiles] = useState<File[]>([]);
   const [ghPreview, setGhPreview] = useState<GithubPreview | undefined>();
+  /**
+   * 扫描件 OCR 开关（F8 范围 2）。与「新建资料」弹窗各持一份状态 ——
+   * 但两个弹窗的面板与判定逻辑是同一套，行为一致。
+   */
+  const [ocrEnabled, setOcrEnabled] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState<{ done: number; total: number } | null>(null);
 
   useEffect(() => {
     setTab("paste");
@@ -239,6 +249,7 @@ export function UpdateDocModal({
     setBody("");
     setFiles([]);
     setGhPreview(undefined);
+    setOcrProgress(null);
     setPhases(REPLACE_PHASES.map(() => "pending"));
   }, [doc?.id]);
 
@@ -257,7 +268,23 @@ export function UpdateDocModal({
       return { title: doc.title, format, splitFormat: format === "markdown" ? "markdown" : "auto", text: body.trim() };
     }
     if (tab === "local") {
-      const out = await fileToUnit(files[0]);
+      // 只在「勾选了 + 本机支持」时传依赖：不传 = 完全不走 OCR。
+      const deps: LocalFileDeps | undefined =
+        ocrEnabled && isOcrAvailable()
+          ? {
+              ocr: {
+                renderPages: (buffer, pages) => renderPdfPages(buffer, pages),
+                recognize: recognizeImage,
+                onProgress: (done, total) => setOcrProgress({ done, total }),
+              } satisfies PdfOcrDeps,
+            }
+          : undefined;
+      let out;
+      try {
+        out = await fileToUnit(files[0], deps);
+      } finally {
+        setOcrProgress(null);
+      }
       if ("error" in out) {
         setNotice(localErrorText(out, m.learn.import.local.errors));
         return undefined;
@@ -362,7 +389,15 @@ export function UpdateDocModal({
             </div>
           ) : null}
           {tab === "local" ? (
-            <LocalFilePanel files={files} onFilesChange={setFiles} disabled={busy} />
+            <LocalFilePanel
+              files={files}
+              onFilesChange={setFiles}
+              disabled={busy}
+              ocrEnabled={ocrEnabled}
+              onOcrEnabledChange={setOcrEnabled}
+              ocrAvailable={isOcrAvailable()}
+              ocrProgress={ocrProgress}
+            />
           ) : null}
           {tab === "github" ? (
             <GithubPanel onPreview={(p) => setGhPreview(p ?? undefined)} disabled={busy} />
