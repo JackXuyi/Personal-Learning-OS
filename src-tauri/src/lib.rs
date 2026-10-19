@@ -103,21 +103,39 @@ pub fn run() {
                 );
             }
             // 菜单栏常驻图标（tray.rs）：失败不阻塞启动，仅记录。
-            if let Err(err) = tray::init(app.handle()) {
-                logging::log_line(
-                    logging::LogLevel::Warn,
-                    "app",
-                    &format!("tray init skipped: {err}"),
-                );
+            let tray_ok = match tray::init(app.handle()) {
+                Ok(()) => true,
+                Err(err) => {
+                    logging::log_line(
+                        logging::LogLevel::Warn,
+                        "app",
+                        &format!("tray init skipped: {err}"),
+                    );
+                    false
+                }
+            };
+            // 纯菜单栏应用：Dock 不再显示图标，菜单栏图标是唯一入口。
+            // ⚠️ 仅在托盘可用时才切 —— 否则红点一收走窗口就再也唤不回来
+            // （见 tray.rs::is_available 的注释）。
+            #[cfg(target_os = "macos")]
+            if tray_ok {
+                app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             }
             Ok(())
         })
-        // 窗口左上角红色关闭按钮 → 最小化而非退出（2026-09-30 用户确认）。
-        // 真正退出走托盘菜单「退出」或 ⌘Q，二者都绕过 CloseRequested。
+        // 窗口左上角红色关闭按钮 → 收进菜单栏而非退出（2026-10-19 用户确认：
+        // 「改成最小化到顶部的菜单栏，而不是退出当前客户端」，并确认 Dock 不留图标）。
+        // 真正退出走托盘菜单「退出」；⚠️ Accessory 策略下应用菜单不显示，⌘Q 已失效。
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                let _ = window.minimize();
+                // 托盘不可用时回退最小化：Dock 图标点击仍能唤回，
+                // 而 hide() 后 macOS 不会自动恢复窗口 = 应用变成僵尸进程。
+                if tray::is_available() {
+                    let _ = window.hide();
+                } else {
+                    let _ = window.minimize();
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
