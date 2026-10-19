@@ -1519,7 +1519,14 @@ export const en: Messages = {
       sourceTab: { paste: "Paste", local: "Local files", github: "GitHub", web: "Web page" },
       local: {
         dropTitle: "Drop .md / .txt / .pdf / .docx / .epub here, or click to select files",
-        dropHint: "Multiple files supported; scanned PDFs are not supported (text PDFs work)",
+        dropHint: "Multiple files supported; tick \u201cOCR\u201d below for scanned PDFs",
+        /** OCR toggle (F8 scope 2). Copy must say it is slow — ticking it accepts the wait. */
+        ocrToggle: "Recognize text in scanned PDFs with OCR",
+        ocrHint: "Page-by-page recognition; about half a minute for 50 pages, and results may contain errors",
+        ocrDesktopOnly: "OCR is desktop-only (browser preview cannot reach the system recognizer)",
+        ocrProgress: (done: number, total: number) => `Recognizing scanned pages ${done}/${total}\u2026`,
+        /** Source badge on the result card, to tell OCR apart from the PDF text layer. */
+        ocrTag: "OCR",
         selected: (n: number) => `${n} file(s) selected`,
         importable: (n: number) => `${n} importable`,
         removeAll: "Remove all",
@@ -1534,7 +1541,7 @@ export const en: Messages = {
         errors: {
           unsupported: "Unsupported type (only .md / .txt / .pdf / .docx / .epub)",
           "too-large": "Exceeds the size limit",
-          "pdf-no-text": "No extractable text (likely a scanned PDF)",
+          "pdf-no-text": "No extractable text (likely a scanned PDF) — tick \u201cOCR\u201d above and retry",
           "pdf-too-large": "PDF exceeds the page limit",
           "read-failed": "Failed to read the file",
           /** Must be **actionable**: it names the concrete fix ("save as .docx in Word"). */
@@ -1545,6 +1552,12 @@ export const en: Messages = {
           "epub-drm": "This book is DRM-protected — please use a DRM-free copy",
           "epub-bad-zip": "The file is corrupted or not a valid .epub",
           "epub-no-text": "No text extracted from this book (it may be an image-only layout)",
+          /** OCR fallback (F8 scope 2); each one names a concrete action, never just "unsupported". */
+          "pdf-ocr-unavailable":
+            "This device cannot run OCR (macOS desktop only, with a system that supports Chinese recognition)",
+          "pdf-ocr-too-many-pages": "Over the OCR page limit (50) — split the PDF into parts and retry",
+          "pdf-ocr-failed": "OCR failed — you can paste the text in directly instead",
+          "pdf-ocr-no-text": "OCR found no text (the pages may be charts only, or too blurry)",
         },
       },
       github: {

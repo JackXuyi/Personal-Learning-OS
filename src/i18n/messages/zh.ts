@@ -1490,7 +1490,14 @@ export const zh = {
       /** 本地文件面板。 */
       local: {
         dropTitle: "拖拽 .md / .txt / .pdf / .docx / .epub 到此处，或点击选择文件",
-        dropHint: "支持批量选择多个文件；扫描版 PDF 暂不支持（文本型 PDF 可导入）",
+        dropHint: "支持批量选择多个文件；扫描版 PDF 可勾选下方「OCR 识别」后导入",
+        /** OCR 开关（F8 范围 2）。文案必须写清「慢」——勾了就是接受等待。 */
+        ocrToggle: "扫描版 PDF 用 OCR 识别文字",
+        ocrHint: "纯图片 PDF 逐页识别，50 页内约需半分钟；识别结果可能有错字",
+        ocrDesktopOnly: "OCR 仅桌面端可用（浏览器预览无法调用系统识别）",
+        ocrProgress: (done: number, total: number) => `正在识别扫描件 ${done}/${total} 页…`,
+        /** 结果卡上的来源标记，与「文本层抽出」区分。 */
+        ocrTag: "OCR 识别",
         selected: (n: number) => `已选 ${n} 个文件`,
         importable: (n: number) => `其中 ${n} 份可导入`,
         removeAll: "全部移除",
@@ -1505,7 +1512,7 @@ export const zh = {
         errors: {
           unsupported: "不支持的类型（仅 .md / .txt / .pdf / .docx / .epub）",
           "too-large": "超出大小限制",
-          "pdf-no-text": "未抽取到文本（可能为扫描件）",
+          "pdf-no-text": "未抽取到文本（可能为扫描件）—— 可勾选上方「OCR 识别」重试",
           "pdf-too-large": "PDF 页数超出上限",
           "read-failed": "读取失败",
           /** ⚠️ 必须**可行动**：给的是「用 Word 另存为 .docx」这个具体操作。 */
@@ -1516,6 +1523,12 @@ export const zh = {
           "epub-drm": "这本书有加密保护（DRM），请换用无 DRM 的版本",
           "epub-bad-zip": "文件已损坏或不是有效的 .epub",
           "epub-no-text": "未从这本书抽取到正文（可能是纯图片排版）",
+          /** OCR 兜底（F8 范围 2）；四条都指向一个**具体动作**，不是「不支持」。 */
+          "pdf-ocr-unavailable":
+            "这台设备无法做 OCR 识别（仅 macOS 桌面端支持，且需要系统带中文识别能力）",
+          "pdf-ocr-too-many-pages": "页数超过 OCR 上限（50 页），请先把 PDF 拆成几份再导入",
+          "pdf-ocr-failed": "OCR 识别失败，可改用「粘贴」把文字直接粘进来",
+          "pdf-ocr-no-text": "OCR 未识别出文字（页面上可能只有图表，或扫描太模糊）",
         },
       },
       /** GitHub 面板。 */
