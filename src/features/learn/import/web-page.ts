@@ -23,16 +23,13 @@ import { htmlNodesToMarkdown } from "./html-markdown";
 import { WebImportError } from "./web-error";
 import type { FetchedPage } from "./desktop-fetch";
 
-/** HTML 解析器（生产＝webview 的 `DOMParser`；单测注入 `linkedom`）。 */
-export type HtmlParser = (html: string) => Document;
-
 /**
- * 生产用解析器（浏览器 / webview 的全局 `DOMParser`）。
- * ⚠️ 声明为常量而非在函数内 `new DOMParser()`：node 下没有 `DOMParser` 全局，
- *    这样只有真正调用它时才会炸 —— 单测永不调用 ⇒ 纯逻辑层在 node 可跑。
+ * HTML 解析器：定义搬到 `html-parse.ts`（EPUB 导入共用同一对类型与实现）。
+ * 此处 re-export 保持既有消费方（`WebPanel.tsx`）零改动。
  */
-export const browserHtmlParser: HtmlParser = (html) =>
-  new DOMParser().parseFromString(html, "text/html");
+import type { HtmlParser } from "./html-parse";
+export type { HtmlParser } from "./html-parse";
+export { browserHtmlParser } from "./html-parse";
 
 /** 正文入库字符护栏（与 `LIMITS.webMaxChars` 同一把尺子；测试可注入小值）。 */
 export interface WebUnitLimits {
