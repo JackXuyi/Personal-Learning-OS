@@ -174,7 +174,7 @@
 | # | 条目 | 代码证据 | 结论 |
 |---|------|----------|------|
 | 1 | 扫描件 PDF OCR 兜底 | `features/learn/import/pdf.ts:14` 注释「扫描件抛 `PdfNoTextError`，**不做 OCR**」；全仓无 `ocr`/`tesseract` | 未实现 |
-| 2 | EPUB 解析 | 仅类型占位：`domain/document.ts:12` 联合成员 `"epub"` + i18n 标签 + renderer 注释；无解析器，`ImportModal.tsx:144-149` `FORMAT_OPTIONS` 无 epub | 未实现（仅占位） |
+| 2 | EPUB 解析 | 仅类型占位：`domain/document.ts:12` 联合成员 `"epub"` + i18n 标签 + renderer 注释；无解析器，`ImportModal.tsx:144-149` `FORMAT_OPTIONS` 无 epub | ✅ **已交付（F8 范围 4，2026-10-19）** —— `import/{epub,epub-archive,html-parse}.ts`，输出层复用 `html-markdown.ts`；spine 项驱动章节边界（逐项标题归一化）、标题三级兜底、DRM 可行动拒绝、`jszip` 提为直接依赖（零新增包）。原证据已过时（见 `docs/epub-import-design-2026-10.md`） |
 | 3 | URL 抓取网页 | `ImportModal.tsx:147` 的 `web` 是**粘贴**格式；全仓唯一抓取是 `import/github.ts`（`:77` 限 `hostname === "github.com"`） | ✅ **已交付（2026-10-16）** —— 第四个来源 Tab「网页」：Rust `net::fetch_url`（本仓库唯一一条用户任意 URL 的出网命令）+ TS 侧编码判定 + `@mozilla/readability` 提正文 + DOM→Markdown 输出层（标题层级归一化）；`ImportModal.tsx:147` 的粘贴格式选项**未动**（新来源是另一个 Tab）。原证据已过时（见 `docs/url-import-design-2026-10.md`） |
 | 4 | 手动把一章拆成两章 | `engine/chapter-edit-engine.ts` 仅 `renumberChapters`/`renameChapter`/`mergeChapterRange`/`reorderChapters`，**无 split** | ✅ **已交付（F7-b，2026-10-10）** —— 引擎新增 `splitChapterAt` / `splitCandidatesOf`，`ChapterEdit` union 加 `split` 分支，编辑态 `ChapterSplitDialog`；原证据已过时（见 `docs/chapter-edit-design-2026-09.md §13`） |
 | 5 | 跨文档学习单元 / 学习路径（F7-c） | 无 `learningUnit`/`learningPath` 编组实体；`GoalDetailPage.tsx:424` 的「LEARNING PATH」是目标范围内章的**只读展示** | 未实现（仅只读视图） |
@@ -225,8 +225,9 @@
    均参见 §六 #4 / #6）
   （⚠️ 2026-10-14 更新：「跨文档概念图谱」本体不在本批清单内（它是 README 独有条目、
    无 Feature 编号），现已交付，参见 §六 #7）
-  （⚠️ 2026-10-16 更新：本批列的「URL 抓取」已交付，参见 §六 #3；
-   本批现存 **F7-c 学习单元实体 · EPUB · OCR** 三项 —— 均为 P2，按产品需要排）
+  （⚠️ 2026-10-16 更新：本批列的「URL 抓取」已交付，参见 §六 #3；）
+  （⚠️ 2026-10-19 更新：本批列的「EPUB」已交付，参见 §六 #2；
+   本批现存 **F7-c 学习单元实体 · OCR** 两项 —— 均为 P2，按产品需要排）
 ```
 
 ---

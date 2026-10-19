@@ -93,7 +93,7 @@
 
 | MVP 要求 | 现状 | 判定 |
 |---|---|---|
-| 导入 PDF/MD/TXT | 仅 MD / PDF 落地；DOCX/EPUB/网页/图片OCR **零实现**；本地 `.txt` 被拒 | ⚠️ 部分 |
+| 导入 PDF/MD/TXT | 仅 MD / PDF 落地；DOCX/EPUB/网页/图片OCR **零实现**；本地 `.txt` 被拒 | ⚠️ 部分<br/>⚠️ **时点注（2026-10-19）**：DOCX（2026-09-23）/ EPUB（2026-10-19）/ 网页（2026-10-16）/ `.txt` 均已落地；**只剩图片 OCR 未做**。本行为 2026-09 审查快照，保留原样以便回溯。 |
 | 文档解析、Chunk、知识提取、来源引用 | ✅ Chunk 落 SQLite；要点带原文引用 | ✅ |
 | 知识图谱：知识点 + 父子/前置/相关 + 可视化 | ✅ 有图有交互；但**前置关系不参与章级规划**（只被概念层 buildPlan 用） | ⚠️ 部分 |
 | 学习者状态：掌握度/尝试/正确率/最近复习 | ✅ 掌握度引擎与遗忘衰减齐备 | ✅ |
@@ -116,7 +116,7 @@
 | P0-2 | 阅读不产生学习证据：`markReviewed` 只排复习、delta=0，掌握度只由试卷写入 | `ChapterReaderPage.tsx:119` | "学了但没证明" — 闭环在 Learn→Prove 处断开 |
 | P0-3 | 测评与资料断裂：`AssessmentPage` 走概念层快照，不读 doc/chapter | 概念层 `requiredUnitIds` 恒空 → 缺口为空 → `buildPlan` 无动作 | 自适应测评在真实数据上退化为空转 |
 | P0-4 | 概念层三张 SQLite 表恒空，图数据全在 localStorage，桌面端不落库 | `saveKnowledgeUnit(s)` 无 UI 调用方；`index-service.ts:279` 概念向量返空 | 知识图谱无法跨资料、不可被检索与规划消费 |
-| P0-5 | 宣称格式与实际严重不符（DOCX/EPUB/TXT/网页/图片OCR 全无） | `README.zh-CN.md:138` vs `import/types.ts:92-101` | 用户预期落差 + 误导贡献者 |
+| P0-5 | 宣称格式与实际严重不符（DOCX/EPUB/TXT/网页/图片OCR 全无） | `README.zh-CN.md:138` vs `import/types.ts:92-101` | 用户预期落差 + 误导贡献者<br/>⚠️ **时点注（2026-10-19）**：五项中 DOCX / EPUB / TXT / 网页**均已兑现**，只剩图片 OCR ⇒ 本条只剩「OCR 宣称」一处，不再是 P0。 |
 
 ### P1 — 能力与体验缺口
 

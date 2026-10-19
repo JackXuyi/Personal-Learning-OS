@@ -163,8 +163,8 @@ Document ──splitDocument──▶ Chapter[]
 |---|---|
 | **目的** | 把外部知识变成系统的 `Document` 实体，成为后续一切流程的原料 |
 | **触发入口** | 全局 `ImportModal`（`src/features/learn/ImportModal.tsx`，挂载于 `AppShell.tsx:115`）。触发点：Header、`HomePage:480/512`、`LibraryPage:275/390`、`PlanPage`、`GoalsPage`、`CommandPalette:288` |
-| **输入来源** | 四 Tab（`ImportModal.tsx`；2026-10-16 起为四路）：① **粘贴**（markdown / note / web / txt，按类型分派 format）② **本地文件**（含 .docx）③ **GitHub** ④ **网页**（`WebPanel.tsx`，2026-10-16 新增） |
-| **格式支持** | MD / TXT → `decodeBytes`（`import/decode.ts`，BOM + UTF-8/GB18030 嗅探）；**PDF → `pdfjs-dist` `extractPdfText`（`import/pdf.ts`）+ `promotePdfHeadings`（`import/pdf-layout.ts`，把疑似标题提升为 md 标题）**；**DOCX → `extractDocxMarkdown`（`import/docx.ts` + `docx-markdown.ts`）**；GitHub → `buildGithubUnit`（`import/github.ts`）；**网页 → Rust `net::fetch_url` + `buildWebUnit`（`import/web-page.ts`，Readability 提正文 + `html-markdown.ts` 产 Markdown）**。统一护栏 `LIMITS`（`import/types.ts`） |
+| **输入来源** | 四 Tab（`ImportModal.tsx`；2026-10-16 起为四路）：① **粘贴**（markdown / note / web / txt，按类型分派 format）② **本地文件**（含 .docx / .epub）③ **GitHub** ④ **网页**（`WebPanel.tsx`，2026-10-16 新增） |
+| **格式支持** | MD / TXT → `decodeBytes`（`import/decode.ts`，BOM + UTF-8/GB18030 嗅探）；**PDF → `pdfjs-dist` `extractPdfText`（`import/pdf.ts`）+ `promotePdfHeadings`（`import/pdf-layout.ts`，把疑似标题提升为 md 标题）**；**DOCX → `extractDocxMarkdown`（`import/docx.ts` + `docx-markdown.ts`）**；**EPUB → `extractEpubMarkdown`（`import/epub.ts` + `epub-archive.ts`，jszip 解归档 → spine 逐项 → 复用 `html-markdown.ts`，2026-10-19 新增）**；GitHub → `buildGithubUnit`（`import/github.ts`）；**网页 → Rust `net::fetch_url` + `buildWebUnit`（`import/web-page.ts`，Readability 提正文 + `html-markdown.ts` 产 Markdown）**。统一护栏 `LIMITS`（`import/types.ts`） |
 | **处理管线** | `runUnitImport`（`import/pipeline.ts:62`）**七步**：<br/>① 同 source 查重（L77-98）<br/>② markdown 清洗 `stripMarkdownNoise`（L102 / `normalize-text.ts:33`，删 badge/img/链接 URL）<br/>③ `saveDocument`（L114）<br/>④ `splitDocument`（L116）<br/>⑤ **AI 精修** `refineSplitResult`（L132）<br/>⑥ `saveChapters`（L138）<br/>⑦ `rebuildChunks`（L140） |
 | **产物** | `Document`（`plos.documents`）+ `Chapter[]`（`plos.chapters`）+ `Chunk[]`/`Embedding[]`（SQLite） |
 | **异常分支** | 切分得 **0 章** → 仅保存 Document，不写 chapters（`pipeline.ts:124`）；同 source 已存在 → 走查重分支（更新而非新建）。⚠️ 该分支**现在只对「有文本但切不出章」成立** —— 抽出 **0 字符**的 PDF 在更早的抽取环节就抛 `PdfNoTextError`（`import/pdf.ts:83`），根本走不到这里 |
@@ -545,6 +545,7 @@ not-started ──打开阅读──▶ learning ──标记学完(markReady)�
 > ⚠️ **2026-10-10 三追加**：上一段的「`roadmap` 的 F7 余项」进一步收窄 —— **F7 范围 2（章节拆分）
 > 与范围 4（前置关系人工调整）均已交付**，F7 只剩 **F7-c 独立学习单元实体**；F8 仍余 OCR / EPUB / URL。
 > （**时点注 2026-10-16**：F8 的 URL 抓取已于本日交付 ⇒ 该句应读作「F8 仍余 **OCR / EPUB**」。）
+> （**时点注 2026-10-19**：F8 的 EPUB 解析已于本日交付 ⇒ 该句应读作「F8 仍余 **OCR** 一项」。）
 > 本文件 §六 缺口清单 #4（章节人工微调）与 §S2 行已同步。
 >
 > ⚠️ **2026-10-14 追加**：概念层多了一个**跨资料口径**的出口 —— `/graph`（`CrossDocGraphPage`）
@@ -556,6 +557,8 @@ not-started ──打开阅读──▶ learning ──标记学完(markReady)�
 >
 > ⚠️ **2026-10-16 追加**：F8 范围 5（URL 抓取）已交付 ⇒ §七 各段所记「F8 仍余 OCR / EPUB / URL 三项」
 > 收窄为 **OCR / EPUB 两项**。本文件 §S1 的「输入来源」与「格式支持」两行已同步为四来源。
+> ⚠️ **2026-10-19 追加**：F8 范围 4（EPUB 解析）已交付 ⇒ §七 各段所记「F8 仍余 OCR / EPUB」
+> 进一步收窄为 **OCR 一项**；§S1 的「输入来源」与「格式支持」两行已补 `.epub`。
 > ⚠️ 该特性**首次在 `src-tauri/**` 开网络口**（`net.rs`，本仓库唯一一条用户任意 URL 出网命令）——
 > 原因不是「想放后端」，而是 webview 的 `fetch` 被 CORS 挡死：GitHub 导入能用 `fetch` 只因
 > `api.github.com` / `raw.githubusercontent.com` 主动发 `Access-Control-Allow-Origin`，任意站点不发。
