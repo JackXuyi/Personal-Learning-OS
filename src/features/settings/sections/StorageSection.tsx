@@ -1,5 +1,6 @@
 import { Card } from "../../../components/primitives";
 import type { Messages } from "../../../i18n";
+import { storagePlacementOf } from "../../../lib/storage-label";
 import { storage } from "../../../stores/useLoopStore";
 import DataPortabilityCard from "../../data/portability/DataPortabilityCard";
 import KnowledgePackCard, { type PackCandidate } from "../../data/portability/KnowledgePackCard";
@@ -14,9 +15,9 @@ export interface StorageCounts {
   evidence: number;
 }
 
-/** 后端徽标文案：适配器 name（local=本机 localStorage；memory=内存预览）。 */
-function backendLabelOf(name: string, sg: Messages["settings"]["storage"]): string {
-  return name.includes("local") ? sg.storageLocal : sg.storageMemory;
+/** 保存位置文案：`storagePlacementOf` 只给 enum，文案在此映射。 */
+function placementLabelOf(name: string, sg: Messages["settings"]["storage"]): string {
+  return storagePlacementOf(name) === "temporary" ? sg.storageMemory : sg.storageLocal;
 }
 
 export default function StorageSection({
@@ -39,7 +40,7 @@ export default function StorageSection({
     <SectionShell title={sg.title} desc={sg.desc}>
       <Card className="space-y-3">
         <dl className="space-y-1.5 text-sm">
-          <KV k={sg.backend} v={backendLabelOf(storage.name, sg)} />
+          <KV k={sg.backend} v={placementLabelOf(storage.name, sg)} />
         </dl>
         <div className="border-t border-line pt-3">
           <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">{sg.counts}</p>

@@ -19,6 +19,7 @@ import { Spinner } from "../../../components/ui/spinner";
 import { useI18n } from "../../../i18n";
 import type { Messages } from "../../../i18n";
 import { storage, useLoopStore } from "../../../stores/useLoopStore";
+import { storagePlacementOf } from "../../../lib/storage-label";
 import { refreshCoverage } from "../../../services/learn/index-service";
 import { decodeBytes } from "../../learn/import/decode";
 import {
@@ -373,7 +374,11 @@ export default function DataPortabilityCard({ counts, onDataChanged }: Props) {
             <p className="text-xs font-medium text-ink-1">{d.importPreviewTitle}</p>
             <p className="text-[11px] text-ink-3">
               {d.previewMeta(
-                pending.backend,
+                // 备份里的 `backend` 是导出时的适配器 name（local / memory / tauri），
+                // 直接透出会让用户看到「来源 local」——同一判定与设置页共用。
+                storagePlacementOf(pending.backend) === "temporary"
+                  ? m.settings.storage.storageMemory
+                  : m.settings.storage.storageLocal,
                 pending.exportVersion,
                 new Date(pending.exportedAt).toLocaleString(),
               )}
