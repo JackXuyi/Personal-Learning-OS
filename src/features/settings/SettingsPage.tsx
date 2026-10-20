@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
+import { Navigate, useParams } from "react-router-dom";
 import { SectionTitle } from "../../components/primitives";
 import { PageContainer } from "../../components/layout/AppShell";
 import { useLangStore } from "../../stores/useLangStore";
 import { useI18n } from "../../i18n";
 import { storage } from "../../stores/useLoopStore";
-import { isDesktopLogAvailable } from "../../lib/desktop-log";
 import AIModelsSection from "./AIModelsSection";
+import SettingsNav from "./SettingsNav";
 import type { PackCandidate } from "../data/portability/KnowledgePackCard";
 import StorageSection, { type StorageCounts } from "./sections/StorageSection";
 import LearningSection from "./sections/LearningSection";
@@ -13,14 +14,17 @@ import AppearanceSection from "./sections/AppearanceSection";
 import ShortcutsSection from "./sections/ShortcutsSection";
 import LogsSection from "./sections/LogsSection";
 import AboutSection from "./sections/AboutSection";
-import { SECTION_ORDER, type SectionKey } from "./settings-nav";
+import { isSectionKey, visibleSections } from "./settings-nav";
 
 /**
  * 设置页壳（布局：docs/settings-left-menu-layout-design-2026-10.md）。
  *
+ * 左侧分区菜单 + 右侧内容，分区进 URL（`/settings/<key>`）⇒ 可深链、刷新与前进后退都保住分区。
  * 分区键与可见性真源在 `settings-nav.ts`；分区内容各自成文件（`sections/`）。
- * AI 分区 = 原「AI 模型中心」（`AIModelsSection`，零功能回退）；
- * Storage 分区展示真实计数（读 storage）；帮助与诊断分区为桌面端专属，纯浏览器隐藏。
+ *
+ * ⚠️ 内容**由 URL 派生**，没有 `useState` 存分区 ⇒ 不存在「菜单已切、内容没切」的竞态。
+ * ⚠️ AI 分区 = 原「AI 模型中心」（`AIModelsSection`，零功能回退）；Storage 分区的计数与
+ * 可打包资料必须**同源一次读取**（见 `packCandidates` 注释）；帮助与诊断分区为桌面端专属。
  */
 
 export default function SettingsPage() {
@@ -28,8 +32,8 @@ export default function SettingsPage() {
   const st = m.settings;
   const langMode = useLangStore((s) => s.mode);
   const setLangMode = useLangStore((s) => s.setMode);
+  const { section } = useParams<{ section?: string }>();
 
-  const [section, setSection] = useState<SectionKey>("ai");
   const [counts, setCounts] = useState<StorageCounts | undefined>();
   /**
    * 可打包资料（F10 社区知识包卡片）。
@@ -63,57 +67,41 @@ export default function SettingsPage() {
 
   useEffect(reloadCounts, []);
 
+  // 非法分区 / 不可见分区（如浏览器预览态下的日志）→ 规范化到 ai。
+  // replace：不把「刚才那个错链接」塞进后退历史，否则点后退会回到一个立刻又被替换的地址。
+  if (!isSectionKey(section) || !visibleSections().includes(section)) {
+    return <Navigate to="/settings/ai" replace />;
+  }
+
   return (
-    <PageContainer>
+    <PageContainer size="wide">
       <SectionTitle title={m.nav.settings.label} subtitle={m.nav.settings.hint} />
 
-      {/* ── 分区导航：顶部横向 Segment Tab（日志分区仅桌面端显示） ── */}
-      <div
-        role="tablist"
-        className="mt-4 flex gap-1 overflow-x-auto rounded-lg border border-line bg-subtle p-1"
-      >
-        {SECTION_ORDER.filter((k) => k !== "logs" || isDesktopLogAvailable()).map((key) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            aria-selected={section === key}
-            data-testid={`settings-tab-${key}`}
-            onClick={() => setSection(key)}
-            className={`flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              section === key
-                ? "bg-surface text-primary shadow-sm"
-                : "text-ink-2 hover:bg-subtle hover:text-ink-1"
-            }`}
-          >
-            {st.sections[key]}
-          </button>
-        ))}
-      </div>
-
-      {/* ── 分区内容 ───────────────────────────────────────────────── */}
-      <div className="mt-6 min-w-0">
-        {section === "ai" ? (
-          <AIModelsSection />
-        ) : section === "storage" ? (
-          <StorageSection
-            counts={counts}
-            packCandidates={packCandidates}
-            st={st}
-            loading={m.common.loading}
-            onDataChanged={reloadCounts}
-          />
-        ) : section === "learning" ? (
-          <LearningSection st={st} />
-        ) : section === "appearance" ? (
-          <AppearanceSection langMode={langMode} setLangMode={setLangMode} lang={lang} m={m} />
-        ) : section === "shortcuts" ? (
-          <ShortcutsSection st={st} />
-        ) : section === "logs" ? (
-          <LogsSection st={st} />
-        ) : (
-          <AboutSection st={st} />
-        )}
+      <div className="mt-6 grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-8">
+        <SettingsNav current={section} />
+        <div className="min-w-0">
+          {section === "ai" ? (
+            <AIModelsSection />
+          ) : section === "storage" ? (
+            <StorageSection
+              counts={counts}
+              packCandidates={packCandidates}
+              st={st}
+              loading={m.common.loading}
+              onDataChanged={reloadCounts}
+            />
+          ) : section === "learning" ? (
+            <LearningSection st={st} />
+          ) : section === "appearance" ? (
+            <AppearanceSection langMode={langMode} setLangMode={setLangMode} lang={lang} m={m} />
+          ) : section === "shortcuts" ? (
+            <ShortcutsSection st={st} />
+          ) : section === "logs" ? (
+            <LogsSection st={st} />
+          ) : (
+            <AboutSection st={st} />
+          )}
+        </div>
       </div>
     </PageContainer>
   );

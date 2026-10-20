@@ -73,7 +73,10 @@ export default function App() {
           <Route path="study" element={<Navigate to="/plan" replace />} />
           <Route path="plan" element={<PlanPage />} />
           <Route path="study/session" element={<ReviewSession />} />
+          {/* 分区 URL 化（docs/settings-left-menu-layout-design-2026-10.md §8.6）：
+              两条路由指向同一组件；无段时 SettingsPage 内部 replace 到 /settings/ai。 */}
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="settings/:section" element={<SettingsPage />} />
           <Route path="*" element={<HomePage />} />
         </Route>
       </Routes>
