@@ -147,14 +147,6 @@ pub fn get_embedding_models() -> Vec<ModelDef> {
         .collect()
 }
 
-/// 默认向量模型(清单首位)。
-pub fn get_default_embedding_model() -> ModelDef {
-    get_embedding_models()
-        .into_iter()
-        .next()
-        .expect("at least one embedding model must be defined")
-}
-
 /// 全量清单(LLM + Embedding),按用途分流前的唯一真源。
 fn all_models() -> Vec<ModelDef> {
     vec![
@@ -448,7 +440,11 @@ mod tests {
 
     #[test]
     fn default_embedding_model_is_qwen3_0b6() {
-        let def = get_default_embedding_model();
+        // 「默认档」= 清单首位(前端 `models[0]` 同口径)
+        let def = get_embedding_models()
+            .into_iter()
+            .next()
+            .expect("at least one embedding model must be defined");
         assert_eq!(def.name, "qwen3-embed:0.6b");
         assert_eq!(def.gguf_file, "Qwen3-Embedding-0.6B-Q8_0.gguf");
         assert_eq!(def.kind, ModelKind::Embedding);
@@ -485,7 +481,10 @@ mod tests {
     #[test]
     fn approx_bytes_matches_upstream() {
         // 639,150,592 为 ModelScope / HuggingFace 双端实测一致的大小
-        let def = get_default_embedding_model();
+        let def = get_embedding_models()
+            .into_iter()
+            .next()
+            .expect("at least one embedding model must be defined");
         assert_eq!(def.approx_bytes, 639_150_592);
     }
 

@@ -12,7 +12,7 @@ PLOS 的 UI 与桌面核心只经 Tauri commands（与可选 events）通信。�
 | 命令面 | Rust 属主 | 前端调用侧 |
 |---------|-----------|-----------|
 | `vault_set_secret` / `vault_get_secret` / `vault_delete_secret` | `src-tauri/src/vault.rs` | `src/ai/vault.ts` |
-| `llm_list_models` / `llm_download` / `llm_cancel_download` / `llm_delete` / `llm_generate` / `llm_default_model` / `llm_status` | `src-tauri/src/llm/commands.rs` | `src/ai/builtin.ts` |
+| `llm_list_models` / `llm_download` / `llm_cancel_download` / `llm_delete` / `llm_generate` / `llm_status` | `src-tauri/src/llm/commands.rs` | `src/ai/builtin.ts` |
 | `db_*`（28 条：sections / chunks / fts / knowledge_units / relations / embeddings） | `src-tauri/src/db/commands.rs` | `src/storage/tauri.ts`（`TauriStorage`） |
 | `app_status` | `src-tauri/src/lib.rs` | — |
 

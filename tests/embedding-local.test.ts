@@ -283,7 +283,6 @@ const run = async () => {
       "embed_download",
       "embed_cancel_download",
       "embed_delete",
-      "embed_default_model",
       "embed_texts",
     ]) {
       assert.ok(lib.includes(cmd), `lib.rs 必须注册 ${cmd}`);

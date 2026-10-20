@@ -10,9 +10,11 @@ use super::manager::{
     block_reason_if_unsupported, current_device, DownloadProgress, ModelInfo, ModelManager,
 };
 use super::models::{
-    get_default_embedding_model, get_default_model, get_model_by_name, render_prompt, ChatMessage,
-    ChatRole, ModelDef, ModelKind, PoolingKind, SamplingParams,
+    get_default_model, get_model_by_name, render_prompt, ChatMessage, ChatRole, ModelDef, ModelKind,
+    PoolingKind, SamplingParams,
 };
+#[cfg(test)]
+use super::models::get_embedding_models;
 use super::sidecar::Sidecar;
 
 /// 下载进度事件名(前端经 `@tauri-apps/api/event` 监听)。
@@ -235,12 +237,6 @@ pub async fn llm_generate(
     result.map_err(|e| e.to_string())
 }
 
-/// 供设置页展示默认模型名。
-#[tauri::command]
-pub async fn llm_default_model() -> String {
-    get_default_model().name
-}
-
 // ---------------------------------------------------------------------------
 // 向量化(embedding)命令面
 //
@@ -317,12 +313,6 @@ pub async fn embed_delete(state: State<'_, LlmState>, model: String) -> Result<(
         .delete(&model)
         .await
         .map_err(|e| e.to_string())
-}
-
-/// 默认向量模型名(供设置页默认值与迁移校验)。
-#[tauri::command]
-pub async fn embed_default_model() -> String {
-    get_default_embedding_model().name
 }
 
 /// 批量文本向量化。失败一律返回 Err(含维度不符),**绝不返回脏向量**。
@@ -494,7 +484,10 @@ mod tests {
     #[test]
     fn embedding_default_is_a_local_embedding_model() {
         // 设置页默认值必须落到本地向量清单内(非云端名)
-        let def = get_default_embedding_model();
+        let def = get_embedding_models()
+            .into_iter()
+            .next()
+            .expect("至少一档本地向量模型");
         assert_eq!(def.kind, ModelKind::Embedding);
         assert_eq!(def.dim, Some(1024));
         assert!(

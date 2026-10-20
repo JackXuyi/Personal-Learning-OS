@@ -146,14 +146,12 @@ pub fn run() {
             llm::commands::llm_cancel_download,
             llm::commands::llm_delete,
             llm::commands::llm_generate,
-            llm::commands::llm_default_model,
             llm::commands::llm_status,
             // 本地向量化（docs/embedding-default-config-design-2026-09.md）
             llm::commands::embed_list_models,
             llm::commands::embed_download,
             llm::commands::embed_cancel_download,
             llm::commands::embed_delete,
-            llm::commands::embed_default_model,
             llm::commands::embed_texts,
             // 文件日志（docs/tauri-log-config-design-2026-09.md）
             logging::log_get_config,
