@@ -441,18 +441,16 @@ export const en: Messages = {
           "Cloud models need an API Key; Base URL and model name are required.",
         validHint: "Base URL and model name are required.",
         keychainNote:
-          "On “Use this model”, the API Key is written to the system Keychain — never kept in plaintext on this machine.",
-        localStorageNote:
-          "Pure browser preview: API Key is stored as plaintext in local localStorage, used only by this app to call the endpoint.",
+          "The key is kept in the system's secure storage — never written into a backup.",
+        localStorageNote: "Browser preview: the key is kept in this browser only.",
         testNote:
           "“Test connection” sends one minimal request against the current form values (tests even when unsaved).",
         testRunning: "Testing connection…",
         testOk: (ms: number) => `✅ Connected · ${ms}ms latency · model online`,
       },
       builtin: {
-        previewNoticeHead: "Built-in local models require the desktop app. Run ",
-        previewNoticeTail:
-          " or open the installed app; this is a pure browser preview.",
+        previewNotice:
+          "Built-in local models work in the desktop app only. This is a browser preview — install the desktop app and come back.",
         aboutGb: (n: string) => `~${n} GB`,
         aboutMb: (n: string) => `~${n} MB`,
         unsupportedPlatform: (os: string, arch: string) =>
@@ -534,7 +532,7 @@ export const en: Messages = {
       doneAll: "Index complete",
       desktopOnly: "Desktop app required",
       previewDisabled:
-        "The local embedding model needs the desktop app (npm run tauri dev or the packaged build); it is unavailable in browser preview.",
+        "Semantic search needs the desktop app; unavailable in browser preview.",
       unsupportedPlatform: (os: string, arch: string) =>
         `Local inference is unsupported on this platform (${os} · ${arch}; macOS Apple Silicon only)`,
       ramBelowMin: (ram: string, min: string) =>

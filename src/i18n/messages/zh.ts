@@ -445,17 +445,14 @@ export const zh = {
         useModel: "使用该模型",
         validHintCloud: "云端模型需填 API Key;Base URL 与模型名必填。",
         validHint: "Base URL 与模型名必填。",
-        keychainNote:
-          "API Key 在「使用该模型」时写入系统钥匙串(Keychain),不在本机明文保存。",
-        localStorageNote:
-          "纯浏览器预览:API Key 以明文保存在本机 localStorage,仅供本应用调用对应端点。",
+        keychainNote: "密钥保存在系统的安全存储里，不会写进备份文件。",
+        localStorageNote: "当前是浏览器预览，密钥只保存在这个浏览器里。",
         testNote: "「测试连接」向当前表单值(未保存也测)发一次最小请求。",
         testRunning: "正在测试连接…",
         testOk: (ms: number) => `✅ 已连接 · 延迟 ${ms}ms · 模型在线`,
       },
       builtin: {
-        previewNoticeHead: "内置本地模型需在桌面端使用。请运行 ",
-        previewNoticeTail: " 或安装包打开应用;当前是纯浏览器预览。",
+        previewNotice: "内置本地模型只能在桌面版使用。当前是浏览器预览，装好桌面版再回来。",
         aboutGb: (n: string) => `约 ${n} GB`,
         aboutMb: (n: string) => `约 ${n} MB`,
         unsupportedPlatform: (os: string, arch: string) =>
@@ -530,8 +527,7 @@ export const zh = {
       failedPartial: (n: number) => `${n} 块失败，可再点「仅补齐缺失」重试`,
       doneAll: "索引已完成",
       desktopOnly: "需桌面端可用",
-      previewDisabled:
-        "本地向量模型需桌面端（npm run tauri dev 或打包版），浏览器预览下不可用。",
+      previewDisabled: "语义搜索需要桌面版，浏览器预览下不可用。",
       unsupportedPlatform: (os: string, arch: string) =>
         `当前平台不支持本地推理（${os} · ${arch}，仅 macOS Apple Silicon）`,
       ramBelowMin: (ram: string, min: string) =>

@@ -146,9 +146,7 @@ export default function BuiltinModelsPanel({
   if (!isBuiltinAvailable()) {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-800">
-        {b.previewNoticeHead}
-        <code className="rounded bg-amber-100 px-1">npm run tauri dev</code>
-        {b.previewNoticeTail}
+        {b.previewNotice}
       </div>
     );
   }
