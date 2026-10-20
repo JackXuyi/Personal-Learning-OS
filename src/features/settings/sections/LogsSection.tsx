@@ -108,7 +108,7 @@ export default function LogsSection({ st }: { st: Messages["settings"] }) {
                     : "text-ink-2 hover:text-ink-1"
                 }`}
               >
-                {level}
+                {lg.levels[level]}
               </button>
             ))}
           </div>
