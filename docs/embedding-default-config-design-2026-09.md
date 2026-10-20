@@ -486,6 +486,8 @@ pub fn get_embedding_models_directory(app_data_dir: &Path) -> PathBuf {
 
 单测补充：`default_embedding_model_is_qwen3_0b6`、`embedding_defs_have_dim_and_pooling`、`embedding_mirrors_follow_convention`（主 ModelScope、备 HF）、`approx_bytes_matches_upstream`（639_150_592）。
 
+> 时点注（2026-10-19）：`get_default_embedding_model()` 已随 `embed_default_model` 与 `llm_default_model` 两个 IPC 命令的清理一并删除（前端零调用方 —— 设置页改用 `models.find(...) ?? models[0]`，`ai/embedding.ts` 自带 `LOCAL_EMBEDDING_MODELS` 常量）。「默认档＝清单首位」改由 `get_embedding_models().next()` 表达，上述三条单测口径不变。
+
 ### 8.3 `src-tauri/src/llm/manager.rs`（修改）
 
 **改动说明**：`ModelManager` 构造时固化「清单 + 目录」，同一套下载/扫描/删除逻辑服务两类模型。

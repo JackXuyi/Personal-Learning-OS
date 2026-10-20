@@ -53,7 +53,7 @@
 | `CAPABILITY_EVIDENCE_PREVIEW_CHARS` | `engine/capability-engine.ts:51` | — |
 | `QUIZ_QUOTA_PREVIEW` | `engine/quiz-engine.ts:366` | 题量预览已改由 i18n `m.quiz.hint*` 提供；连带 `PaperMode` 变该文件未用导入（同批摘除） |
 | `isLocalEmbeddingAvailable` | `ai/embedding.ts:83` | 就绪判断实际走 `isEmbeddingModelReady`（`:128`） |
-| `embedDefaultModel` | `ai/builtin.ts:136` | ⚠️ 它是 Rust IPC 命令 `embed_default_model` 的 TS 镜像。**本轮只删 TS 侧**；Rust 侧（`llm/commands.rs:324` + `lib.rs:119` 注册 + `tests/embedding-local.test.ts:286` 断言）**保留不动** ⇒ 该命令转入「前端零调用方」，已登记（§2.5） |
+| `embedDefaultModel` | `ai/builtin.ts:136` | ⚠️ 它是 Rust IPC 命令 `embed_default_model` 的 TS 镜像。**本轮只删 TS 侧**；Rust 侧（`llm/commands.rs:324` + `lib.rs:119` 注册 + `tests/embedding-local.test.ts:286` 断言）**保留不动** ⇒ 该命令转入「前端零调用方」，已登记（§2.5）。（时点注 2026-10-19：Rust 侧已单独一轮清完，见 §2.5） |
 | `CHAPTER_FLOW` · `asMasterySubject` | `domain/chapter.ts:31 / :88` | 状态机常量仅被文档引用。**流转说明保留**——改挂到 `ChapterStatus` 的 doc 上（删常量不丢知识） |
 | `DEFAULT_GOAL` | `domain/goal.ts:37` | `business-logic-review-2026-09.md:123` 已点名「建议删除」，本轮兑现 |
 | `SkillGap` · `LearningPlan`（类型） | `domain/plan.ts:22 / :43` | 无人使用（`ActionKind` / `NextAction` / `MASTERY_THRESHOLD` / `MASTERY_FLOOR` 均有消费，保留） |
@@ -86,13 +86,20 @@
 消费面实测（`dst/` 之外全仓 Grep）：全部**零命中**；保留的只有 `savedOk`（`ApiModelsTab.tsx:229`）· `currentUse`（同文件 `:168`、`BuiltinModelsPanel.tsx:259`）· `tabLocal`/`tabApi`/`localHint`（`AIModelsSection.tsx:62-82`）· `api{}` · `builtin{}` · `importAssist{}`。
 **安全网**：`Messages = typeof zh` ⇒ 删到仍在用的键 `tsc` 必报错；`test:i18n` 再锁 zh/en 结构对齐。两道门禁本轮皆绿。
 
-### 2.5 单侧孤儿登记（本轮**刻意未清**）
+### 2.5 单侧孤儿登记
 
-| 项 | 位置 | 为什么没清 |
+> **2026-10-19 已收口**：下表两项在同一轮清完（`src-tauri/**` 改动 + 契约测试断言同批）。
+> 清的理由不变 —— 当时登记「需单独一轮，不要顺手删」，就是因为要同时动 Rust 命令、
+> `lib.rs` 注册与 `D5` 正向断言三处，跨了「只清 TS 死代码」的批次边界。
+
+| 项 | 位置 | 处置 |
 |---|---|---|
-| Rust IPC `embed_default_model` | `src-tauri/src/llm/commands.rs:324` + `src-tauri/src/lib.rs:119` 注册 + `tests/embedding-local.test.ts:286` 断言 | 它的 TS 镜像 `ai/builtin.ts::embedDefaultModel` 已删 ⇒ **前端零调用方**。但清 Rust 侧要动 `src-tauri/**` + IPC 契约测试（`D5 Rust 侧命令已注册 embed_*` 是**正向断言**，删命令要同批改），超出「清 TS 死代码」的批次边界。**需单独一轮**，不要顺手删 |
+| Rust IPC `embed_default_model` | `llm/commands.rs` 定义 + `lib.rs` 注册 + `tests/embedding-local.test.ts` 的 `D5` 断言 | ✅ 2026-10-19 删除。前端零调用方：`VectorIndexCard.tsx:130` 改用 `models.find(...) ?? models[0]`，`ai/embedding.ts` 自带 `LOCAL_EMBEDDING_MODELS` 常量 |
+| Rust IPC `llm_default_model` | `llm/commands.rs` 定义 + `lib.rs` 注册 | ✅ 同批删除。**同一处发现的同族孤儿**（同为「查默认模型名」，前端同样零调用）；`skills/tauri-ipc/SKILL.md` 台账同批摘除 |
+| `llm/models.rs::get_default_embedding_model` | —— | ✅ **连带孤儿**：删上两项后生产零消费（只剩测试）。改由 `get_embedding_models().next()` 表达「默认档＝清单首位」；`get_default_model` **有生产消费**（`llm_status`），保留 |
 
 > 同族提醒：删任何 `invoke("xxx")` 的 TS 封装前，先查 Rust 侧是否还有别的调用方，以及**契约测试是否在正向断言该命令已注册**。
+> 另：删 Rust 命令后要跑一次 `cargo check --lib` 看 **新出现的 `unused import` / `never used` 警告** —— 那是连带孤儿的唯一信号。
 
 `canStartCapabilityRun`（`capability-engine.ts:239`）零消费，而同一门禁被**内联重算 3 处**：`features/goals/capability-service.ts:303,396`、`features/goals/CapabilityPage.tsx:319`（`items.length < CAPABILITY_LIMITS.minItems`）。规则改动时必然漂移。
 
@@ -200,6 +207,7 @@
        + 从未接线的 labelOf* 标签族 + 33 个孤儿 i18n 键（§2.4 更正了原报告的 8 键漏报）
   2.3 canStartCapabilityRun → 走【接线】为唯一门禁（消「两把尺子」，非删除）
   ⚠️ 唯一未同步处：Rust `embed_default_model` 命令（TS 镜像已删，Rust 侧保留）→ 见 §2.5
+     （时点注 2026-10-19：已在单独一轮清完，含同族 `llm_default_model`）
 
 第 3 批 —— ✅ 已完成 2026-09-24
   方案 docs/architecture-service-layer-design-2026-09.md ｜ 台账 docs/architecture-service-layer-runbook-2026-09.md
