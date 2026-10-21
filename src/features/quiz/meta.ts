@@ -8,7 +8,12 @@
 import type { Chapter, PaperMode, PaperScope, QuizType } from "../../domain";
 import { isSubjectiveType, PAPER_MODE_DURATION_MIN } from "../../domain";
 import type { PaperQuestion } from "../../domain";
-import { zh, type Messages } from "../../i18n";
+/**
+ * ⚠️ 直连消息表，**不走 `../../i18n` 索引**：索引会连带 `I18nProvider.tsx`，
+ * 而 node 单测（`--experimental-strip-types`）不支持 JSX —— 一经索引导入，
+ * 本文件就无法被单测引用（既有约定：单测不 import .tsx）。
+ */
+import { zh, type Messages } from "../../i18n/messages/zh";
 
 /**
  * 模式 → 支持的最小章数（向导中决定哪些模式可选）。

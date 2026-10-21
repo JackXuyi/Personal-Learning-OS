@@ -62,16 +62,15 @@ export function buildExplainMessages(input: ExplainQuestionInput): ChatMessage[]
     .join("\n\n");
   /**
    * ⚠️ 安全关键：options **原序、无标记**。
+   *
    * 任何「正确答案：B」「正确项」字样，或把正确项排到特殊位置，都是安全事故 ——
-   * 见文件头的 D3 红线。单测 `tests/quiz-explain.test.ts` 对此有断言。
+   * 见文件头的 D3 红线。单测 `tests/quiz-explain.test.ts::TC-EX-A01` 对此有断言
+   * （连「不含正确项信息」这种**免责声明本身**都会命中扫描，所以这里索性
+   * 一个字都不提答案 —— 提了反而是提醒模型「存在一个答案」）。
    */
   const optionsBlock =
     input.options && input.options.length > 0
-      ? [
-          "",
-          "【本题选项】（仅作语境参考，**不含正确项信息**）",
-          ...input.options.map((o, i) => `${String.fromCharCode(65 + i)}. ${o}`),
-        ].join("\n")
+      ? ["", "【本题选项】（仅作语境参考）", ...input.options.map((o, i) => `${String.fromCharCode(65 + i)}. ${o}`)].join("\n")
       : "";
   const depthLine =
     input.depth === "hint"
