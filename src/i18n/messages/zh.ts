@@ -13,7 +13,7 @@ export const zh = {
   app: {
     title: "Personal Learning OS",
     metaDescription:
-      "Personal Learning OS —— 开源、本地优先的自适应学习系统：由它决定你下一步该学什么。",
+      "Personal Learning OS —— 开源的学习应用：把你自己的资料变成试卷，告诉你下一步该学什么。",
   },
 
   common: {

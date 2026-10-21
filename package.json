@@ -2,7 +2,7 @@
   "name": "personal-learning-os",
   "private": true,
   "version": "0.1.0",
-  "description": "An open-source, local-first AI learning system that turns your knowledge into an adaptive learning experience.",
+  "description": "An open-source learning app that turns your own material into quizzes and tells you what to study next.",
   "type": "module",
   "scripts": {
     "dev": "vite",

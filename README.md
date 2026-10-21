@@ -10,7 +10,7 @@ your scores become a mastery model that tells you what to study next.
 <div align="center">
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Status](https://img.shields.io/badge/status-pre--MVP-orange)
+![Status](https://img.shields.io/badge/status-preview-orange)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)
 ![Local-first](https://img.shields.io/badge/local--first-no%20account%20required-blue)
 ![Node](https://img.shields.io/badge/node-%E2%89%A522-brightgreen)

@@ -10,7 +10,7 @@
 <div align="center">
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Status](https://img.shields.io/badge/status-pre--MVP-orange)
+![Status](https://img.shields.io/badge/status-预览版-orange)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)
 ![Local-first](https://img.shields.io/badge/local--first-%E6%97%A0%E9%9C%80%E8%B4%A6%E5%8F%B7-blue)
 ![Node](https://img.shields.io/badge/node-%E2%89%A522-brightgreen)

@@ -9,7 +9,7 @@ export const en: Messages = {
   app: {
     title: "Personal Learning OS",
     metaDescription:
-      "Personal Learning OS — an open-source, local-first adaptive learning system that decides what you should learn next.",
+      "Personal Learning OS — an open-source learning app that turns your own material into quizzes and tells you what to study next.",
   },
 
   common: {
