@@ -205,6 +205,72 @@ const run = async () => {
     assert.ok(user.includes("来源：「第 1 章 基础」"));
   });
 
+  /**
+   * 缺省「逐字节不变」锁（Feature B 的回归底线）。
+   *
+   * 新增 tier / history 注入后，不传这两项时的产物必须与改动前**完全一致** ——
+   * 否则既有单轮问答的 prompt 被悄悄改写，而那部分没有任何测试会发现。
+   */
+  await check("TC-UC01-04 缺省不注入：tier/history 均缺省 → 与改动前逐字节相同", () => {
+    const msgs = buildChapterQaMessages({
+      chapterTitle: "第 1 章 基础",
+      documentTitle: "资料A",
+      question: "这章讲了什么？",
+      blocks: [
+        { index: 1, chunkId: "c1", chapterId: "ch1", chapterTitle: "第 1 章 基础", text: SENT1 },
+        { index: 2, chunkId: "c4", chapterId: "ch2", chapterTitle: "第 2 章 进阶", text: SENT4 },
+      ],
+    });
+    const golden = [
+      "资料：《资料A》 · 当前章：《第 1 章 基础》",
+      "",
+      "【原文片段】",
+      "【片段 1】来源：「第 1 章 基础」",
+      SENT1,
+      "",
+      "【片段 2】来源：「第 2 章 进阶」",
+      SENT4,
+      "",
+      "【用户问题】这章讲了什么？",
+    ].join("\n");
+    assert.equal(msgs[1].content, golden, "缺省时不得多出策略行 / 对话块 / 空行");
+  });
+
+  await check("TC-UC01-05 空数组等同缺省：history=[] 不注入对话块", () => {
+    const msgs = buildChapterQaMessages({
+      chapterTitle: "第 1 章 基础",
+      documentTitle: "资料A",
+      question: "Q",
+      blocks: [],
+      history: [],
+    });
+    assert.ok(!msgs[1].content.includes("【前面的对话】"), "空线程不得留下空块");
+  });
+
+  await check("TC-UC01-06 tier/history 注入顺序：策略行在问题之后、线程之前", () => {
+    const msgs = buildChapterQaMessages({
+      chapterTitle: "第 1 章 基础",
+      documentTitle: "资料A",
+      question: "Q",
+      blocks: [],
+      tier: "scaffold",
+      history: [
+        { role: "user", text: "上一条问题" },
+        { role: "tutor", text: "上一条回答" },
+      ],
+    });
+    const user = msgs[1].content;
+    const iQuestion = user.indexOf("【用户问题】Q");
+    const iTier = user.indexOf("讲解策略：");
+    const iThread = user.indexOf("【前面的对话】");
+    assert.ok(iQuestion >= 0 && iTier > iQuestion, "策略行必须紧跟在问题之后");
+    assert.ok(iThread > iTier, "线程块必须排在策略行之后（否则策略被长线程稀释）");
+    assert.ok(user.includes("用户：上一条问题"));
+    assert.ok(user.includes("你：上一条回答"), "tutor 轮以「你：」注入，模型才认得出是自己说的");
+    // scaffold 档的硬约束：不得直接给完整结论
+    assert.ok(user.includes("**不要**直接给完整结论"));
+  });
+
   await check("TC-EDGE-09 严判 found：缺字段 / 字符串 \"true\" 一律 false", () => {
     assert.equal(parseChapterQaAnswer({ answer: "a", quotes: ["b"] }).found, false);
     assert.equal(parseChapterQaAnswer({ found: "true", answer: "a", quotes: ["b"] }).found, false);

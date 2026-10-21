@@ -146,6 +146,9 @@ export async function askChapter(input: AskChapterInput): Promise<ChapterAnswer>
       blocks: ctx.blocks,
       learner: profile,
       memory,
+      // 追问上下文与档位：两者均为可选，缺省时与改动前逐字节相同（单测锁）。
+      ...(input.history && input.history.length > 0 ? { history: input.history } : {}),
+      ...(input.tier ? { tier: input.tier } : {}),
     });
     if (!draft.found) return { ...base, status: "not-found", scopeUsed: ctx.scopeUsed };
 
