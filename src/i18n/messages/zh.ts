@@ -1691,6 +1691,16 @@ export const zh = {
         errNotConfigured: "AI 未就绪：请到「设置 → AI 模型中心」配置本地模型或 API。",
         errFetch: "检索或读取资料失败，请重试。",
         errGeneric: "提问失败，请重试。",
+        /** 以下 8 键为「追问线程 + 掌握度档位」（Feature B，决策 D5/D6）。 */
+        tierLabel: (n: number) => `本章掌握度 ${n}%`,
+        tierScaffold: "引导式",
+        tierStandard: "标准",
+        tierDirect: "直达",
+        tierReset: "改回推荐档",
+        followUpPlaceholder: "换个说法再问一次…",
+        followUpSend: "发送",
+        rephrase: "还是不懂，换个说法讲",
+        directAnswer: "直接给答案",
       },
       /** 第 6 区「讲给我听」（费曼式复述；AI 对照本章原文给出差距反馈）。 */
       restatement: {
@@ -2205,6 +2215,32 @@ export const zh = {
       targetLine: "达标线",
       trueLabel: "对 ✓",
       falseLabel: "错 ✗",
+    },
+    /**
+     * 作答页「就地要点提示」（Feature A）。
+     *
+     * 设计（docs/ai-immediate-explain-design-2026-10.md §7）：
+     * AI 只讲「原文怎么说」，**不知道参考答案**（决策 D3）—— 故文案里必须让用户
+     * 知道这一点，否则「提示里没有答案」会被当成缺陷。
+     */
+    explain: {
+      openEntry: "💡 没思路？看思路提示",
+      loading: "正在从你的原文里找依据…",
+      hintTitle: "思路提示",
+      aiBadge: "依据你的原文生成",
+      citationsTitle: "依据（点一行到原文核对）",
+      revealCta: "还是拿不准？",
+      revealAnswer: "直接看参考答案",
+      answerTitle: "参考答案",
+      noAiTitle: "AI 未就绪——配置后就能在答题时就地查看要点提示。",
+      goConfigure: "去配置 AI →",
+      emptyIndex: "这章的内容还没进入搜索范围，暂时给不出有原文依据的提示。",
+      notFound: "你的原文里没有足够依据讲清这道题。",
+      unanchored: "未能把这条讲解定位回你的原文，请谨慎参考。",
+      retry: "重试",
+      errGeneric: "AI 暂不可用，请稍后重试。",
+      /** D 类用户决策说明：讲清「为什么提示里没有答案」，避免被当成缺陷。 */
+      footnote: "提示只依据你导入的原文生成；AI 不知道参考答案，所以不会顺着答案编理由。",
     },
   },
 

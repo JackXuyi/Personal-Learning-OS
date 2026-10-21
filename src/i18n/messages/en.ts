@@ -1733,6 +1733,16 @@ export const en: Messages = {
         errNotConfigured: "AI not ready: configure a local model or API in Settings → AI model center.",
         errFetch: "Failed to search or read the document. Please retry.",
         errGeneric: "Asking failed. Please retry.",
+        /** Follow-up thread + mastery-driven tier (Feature B, decisions D5/D6). */
+        tierLabel: (n: number) => `Mastery of this chapter: ${n}%`,
+        tierScaffold: "Guided",
+        tierStandard: "Standard",
+        tierDirect: "Direct",
+        tierReset: "Back to recommended",
+        followUpPlaceholder: "Ask it differently…",
+        followUpSend: "Send",
+        rephrase: "Still lost — explain it differently",
+        directAnswer: "Just give me the answer",
       },
       /** Zone 6 “Teach it back” (Feynman restatement; AI diffs it against this chapter's text). */
       restatement: {
@@ -2279,6 +2289,26 @@ export const en: Messages = {
       targetLine: "Target line",
       trueLabel: "True ✓",
       falseLabel: "False ✗",
+    },
+    /** In-place hints while answering (Feature A) — see docs/ai-immediate-explain-design-2026-10.md §7. */
+    explain: {
+      openEntry: "💡 Stuck? Get a hint",
+      loading: "Looking for evidence in your material…",
+      hintTitle: "Hint",
+      aiBadge: "Grounded in your own material",
+      citationsTitle: "Evidence (tap a row to check it in the source)",
+      revealCta: "Still unsure?",
+      revealAnswer: "Show the reference answer",
+      answerTitle: "Reference answer",
+      noAiTitle: "AI isn't set up — configure a model to see hints while answering.",
+      goConfigure: "Configure AI →",
+      emptyIndex: "This chapter isn't searchable yet, so a sourced hint isn't available.",
+      notFound: "Your material doesn't provide enough evidence to explain this question.",
+      unanchored: "This hint couldn't be traced back to your text — treat it with caution.",
+      retry: "Retry",
+      errGeneric: "AI is unavailable right now. Please try again later.",
+      footnote:
+        "Hints come only from your imported text; the AI never sees the answer key, so it can't rationalize toward it.",
     },
   },
 
