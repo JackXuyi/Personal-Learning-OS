@@ -17,7 +17,9 @@
 import type {
   Chapter,
   ChapterAnswer,
+  ChapterQaTurn,
   QaCitation,
+  TutorTier,
 } from "../../domain";
 import type { StorageAdapter } from "../../storage";
 import type { AIProvider } from "../../ai/types";
@@ -39,10 +41,52 @@ export const MAX_QUESTION_CHARS = 200;
 /** 引用条数上限（与 `ai/chapter-qa` 的 quotes 上限同源，避免两处各写一个 5）。 */
 export const MAX_CITATIONS = PIPELINE_LIMITS.chapterQaMaxQuotes;
 
+/**
+ * 章掌握度 → 讲解档位（纯函数，UI 与 AI 共同依赖）。
+ *
+ * 口径：`undefined`（从未测评）**按最弱处理** —— 没证据 = 不了解，不该给
+ * 「直达结论」型回答。阈值借用既有精熟度口径的两端（0.4 之下 learning、
+ * 0.75 接近 ready），此处不写第三套划分。
+ *
+ * 阈值唯一产出方是这里：UI 显示档位标签、AI 决定讲解深浅，都从这一个函数取，
+ * 避免「标签说是引导式、AI 实际给直达」的漂移。
+ */
+export function tutorTierOf(mastery: number | undefined): TutorTier {
+  const m = mastery ?? 0;
+  if (m < 0.4) return "scaffold";
+  if (m < 0.75) return "standard";
+  return "direct";
+}
+
+/**
+ * 追问线程裁剪（纯函数）：保留最近 N 轮往返，并对单条文本封顶。
+ *
+ * 为什么封顶：本地 4B 模型上下文有限，且线程越旧越失焦。
+ * 为什么必须**成对**保留：孤立的 tutor 轮次会让模型以为自己在自言自语
+ * （上下文里出现「你：…」却看不到对应的问题），首轮必须是 user。
+ *
+ * 纯函数语义：返回新数组，**不改实参**。
+ */
+export function trimThread(history: readonly ChapterQaTurn[]): ChapterQaTurn[] {
+  const capped = history.map((t) => ({
+    role: t.role,
+    text: t.text.slice(0, PIPELINE_LIMITS.qaThreadTurnChars),
+  }));
+  const tail = capped.slice(-(PIPELINE_LIMITS.qaThreadMaxTurns * 2));
+  // 去掉开头的孤立 tutor 轮（首个必须是 user）
+  const out = [...tail];
+  while (out.length > 0 && out[0].role !== "user") out.shift();
+  return out;
+}
+
 export interface AskChapterInput {
   documentId: string;
   chapterId: string;
   question: string;
+  /** 追问上下文（会话级，UI 累积；缺省 = 单轮，与改动前一致）。 */
+  history?: readonly ChapterQaTurn[];
+  /** 讲解档位（缺省 = "standard"，与改动前一致）。 */
+  tier?: TutorTier;
   /** 注入用（单测传 mock）。 */
   storage?: StorageAdapter;
   provider?: AIProvider;
