@@ -177,11 +177,11 @@ export default function NewQuizPage() {
     return (
       <PageContainer>
         <Card className="border-dashed">
-          <p className="text-base font-semibold text-slate-900">{np.noDocTitle}</p>
-          <p className="mt-1 text-sm text-slate-500">{np.noDocDesc}</p>
+          <p className="text-base font-semibold text-ink-1">{np.noDocTitle}</p>
+          <p className="mt-1 text-sm text-ink-2">{np.noDocDesc}</p>
           <button
             onClick={openImportModal}
-            className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary"
           >
             {m.quiz.center.goImport}
           </button>
@@ -199,7 +199,7 @@ export default function NewQuizPage() {
   ) {
     return (
       <PageContainer>
-        <p className="text-sm text-slate-400">{np.generating}</p>
+        <p className="text-sm text-ink-3">{np.generating}</p>
       </PageContainer>
     );
   }
@@ -215,7 +215,7 @@ export default function NewQuizPage() {
 
       {/* Step 1 · 范围 */}
       <Card className="mb-4">
-        <p className="text-sm font-semibold text-slate-800">{np.stepRange}</p>
+        <p className="text-sm font-semibold text-ink-1">{np.stepRange}</p>
         {docs.length > 1 ? (
           <div className="mt-3 flex flex-wrap gap-2">
             {docs.map((d) => (
@@ -228,8 +228,8 @@ export default function NewQuizPage() {
                 }}
                 className={`rounded-lg border px-3 py-1.5 text-sm ${
                   docId === d.id
-                    ? "border-indigo-300 bg-indigo-50 font-medium text-indigo-700"
-                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    ? "border-primary bg-learning-soft font-medium text-learning-ink"
+                    : "border-line text-ink-2 hover:bg-subtle"
                 }`}
               >
                 {d.title}
@@ -241,7 +241,7 @@ export default function NewQuizPage() {
         {chapters.length > 0 ? (
           <div className="mt-3">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-ink-3">
                 {np.selectedInfo(selected.size)}
               </p>
               <button
@@ -249,7 +249,7 @@ export default function NewQuizPage() {
                   setSelected(new Set(chapters.map((c) => c.id)))
                 }
                 disabled={selected.size === chapters.length}
-                className="text-xs font-medium text-indigo-600 hover:underline disabled:opacity-40"
+                className="text-xs font-medium text-primary hover:underline disabled:opacity-40"
               >
                 {np.selectAll(chapters.length)}
               </button>
@@ -272,25 +272,25 @@ export default function NewQuizPage() {
                     }}
                     className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${
                       on
-                        ? "border-indigo-300 bg-indigo-50"
-                        : "border-slate-200 hover:bg-slate-50"
+                        ? "border-primary bg-learning-soft"
+                        : "border-line hover:bg-subtle"
                     }`}
                   >
                     <span
                       className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border text-[11px] font-medium ${
                         on
-                          ? "border-indigo-600 bg-indigo-600 text-white"
-                          : "border-slate-300 text-transparent"
+                          ? "border-primary bg-primary text-white"
+                          : "border-line text-transparent"
                       }`}
                     >
                       ✓
                     </span>
                     <span className="min-w-0 flex-1 truncate">
-                      <span className="text-slate-800">
+                      <span className="text-ink-1">
                         {c.order}. {c.title || m.chapter.ordinal(c.order)}
                       </span>
                       {mastery > 0 ? (
-                        <span className="ml-1.5 text-[11px] text-slate-400">
+                        <span className="ml-1.5 text-[11px] text-ink-3">
                           {Math.round(mastery * 100)}%
                         </span>
                       ) : null}
@@ -301,15 +301,15 @@ export default function NewQuizPage() {
             </div>
           </div>
         ) : (
-          <p className="mt-3 text-sm text-slate-400">{np.noChapterOfDoc}</p>
+          <p className="mt-3 text-sm text-ink-3">{np.noChapterOfDoc}</p>
         )}
       </Card>
 
       {/* Step 2 · 模式 */}
       <Card className="mb-4">
-        <p className="text-sm font-semibold text-slate-800">{np.stepMode}</p>
+        <p className="text-sm font-semibold text-ink-1">{np.stepMode}</p>
         {!canNext ? (
-          <p className="mt-2 text-xs text-slate-400">{np.pickChapterFirst}</p>
+          <p className="mt-2 text-xs text-ink-3">{np.pickChapterFirst}</p>
         ) : (
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
             {NEW_PAPER_MODES.map((mm) => {
@@ -331,21 +331,21 @@ export default function NewQuizPage() {
                   onClick={() => setMode(on ? undefined : mm)}
                   className={`rounded-xl border p-3.5 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${
                     on
-                      ? "border-indigo-400 bg-indigo-50 ring-1 ring-indigo-200"
-                      : "border-slate-200 hover:bg-slate-50"
+                      ? "border-learning-border bg-learning-soft ring-1 ring-learning-border"
+                      : "border-line hover:bg-subtle"
                   }`}
                 >
-                  <p className="text-sm font-semibold text-slate-800">{label}</p>
-                  <p className="mt-0.5 text-xs leading-5 text-slate-500">
+                  <p className="text-sm font-semibold text-ink-1">{label}</p>
+                  <p className="mt-0.5 text-xs leading-5 text-ink-2">
                     {enabled
                       ? modeHint(mm, { chapters: sortedSelected.length, questions: plan.total }, m)
                       : reason}
                   </p>
-                  <p className="mt-1.5 text-[11px] leading-4 text-slate-400">
+                  <p className="mt-1.5 text-[11px] leading-4 text-ink-3">
                     {m.quiz.quotaPreview[mm](plan.objective, plan.subjective)}
                   </p>
                   {enabled ? (
-                    <p className="mt-1 text-[10px] leading-3 text-slate-300">
+                    <p className="mt-1 text-[10px] leading-3 text-ink-3">
                       {aiReady ? np.aiReadyHint : np.noAiHint}
                     </p>
                   ) : null}
@@ -360,9 +360,9 @@ export default function NewQuizPage() {
           ⚠️ sticky 底栏文案随选择变化 → key 重挂载防 WKWebView 残影瓦片（详见 QuizAnswerPage 底栏注释）。 */}
       <div
         key={`${mode ?? "none"}:${sortedSelected.length}`}
-        className="sticky bottom-4 flex transform-gpu items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-3.5 shadow-lg"
+        className="sticky bottom-4 flex transform-gpu items-center justify-between gap-4 rounded-2xl border border-line bg-white px-5 py-3.5 shadow-lg"
       >
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-ink-2">
           {mode
             ? np.footerSummary(
                 m.quiz.mode[mode],

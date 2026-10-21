@@ -224,10 +224,10 @@ export default function QuizGradingPage() {
     const aiGrading = gradeTask.running; // loading 态由全局任务记录派生（切页重挂可恢复）
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-ink-2">
           {aiGrading ? g.aiLoading : g.loading}
         </p>
-        <p className="mt-2 text-xs text-slate-400">
+        <p className="mt-2 text-xs text-ink-3">
           {aiGrading ? g.aiLoadingSub : g.loadingSub}
         </p>
       </div>
@@ -247,24 +247,24 @@ export default function QuizGradingPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-8 py-10">
-      <Link to="/quiz" className="text-xs text-slate-400 hover:text-indigo-600">
+      <Link to="/quiz" className="text-xs text-ink-3 hover:text-primary">
         {g.backToCenter}
       </Link>
 
       {/* 逐题对错（客观 ✓ / 客观 ✗ / 主观待 AI） */}
       <Card className="mt-4">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-semibold text-slate-800">{g.resultTitle}</p>
-          <div className="flex items-center gap-3 text-[11px] text-slate-500">
+          <p className="text-sm font-semibold text-ink-1">{g.resultTitle}</p>
+          <div className="flex items-center gap-3 text-[11px] text-ink-2">
             <span className="flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> {g.legendCorrect}
+              <span className="h-2.5 w-2.5 rounded-full bg-state-mastered" /> {g.legendCorrect}
             </span>
             <span className="flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-full bg-red-400" /> {g.legendWrong}
+              <span className="h-2.5 w-2.5 rounded-full bg-state-failed" /> {g.legendWrong}
             </span>
             {pendingSubjective > 0 ? (
               <span className="flex items-center gap-1">
-                <span className="h-2.5 w-2.5 rounded-full bg-slate-300" /> {g.legendPending}
+                <span className="h-2.5 w-2.5 rounded-full bg-line" /> {g.legendPending}
               </span>
             ) : null}
           </div>
@@ -280,7 +280,7 @@ export default function QuizGradingPage() {
                   key={q.id}
                   title={`${i + 1}. ${q.prompt}`}
                   className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-semibold ${
-                    gg.correct ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-500"
+                    gg.correct ? "bg-mastered-soft text-mastered-ink" : "bg-failed-soft text-failed-ink"
                   }`}
                 >
                   {gg.correct ? "✓" : "✗"}
@@ -302,10 +302,10 @@ export default function QuizGradingPage() {
                 title={`${i + 1}. ${q.prompt} · ${detail}`}
                 className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-semibold ${
                   sc === undefined
-                    ? "bg-slate-100 text-slate-400"
+                    ? "bg-subtle text-ink-3"
                     : scPass
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "bg-red-50 text-red-500"
+                      ? "bg-mastered-soft text-mastered-ink"
+                      : "bg-failed-soft text-failed-ink"
                 }`}
               >
                 {sc === undefined ? "AI" : scPass ? "✓" : "✗"}
@@ -313,7 +313,7 @@ export default function QuizGradingPage() {
             );
           })}
         </div>
-        <p className="mt-3 text-[11px] text-slate-400">
+        <p className="mt-3 text-[11px] text-ink-3">
           {g.objInstant}
           {subjectiveCount > 0
             ? pendingSubjective > 0
@@ -330,15 +330,15 @@ export default function QuizGradingPage() {
 
       {/* 结果卡 + 撤销窗口 */}
       <Card className="mt-4 text-center">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{g.scoreEyebrow}</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-ink-3">{g.scoreEyebrow}</p>
         <p
           className={`mt-2 text-5xl font-bold tabular-nums ${
-            passed ? "text-emerald-600" : near ? "text-amber-600" : "text-red-500"
+            passed ? "text-mastered-ink" : near ? "text-weak-ink" : "text-failed-ink"
           }`}
         >
           {score}
         </p>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-ink-2">
           {g.scoreBase(Math.round(MASTERY_THRESHOLD * 100))}
           {scoredCount > 0 && pendingSubjective === 0 ? g.subMerged : ""}
         </p>
@@ -346,18 +346,18 @@ export default function QuizGradingPage() {
         <div className="mt-6 flex items-center justify-center gap-2">
           <button
             onClick={() => void undo()}
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-lg border border-line bg-white px-4 py-2 text-sm font-medium text-ink-2 hover:bg-subtle"
           >
             {g.undo(left)}
           </button>
           <button
             onClick={() => void finish()}
-            className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+            className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary"
           >
             {g.viewReport}
           </button>
         </div>
-        <p className="mt-3 text-xs text-slate-400">
+        <p className="mt-3 text-xs text-ink-3">
           {left > 0 ? g.undoHint : g.autoEnter}
         </p>
       </Card>

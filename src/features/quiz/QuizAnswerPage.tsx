@@ -178,7 +178,7 @@ export default function QuizAnswerPage() {
   if (!paper || !context) {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-sm text-slate-500">{a.opening}</p>
+        <p className="text-sm text-ink-2">{a.opening}</p>
       </div>
     );
   }
@@ -190,24 +190,24 @@ export default function QuizAnswerPage() {
       {/* 顶栏：范围标签 + 进度 */}
       <div className="mb-5 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <Link to="/quiz" className="text-xs text-slate-400 hover:text-indigo-600">
+          <Link to="/quiz" className="text-xs text-ink-3 hover:text-primary">
             {a.backToCenter}
           </Link>
-          <p className="mt-0.5 truncate text-xs text-slate-500">
+          <p className="mt-0.5 truncate text-xs text-ink-2">
             {modeLabel} · {context}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
           <span className="text-right">
-            <span className="text-sm font-semibold tabular-nums text-slate-800">
+            <span className="text-sm font-semibold tabular-nums text-ink-1">
               {answeredCount}/{paper.questions.length}
             </span>
-            <span className="text-xs text-slate-400"> {a.answered}</span>
+            <span className="text-xs text-ink-3"> {a.answered}</span>
           </span>
           <button
             onClick={() => setPhase("confirm-submit")}
             disabled={answeredCount === 0}
-            className="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 disabled:opacity-40"
+            className="rounded-lg border border-learning-border bg-white px-3 py-1.5 text-xs font-medium text-primary hover:bg-learning-soft disabled:opacity-40"
           >
             {a.submit}
           </button>
@@ -216,9 +216,9 @@ export default function QuizAnswerPage() {
 
       <div className="mb-4 flex items-center gap-3">
         <div className="flex-1">
-          <Bar value={answeredCount / paper.questions.length} className="bg-indigo-500" />
+          <Bar value={answeredCount / paper.questions.length} className="bg-primary" />
         </div>
-        <span className="text-xs tabular-nums text-slate-400">
+        <span className="text-xs tabular-nums text-ink-3">
           {a.qOf(index + 1, paper.questions.length)}
         </span>
       </div>
@@ -247,16 +247,16 @@ export default function QuizAnswerPage() {
           = 换合成层），残影无从产生。禁 backdrop-filter 的要求仍需保持（见 react.mdc）。 */}
       <div
         key={index}
-        className="sticky bottom-4 z-10 mt-6 flex transform-gpu items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-3.5 shadow-lg"
+        className="sticky bottom-4 z-10 mt-6 flex transform-gpu items-center justify-between gap-4 rounded-2xl border border-line bg-white px-5 py-3.5 shadow-lg"
       >
         <button
           onClick={() => setIndex((i) => Math.max(0, i - 1))}
           disabled={index === 0}
-          className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+          className="rounded-lg border border-line bg-white px-4 py-2 text-sm font-medium text-ink-2 hover:bg-subtle disabled:opacity-40"
         >
           {a.prev}
         </button>
-        <p className="hidden text-xs text-slate-400 sm:block">
+        <p className="hidden text-xs text-ink-3 sm:block">
           {index === paper.questions.length - 1
             ? a.unansweredTip(unansweredCount)
             : a.keyboardTip}
@@ -265,7 +265,7 @@ export default function QuizAnswerPage() {
           <button
             onClick={() => setIndex((i) => i + 1)}
             disabled={!q || (answers[q.id] ?? "").trim().length === 0}
-            className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-40"
+            className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary disabled:opacity-40"
           >
             {a.next}
           </button>
@@ -273,7 +273,7 @@ export default function QuizAnswerPage() {
           <button
             onClick={() => setPhase("confirm-submit")}
             disabled={paper.questions.length === 0}
-            className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-40"
+            className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary disabled:opacity-40"
           >
             {a.submit}
           </button>
@@ -283,32 +283,32 @@ export default function QuizAnswerPage() {
       {/* 交卷二次确认（未答提示） */}
       {phase === "confirm-submit" ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink-1/40 p-4 backdrop-blur-sm"
           onClick={(e) => {
             if (e.target === e.currentTarget) setPhase("answering");
           }}
         >
           <Card className="w-full max-w-sm">
-            <p className="text-base font-semibold text-slate-900">{a.confirmTitle}</p>
+            <p className="text-base font-semibold text-ink-1">{a.confirmTitle}</p>
             {unansweredCount > 0 ? (
-              <p className="mt-2 text-sm leading-6 text-amber-700">
+              <p className="mt-2 text-sm leading-6 text-weak-ink">
                 {a.confirmUnanswered(unansweredCount)}
               </p>
             ) : (
-              <p className="mt-2 text-sm text-slate-500">{a.confirmAllDone}</p>
+              <p className="mt-2 text-sm text-ink-2">{a.confirmAllDone}</p>
             )}
-            <p className="mt-2 text-xs leading-5 text-slate-400">{a.confirmNote}</p>
+            <p className="mt-2 text-xs leading-5 text-ink-3">{a.confirmNote}</p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={() => setPhase("answering")}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                className="rounded-lg border border-line bg-white px-4 py-2 text-sm font-medium text-ink-2 hover:bg-subtle"
               >
                 {a.recheck}
               </button>
               <button
                 onClick={() => void submit()}
                 disabled={busy}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary disabled:opacity-50"
               >
                 {busy ? a.submitting : a.confirmSubmit}
               </button>
@@ -358,13 +358,13 @@ function OptionRow({
       aria-pressed={selected}
       className={`flex w-full items-center gap-3 rounded-lg border px-3.5 py-2.5 text-left text-sm transition ${
         selected
-          ? "border-indigo-400 bg-indigo-50 text-slate-900"
-          : "border-slate-200 text-slate-700 hover:bg-slate-50"
+          ? "border-learning-border bg-learning-soft text-ink-1"
+          : "border-line text-ink-1 hover:bg-subtle"
       }`}
     >
       <span
         className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${
-          selected ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 text-slate-400"
+          selected ? "border-primary bg-primary text-white" : "border-line text-ink-3"
         }`}
       >
         {badge}
@@ -401,17 +401,17 @@ function QuestionCard({
   return (
     <Card className="p-6">
       <div className="flex items-start gap-3">
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold text-white">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white">
           {index + 1}
         </span>
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-center gap-2 text-[11px]">
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-500">
+            <span className="rounded bg-subtle px-1.5 py-0.5 font-medium text-ink-2">
               {m.quiz.type[q.type]}
             </span>
-            <span className="text-slate-300">{a.difficulty(q.difficulty)}</span>
+            <span className="text-ink-3">{a.difficulty(q.difficulty)}</span>
           </div>
-          <p className="text-[15px] font-medium leading-7 text-slate-900">{q.prompt}</p>
+          <p className="text-[15px] font-medium leading-7 text-ink-1">{q.prompt}</p>
         </div>
       </div>
 
@@ -428,7 +428,7 @@ function QuestionCard({
                 {opt}
               </OptionRow>
             ))}
-            <p className="pt-1 text-[11px] text-slate-300">{keyboardHint}</p>
+            <p className="pt-1 text-[11px] text-ink-3">{keyboardHint}</p>
           </div>
         ) : q.type === "judge" ? (
           /* 与单选**完全同一套行式交互**（同一组件），只是选项固定为 ✓ / ✗ 两行。 */
@@ -444,7 +444,7 @@ function QuestionCard({
                 <span className="text-base font-semibold leading-none">{o.glyph}</span>
               </OptionRow>
             ))}
-            <p className="pt-1 text-[11px] text-slate-300">{keyboardHint}</p>
+            <p className="pt-1 text-[11px] text-ink-3">{keyboardHint}</p>
           </div>
         ) : (
           <textarea
@@ -452,7 +452,7 @@ function QuestionCard({
             onChange={(e) => onChange(e.target.value)}
             rows={5}
             placeholder={q.type === "application" ? a.appPlaceholder : a.qaPlaceholder}
-            className="w-full resize-y rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-300 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+            className="w-full resize-y rounded-lg border border-line px-3.5 py-2.5 text-sm leading-6 text-ink-1 outline-none transition placeholder:text-ink-3 focus:border-learning-border focus:ring-2 focus:ring-learning-border"
           />
         )}
 

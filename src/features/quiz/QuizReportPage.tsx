@@ -67,10 +67,10 @@ interface WrongRow {
 }
 
 const KIND_CHIP: Record<string, string> = {
-  "learn-chapter": "border-red-200 bg-red-50 text-red-600",
-  "retake-quiz": "border-amber-200 bg-amber-50 text-amber-700",
-  "review-points": "border-sky-200 bg-sky-50 text-sky-700",
-  "chapter-quiz": "border-indigo-200 bg-indigo-50 text-indigo-700",
+  "learn-chapter": "border-failed-border bg-failed-soft text-failed-ink",
+  "retake-quiz": "border-weak-border bg-weak-soft text-weak-ink",
+  "review-points": "border-learning-border bg-learning-soft text-learning-ink",
+  "chapter-quiz": "border-learning-border bg-learning-soft text-learning-ink",
 };
 
 /** 引擎判卷产出的「未作答」作答占位（quiz-engine 写死的数据标记，不随界面语言走）。 */
@@ -480,7 +480,7 @@ export default function QuizReportPage() {
             <button
               onClick={() => void startRetakeAll()}
               disabled={Boolean(retaking)}
-              className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+              className="rounded-lg border border-weak-border bg-weak-soft px-4 py-2 text-sm font-medium text-weak-ink hover:bg-weak-soft disabled:opacity-50"
             >
               {retaking ? m.plan.generating : r.retakeWeak(weakChapters.length)}
             </button>
@@ -592,7 +592,7 @@ export default function QuizReportPage() {
                         <button
                           onClick={() => void startRetake(chapter)}
                           disabled={Boolean(retaking)}
-                          className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                          className="rounded-full border border-weak-border bg-weak-soft px-2.5 py-0.5 text-[11px] font-medium text-weak-ink hover:bg-weak-soft disabled:opacity-50"
                         >
                           {retaking === chapter.id ? m.plan.generating : r.weakRetake}
                         </button>
@@ -619,7 +619,7 @@ export default function QuizReportPage() {
               return (
                 <div key={q.id} className="rounded-xl border border-line bg-subtle p-4">
                   <div className="flex items-start gap-3">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500 text-xs font-semibold text-white">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-state-failed text-xs font-semibold text-white">
                       {i + 1}
                     </span>
                     <div className="min-w-0 flex-1">
