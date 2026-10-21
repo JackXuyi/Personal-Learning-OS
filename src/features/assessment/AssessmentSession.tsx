@@ -156,7 +156,7 @@ export default function AssessmentSession({
         action={
           <button
             onClick={onExit}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50"
+            className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-subtle"
           >
             {m.common.exit}
           </button>
@@ -167,23 +167,23 @@ export default function AssessmentSession({
         {/* 单元 + 层级状态 */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-base font-semibold text-slate-900">{unitTitle(unit.id)}</span>
-            <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-600">
+            <span className="text-base font-semibold text-ink-1">{unitTitle(unit.id)}</span>
+            <span className="rounded-md bg-learning-soft px-2 py-0.5 text-xs font-medium text-primary">
               {a.cognitiveOf(a.levelLabel[level(levelIdx)])}
-              <span className="ml-1 text-[10px] text-indigo-400">
+              <span className="ml-1 text-[10px] text-primary">
                 {a.levelHint[level(levelIdx)]}
               </span>
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-400">{a.masteryAt(Math.round(masteryNow * 100))}</span>
+            <span className="text-xs text-ink-3">{a.masteryAt(Math.round(masteryNow * 100))}</span>
             <BandBadge band={bandOf(masteryNow)} />
           </div>
         </div>
 
         {/* 题目 */}
         <div className="mt-5">
-          <p className="text-sm font-medium text-slate-700">{question}</p>
+          <p className="text-sm font-medium text-ink-1">{question}</p>
 
           {stage === "answer" || stage === "grade" ? (
             <>
@@ -193,7 +193,7 @@ export default function AssessmentSession({
                 onFocus={() => setStage((s) => (s === "grade" ? "grade" : s))}
                 placeholder={a.answerPlaceholder}
                 rows={3}
-                className="mt-3 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-indigo-300 focus:bg-white"
+                className="mt-3 w-full resize-none rounded-lg border border-line bg-subtle px-3 py-2 text-sm text-ink-1 outline-none transition focus:border-primary focus:bg-white"
               />
               {!revealed ? (
                 <button
@@ -201,45 +201,45 @@ export default function AssessmentSession({
                     setStage("grade");
                     setRevealed(true);
                   }}
-                  className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+                  className="mt-3 rounded-lg border border-learning-border bg-learning-soft px-4 py-2 text-sm font-medium text-learning-ink hover:bg-learning-soft"
                 >
                   {a.compareRef}
                 </button>
               ) : null}
               {revealed ? (
                 <div className="mt-3">
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                    <span className="font-medium text-slate-700">{a.refLead}</span>
+                  <div className="rounded-lg border border-line bg-subtle px-3 py-2 text-sm text-ink-2">
+                    <span className="font-medium text-ink-1">{a.refLead}</span>
                     {unit.summary ?? unit.title}
                   </div>
                   <div className="mt-3 flex gap-3">
                     <button
                       onClick={() => void submitGrade(true)}
-                      className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                      className="rounded-lg bg-state-mastered px-4 py-2 text-sm font-medium text-white hover:bg-state-mastered"
                     >
-                      {a.gotIt} <kbd className="ml-1 rounded bg-emerald-500/40 px-1 text-[10px]">1</kbd>
+                      {a.gotIt} <kbd className="ml-1 rounded bg-state-mastered/40 px-1 text-[10px]">1</kbd>
                     </button>
                     <button
                       onClick={() => void submitGrade(false)}
-                      className="rounded-lg bg-red-50 px-4 py-2 text-sm font-medium text-red-600 ring-1 ring-red-200 hover:bg-red-100"
+                      className="rounded-lg bg-failed-soft px-4 py-2 text-sm font-medium text-failed-ink ring-1 ring-failed-border hover:bg-failed-soft"
                     >
-                      {a.missedIt} <kbd className="ml-1 rounded bg-red-100 px-1 text-[10px]">2</kbd>
+                      {a.missedIt} <kbd className="ml-1 rounded bg-failed-soft px-1 text-[10px]">2</kbd>
                     </button>
                   </div>
-                  <p className="mt-2 text-[11px] text-slate-400">{a.honestNote}</p>
+                  <p className="mt-2 text-[11px] text-ink-3">{a.honestNote}</p>
                 </div>
               ) : null}
             </>
           ) : (
             <div className="mt-3 space-y-4">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              <div className="rounded-lg border border-line bg-subtle px-3 py-2 text-sm text-ink-2">
                 {delta !== undefined && delta >= 0 ? a.verdictRight : a.verdictWrong}
                 {delta !== undefined ? (
                   <span className="mt-1 block">
                     <DeltaBadge delta={delta} nextReviewInDays={intervalDays} />
                   </span>
                 ) : null}
-                <span className="mt-1 block text-xs text-slate-400">
+                <span className="mt-1 block text-xs text-ink-3">
                   {delta !== undefined && delta >= 0
                     ? wrongAtLevel
                       ? ""
@@ -249,10 +249,10 @@ export default function AssessmentSession({
                     : a.queued}
                 </span>
               </div>
-              {submitError ? <p className="text-sm text-red-600">{submitError}</p> : null}
+              {submitError ? <p className="text-sm text-failed-ink">{submitError}</p> : null}
               <button
                 onClick={nextRound}
-                className="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+                className="rounded-xl bg-primary px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary"
               >
                 {!wrongAtLevel && levelIdx < LEVEL_ORDER.length - 1 ? a.nextQuestion : a.finishUnit}
               </button>
@@ -261,14 +261,14 @@ export default function AssessmentSession({
         </div>
       </Card>
 
-      <p className="mt-4 text-xs text-slate-400">
+      <p className="mt-4 text-xs text-ink-3">
         {a.progress(Math.round(startMastery * 100), Math.round(masteryNow * 100))}{" "}
         {a.climbRule}
       </p>
       <div className="mt-2">
         <button
           onClick={() => navigate("/study")}
-          className="text-sm text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline"
+          className="text-sm text-ink-3 underline-offset-2 hover:text-ink-2 hover:underline"
         >
           {a.viewQueue}
         </button>

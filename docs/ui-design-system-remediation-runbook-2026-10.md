@@ -41,7 +41,7 @@
 | T1 后（初始） | — | 436 |
 | T2–T4 后（徽标 + 空态顺带） | −53 | 383 |
 | T5 后（quiz **−141**，方案估 149） | 242 | **242** |
-| T6 后（study+assessment −103） | 139 | 139 |
+| T6 后（study+assessment −103，与方案估算一致） | 139 | **139** |
 | T7 后（settings −87） | 52 | 52 |
 | T8 后（剩余 −52） | 0 | **0** |
 
@@ -162,10 +162,19 @@
 ### T6 — study + assessment 域收敛（基线 → 184）
 
 - **Scope**：`ReviewSession` / `AssessmentSession` / `AssessmentPage`
-- **Done**：−103 命中；`test:rating` / `test:capability` 绿
-- **Status**：☐
-- **Outcome**：
-- **Notes**：`ReviewSession` 63 处为全站最多
+- **Done**：−103 命中（study+assessment 归零）；`test:rating` / `test:capability` 绿
+- **Status**：✅
+- **Outcome**：`ReviewSession`(63) + `AssessmentSession`(40) **103 处全部收敛**，两文件归零；
+  palette **242 → 139**（11 → 9 文件）；基线降至 139，差值 0 达标。
+- **Notes**：① 构成：机械映射 89 + 剩余判定 13 + `text-indigo-400` 人工 1 = 103。
+  ② 剩余 13 处的判定：`bg-red-100`→`bg-failed-soft`、`ring-red-200`→`ring-failed-border`、
+  `bg-emerald-600/700`→`bg-state-mastered`（emerald-600 #059669 与 `state-mastered` **完全相等**）、
+  `border-indigo-100`→`border-learning-border`、`bg-indigo-400/30`→`bg-primary/30`、
+  `border-slate-100`→`border-line`；`bg-emerald-500/40` 由 `\b` 边界自动保留透明度 →
+  `bg-state-mastered/40`（无需单独规则）。
+  ③ `text-indigo-400`（认知层级徽标内的 levelHint 弱化提示）→ `text-primary`，
+  弱化由既有 `text-[10px]` 字号承担。
+  ④ ⚠️ `AssessmentPage` 实测**零命中**（方案把它列进 T6，但它本就没有硬编码色）。
 
 ### T7 — settings 域收敛（基线 → 97）
 
@@ -226,7 +235,7 @@
 | T1 | ✅ | ✅ | ✅ | ✅ | ✅ | — | 436 |
 | T2–T4 | ✅ | ✅ | ✅ | ✅ | ✅ | test:card 8/8 · eta/quota/goal/rawid 全绿 | 383 |
 | T5 | ✅ | ✅ | ✅ | — | — | test:quiz 17/17 · test:explain 16/16 | **242** |
-| T6 | | | | | | | 184 |
+| T6 | ✅ | ✅ | ✅ | — | — | test:rating · test:capability 全绿 | **139** |
 | T7 | | | | | | | 97 |
 | T8 | | | | | | | **0** |
 | T9 | | | | | | | 0 |

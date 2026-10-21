@@ -337,8 +337,8 @@ function SessionBody() {
     return (
       <PageContainer>
         <Card>
-          <p className="text-sm text-slate-500">{r.missingChapter}</p>
-          <Link to="/learn" className="mt-2 inline-block text-sm text-indigo-600 hover:underline">
+          <p className="text-sm text-ink-2">{r.missingChapter}</p>
+          <Link to="/learn" className="mt-2 inline-block text-sm text-primary hover:underline">
             ← {m.learn.reader.backToCatalog}
           </Link>
         </Card>
@@ -350,7 +350,7 @@ function SessionBody() {
     return (
       <PageContainer>
         <Card>
-          <p className="text-sm text-slate-500">{r.opening}</p>
+          <p className="text-sm text-ink-2">{r.opening}</p>
         </Card>
       </PageContainer>
     );
@@ -360,10 +360,10 @@ function SessionBody() {
     return (
       <PageContainer>
         <Card>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-ink-2">
             {conceptMode ? r.noConceptGaps : r.noGaps}
           </p>
-          <Link to={goBack} className="mt-2 inline-block text-sm text-indigo-600 hover:underline">
+          <Link to={goBack} className="mt-2 inline-block text-sm text-primary hover:underline">
             ← {goBackLabel}
           </Link>
         </Card>
@@ -393,7 +393,7 @@ function SessionBody() {
         action={
           <button
             onClick={exit}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50"
+            className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-subtle"
           >
             {r.exit}
           </button>
@@ -404,37 +404,37 @@ function SessionBody() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+            <span className="rounded-md bg-subtle px-2 py-0.5 text-xs font-medium text-ink-2">
               {m.units.action[current.kind]}
             </span>
-            <span className="text-base font-semibold text-slate-900">
+            <span className="text-base font-semibold text-ink-1">
               {titleOf(current.unitId)}
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-400">{r.masteryAt(Math.round(masteryNow * 100))}</span>
+            <span className="text-xs text-ink-3">{r.masteryAt(Math.round(masteryNow * 100))}</span>
             <BandBadge band={bandOf(masteryNow)} />
           </div>
         </div>
 
         {/* 思考作答区（可选，默认自评模式） */}
         <div className="mt-5">
-          <p className="text-sm font-medium text-slate-700">{r.explainPrompt}</p>
+          <p className="text-sm font-medium text-ink-1">{r.explainPrompt}</p>
           <textarea
             value={thinking}
             onChange={(e) => setThinking(e.target.value)}
             placeholder={r.explainPlaceholder}
             rows={2}
-            className="mt-2 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-indigo-300 focus:bg-white"
+            className="mt-2 w-full resize-none rounded-lg border border-line bg-subtle px-3 py-2 text-sm text-ink-1 outline-none transition focus:border-primary focus:bg-white"
           />
           <button
             onClick={() => setRevealed((v) => !v)}
-            className="mt-2 text-sm font-medium text-indigo-600 hover:underline"
+            className="mt-2 text-sm font-medium text-primary hover:underline"
           >
-            {revealed ? r.hideRef : r.showRef} <kbd className="ml-1 rounded border border-slate-200 px-1 text-[10px] text-slate-400">Space</kbd>
+            {revealed ? r.hideRef : r.showRef} <kbd className="ml-1 rounded border border-line px-1 text-[10px] text-ink-3">Space</kbd>
           </button>
           {revealed && summaries[current.unitId] ? (
-            <p className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-sm text-slate-600">
+            <p className="mt-2 rounded-lg border border-learning-border bg-learning-soft/60 px-3 py-2 text-sm text-ink-2">
               {summaries[current.unitId]}
             </p>
           ) : null}
@@ -445,29 +445,29 @@ function SessionBody() {
       <Card className="mt-4 border-t-0">
         {stage === "show" ? (
           <>
-            <p className="mb-3 text-sm font-semibold text-slate-700">{r.askSelf}</p>
+            <p className="mb-3 text-sm font-semibold text-ink-1">{r.askSelf}</p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {RATINGS.map((rate, i) => (
                 <button
                   key={rate.value}
                   onClick={() => void onRate(rate.value)}
-                  className="group rounded-xl border border-slate-200 px-3 py-3 text-center transition hover:border-indigo-300 hover:bg-indigo-50/50 active:scale-[0.98]"
+                  className="group rounded-xl border border-line px-3 py-3 text-center transition hover:border-primary hover:bg-learning-soft/50 active:scale-[0.98]"
                 >
-                  <span className="block text-sm font-semibold text-slate-800">{r.rating[rate.value]}</span>
-                  <span className="mt-1 block text-[11px] text-slate-400 group-hover:text-indigo-500">
+                  <span className="block text-sm font-semibold text-ink-1">{r.rating[rate.value]}</span>
+                  <span className="mt-1 block text-[11px] text-ink-3 group-hover:text-primary">
                     {r.meetAgain(rate.days)}
-                    <kbd className="ml-1 rounded border border-slate-200 px-1 text-[10px]">{i + 1}</kbd>
+                    <kbd className="ml-1 rounded border border-line px-1 text-[10px]">{i + 1}</kbd>
                   </span>
                 </button>
               ))}
             </div>
-            <p className="mt-3 text-[11px] text-slate-400">{r.intervalPreview}</p>
+            <p className="mt-3 text-[11px] text-ink-3">{r.intervalPreview}</p>
           </>
         ) : (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-slate-600">
+                <p className="text-sm font-medium text-ink-2">
                   {r.recorded(lastResultRating() ? r.rating[lastResultRating()!] : "")}
                 </p>
                 {lastResult ? (
@@ -479,19 +479,19 @@ function SessionBody() {
               {undoLeft > 0 ? (
                 <button
                   onClick={() => void undo()}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50"
+                  className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-subtle"
                 >
                   {r.undo(undoLeft)}
                 </button>
               ) : null}
             </div>
-            {submitError ? <p className="text-sm text-red-600">{submitError}</p> : null}
+            {submitError ? <p className="text-sm text-failed-ink">{submitError}</p> : null}
             <button
               onClick={next}
-              className="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+              className="rounded-xl bg-primary px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary"
             >
               {isLast ? r.finishReview : r.nextItem}{" "}
-              <kbd className="ml-1 rounded bg-indigo-400/30 px-1 text-[10px] text-white">Enter</kbd>
+              <kbd className="ml-1 rounded bg-primary/30 px-1 text-[10px] text-white">Enter</kbd>
             </button>
           </div>
         )}
@@ -547,17 +547,17 @@ function SummaryView({
       />
       <Card>
         {items.length === 0 ? (
-          <p className="text-sm text-slate-500">{r.noneDone}</p>
+          <p className="text-sm text-ink-2">{r.noneDone}</p>
         ) : (
           <ul className="space-y-2">
             {items.map((it) => (
               <li
                 key={it.action.unitId}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line px-3 py-2"
               >
-                <span className="text-sm font-medium text-slate-700">
+                <span className="text-sm font-medium text-ink-1">
                   {titleOf(it.action.unitId)}
-                  <span className="ml-2 text-xs font-normal text-slate-400">
+                  <span className="ml-2 text-xs font-normal text-ink-3">
                     {r.rating[it.rating]}
                   </span>
                 </span>
@@ -567,23 +567,23 @@ function SummaryView({
           </ul>
         )}
         {!conceptMode && snapshot ? (
-          <div className="mt-6 rounded-lg border border-indigo-100 bg-indigo-50/50 px-4 py-3">
-            <p className="text-sm font-medium text-slate-800">
+          <div className="mt-6 rounded-lg border border-learning-border bg-learning-soft/50 px-4 py-3">
+            <p className="text-sm font-medium text-ink-1">
               {r.readinessHead}{" "}
-              <span className="tabular-nums text-slate-900">
+              <span className="tabular-nums text-ink-1">
                 {Math.round(startReadiness * 100)}%
               </span>
               {delta !== 0 ? (
-                <span className="tabular-nums text-emerald-600">
+                <span className="tabular-nums text-mastered-ink">
                   {" "}→ {Math.round(nowReadiness * 100)}%（{delta >= 0 ? "+" : ""}
                   {delta}%）
                 </span>
               ) : (
-                <span className="tabular-nums text-slate-900"> → {Math.round(nowReadiness * 100)}%</span>
+                <span className="tabular-nums text-ink-1"> → {Math.round(nowReadiness * 100)}%</span>
               )}
-              <span className="text-slate-500">{r.readinessTail(Math.round(MASTERY_THRESHOLD * 100))}</span>
+              <span className="text-ink-2">{r.readinessTail(Math.round(MASTERY_THRESHOLD * 100))}</span>
             </p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-ink-2">
               {snapshot.next
                 ? r.gapsLeft(snapshot.actions.length)
                 : r.allReadyShort}
@@ -593,28 +593,28 @@ function SummaryView({
         <div className="mt-6 flex flex-wrap gap-3">
           <button
             onClick={() => navigate("/")}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary"
           >
             {r.goHome}
           </button>
           {conceptMode ? (
             <button
               onClick={() => navigate(goBack)}
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-line bg-white px-4 py-2 text-sm font-medium text-ink-1 hover:bg-subtle"
             >
               {goBackLabel} →
             </button>
           ) : (
             <button
               onClick={() => navigate("/assessment")}
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-line bg-white px-4 py-2 text-sm font-medium text-ink-1 hover:bg-subtle"
             >
               {r.keepAssess}
             </button>
           )}
           <button
             onClick={() => navigate(conceptMode ? "/learn" : "/study")}
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-lg border border-line bg-white px-4 py-2 text-sm font-medium text-ink-1 hover:bg-subtle"
           >
             {conceptMode ? r.backCatalog : r.goBackStudy}
           </button>
