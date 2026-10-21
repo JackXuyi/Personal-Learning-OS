@@ -163,26 +163,26 @@ export default function ApiModelsTab({ saved, onUse }: Props) {
             className="w-full max-w-sm"
           />
           {isSaved ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-learning-border bg-learning-soft px-2.5 py-1 text-xs font-medium text-learning-ink">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
               {mod.currentUse}
             </span>
           ) : null}
         </div>
-        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
+        <p className="mt-1.5 text-[11px] leading-relaxed text-ink-3">
           {s.presetHint}
         </p>
       </Field>
 
       {/* 配置表单 */}
-      <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/40 p-4">
-        <p className="text-xs font-medium text-slate-600">
+      <div className="space-y-3 rounded-xl border border-line bg-subtle/40 p-4">
+        <p className="text-xs font-medium text-ink-2">
           {preset ? s.configTitle(preset.label) : s.configPlain}{" "}
-          <span className="font-normal text-slate-400">{s.configNote}</span>
+          <span className="font-normal text-ink-3">{s.configNote}</span>
         </p>
         <Field label="Base URL">
           <input
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
+            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-learning-border"
             value={draft.baseUrl}
             onChange={(e) => update("baseUrl")(e.target.value)}
             placeholder="https://…/v1"
@@ -191,7 +191,7 @@ export default function ApiModelsTab({ saved, onUse }: Props) {
         </Field>
         <Field label={s.modelLabel}>
           <input
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
+            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-learning-border"
             value={draft.model}
             onChange={(e) => update("model")(e.target.value)}
             placeholder="qwen-plus"
@@ -202,7 +202,7 @@ export default function ApiModelsTab({ saved, onUse }: Props) {
           <Field label="API Key">
             <input
               type="password"
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
+              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-learning-border"
               value={draft.apiKey}
               onChange={(e) => update("apiKey")(e.target.value)}
               placeholder="sk-..."
@@ -215,20 +215,20 @@ export default function ApiModelsTab({ saved, onUse }: Props) {
           <button
             onClick={() => void runTest()}
             disabled={test.state === "testing" || !draft.baseUrl.trim()}
-            className="rounded-lg border border-indigo-200 bg-white px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-lg border border-learning-border bg-white px-4 py-2 text-sm font-medium text-learning-ink transition hover:bg-learning-soft disabled:cursor-not-allowed disabled:opacity-60"
           >
             {test.state === "testing" ? s.testing : s.testConnection}
           </button>
           <button
             onClick={runUse}
             disabled={!valid}
-            className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-primary px-5 py-2 text-sm font-medium text-white transition hover:bg-primary disabled:cursor-not-allowed disabled:opacity-50"
           >
             {s.useModel}
           </button>
-          {savedFlash ? <span className="text-sm text-emerald-600">{mod.savedOk}</span> : null}
+          {savedFlash ? <span className="text-sm text-mastered-ink">{mod.savedOk}</span> : null}
           {!valid ? (
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-ink-3">
               {cloudLike ? s.validHintCloud : s.validHint}
             </span>
           ) : null}
@@ -237,7 +237,7 @@ export default function ApiModelsTab({ saved, onUse }: Props) {
 
       <TestResultArea test={test} />
 
-      <p className="text-[11px] leading-relaxed text-slate-400">
+      <p className="text-[11px] leading-relaxed text-ink-3">
         {hasKeyring() ? s.keychainNote : s.localStorageNote}
         {s.testNote}
       </p>
@@ -248,7 +248,7 @@ export default function ApiModelsTab({ saved, onUse }: Props) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium text-slate-500">{label}</span>
+      <span className="mb-1 block text-xs font-medium text-ink-2">{label}</span>
       {children}
     </label>
   );
@@ -262,7 +262,7 @@ function TestResultArea({ test }: { test: TestStatus }) {
   }
   if (test.state === "testing") {
     return (
-      <p className="flex items-center gap-2 text-sm text-slate-500">
+      <p className="flex items-center gap-2 text-sm text-ink-2">
         <Spinner className="size-3.5" />
         {s.testRunning}
       </p>
@@ -270,17 +270,17 @@ function TestResultArea({ test }: { test: TestStatus }) {
   }
   if (test.state === "ok") {
     return (
-      <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2">
-        <p className="text-sm font-medium text-emerald-700">
+      <div className="rounded-lg border border-mastered-border bg-mastered-soft/60 px-3 py-2">
+        <p className="text-sm font-medium text-mastered-ink">
           {s.testOk(test.latencyMs)}
         </p>
       </div>
     );
   }
   return (
-    <div className="rounded-lg border border-red-200 bg-red-50/60 px-3 py-2">
-      <p className="text-sm font-medium text-red-700">❌ {test.reason}</p>
-      <p className="mt-1 text-xs leading-relaxed text-red-600/90">→ {test.hint}</p>
+    <div className="rounded-lg border border-failed-border bg-failed-soft/60 px-3 py-2">
+      <p className="text-sm font-medium text-failed-ink">❌ {test.reason}</p>
+      <p className="mt-1 text-xs leading-relaxed text-failed-ink/90">→ {test.hint}</p>
     </div>
   );
 }

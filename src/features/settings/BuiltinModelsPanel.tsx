@@ -57,10 +57,10 @@ const STATUS_STYLE: Record<
   LlmModelInfo["status"],
   string
 > = {
-  not_found: "border-slate-200 bg-slate-50 text-slate-500",
-  downloading: "border-indigo-200 bg-indigo-50 text-indigo-700",
-  ready: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  corrupted: "border-red-200 bg-red-50 text-red-700",
+  not_found: "border-line bg-subtle text-ink-2",
+  downloading: "border-learning-border bg-learning-soft text-learning-ink",
+  ready: "border-mastered-border bg-mastered-soft text-mastered-ink",
+  corrupted: "border-failed-border bg-failed-soft text-failed-ink",
 };
 
 interface Props {
@@ -145,7 +145,7 @@ export default function BuiltinModelsPanel({
 
   if (!isBuiltinAvailable()) {
     return (
-      <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-800">
+      <div className="rounded-lg border border-weak-border bg-weak-soft/70 px-4 py-3 text-sm text-weak-ink">
         {b.previewNotice}
       </div>
     );
@@ -199,34 +199,34 @@ export default function BuiltinModelsPanel({
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs leading-relaxed text-slate-500">
+        <p className="text-xs leading-relaxed text-ink-2">
           {b.downloadNoteHead}
-          <code className="rounded bg-slate-100 px-1">models/llm</code>
+          <code className="rounded bg-subtle px-1">models/llm</code>
           {b.downloadNoteTail}
-          {deviceChip ? <span className="ml-1 font-medium text-slate-600">{deviceChip}</span> : null}
+          {deviceChip ? <span className="ml-1 font-medium text-ink-2">{deviceChip}</span> : null}
         </p>
         <button
           onClick={() => void refresh()}
           disabled={busy}
-          className="shrink-0 rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+          className="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-ink-2 transition hover:bg-subtle disabled:opacity-50"
         >
           {b.refresh}
         </button>
       </div>
 
       {error ? (
-        <p className="mb-3 rounded-lg border border-red-200 bg-red-50/70 px-3 py-2 text-xs text-red-700">
+        <p className="mb-3 rounded-lg border border-failed-border bg-failed-soft/70 px-3 py-2 text-xs text-failed-ink">
           {error}
         </p>
       ) : null}
 
       {device ? (
-        <p className="mb-3 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-xs text-slate-500">
+        <p className="mb-3 rounded-lg border border-line bg-subtle/70 px-3 py-2 text-xs text-ink-2">
           {b.deviceMatchNote}
         </p>
       ) : null}
 
-      <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+      <ul className="divide-y divide-line rounded-xl border border-line">
         {models.map((m) => {
           const pct = progress[m.name];
           const isDownloading = pct !== undefined && pct < 100;
@@ -239,10 +239,10 @@ export default function BuiltinModelsPanel({
             <li
               key={m.name}
               className={`px-4 py-3 transition-colors ${
-                blocked ? "cursor-not-allowed bg-slate-50/70 opacity-60" : ""
-              } ${active ? "bg-indigo-50/60" : ""} ${
+                blocked ? "cursor-not-allowed bg-subtle/70 opacity-60" : ""
+              } ${active ? "bg-learning-soft/60" : ""} ${
                 !blocked && !isDownloading && m.status === "ready"
-                  ? "cursor-pointer hover:bg-slate-50/80"
+                  ? "cursor-pointer hover:bg-subtle/80"
                   : ""
               }`}
               onClick={() => {
@@ -252,28 +252,28 @@ export default function BuiltinModelsPanel({
               <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-slate-800">{m.display_name}</p>
+                    <p className="text-sm font-semibold text-ink-1">{m.display_name}</p>
                     {active && !blocked ? (
-                      <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                      <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
                         {mod.currentUse}
                       </span>
                     ) : null}
                     {blocked ? (
-                      <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                      <span className="rounded-full bg-line px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-2">
                         {b.deviceUnsupported}
                       </span>
                     ) : null}
                   </div>
-                  <p className="mt-0.5 truncate text-xs text-slate-400">
+                  <p className="mt-0.5 truncate text-xs text-ink-3">
                     {formatSize(m.approx_bytes, b)} · {m.description}
                   </p>
                   {blocked ? (
-                    <p className="mt-0.5 text-xs text-slate-400">
+                    <p className="mt-0.5 text-xs text-ink-3">
                       ⚠ {unsupportedReason(b, m, device)}
                     </p>
                   ) : null}
                   {!blocked && m.status === "ready" && !active ? (
-                    <p className="mt-0.5 text-[11px] text-indigo-500">{b.tapToActivate}</p>
+                    <p className="mt-0.5 text-[11px] text-primary">{b.tapToActivate}</p>
                   ) : null}
                 </div>
 
@@ -282,10 +282,10 @@ export default function BuiltinModelsPanel({
                     {/* 该面板整体走 slate/indigo 独立配色，故覆写轨道与填充色 */}
                     <Progress
                       value={pct ?? 0}
-                      className="bg-slate-200"
-                      indicatorClassName="bg-indigo-500"
+                      className="bg-line"
+                      indicatorClassName="bg-primary"
                     />
-                    <p className="mt-1 text-right text-[10px] text-indigo-600">{pct}%</p>
+                    <p className="mt-1 text-right text-[10px] text-primary">{pct}%</p>
                   </div>
                 ) : !blocked ? (
                   <span
@@ -300,7 +300,7 @@ export default function BuiltinModelsPanel({
                     <button
                       onClick={() => void runDownload(m.name)}
                       disabled={busy || isDownloading}
-                      className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                      className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-white transition hover:bg-primary disabled:opacity-50"
                     >
                       {m.status === "corrupted" ? b.retryDownload : b.download}
                     </button>
@@ -308,7 +308,7 @@ export default function BuiltinModelsPanel({
                   {!blocked && isDownloading ? (
                     <button
                       onClick={() => void runCancel(m.name)}
-                      className="rounded-md border border-slate-200 px-3 py-1 text-xs text-slate-600 transition hover:bg-slate-50"
+                      className="rounded-md border border-line px-3 py-1 text-xs text-ink-2 transition hover:bg-subtle"
                     >
                       {b.cancel}
                     </button>
@@ -317,7 +317,7 @@ export default function BuiltinModelsPanel({
                     <button
                       onClick={() => activate(m)}
                       disabled={active}
-                      className="rounded-md border border-indigo-200 px-3 py-1 text-xs font-medium text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-md border border-learning-border px-3 py-1 text-xs font-medium text-primary transition hover:bg-learning-soft disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {b.setActive}
                     </button>
@@ -325,7 +325,7 @@ export default function BuiltinModelsPanel({
                   {hasFile ? (
                     <button
                       onClick={() => setDeleteTarget(m)}
-                      className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-500 transition hover:bg-red-50 hover:text-red-600"
+                      className="rounded-md border border-line px-2.5 py-1 text-xs text-ink-2 transition hover:bg-failed-soft hover:text-failed-ink"
                     >
                       {msg.common.delete}
                     </button>
@@ -336,7 +336,7 @@ export default function BuiltinModelsPanel({
           );
         })}
       </ul>
-      <p className="mt-2 text-[11px] text-slate-400">
+      <p className="mt-2 text-[11px] text-ink-3">
         {b.downloadTip}
       </p>
       <ConfirmDialog

@@ -42,7 +42,7 @@
 | T2–T4 后（徽标 + 空态顺带） | −53 | 383 |
 | T5 后（quiz **−141**，方案估 149） | 242 | **242** |
 | T6 后（study+assessment −103，与方案估算一致） | 139 | **139** |
-| T7 后（settings −87） | 52 | 52 |
+| T7 后（settings −87，与方案估算一致） | 52 | **52** |
 | T8 后（剩余 −52） | 0 | **0** |
 
 > ⚠️ 方案原表按「T5 才开始收敛」写（436/287/184/97/0）；**实测** T2–T4 的徽标与空态
@@ -179,10 +179,13 @@
 ### T7 — settings 域收敛（基线 → 97）
 
 - **Scope**：`BuiltinModelsPanel` / `ApiModelsTab`
-- **Done**：−87 命中；`copy:check` 仍全绿（设置页文案不受影响）
-- **Status**：☐
-- **Outcome**：
-- **Notes**：
+- **Done**：−87 命中（settings 域归零）；`copy:check` / `test:i18n` 仍全绿
+- **Status**：✅
+- **Outcome**：`BuiltinModelsPanel`(55) + `ApiModelsTab`(32) **87 处全部收敛**，settings 域归零；
+  palette **139 → 52**（9 → 7 文件）；基线降至 52，差值 0 达标。
+- **Notes**：机械映射一次到位 83 处，剩余 4 处人工判定：`bg-slate-200`×2（灰徽标底 +
+  `Progress` 轨道底）→ `bg-line`（#e4e4e7 与 slate-200 #e2e8f0 几乎相等，视觉不变）、
+  `divide-slate-100`→`divide-line`、`text-amber-800`（预览提示块）→`text-weak-ink`。
 
 ### T8 — 剩余域收敛（基线 → 0）
 
@@ -236,7 +239,7 @@
 | T2–T4 | ✅ | ✅ | ✅ | ✅ | ✅ | test:card 8/8 · eta/quota/goal/rawid 全绿 | 383 |
 | T5 | ✅ | ✅ | ✅ | — | — | test:quiz 17/17 · test:explain 16/16 | **242** |
 | T6 | ✅ | ✅ | ✅ | — | — | test:rating · test:capability 全绿 | **139** |
-| T7 | | | | | | | 97 |
+| T7 | ✅ | ✅ | ✅ | ✅ | ✅ | — | **52** |
 | T8 | | | | | | | **0** |
 | T9 | | | | | | | 0 |
 | T10–T12 | | | | | | | 0 |
