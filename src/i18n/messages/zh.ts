@@ -72,7 +72,7 @@ export const zh = {
     goals: { label: "目标", hint: "目标管理与就绪度" },
     footerHint: "⌘K 快速操作",
     footerBadge: "Pre-MVP",
-    readyTooltip: "AI Provider 已就绪",
+    readyTooltip: "AI 已就绪",
     aiReady: "AI 就绪",
     aiOffline: "未配置 AI",
   },
@@ -495,11 +495,11 @@ export const zh = {
     },
     /** 设置 · 向量索引（RAG 接线：语义检索所需）。 */
     embedding: {
-      title: "向量索引（本地）",
+      title: "语义搜索（本地）",
       desc:
-        "用本机的小模型为资料正文建立向量索引，让搜索能命中「意思相近但用词不同」的段落。全程不出本机。",
-      localNote: "向量化与「当前使用模型」无关，聊天用云端 API 也不影响。",
-      model: "向量模型",
+        "让搜索能命中「意思相近但用词不同」的段落 —— 比如搜「怎样记住知识点」能找着写「怎么避免遗忘」的那一段。资料不出本机。",
+      localNote: "搜索用的模型和聊天用的模型是两回事，聊天走云端也不影响这里。",
+      model: "搜索用的本地模型",
       spec: (dim: number, ctx: number) => `${dim} 维 · ${Math.round(ctx / 1024)}k 上下文 · CPU 推理`,
       sizeMb: (bytes: number) => `${Math.round(bytes / 1_000_000)} MB`,
       status: {
@@ -512,19 +512,19 @@ export const zh = {
       redownload: "重新下载",
       cancel: "取消",
       delete: "删除模型",
-      deleteTitle: "删除向量模型",
-      deleteBody: (name: string) => `删除后需重新下载才能继续向量化：${name}`,
-      autoIndex: "导入后自动向量化",
-      autoIndexHint: "关闭后不再调用本地模型，仍可手动「重建索引」。",
-      coverage: "索引覆盖率",
-      coverageValue: (indexed: number, total: number) => `${indexed} / ${total} 块`,
-      coverageEmpty: "还没有可索引的内容（先导入资料并切分）",
-      rebuild: "重建索引",
+      deleteTitle: "删除搜索模型",
+      deleteBody: (name: string) => `删除后需要重新下载才能继续建立搜索索引：${name}`,
+      autoIndex: "导入后自动建立搜索索引",
+      autoIndexHint: "关闭后导入的资料只按文字查找；随时可以手动「重新建立索引」。",
+      coverage: "已可搜索的内容",
+      coverageValue: (indexed: number, total: number) => `${indexed} / ${total} 段`,
+      coverageEmpty: "还没有可搜索的内容（先导入资料并切分章节）",
+      rebuild: "重新建立索引",
       onlyMissing: "仅补齐缺失",
-      notReady: "请先下载并启用本地向量模型",
-      noModel: "未找到本地向量模型清单，请升级桌面端",
-      running: (done: number, total: number) => `索引中 ${done}/${total}…`,
-      failedPartial: (n: number) => `${n} 块失败，可再点「仅补齐缺失」重试`,
+      notReady: "请先下载并启用搜索模型",
+      noModel: "未找到搜索模型清单，请升级桌面端",
+      running: (done: number, total: number) => `正在建立索引 ${done}/${total}…`,
+      failedPartial: (n: number) => `${n} 段没成功，可再点「仅补齐缺失」重试`,
       doneAll: "索引已完成",
       desktopOnly: "需桌面端可用",
       previewDisabled: "语义搜索需要桌面版，浏览器预览下不可用。",
@@ -1101,7 +1101,7 @@ export const zh = {
        * 故障时若沿用空态，用户看到的是**同一个空白**，会以为自己的资料没了。
        */
       loadFailedTitle: "资料库读不出来",
-      loadFailedDesc: "本地数据库暂时不可用。你的资料没有被改动，重启应用后再试一次。",
+      loadFailedDesc: "暂时读不出你的资料。资料没有被改动，重启应用后再试一次。",
       actions: {
         rename: "重命名",
         meta: "编辑信息",
@@ -1193,8 +1193,8 @@ export const zh = {
       contentHits: (n: number) => `正文命中 ${n} 处`,
       contentEmpty: "未找到正文匹配",
       fulltextOnly: "仅全文检索",
-      fulltextOnlyHint: "向量索引不可用（未配置 Embedding 模型或尚未建索引）",
-      indexing: (done: number, total: number) => `索引中 ${done}/${total}`,
+      fulltextOnlyHint: "语义搜索还没准备好（需要先下载搜索模型并建立索引）",
+      indexing: (done: number, total: number) => `正在建立索引 ${done}/${total}`,
       semanticTag: "语义命中",
       loading: "检索中…",
     },
@@ -1471,7 +1471,7 @@ export const zh = {
         /** OCR 开关（F8 范围 2）。文案必须写清「慢」——勾了就是接受等待。 */
         ocrToggle: "扫描版 PDF 用 OCR 识别文字",
         ocrHint: "纯图片 PDF 逐页识别，50 页内约需半分钟；识别结果可能有错字",
-        ocrDesktopOnly: "OCR 仅桌面端可用（浏览器预览无法调用系统识别）",
+        ocrDesktopOnly: "OCR 识别需要桌面版（浏览器预览调用不了系统识别功能）",
         ocrProgress: (done: number, total: number) => `正在识别扫描件 ${done}/${total} 页…`,
         /** 结果卡上的来源标记，与「文本层抽出」区分。 */
         ocrTag: "OCR 识别",
@@ -1489,7 +1489,7 @@ export const zh = {
         errors: {
           unsupported: "不支持的类型（仅 .md / .txt / .pdf / .docx / .epub）",
           "too-large": "超出大小限制",
-          "pdf-no-text": "未抽取到文本（可能为扫描件）—— 可勾选上方「OCR 识别」重试",
+          "pdf-no-text": "没找到文字（这可能是扫描件）—— 勾选上面的「OCR 识别」再试一次",
           "pdf-too-large": "PDF 页数超出上限",
           "read-failed": "读取失败",
           /** ⚠️ 必须**可行动**：给的是「用 Word 另存为 .docx」这个具体操作。 */
@@ -1502,10 +1502,10 @@ export const zh = {
           "epub-no-text": "未从这本书抽取到正文（可能是纯图片排版）",
           /** OCR 兜底（F8 范围 2）；四条都指向一个**具体动作**，不是「不支持」。 */
           "pdf-ocr-unavailable":
-            "这台设备无法做 OCR 识别（仅 macOS 桌面端支持，且需要系统带中文识别能力）",
-          "pdf-ocr-too-many-pages": "页数超过 OCR 上限（50 页），请先把 PDF 拆成几份再导入",
-          "pdf-ocr-failed": "OCR 识别失败，可改用「粘贴」把文字直接粘进来",
-          "pdf-ocr-no-text": "OCR 未识别出文字（页面上可能只有图表，或扫描太模糊）",
+            "这台设备不能做 OCR 识别（目前只有 macOS 桌面版支持，系统还得能识别中文）",
+          "pdf-ocr-too-many-pages": "超过 50 页了，OCR 处理不了这么多页——请先把 PDF 拆成几份再导入",
+          "pdf-ocr-failed": "OCR 识别没成功——可以改用「粘贴」把文字直接贴进来",
+          "pdf-ocr-no-text": "OCR 没认出文字（页面上可能只有图表，或者扫得太模糊）",
         },
       },
       /** GitHub 面板。 */
@@ -1620,10 +1620,10 @@ export const zh = {
       encodingHint: (name: string) => `已按 ${name} 解码`,
       scannedHint: "部分页面未抽到文本，可能含扫描页",
       /** 结果卡索引态（G7）；未入队时按原因细分，便于用户直接对症处理。 */
-      indexQueued: "已入队向量化",
-      indexOffNoModel: "未下载本地向量模型 · 本次仅全文索引",
-      indexOffDisabled: "已关闭「导入后自动向量化」· 本次仅全文索引",
-      indexOffPreview: "浏览器预览不支持本地向量模型 · 本次仅全文索引",
+      indexQueued: "已加入搜索索引队列",
+      indexOffNoModel: "未下载搜索模型 · 本次只按文字查找",
+      indexOffDisabled: "已关闭「导入后自动建立搜索索引」· 本次只按文字查找",
+      indexOffPreview: "浏览器预览不支持搜索模型 · 本次只按文字查找",
       mergedN: (n: number) => `已自动合并 ${n} 个过碎小节`,
       structureRefined: "AI 已精修标题与要点",
       structureLocal: "本地启发式切分 · 未配置 AI",
@@ -1676,7 +1676,7 @@ export const zh = {
         goConfigure: "去配置 AI →",
         expanded: "本章内容不足，已扩展到本资料其他章节",
         notFound: "资料中未提及这一点。可以换个说法再问，或到「资料库」搜索整份资料。",
-        emptyIndex: "本章还没有建立检索索引——先在「资料详情 → 章节」重新切分，或到设置页重建索引。",
+        emptyIndex: "本章的内容还没进入搜索范围——先在「资料详情 → 章节」重新切分，或到设置页重新建立索引。",
         unanchored: "未能把这条回答定位回你的原文，请谨慎采信。",
         retry: "重试",
         citationsTitle: "依据（点一行回到原文）",
@@ -1970,7 +1970,7 @@ export const zh = {
     wrong: "答错",
     /* 资料作用域测评（评审 M2-7）：以资料章节为单位出卷，结果写章掌握度。 */
     docScopeTitle: "资料测评",
-    docScopeHint: "从资料的章节直接出单章测评卷——结果写入章掌握度，进入学习闭环。",
+    docScopeHint: "从资料的章节直接出一份单章测评卷——成绩会计入这一章的掌握度。",
     docScopeEmpty: "还没有可测评的资料——先去资料库导入一份。",
     docChapters: (n: number) => `${n} 章`,
     testChapter: "出卷",
@@ -2028,7 +2028,7 @@ export const zh = {
       loading: "正在加载…",
       loadFailedTitle: "试卷数据加载失败",
       loadFailedDesc:
-        "可能是本地数据库暂时不可用。请重启应用再试；数据仍在，不会因本次失败丢失。",
+        "可能是存储暂时出了点问题。请重启应用再试；数据仍在，不会因本次失败丢失。",
       noPaperTitle: "还没有试卷",
       noPaperDesc:
         "选一章（或几章）出一张卷：单元测检验单章，阶段测联测多章，综合测覆盖全本。",

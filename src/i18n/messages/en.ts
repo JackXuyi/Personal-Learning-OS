@@ -67,7 +67,7 @@ export const en: Messages = {
     goals: { label: "Goals", hint: "Manage goals & readiness" },
     footerHint: "⌘K quick actions",
     footerBadge: "Pre-MVP",
-    readyTooltip: "AI Provider ready",
+    readyTooltip: "AI ready",
     aiReady: "AI ready",
     aiOffline: "No AI configured",
   },
@@ -495,12 +495,12 @@ export const en: Messages = {
     },
     /** Settings · vector index (needed by semantic retrieval). */
     embedding: {
-      title: "Vector index (local)",
+      title: "Semantic search (local)",
       desc:
-        "A small on-device model indexes document bodies so search can hit passages that mean the same thing in different words. Nothing ever leaves your machine.",
+        "Lets search find passages that mean the same thing in different words — searching “how to remember a fact” will turn up the part that says “how to avoid forgetting it”. Your documents never leave this machine.",
       localNote:
-        "Embedding is independent of the current chat model — using a cloud API for chat does not affect it.",
-      model: "Embedding model",
+        "The search model and the chat model are separate; using a cloud model for chat doesn't affect this.",
+      model: "Local model for search",
       spec: (dim: number, ctx: number) =>
         `${dim}-dim · ${Math.round(ctx / 1024)}k context · CPU inference`,
       sizeMb: (bytes: number) => `${Math.round(bytes / 1_000_000)} MB`,
@@ -514,21 +514,22 @@ export const en: Messages = {
       redownload: "Download again",
       cancel: "Cancel",
       delete: "Delete model",
-      deleteTitle: "Delete embedding model",
+      deleteTitle: "Delete the search model",
       deleteBody: (name: string) =>
-        `You will need to download it again before embedding works: ${name}`,
-      autoIndex: "Embed automatically after import",
+        `You will need to download it again before search indexing works: ${name}`,
+      autoIndex: "Build the search index after import",
       autoIndexHint:
-        "When off, the local model is never called; you can still rebuild the index manually.",
-      coverage: "Index coverage",
-      coverageValue: (indexed: number, total: number) => `${indexed} / ${total} blocks`,
-      coverageEmpty: "Nothing to index yet (import and split a document first)",
+        "When off, imported documents are matched by words only; you can still rebuild the index manually at any time.",
+      coverage: "Content that can be searched",
+      coverageValue: (indexed: number, total: number) => `${indexed} / ${total} passages`,
+      coverageEmpty: "Nothing to search yet (import a document and split it into chapters first)",
       rebuild: "Rebuild index",
       onlyMissing: "Fill missing only",
-      notReady: "Download and enable the local embedding model first",
-      noModel: "No local embedding model found — please update the desktop app",
-      running: (done: number, total: number) => `Indexing ${done}/${total}…`,
-      failedPartial: (n: number) => `${n} blocks failed; use “Fill missing only” to retry`,
+      notReady: "Download and enable the search model first",
+      noModel: "No search model found — please update the desktop app",
+      running: (done: number, total: number) => `Building index ${done}/${total}…`,
+      failedPartial: (n: number) =>
+        `${n} passages failed; use “Fill missing only” to retry`,
       doneAll: "Index complete",
       desktopOnly: "Desktop app required",
       previewDisabled:
@@ -1120,7 +1121,7 @@ export const en: Messages = {
        */
       loadFailedTitle: "Could not read your library",
       loadFailedDesc:
-        "The local database is temporarily unavailable. Your material has not been changed — restart the app and try again.",
+        "Your material can't be read right now. Nothing was changed — restart the app and try again.",
       actions: {
         rename: "Rename",
         meta: "Edit info",
@@ -1214,8 +1215,8 @@ export const en: Messages = {
       contentEmpty: "No content match",
       fulltextOnly: "Full-text only",
       fulltextOnlyHint:
-        "Vector index unavailable (no embedding model configured, or index not built yet)",
-      indexing: (done: number, total: number) => `Indexing ${done}/${total}`,
+        "Semantic search isn't ready yet (it needs the search model downloaded and an index built)",
+      indexing: (done: number, total: number) => `Building index ${done}/${total}`,
       semanticTag: "Semantic",
       loading: "Searching…",
     },
@@ -1502,7 +1503,7 @@ export const en: Messages = {
         /** OCR toggle (F8 scope 2). Copy must say it is slow — ticking it accepts the wait. */
         ocrToggle: "Recognize text in scanned PDFs with OCR",
         ocrHint: "Page-by-page recognition; about half a minute for 50 pages, and results may contain errors",
-        ocrDesktopOnly: "OCR is desktop-only (browser preview cannot reach the system recognizer)",
+        ocrDesktopOnly: "OCR needs the desktop app (browser preview can't reach the system recognizer)",
         ocrProgress: (done: number, total: number) => `Recognizing scanned pages ${done}/${total}\u2026`,
         /** Source badge on the result card, to tell OCR apart from the PDF text layer. */
         ocrTag: "OCR",
@@ -1520,7 +1521,7 @@ export const en: Messages = {
         errors: {
           unsupported: "Unsupported type (only .md / .txt / .pdf / .docx / .epub)",
           "too-large": "Exceeds the size limit",
-          "pdf-no-text": "No extractable text (likely a scanned PDF) — tick \u201cOCR\u201d above and retry",
+          "pdf-no-text": "No text found (this may be a scan) — tick “OCR” above and try again",
           "pdf-too-large": "PDF exceeds the page limit",
           "read-failed": "Failed to read the file",
           /** Must be **actionable**: it names the concrete fix ("save as .docx in Word"). */
@@ -1533,9 +1534,9 @@ export const en: Messages = {
           "epub-no-text": "No text extracted from this book (it may be an image-only layout)",
           /** OCR fallback (F8 scope 2); each one names a concrete action, never just "unsupported". */
           "pdf-ocr-unavailable":
-            "This device cannot run OCR (macOS desktop only, with a system that supports Chinese recognition)",
-          "pdf-ocr-too-many-pages": "Over the OCR page limit (50) — split the PDF into parts and retry",
-          "pdf-ocr-failed": "OCR failed — you can paste the text in directly instead",
+            "This device can't run OCR (macOS desktop app only, and the system must recognize Chinese)",
+          "pdf-ocr-too-many-pages": "Over 50 pages — OCR can't handle that many. Split the PDF into parts and import them separately",
+          "pdf-ocr-failed": "OCR didn't work — you can paste the text in directly instead",
           "pdf-ocr-no-text": "OCR found no text (the pages may be charts only, or too blurry)",
         },
       },
@@ -1654,11 +1655,11 @@ export const en: Messages = {
       encodingHint: (name: string) => `Decoded as ${name}`,
       scannedHint: "Some pages had no extractable text — may contain scanned pages",
       /** Result card index status (G7). */
-      indexQueued: "Vector indexing queued",
-      indexOffNoModel: "Local embedding model not downloaded · full-text index only",
-      indexOffDisabled: "Auto-embed after import is off · full-text index only",
+      indexQueued: "Added to the search index queue",
+      indexOffNoModel: "Search model not downloaded · matching by words only this time",
+      indexOffDisabled: "“Build the search index after import” is off · matching by words only this time",
       indexOffPreview:
-        "Browser preview has no local embedding model · full-text index only",
+        "Browser preview has no search model · matching by words only this time",
       mergedN: (n: number) => `${n} over-fragmented section(s) auto-merged`,
       structureRefined: "AI refined titles & key points",
       structureLocal: "Local heuristic split · no AI configured",
@@ -1717,7 +1718,7 @@ export const en: Messages = {
         expanded: "This chapter wasn't enough — expanded to other chapters of this document",
         notFound: "The source doesn't mention this. Try rephrasing, or search the whole document in Library.",
         emptyIndex:
-          "This chapter has no retrieval index yet — re-split it in Document detail → Chapters, or rebuild the index in Settings.",
+          "This chapter isn't searchable yet — re-split it in Document detail → Chapters, or rebuild the index in Settings.",
         unanchored: "This answer couldn't be located back in your source text — treat it with caution.",
         retry: "Retry",
         citationsTitle: "Evidence (tap a row to jump to the source)",
@@ -2032,7 +2033,7 @@ export const en: Messages = {
     wrong: "Wrong",
     /* Document-scoped assessment (review M2-7): per-chapter papers that write chapter mastery. */
     docScopeTitle: "Document assessment",
-    docScopeHint: "Create a single-chapter paper from any chapter — results write chapter mastery and enter the learning loop.",
+    docScopeHint: "Create a single-chapter paper from any chapter — the score counts toward that chapter's mastery.",
     docScopeEmpty: "No documents to assess yet — import one in the Library first.",
     docChapters: (n: number) => `${n} chapter(s)`,
     testChapter: "Create paper",
@@ -2091,7 +2092,7 @@ export const en: Messages = {
       loading: "Loading…",
       loadFailedTitle: "Failed to load quiz data",
       loadFailedDesc:
-        "The local database may be temporarily unavailable. Restart the app and try again; your data is safe and not lost.",
+        "Storage may be having trouble. Restart the app and try again; your data is safe and not lost.",
       noPaperTitle: "No papers yet",
       noPaperDesc:
         "Pick one or several chapters for a paper: unit tests check one chapter, stage tests cover several, final tests span the whole book.",
