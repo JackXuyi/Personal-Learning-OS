@@ -39,7 +39,7 @@ import { splitDocumentNow, SplitServiceError } from '../split-service';
 import { applyChapterEdit, ChapterEditError } from '../chapter-edit-service';
 import type { ChapterEdit, ChapterEditResult } from '../chapter-edit-service';
 import { autoIndexAfterImport } from '../../../services/learn/index-service';
-import { analyzeChaptersNow } from '../analyze-service';
+import { analyzeChaptersNow, AnalyzeServiceError } from '../analyze-service';
 import { chapterCharCount } from '../chapter-preview';
 import { ChapterRow } from './ChapterRow';
 import { ChapterEditRow } from './ChapterEditRow';
@@ -242,13 +242,19 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
       notifyDocsChanged();
       await onChanged();
     } catch (e) {
-      const err = e instanceof SplitServiceError ? e : new Error(String(e));
-      if (err.message.includes('no-body')) {
-        setNotice(t.learn.detail.split.noBody);
-      } else if (err.message.includes('no-chapters')) {
-        setNotice(t.learn.detail.split.noChapters);
+      // ⚠️ 判据用 `.kind` 而非 `.message.includes(...)`：服务层 message 是机器令牌
+      // （`split:no-body`），且原先的中文 message 里根本没有 'no-body' 字样 ⇒ 那两个
+      // 分支从未生效，异常一律落到兜底显示原始 message（docs/copy-terminology-2026-10.md §3）。
+      if (e instanceof SplitServiceError) {
+        setNotice(
+          e.kind === 'no-body'
+            ? t.learn.detail.split.noBody
+            : e.kind === 'no-chapters'
+              ? t.learn.detail.split.noChapters
+              : e.message,
+        );
       } else {
-        setNotice(err.message || t.common.loading);
+        setNotice(e instanceof Error ? e.message : String(e));
       }
     } finally {
       setSplitting(false);
@@ -259,22 +265,40 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
     if (!aiReady || !hasChapters || refineTask.running || splitting) return;
     const provider = buildActiveProvider();
     void refineTask.run(async (_report, done) => {
-      const result = await analyzeChaptersNow(doc, chapters, { storage, provider });
-      // 三类结果分开提示（不再静默），结果文案进任务终态（切页回来仍可见）：
-      // - 有批失败 → 明确「N 批未精修」（这些章保持原样）；
-      // - 无变更（含全部批失败）→ 「本次未产生精修建议」；
-      // - 否则 → 既有结果文案。
-      if (result.failedBatches > 0) {
-        done(t.learn.detail.analyze.failedBatches(result.failedBatches));
-      } else if (result.changed === 0) {
-        done(t.learn.detail.analyze.noSuggestion);
-      } else {
-        done(t.learn.detail.analyze.result(result.changed, result.merged));
+      // ⚠️ catch 必须包在 run 回调**内部**：`done` 是回调参数，在外层 `.catch` 里不可见。
+      // 服务层 message 是机器令牌（`analyze:not-configured` 等），此处按 kind 映射成用户
+      // 文案；未识别的 kind 原样透出，便于发现新增错误类型。
+      try {
+        const result = await analyzeChaptersNow(doc, chapters, { storage, provider });
+        // 三类结果分开提示（不再静默），结果文案进任务终态（切页回来仍可见）：
+        // - 有批失败 → 明确「N 批未精修」（这些章保持原样）；
+        // - 无变更（含全部批失败）→ 「本次未产生精修建议」；
+        // - 否则 → 既有结果文案。
+        if (result.failedBatches > 0) {
+          done(t.learn.detail.analyze.failedBatches(result.failedBatches));
+        } else if (result.changed === 0) {
+          done(t.learn.detail.analyze.noSuggestion);
+        } else {
+          done(t.learn.detail.analyze.result(result.changed, result.merged));
+        }
+        notifyDocsChanged();
+        await onChanged();
+      } catch (e) {
+        const a = t.learn.detail.analyze;
+        if (e instanceof AnalyzeServiceError) {
+          done(
+            e.kind === 'not-configured'
+              ? a.errNotConfigured
+              : e.kind === 'no-body'
+                ? a.errNoBody
+                : e.kind === 'no-chapters'
+                  ? a.errNoChapters
+                  : e.message,
+          );
+        } else {
+          done(e instanceof Error ? e.message : String(e));
+        }
       }
-      notifyDocsChanged();
-      await onChanged();
-    }).catch(() => {
-      // 失败终态经 refineTask.message 渲染到下方通知条。
     });
   };
 

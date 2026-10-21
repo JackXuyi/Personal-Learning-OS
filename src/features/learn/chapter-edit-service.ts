@@ -85,7 +85,7 @@ export async function applyChapterEdit(
   opts: ChapterEditOptions,
 ): Promise<ChapterEditResult> {
   const { storage, chapters, edit } = opts;
-  if (chapters.length === 0) throw new ChapterEditError("no-chapters", "还没有章节。");
+  if (chapters.length === 0) throw new ChapterEditError("no-chapters", "chapter-edit:no-chapters");
 
   let next: Chapter[];
   let merge: { keepId: string; absorbedIds: string[] } | undefined;
@@ -93,7 +93,7 @@ export async function applyChapterEdit(
   switch (edit.kind) {
     case "rename": {
       if (!chapters.some((c) => c.id === edit.chapterId)) {
-        throw new ChapterEditError("chapter-not-found", "章节不存在。");
+        throw new ChapterEditError("chapter-not-found", "chapter-edit:chapter-not-found");
       }
       next = renameChapter([...chapters], edit.chapterId, edit.title);
       // 值未变（含空串回退原名）→ 不写库。
@@ -105,12 +105,12 @@ export async function applyChapterEdit(
     case "merge": {
       const exists = (id: string) => chapters.some((c) => c.id === id);
       if (!exists(edit.fromId) || !exists(edit.toId)) {
-        throw new ChapterEditError("chapter-not-found", "章节不存在。");
+        throw new ChapterEditError("chapter-not-found", "chapter-edit:chapter-not-found");
       }
       const r = mergeChapterRange([...chapters], edit.fromId, edit.toId);
       // 单章（from === to）或区间反向：无被吞章 = 无效合并。
       if (!r.merged || r.absorbedIds.length === 0) {
-        throw new ChapterEditError("invalid-range", "合并范围无效。");
+        throw new ChapterEditError("invalid-range", "chapter-edit:invalid-range");
       }
       next = r.chapters;
       merge = { keepId: r.merged.id, absorbedIds: r.absorbedIds };
@@ -125,12 +125,12 @@ export async function applyChapterEdit(
     }
     case "split": {
       if (!chapters.some((c) => c.id === edit.chapterId)) {
-        throw new ChapterEditError("chapter-not-found", "章节不存在。");
+        throw new ChapterEditError("chapter-not-found", "chapter-edit:chapter-not-found");
       }
       const r = splitChapterAt([...chapters], edit.chapterId, edit.offset, edit.newTitle);
       // offset 未落在章区间内部（落在端点 / 越界）→ 会产生空章 = 无效拆分。
       if (!r.newChapterId) {
-        throw new ChapterEditError("invalid-range", "拆分位置无效。");
+        throw new ChapterEditError("invalid-range", "chapter-edit:invalid-range");
       }
       next = r.chapters;
       break;

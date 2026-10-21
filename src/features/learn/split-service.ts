@@ -74,7 +74,7 @@ export async function splitDocumentNow(
   const { storage, now = Date.now() } = opts;
   const text = doc.textPreview ?? "";
   if (text.trim().length === 0) {
-    throw new SplitServiceError("no-body", "这份资料没有正文。");
+    throw new SplitServiceError("no-body", "split:no-body");
   }
 
   const old = await storage.listChapters(doc.id);
@@ -83,7 +83,7 @@ export async function splitDocumentNow(
     { ...opts.split },
   );
   if (heuristic.chapters.length === 0) {
-    throw new SplitServiceError("no-chapters", "没有切出章节。");
+    throw new SplitServiceError("no-chapters", "split:no-chapters");
   }
   // 到这里切分已完成，且全程零 AI、零重试 —— 纯函数确定性产出。
 

@@ -100,7 +100,7 @@ export function normalizeProfile(raw: unknown): LearnerProfile | undefined {
 /** 表单输入 → 落库值；档位非法时抛 `ProfileError("invalid-level")`。 */
 export function toProfile(input: LearnerProfileInput, now = Date.now()): LearnerProfile {
   const normalized = normalizeProfile({ ...input, updatedAt: now });
-  if (!normalized) throw new ProfileError("invalid-level", "画像档位非法。");
+  if (!normalized) throw new ProfileError("invalid-level", "profile:invalid-level");
   return normalized;
 }
 

@@ -112,11 +112,11 @@ export async function enrichDocumentNow(
 ): Promise<EnrichResult> {
   const { storage, provider, replaceTitle, model, onProgress, now = Date.now() } = opts;
   if (!provider.isConfigured()) {
-    throw new EnrichError("not-configured", "AI 未配置。");
+    throw new EnrichError("not-configured", "enrich:not-configured");
   }
   const text = doc.textPreview ?? "";
   if (text.trim().length === 0) {
-    throw new EnrichError("no-body", "这份资料没有正文。");
+    throw new EnrichError("no-body", "enrich:no-body");
   }
 
   const startedAt = Date.now();

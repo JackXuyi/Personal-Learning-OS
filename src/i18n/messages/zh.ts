@@ -52,7 +52,7 @@ export const zh = {
     brand: "个人学习 OS",
     /* 分组键（groupToday/groupLearn/groupKnowledge/groupGoals/groupSystem）已删除：
        导航改为平铺单列 + 图标，hint 由 hover 浮层承载（docs/nav-sidebar-redesign-design-2026-09.md）。 */
-    brandSub: "本地优先 · 学习闭环",
+    brandSub: "把资料变成试卷",
     home: { label: "首页", hint: "今天最值得做什么" },
     plan: { label: "计划", hint: "下一步怎么学" },
     learn: { label: "学习", hint: "章节目录与阅读" },
@@ -71,7 +71,7 @@ export const zh = {
     /* U6 导航项（GOALS 组主入口 /goals）。 */
     goals: { label: "目标", hint: "目标管理与就绪度" },
     footerHint: "⌘K 快速操作",
-    footerBadge: "Pre-MVP",
+    footerBadge: "预览版",
     readyTooltip: "AI 已就绪",
     aiReady: "AI 就绪",
     aiOffline: "未配置 AI",
@@ -1136,6 +1136,7 @@ export const zh = {
         placeholder: "把新增的笔记 / 章节粘贴到这里…",
         count: (n: number, total: number) => `本次 ${n} 字 · 追加后约 ${total} 字`,
         submit: "追加并重新切分",
+        empty: "要追加的内容不能为空",
         tooLarge: "追加后正文超出大小上限，请拆分资料后再试。",
       },
       del: {
@@ -1379,6 +1380,10 @@ export const zh = {
         failedBatches: (n: number) => `有 ${n} 批未精修（这些章保持原样，可稍后重试）`,
         // 精修未产生任何建议（替代改造前的静默）
         noSuggestion: "本次未产生精修建议，可稍后重试。",
+        // 服务层只产 kind（机器令牌），文案在此映射（docs/copy-terminology-2026-10.md §3）
+        errNotConfigured: "AI 未配置，请先到设置页配置模型。",
+        errNoBody: "这份资料还没有正文，先导入内容再试。",
+        errNoChapters: "还没有章节，先切分章节再试。",
       },
       knowledge: {
         pointsHead: "章要点",

@@ -25,6 +25,22 @@ import {
 export type { DeleteReport };
 
 /**
+ * 写操作的前置校验失败（docs/copy-terminology-2026-10.md §3：服务层只产机器令牌，
+ * 文案由 UI 按 kind 映射 ⇒ 切英文时不残留中文）。
+ *
+ * ⚠️ 消费方 `dialogs.tsx` 目前按 `msg.includes("上限")` 匹配，改这里须同步改那份判据。
+ */
+export class LibraryActionError extends Error {
+  readonly kind: "empty-title" | "empty-append" | "append-too-large";
+  // 不用 TS 参数属性（constructor(readonly kind)）——strip-only 模式不支持该语法糖。
+  constructor(kind: "empty-title" | "empty-append" | "append-too-large", message: string) {
+    super(message);
+    this.name = "LibraryActionError";
+    this.kind = kind;
+  }
+}
+
+/**
  * 删除级联实现已下沉 `document-cascade.ts`（纯编排，store 必传）——
  * 导入管道的「覆盖式导入」（O2/D1）复用同一条链路且不得拖进 store 模块。
  * 此处保留带默认 store 的兼容包装，既有消费方零改动。
@@ -53,7 +69,7 @@ export async function renameDocument(
   store: StorageAdapter = storage,
 ): Promise<SourceDocument> {
   const t = title.trim();
-  if (!t) throw new Error("标题不能为空");
+  if (!t) throw new LibraryActionError("empty-title", "library:empty-title");
   const next = { ...doc, title: t };
   await store.saveDocument(next);
   return next;
@@ -125,10 +141,10 @@ export async function appendDocumentBody(
   opts: { storage: StorageAdapter },
 ): Promise<SplitRunResult & { appendedChars: number }> {
   const add = newText.trim();
-  if (!add) throw new Error("追加内容不能为空");
+  if (!add) throw new LibraryActionError("empty-append", "library:empty-append");
   const merged = `${doc.textPreview ?? ""}\n\n${add}`;
   if (merged.length > LIMITS.githubTotalChars) {
-    throw new Error("追加后正文超出大小上限");
+    throw new LibraryActionError("append-too-large", "library:append-too-large");
   }
   const next: SourceDocument = { ...doc, textPreview: merged, analysis: undefined };
   await opts.storage.saveDocument(next);

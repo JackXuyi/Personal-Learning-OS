@@ -39,6 +39,7 @@ import { LIMITS } from "../import/types";
 import {
   appendDocumentBody,
   deleteDocumentCascade,
+  LibraryActionError,
   previewDeleteCascade,
   renameDocument,
   replaceDocumentBody,
@@ -324,12 +325,20 @@ export function UpdateDocModal({
         // GitHub 错误按 kind 取文案（G2）。
         setNotice(githubErrorText(err, m.learn.import.github.errors));
       } else {
-        const msg = err instanceof Error ? err.message : String(err);
-        setNotice(
-          msg.includes("上限") || msg.includes("limit")
-            ? m.learn.library.append.tooLarge
-            : msg,
-        );
+        // ⚠️ 判据走 `LibraryActionError.kind`，不再按 message 里的中文/英文关键字匹配：
+        // message 现为机器令牌（`library:append-too-large`），且中文界面下 `includes("上限")`
+        // 与英文界面下的 `includes("limit")` 是两套判据（docs/copy-terminology-2026-10.md §3）。
+        if (err instanceof LibraryActionError) {
+          setNotice(
+            err.kind === "append-too-large"
+              ? m.learn.library.append.tooLarge
+              : err.kind === "empty-append"
+                ? m.learn.library.append.empty
+                : m.learn.library.rename.empty,
+          );
+        } else {
+          setNotice(err instanceof Error ? err.message : String(err));
+        }
       }
     } finally {
       setBusy(false);

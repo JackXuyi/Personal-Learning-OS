@@ -46,7 +46,7 @@ export const en: Messages = {
 
   nav: {
     brand: "Personal Learning OS",
-    brandSub: "Local-first · Learning loop",
+    brandSub: "Your material, turned into quizzes",
     /* Group keys removed: nav is now a flat icon list, hints moved to hover tooltip
        (docs/nav-sidebar-redesign-design-2026-09.md). */
     home: { label: "Home", hint: "What to do today" },
@@ -66,7 +66,7 @@ export const en: Messages = {
     /* U6 nav item (GOALS group main entry /goals). */
     goals: { label: "Goals", hint: "Manage goals & readiness" },
     footerHint: "⌘K quick actions",
-    footerBadge: "Pre-MVP",
+    footerBadge: "Preview",
     readyTooltip: "AI ready",
     aiReady: "AI ready",
     aiOffline: "No AI configured",
@@ -1156,6 +1156,7 @@ export const en: Messages = {
         placeholder: "Paste new notes / chapters here…",
         count: (n: number, total: number) => `${n} chars now · ~${total} after append`,
         submit: "Append & re-split",
+        empty: "There's nothing to append",
         tooLarge: "Body would exceed the size limit — split the document first.",
       },
       del: {
@@ -1409,6 +1410,10 @@ export const en: Messages = {
           `${n} batch(es) not refined (those chapters kept as-is; retry later)`,
         // No refinement suggestions produced (replaces the former silent no-op)
         noSuggestion: "No refinement suggestions this time — try again later.",
+        // Services only produce kinds (machine tokens); copy is mapped here
+        errNotConfigured: "AI isn't configured — set up a model in Settings first.",
+        errNoBody: "This document has no content yet. Import some first.",
+        errNoChapters: "No chapters yet — split the document into chapters first.",
       },
       knowledge: {
         pointsHead: "Chapter points",

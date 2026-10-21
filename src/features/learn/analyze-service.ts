@@ -146,14 +146,14 @@ export async function analyzeChaptersNow(
 ): Promise<AnalyzeChaptersResult> {
   const { storage, provider, model, now = Date.now() } = opts;
   if (!provider.isConfigured()) {
-    throw new AnalyzeServiceError("not-configured", "AI 未配置。");
+    throw new AnalyzeServiceError("not-configured", "analyze:not-configured");
   }
   if (chapters.length === 0) {
-    throw new AnalyzeServiceError("no-chapters", "还没有章节，先切分。");
+    throw new AnalyzeServiceError("no-chapters", "analyze:no-chapters");
   }
   const text = doc.textPreview ?? "";
   if (text.trim().length === 0) {
-    throw new AnalyzeServiceError("no-body", "这份资料没有正文。");
+    throw new AnalyzeServiceError("no-body", "analyze:no-body");
   }
 
   const startedAt = Date.now();
@@ -198,7 +198,7 @@ export async function analyzeConceptsNow(
 ): Promise<AnalyzeConceptsResult> {
   const { storage, provider, model, onlyMissing = false, onProgress, now = Date.now() } = opts;
   if (!provider.isConfigured()) {
-    throw new AnalyzeServiceError("not-configured", "AI 未配置。");
+    throw new AnalyzeServiceError("not-configured", "analyze:not-configured");
   }
 
   const targets = onlyMissing
@@ -313,14 +313,14 @@ export async function analyzeKeyPointsNow(
 ): Promise<AnalyzeKeyPointsResult> {
   const { storage, provider, model, onlyMissing = false, onProgress, now = Date.now() } = opts;
   if (!provider.isConfigured()) {
-    throw new AnalyzeServiceError("not-configured", "AI 未配置。");
+    throw new AnalyzeServiceError("not-configured", "analyze:not-configured");
   }
   if (chapters.length === 0) {
-    throw new AnalyzeServiceError("no-chapters", "还没有章节，先切分。");
+    throw new AnalyzeServiceError("no-chapters", "analyze:no-chapters");
   }
   const text = doc.textPreview ?? "";
   if (text.trim().length === 0) {
-    throw new AnalyzeServiceError("no-body", "这份资料没有正文。");
+    throw new AnalyzeServiceError("no-body", "analyze:no-body");
   }
 
   // 选目标：`onlyMissing` 只挑「尚无原文引用」的章（续跑）。判据与 UI 覆盖度
@@ -450,11 +450,11 @@ export async function generateOverviewNow(
 ): Promise<GenerateOverviewResult> {
   const { storage, provider, model, onProgress, now = Date.now() } = opts;
   if (!provider.isConfigured()) {
-    throw new AnalyzeServiceError("not-configured", "AI 未配置。");
+    throw new AnalyzeServiceError("not-configured", "analyze:not-configured");
   }
   const text = doc.textPreview ?? "";
   if (text.trim().length === 0) {
-    throw new AnalyzeServiceError("no-body", "这份资料没有正文。");
+    throw new AnalyzeServiceError("no-body", "analyze:no-body");
   }
 
   const startedAt = Date.now();
