@@ -5,7 +5,7 @@
 | 日期 | 2026-10-20 |
 | 方案 | `docs/settings-left-menu-layout-design-2026-10.md`（修订 3） |
 | 状态 | **已完成**（代码全数落地，静态门禁全绿；人工走查项见 §5，待用户实跑） |
-| 范围 | `src/features/settings/**`、`src/App.tsx`、`src/lib/storage-label.ts`、`src/i18n/messages/{zh,en}.ts`、`scripts/settings-copy-scan.mjs`、两份文档 |
+| 范围 | `src/features/settings/**`、`src/App.tsx`、`src/lib/storage-label.ts`、`src/i18n/messages/{zh,en}.ts`、`scripts/settings-copy-scan.mjs`（⚠️ 2026-10-21 起已被 `scripts/copy-scan.mjs` 取代）、两份文档 |
 
 ## 1. 提交清单（本地，未 push）
 

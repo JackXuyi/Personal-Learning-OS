@@ -4,10 +4,10 @@
 |------|------|
 | 作者 | Agent |
 | 日期 | 2026-10-20 |
-| 状态 | **待确认**（用户已拍板三项决策点：范围＝三档全做 / 定位语＝UI 与 README 一起改 / 孤儿键＝先出清单逐个判断） |
-| 关联需求 | 用户「基于现状，优化当前项目的文案，先生成详细方案」 |
+| 状态 | **已实施**（2026-10-21，T0–T13 全数落地；9 条提交与门禁结果见 `docs/copy-optimization-runbook-2026-10.md`） |
+| 关联需求 | 用户「基于现状，优化当前项目的文案，先生成详细方案」→「按照推荐实施」（D4=A 下线 /spaces｜D5=A 保持注释｜D6=A，实测 README 无里程碑句可改） |
 | 前序方案 | `docs/settings-left-menu-layout-design-2026-10.md` §9（**设置页去技术化已实施**；本文是它的**全局续篇**，不推翻其任何决策） |
-| 门禁基线（实测 2026-10-20） | `typecheck` 0 error；`copy:check` zh 0 / en 0 命中 |
+| 门禁基线（实测 2026-10-20，实施前） | `typecheck` 0 error；`copy:check` zh 0 / en 0 命中 |
 
 ---
 
@@ -630,3 +630,4 @@ npm run copy:check    # 新版：全量值级扫描 + 硬编码 + markdown 残�
 | 日期 | 变更 | 作者 |
 |------|------|------|
 | 2026-10-20 | 初稿。基于实测（zh/en 各 1830 叶子值 / 24 命名空间 / 技术词命中 zh 82 · en 64 / 孤儿键 21 / spaces 占位页 / FORMAT_OPTIONS 硬编码中文 / privacyMaskNote markdown 残迹）制定三档方案。已拍板：范围＝三档全做、定位语＝UI 与 README 一起改、孤儿键＝先出清单逐个判断。待确认：D4（spaces 处置）、D5（brandSub 注释）、D6（README 里程碑句） | Agent |
+| 2026-10-21 | **实施完成并回写修订**（T0–T13；9 条提交）。D4=A 下线 `/spaces`、D5=A 保持 `brandSub` 注释、D6=A（实测 README 除徽章外无里程碑句）。⚠️ **本方案有三处事前推断被实测推翻，正文对应段落保留原样作历史依据，修订见此处**：①§2.3「孤儿键 21 个」不可靠 —— 原判据用裸 grep 拼多模式（静默 0 命中），据此误删 `learn.import.formatNote/Web/Txt` 被 `typecheck` TS2551 拦下（`ImportModal.tsx:156-158` 有真实消费方）；Node 正则重扫得 **54 个**，逐条定性后**本轮一个未删**。②§5.3 `coverageValue` 改「块→份资料」**会改错口径** —— `embeddingCoverage` 分母是正文切片数（`targetType="chunk"`），改为口语「段」但仍按切片计数。③§9.3「明确不做」漏了服务层中文错误串 —— `useAiTaskStore.run` 的 catch 走 `finish(id,"error",e.message)`，6 个服务的中文 message 会原样渲染，切英文不生效；已改为机器令牌 + UI 按 kind 映射，并顺带修掉两个**判据从未生效**的既存缺陷（`SplitTab` / `dialogs.tsx` 的 `message.includes` 中文匹配）。详见 `docs/copy-optimization-runbook-2026-10.md` §2–§3 | Agent |

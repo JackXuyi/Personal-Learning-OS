@@ -747,7 +747,7 @@ const LOG_LEVELS: LogLevel[] = ["debug", "info", "warn", "error"];
 **自动（`npm run copy:check`，扫 settings 子树 + `nav.settings.hint` 的**值**，0 命中）**：
 
 ```bash
-npm run copy:check     # scripts/settings-copy-scan.mjs
+npm run copy:check     # ⚠️ 2026-10-21 起为 scripts/copy-scan.mjs（本文写作时是 settings-copy-scan.mjs，已被全局版取代，见 docs/copy-terminology-2026-10.md）
 # ✅ zh：设置页用户可见文案无技术术语（0 命中）
 # ✅ en：设置页用户可见文案无技术术语（0 命中）
 ```
