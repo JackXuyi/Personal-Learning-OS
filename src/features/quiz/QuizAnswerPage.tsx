@@ -18,10 +18,13 @@ import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { Bar, Card } from "../../components/primitives";
-import type { Paper, PaperAnswers, PaperQuestion } from "../../domain";
+import type { ChapterAnswer, Paper, PaperAnswers, PaperQuestion } from "../../domain";
 import { storage } from "../../stores/useLoopStore";
+import { useAiTask } from "../../stores/useAiTaskStore";
 import { useI18n, type Messages } from "../../i18n";
 import { orderRange } from "./meta";
+import { objectiveQuestionHint } from "./explain-service";
+import ExplainPanel from "./ExplainPanel";
 
 type Phase = "answering" | "confirm-submit";
 
@@ -39,6 +42,13 @@ export default function QuizAnswerPage() {
   const [busy, setBusy] = useState(false);
   /** 重定向目标：done → 报告；grading → 判卷页（载入后跳转）。 */
   const [redirectTo, setRedirectTo] = useState<string | undefined>();
+  /**
+   * 要点提示缓存：**按 questionId 存，不按 index** —— 换题再回来不会串位置。
+   * 会话级：卸载即弃，不落库（与章内问答同口径）。
+   */
+  const [explanations, setExplanations] = useState<Record<string, ChapterAnswer>>({});
+  /** 正在取讲解的题 id（同一时刻只可能一题，但用它避免跨题误显示 loading）。 */
+  const [pending, setPending] = useState<string | undefined>();
 
   // 载入试卷 + 范围标签 + 草稿；按态迁移决定视图。
   useEffect(() => {
@@ -67,6 +77,8 @@ export default function QuizAnswerPage() {
   }, [paperId, m]);
 
   const q = paper?.questions[index];
+  /** AI 任务按「卷 + 题」注册：切页重挂可恢复 loading，`skipIfFinished` 防重跑。 */
+  const explainTask = useAiTask(`explain:${paperId}:${q?.id ?? ""}`);
   const answeredCount = paper
     ? paper.questions.filter((qq) => (answers[qq.id] ?? "").trim().length > 0).length
     : 0;
@@ -83,6 +95,28 @@ export default function QuizAnswerPage() {
     },
     [paperId],
   );
+
+  /**
+   * 取本题的要点提示。
+   *
+   * 已取过的题**不重复调用**：缓存命中直接复用（讲解只依赖原文，与用户选了什么
+   * 无关 —— 这是 D3 的意外红利）。
+   */
+  const askExplain = useCallback(async () => {
+    if (!paper || !q) return;
+    if (explanations[q.id] || explainTask.running) return;
+    setPending(q.id);
+    try {
+      await explainTask.run(async () => {
+        const res = await objectiveQuestionHint({ paper, questionId: q.id });
+        setExplanations((prev) => ({ ...prev, [q.id]: res }));
+      });
+    } catch {
+      /* 任务终态已在 store；面板由 status 渲染，此处不额外弹错 */
+    } finally {
+      setPending(undefined);
+    }
+  }, [paper, q, explanations, explainTask]);
 
   // 键盘 1–4 快速选择（选择/判断题；textarea 输入时忽略）。
   useEffect(() => {
@@ -192,6 +226,12 @@ export default function QuizAnswerPage() {
           index={index}
           value={answers[q.id] ?? ""}
           onChange={(v) => void answer(q.id, v)}
+          explain={{
+            answer: explanations[q.id],
+            loading: pending === q.id || explainTask.running,
+          }}
+          onAsk={() => void askExplain()}
+          onRetry={() => void askExplain()}
         />
       ) : null}
 
@@ -330,17 +370,24 @@ function OptionRow({
   );
 }
 
-/** 单题卡：按题型渲染控件。 */
+/** 单题卡：按题型渲染控件，末尾挂「要点提示」面板（受控，自身不取数）。 */
 function QuestionCard({
   q,
   index,
   value,
   onChange,
+  explain,
+  onAsk,
+  onRetry,
 }: {
   q: PaperQuestion;
   index: number;
   value: string;
   onChange: (v: string) => void;
+  /** 要点提示（受控；页级按 questionId 缓存）。 */
+  explain: { answer?: ChapterAnswer; loading: boolean } | undefined;
+  onAsk: () => void;
+  onRetry: () => void;
 }) {
   const { m } = useI18n();
   const a = m.quiz.answer;
@@ -404,6 +451,9 @@ function QuestionCard({
             className="w-full resize-y rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-300 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
           />
         )}
+
+        {/* 要点提示（Feature A）：客观题才出现；主观题走判卷页的 AI 批语。 */}
+        <ExplainPanel q={q} state={explain} onAsk={onAsk} onRetry={onRetry} />
       </div>
     </Card>
   );

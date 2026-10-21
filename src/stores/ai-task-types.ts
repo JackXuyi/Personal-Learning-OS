@@ -38,7 +38,9 @@ export type AiTaskId =
   | `refine:${string}`
   | `keypoints:${string}`
   | `concepts:${string}`
-  | `graph-extract:${string}`;
+  | `graph-extract:${string}`
+  /** 客观题即时要点提示（`explain:${paperId}:${questionId}`）。 */
+  | `explain:${string}`;
 
 /**
  * 终态新鲜度窗口（毫秒）。

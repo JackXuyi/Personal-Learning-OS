@@ -8,10 +8,9 @@
  * - 所有反馈内联在面板内，无弹层、无 Toast（保持阅读页无模态打断）。
  * - `data-testid` 一次到位（`rules/playwright-test-ids`：写 testid 但不启浏览器）。
  */
-import { useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { useState } from "react";
 import { useI18n } from "../../../i18n";
-import type { Chapter, ChapterAnswer, ChapterQaErrorKind, QaCitation, SourceDocument } from "../../../domain";
+import type { Chapter, ChapterAnswer, ChapterQaErrorKind, SourceDocument } from "../../../domain";
 import { Section } from "../../../components/primitives";
 import { Button } from "../../../components/ui/button";
 import { Spinner } from "../../../components/ui/spinner";
@@ -20,7 +19,7 @@ import { useAiReady } from "../../../hooks/useAiReady";
 import { useAliveRef } from "../../../hooks/useAliveRef";
 import { isUsefulKeyPoint } from "../../../lib/text-quality";
 import { MAX_QUESTION_CHARS, askChapter } from "../chapter-qa-service";
-import { splitCitationMarkers } from "./qa-citations";
+import { CitationList, QaNotice, renderWithCitations } from "./qa-shared";
 
 interface ChapterQaPanelProps {
   doc: SourceDocument;
@@ -150,35 +149,11 @@ export default function ChapterQaPanel({
   );
 }
 
-/** 内联提示条（无弹层；warn 走 warning 语义色，与徽标色族同源）。 */
-function QaNotice({
-  kind,
-  text,
-  testId,
-  action,
-}: {
-  kind: "info" | "muted" | "warn";
-  text: string;
-  testId?: string;
-  action?: { label: string; to: string };
-}) {
-  const cls =
-    kind === "warn"
-      ? "mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700"
-      : kind === "muted"
-        ? "mt-3 text-xs leading-5 text-ink-3"
-        : "mt-3 rounded-lg border border-line bg-subtle px-3 py-2 text-xs leading-5 text-ink-2";
-  return (
-    <div className={cls} data-testid={testId}>
-      <span>{text}</span>
-      {action ? (
-        <Link to={action.to} className="ml-1 font-medium text-primary hover:underline">
-          {action.label}
-        </Link>
-      ) : null}
-    </div>
-  );
-}
+/**
+ * ⚠️ `QaNotice` / `renderWithCitations` / `CitationList` / `jumpTo` / `previewOf`
+ * 已搬到 `./qa-shared`（供作答页「要点提示」共用，见 §T0）。
+ * **此处不再保留任何一份副本** —— 两份实现必然漂移。
+ */
 
 /** 答案体：按状态分支；除 answered / unanchored 外不渲染任何模型文本。 */
 function QaAnswerBody({
@@ -233,6 +208,7 @@ function QaAnswerBody({
               chapterOrdinal={m.chapter.ordinal}
               onHighlight={onHighlight}
               onJumpChapter={onJumpChapter}
+              testIdPrefix="chapter-qa-citation"
             />
           </div>
           <div className="text-right text-xs text-ink-3">{t.footnote}</div>
@@ -284,83 +260,4 @@ function QaAnswerBody({
     default:
       return null;
   }
-}
-
-/** 把答案里的 `[n]` 标记渲染为可点按钮（越界下标原样当普通文本）。 */
-function renderWithCitations(
-  text: string,
-  citations: readonly QaCitation[],
-  onHighlight: (start: number, end: number) => void,
-  onJumpChapter: (chapterId: string, atAbs: number) => void,
-): ReactNode {
-  const segments = splitCitationMarkers(text, citations.length);
-  return segments.map((seg, i) => {
-    if (seg.citation === undefined) return <span key={i}>{seg.text}</span>;
-    const citation = citations[seg.citation - 1];
-    return (
-      <button
-        key={i}
-        type="button"
-        data-testid={`chapter-qa-inline-citation-${seg.citation}`}
-        onClick={() => jumpTo(citation, onHighlight, onJumpChapter)}
-        className="mx-0.5 align-baseline text-xs font-semibold text-primary hover:underline"
-      >
-        [{seg.citation}]
-      </button>
-    );
-  });
-}
-
-/** 引用列表：一行一条，点击回原文。 */
-function CitationList({
-  citations,
-  chapterOrdinal,
-  onHighlight,
-  onJumpChapter,
-}: {
-  citations: readonly QaCitation[];
-  chapterOrdinal: (order: number) => string;
-  onHighlight: (start: number, end: number) => void;
-  onJumpChapter: (chapterId: string, atAbs: number) => void;
-}) {
-  return (
-    <ul className="space-y-1">
-      {citations.map((c, i) => (
-        <li key={c.start}>
-          <button
-            type="button"
-            data-testid={`chapter-qa-citation-${i + 1}`}
-            onClick={() => jumpTo(c, onHighlight, onJumpChapter)}
-            className="w-full rounded-md px-2 py-1.5 text-left text-xs leading-5 text-ink-2 transition-colors hover:bg-subtle hover:text-primary"
-          >
-            <span className="font-semibold text-primary">[{i + 1}]</span>{" "}
-            <span className="text-ink-3">
-              {chapterOrdinal(c.chapterOrder)} · {c.chapterTitle}
-            </span>
-            <br />
-            <span className="line-clamp-2">{previewOf(c.quote)}</span>
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-/** 引用跳转：本章 → 页内高亮（章内相对偏移）；跨章 → 路由跳转（文档绝对偏移）。 */
-function jumpTo(
-  citation: QaCitation | undefined,
-  onHighlight: (start: number, end: number) => void,
-  onJumpChapter: (chapterId: string, atAbs: number) => void,
-): void {
-  if (!citation) return;
-  if (citation.inThisChapter) {
-    onHighlight(citation.start, citation.end);
-  } else {
-    onJumpChapter(citation.chapterId, citation.start);
-  }
-}
-
-/** 引文预览（单行省略，与线框「引文前 60 字…」同口径）。 */
-function previewOf(quote: string): string {
-  return quote.length > 60 ? `${quote.slice(0, 60)}…` : quote;
 }
