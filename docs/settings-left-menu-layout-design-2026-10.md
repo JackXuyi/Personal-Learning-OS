@@ -661,6 +661,9 @@ export function StatCell({ label }: { label: string }) { /* … */ }
 | `about.tagline` | 开源 · 本地优先的自适应学习系统 | 开源 · 数据始终在你手里 | Open source · your data stays with you |
 | `about.badge` | Pre-MVP | 预览版 | Preview |
 | `about.desc` | 由「阅界」品牌出品。学习闭环：资料 → 章节 → 测评 → 掌握度 → 下一步该学什么。 | 由「阅界」出品。把资料拆成章节，读一读、测一测，就知道下一步该学什么。 | Made by 阅界. Split a document into chapters, read and test yourself, and you will know what to learn next. |
+| `about.desc`（**2026-10-21 再修订**） | — | 把资料拆成章节，读一读、测一测，就知道下一步该学什么。 | Split a document into chapters, read and test yourself, and you will know what to learn next. |
+
+> ⚠️ **2026-10-21 再修订**：`about.desc` 原含「阅界」品牌署名（PLOS 是独立开源项目，不带其它产品品牌），已去掉出品方表述，保留产品说明本身。详见 `docs/copy-optimization-runbook-2026-10.md`。
 | `about.repoNote` | 代码可在项目仓库查看；本版为 Pre-MVP 里程碑（U6 · UI Workbench 收官）。 | 本版仍在完善中，功能会持续补充。 | This build is still being completed; more features are on the way. |
 
 > `badge` 选「改值」而非「删元素」：删掉要改 `sections/AboutSection.tsx` 做可选渲染（多一处分支），而「预览版」既去掉里程碑代号、又诚实告知这是早期版本。代价可忽略。

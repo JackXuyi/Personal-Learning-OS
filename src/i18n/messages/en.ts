@@ -415,7 +415,7 @@ export const en: Messages = {
       name: "Personal Learning OS",
       tagline: "Open source · your data stays with you",
       badge: "Preview",
-      desc: "Made by 阅界. Split a document into chapters, read and test yourself, and you will know what to learn next.",
+      desc: "Split a document into chapters, read and test yourself, and you will know what to learn next.",
       repoNote: "This build is still being completed; more features are on the way.",
     },
     /** Settings · AI Model Center (local model downloads + API model config). */
