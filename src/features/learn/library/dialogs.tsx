@@ -21,6 +21,7 @@ import {
 } from "../../../components/ui/dialog";
 import { Select } from "../../../components/ui/select";
 import { useI18n } from "../../../i18n";
+import type { Messages } from "../../../i18n";
 import { storage } from "../../../stores/useLoopStore";
 import { notifyDocsChanged } from "../../../components/layout/AppShell";
 import LocalFilePanel from "../import/LocalFilePanel";
@@ -47,12 +48,17 @@ import { autoIndexAfterImport } from "../../../services/learn/index-service";
 import type { DeleteReport, ReplacePhaseKey } from "../library-actions";
 import type { DocActionKind } from "./DocActionsMenu";
 
-const FORMAT_OPTIONS: { value: DocumentFormat; label: string }[] = [
-  { value: "markdown", label: "Markdown" },
-  { value: "note", label: "笔记" },
-  { value: "web", label: "网页" },
-  { value: "txt", label: "纯文本" },
-];
+/** 格式选项：标签走 i18n（`learn.format.*` 是格式名的单一事实源）。
+ *  ⚠️ 此前是模块级硬编码中文常量 ⇒ 切英文时这两个下拉仍显示「笔记 / 网页 / 纯文本」
+ *  （docs/copy-optimization-design-2026-10.md §5.2 T-P0-1）。改从字典取，故在组件内派生。 */
+function formatOptions(m: Messages): { value: DocumentFormat; label: string }[] {
+  return [
+    { value: "markdown", label: m.learn.format.markdown },
+    { value: "note", label: m.learn.format.note },
+    { value: "web", label: m.learn.format.web },
+    { value: "txt", label: m.learn.format.txt },
+  ];
+}
 
 const inputCls =
   "w-full rounded-lg border border-line bg-app-bg px-3 py-2 text-sm text-ink-1 outline-none transition-colors placeholder:text-ink-3 focus:border-primary disabled:opacity-50";
@@ -191,7 +197,7 @@ export function DocumentMetaDialog({
               size="sm"
               value={format}
               onValueChange={(v) => setFormat(v as DocumentFormat)}
-              options={FORMAT_OPTIONS}
+              options={formatOptions(m)}
               className="w-auto"
             />
           </div>
@@ -382,7 +388,7 @@ export function UpdateDocModal({
                   value={format}
                   onValueChange={(v) => setFormat(v as DocumentFormat)}
                   disabled={busy}
-                  options={FORMAT_OPTIONS}
+                  options={formatOptions(m)}
                   className="w-auto"
                 />
               </div>
