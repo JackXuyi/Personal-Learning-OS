@@ -23,6 +23,21 @@
   --plos-state-weak: #d97706;
   --plos-state-idle: #71717a;
   --plos-state-failed: #dc2626;
+  /* 状态语义三件套（整改方案 D2-A）：徽标/区块的「浅底 / 描边 / 字」组合。
+   * 与 --plos-state-*（**实色**，仅 dot 与徽标点用）分工，勿混用：
+   * 带底色的徽标走本组，纯色小点走 --plos-state-*。 */
+  --plos-mastered-soft: #ecfdf5;
+  --plos-mastered-border: #a7f3d0;
+  --plos-mastered-ink: #047857;
+  --plos-weak-soft: #fffbeb;
+  --plos-weak-border: #fde68a;
+  --plos-weak-ink: #b45309;
+  --plos-failed-soft: #fef2f2;
+  --plos-failed-border: #fecaca;
+  --plos-failed-ink: #b91c1c;
+  --plos-learning-soft: #eef2ff;
+  --plos-learning-border: #c7d2fe;
+  --plos-learning-ink: #4338ca;
 }
 
 @theme inline {
@@ -63,6 +78,24 @@
   --color-border: var(--plos-line);
   --color-input: var(--plos-line);
   --color-ring: var(--plos-primary);
+
+  /* ── 状态语义三件套（D2-A）—— 徽标「浅底 / 描边 / 字」组合收口 ── */
+  --color-mastered-soft: var(--plos-mastered-soft);
+  --color-mastered-border: var(--plos-mastered-border);
+  --color-mastered-ink: var(--plos-mastered-ink);
+  --color-weak-soft: var(--plos-weak-soft);
+  --color-weak-border: var(--plos-weak-border);
+  --color-weak-ink: var(--plos-weak-ink);
+  --color-failed-soft: var(--plos-failed-soft);
+  --color-failed-border: var(--plos-failed-border);
+  --color-failed-ink: var(--plos-failed-ink);
+  --color-learning-soft: var(--plos-learning-soft);
+  --color-learning-border: var(--plos-learning-border);
+  --color-learning-ink: var(--plos-learning-ink);
+
+  /* ── 字号语义档（D3-A）—— 像素值与现状逐一对齐，只换名字 ── */
+  --text-badge: 0.625rem; /* 10px —— 徽标 / 角标 */
+  --text-meta: 0.6875rem; /* 11px —— 元信息行 */
 }
 
 /* 全局基础样式，避免应用出现未加载样式的背景闪烁 */

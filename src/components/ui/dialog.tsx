@@ -52,7 +52,7 @@ function DialogContent({
         {showClose ? (
           <BaseDialog.Close
             aria-label="Close"
-            className="absolute right-4 top-4 rounded-md p-1 text-ink-3 transition-colors hover:bg-subtle hover:text-ink-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="absolute right-4 top-4 rounded-md p-1 text-ink-3 transition-colors hover:bg-subtle hover:text-ink-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           >
             <X className="size-4" aria-hidden />
           </BaseDialog.Close>

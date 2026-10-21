@@ -69,7 +69,7 @@ function Select({
           sizing.trigger,
           "transition-colors outline-none select-none",
           "hover:bg-subtle/60 data-pressed:bg-subtle",
-          "focus-visible:ring-2 focus-visible:ring-ring/25",
+          "focus-visible:ring-2 focus-visible:ring-ring/50",
           "data-disabled:cursor-not-allowed data-disabled:opacity-50",
           className,
         )}

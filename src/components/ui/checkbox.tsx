@@ -20,7 +20,7 @@ function Checkbox({
         "flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-line bg-surface text-primary-foreground",
         "transition-colors outline-none",
         "hover:border-primary/60",
-        "focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-surface",
+        "focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface",
         "data-checked:border-primary data-checked:bg-primary",
         "data-disabled:cursor-not-allowed data-disabled:opacity-50",
         className,

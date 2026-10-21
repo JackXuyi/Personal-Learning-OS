@@ -46,7 +46,7 @@ function TabsTab({ className, ...props }: TabsTabProps) {
         // 与「主色条 + 灰线」双层线），只负责等分、字色与焦点环。
         "min-w-0 flex-1 whitespace-nowrap px-2 pb-2 pt-1 text-center text-sm font-medium",
         "text-ink-3 transition-colors hover:text-ink-2",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
         "data-selected:text-ink-1",
         className,
       )}

@@ -31,6 +31,8 @@
  *   node scripts/ui-consistency-scan.mjs --fail-on=3        # 存在跨 ≥3 文件模式 → 退出码 1
  *   node scripts/ui-consistency-scan.mjs --fail-on-native   # 存在原生下拉控件 → 退出码 1
  *   node scripts/ui-consistency-scan.mjs --fail-on-sticky-glass  # sticky+backdrop / bottom 条缺 key → 退出码 1
+ *   node scripts/ui-consistency-scan.mjs --fail-on-palette --palette-baseline 436
+ *                                        # 硬编码调色板色 > 基线 → 退出码 1（只降不升）
  *   node scripts/ui-consistency-scan.mjs --json             # 机器可读输出
  *
  * 退出码：0 = 报告模式（或达标）；1 = 命中 --fail-on / --fail-on-native 阈值；2 = 参数/运行错误。
@@ -160,6 +162,8 @@ function parseArgs(argv) {
     failOn: null,
     failOnNative: false,
     failOnStickyGlass: false,
+    failOnPalette: false,
+    paletteBaseline: 0,
     json: false,
   };
   for (const arg of argv) {
@@ -189,6 +193,12 @@ function parseArgs(argv) {
       case "fail-on-sticky-glass":
         opts.failOnStickyGlass = value !== "false";
         break;
+      case "fail-on-palette":
+        opts.failOnPalette = value !== "false";
+        break;
+      case "palette-baseline":
+        opts.paletteBaseline = Number(value);
+        break;
       case "json":
         opts.json = value !== "false";
         break;
@@ -202,6 +212,8 @@ function parseArgs(argv) {
   if (!Number.isInteger(opts.gram) || opts.gram < 2) throw new Error("--gram 必须是 ≥2 的整数");
   if (!Number.isInteger(opts.minFiles) || opts.minFiles < 2)
     throw new Error("--min-files 必须是 ≥2 的整数");
+  if (!Number.isInteger(opts.paletteBaseline) || opts.paletteBaseline < 0)
+    throw new Error("--palette-baseline 必须是 ≥0 的整数");
   return opts;
 }
 
@@ -435,6 +447,14 @@ function renderMarkdown(report, opts) {
   p(`## 2. 硬编码调色板色（应改用语义 token）`);
   const totalBanned = report.banned.reduce((n, b) => n + b.hits.length, 0);
   p(`合计 **${totalBanned}** 处，分布在 **${report.banned.length}** 个文件。`);
+  if (opts.failOnPalette) {
+    const delta = totalBanned - opts.paletteBaseline;
+    p(
+      `基线 **${opts.paletteBaseline}**（\`--palette-baseline\`）—— 差值 ${
+        delta > 0 ? `+${delta} ❌ 超出` : delta === 0 ? "0 ✅ 达标" : `${delta} ✅ 优于基线`
+      }。`,
+    );
+  }
   if (report.banned.length > 0) {
     p(`| 文件 | 层 | 命中 | 类名（次数） |`);
     p(`|------|----|------|--------------|`);
@@ -575,6 +595,18 @@ function main() {
       `[ui-scan] 门禁未通过：${stickyGlass.length} 处 sticky 残影隐患（backdrop-filter / bottom 条缺 key 重挂载，rules/react.mdc §Styling）\n`,
     );
     process.exit(1);
+  }
+
+  // 第 2 类门禁：硬编码调色板色「只降不升」—— 基线写在 package.json 的 ui:check，
+  // 每收敛一批下调一次（整改方案 D1-B；逐批值见 remediation runbook 的基线递减表）。
+  if (opts.failOnPalette) {
+    const totalBanned = banned.reduce((n, b) => n + b.hits.length, 0);
+    if (totalBanned > opts.paletteBaseline) {
+      process.stderr.write(
+        `[ui-scan] 门禁未通过：硬编码调色板色 ${totalBanned} 处 > 基线 ${opts.paletteBaseline}，请改用 main.css 语义 token\n`,
+      );
+      process.exit(1);
+    }
   }
 
   if (opts.failOn !== null) {
