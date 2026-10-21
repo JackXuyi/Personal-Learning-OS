@@ -688,7 +688,7 @@ export const zh = {
   /** U6 · My Learner（纯视图，§23/§7.6）。 */
   learner: {
     title: "我的画像",
-    subtitle: "系统如何理解我——由学习记录推导，全部字段可指到领域模型。",
+    subtitle: "系统如何理解你——每个判断都来自你的学习记录，你也能逐项对照修改。",
     loading: "正在汇总学习记录…",
     noRecordTitle: "还没有学习记录",
     noRecordDesc: "开始学一章或测一章后，画像会从掌握度记录里自动生成。",
@@ -944,7 +944,7 @@ export const zh = {
     privacySend: (notes: number, restatements: number, chars: number) =>
       `本次将发送 ${notes} 条笔记 + ${restatements} 次复述，共约 ${chars} 字。`,
     privacyMaskNote:
-      "已掩码手机号 / 邮箱 / 身份证 / 生日 / 主页链接；姓名与公司名**不掩码**，靠提示词约束模型不输出。",
+      "手机号 / 邮箱 / 身份证 / 生日 / 主页链接会自动打码；姓名与公司名不会自动打码，AI 整理时也不会主动写出。",
     viewPayload: "先看看要发送的内容",
     payloadTitle: "将要发送的内容",
     payloadWarn: "下面就是离开本机的全部内容，请确认后再发送。",
@@ -1010,27 +1010,6 @@ export const zh = {
       aiFailed: "调用失败，请重试。文档与元数据没有被改动。",
       emptyDraft: "模型这次没有给出可用的结论。",
     },
-  },
-
-  scaffold: {
-    scopeTitle: "范围",
-    nextTitle: "下一步（MVP 里程碑）",
-  },
-
-  spaces: {
-    title: "学习空间",
-    subtitle: "为生活不同领域分别建立独立的知识库。",
-    scope: [
-      "存储层就绪：内存 + localStorage 适配器统一在单一接口之后",
-      "领域模型支持跨职业 / 学习 / 个人的多个目标",
-      "SQLite / 文件系统后端接口已在 src/storage 预留",
-    ],
-    nextSteps: [
-      "创建一个 Learning Space（名称、描述、图标）",
-      "将 PDF / Markdown / TXT / EPUB 导入到空间",
-      "文档解析 + 分块（chunking）流水线",
-      "列出文档并附带来源引用",
-    ],
   },
 
   learn: {

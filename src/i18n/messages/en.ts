@@ -700,7 +700,7 @@ export const en: Messages = {
   learner: {
     title: "My Learner",
     subtitle:
-      "How the system sees you — derived from learning records, every figure maps to the domain model.",
+      "How the system sees you — every judgment comes from your own study records, and you can check each one.",
     loading: "Aggregating learning records…",
     noRecordTitle: "No learning records yet",
     noRecordDesc:
@@ -960,7 +960,7 @@ export const en: Messages = {
     privacySend: (notes: number, restatements: number, chars: number) =>
       `Sending ${notes} note(s) + ${restatements} restatement(s), about ${chars} characters.`,
     privacyMaskNote:
-      "Phone numbers, emails, ID numbers, birthdays and homepage links are masked; names and company names are **not** masked and rely on prompt constraints.",
+      "Phone numbers, emails, ID numbers, birthdays and homepage links are masked automatically. Names and company names are not masked automatically — the assistant will not write them out on its own.",
     viewPayload: "Preview what will be sent",
     payloadTitle: "What will be sent",
     payloadWarn: "Below is everything that leaves this machine. Please confirm before sending.",
@@ -1024,27 +1024,6 @@ export const en: Messages = {
       aiFailed: "The call failed. Please retry — the document and metadata were not changed.",
       emptyDraft: "The model returned no usable conclusions this time.",
     },
-  },
-
-  scaffold: {
-    scopeTitle: "Scope",
-    nextTitle: "Next up (MVP milestones)",
-  },
-
-  spaces: {
-    title: "Spaces",
-    subtitle: "Keep a separate knowledge base for each area of your life.",
-    scope: [
-      "Storage ready: in-memory + localStorage adapters behind one interface",
-      "Domain model supports multiple goals across career / study / personal",
-      "SQLite / filesystem backends reserved in src/storage",
-    ],
-    nextSteps: [
-      "Create a Learning Space (name, description, icon)",
-      "Import PDF / Markdown / TXT / EPUB into a space",
-      "Document parsing + chunking pipeline",
-      "List documents with source references",
-    ],
   },
 
   learn: {
