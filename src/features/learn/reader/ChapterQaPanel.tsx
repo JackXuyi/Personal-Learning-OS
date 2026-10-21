@@ -7,10 +7,24 @@
  * - 问答记录是**会话级内存**（决策 D2）：组件卸载即弃，不落库。
  * - 所有反馈内联在面板内，无弹层、无 Toast（保持阅读页无模态打断）。
  * - `data-testid` 一次到位（`rules/playwright-test-ids`：写 testid 但不启浏览器）。
+ *
+ * 追加（docs/ai-immediate-explain-design-2026-10.md，Feature B）：
+ * - **掌握度驱动的讲解档位**（决策 D5）：弱章先给脚手架、强章直达结论 ——
+ *   档位由 `tutorTierOf(mastery)` 决定，用户可手动改档（改了就一直生效到切章）。
+ * - **追问线程**（决策 D6）：最多注入最近 3 轮，**会话级内存**，切章即弃。
+ *   只有真的拿到回答（answered / unanchored）才追加进线程 —— no-ai / error
+ *   不污染上下文，否则模型会看到「自己说了一半又被问」的假历史。
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "../../../i18n";
-import type { Chapter, ChapterAnswer, ChapterQaErrorKind, SourceDocument } from "../../../domain";
+import type {
+  Chapter,
+  ChapterAnswer,
+  ChapterQaErrorKind,
+  ChapterQaTurn,
+  SourceDocument,
+  TutorTier,
+} from "../../../domain";
 import { Section } from "../../../components/primitives";
 import { Button } from "../../../components/ui/button";
 import { Spinner } from "../../../components/ui/spinner";
@@ -18,7 +32,8 @@ import { Textarea } from "../../../components/ui/textarea";
 import { useAiReady } from "../../../hooks/useAiReady";
 import { useAliveRef } from "../../../hooks/useAliveRef";
 import { isUsefulKeyPoint } from "../../../lib/text-quality";
-import { MAX_QUESTION_CHARS, askChapter } from "../chapter-qa-service";
+import { storage } from "../../../stores/useLoopStore";
+import { MAX_QUESTION_CHARS, askChapter, trimThread, tutorTierOf } from "../chapter-qa-service";
 import { CitationList, QaNotice, renderWithCitations } from "./qa-shared";
 
 interface ChapterQaPanelProps {
@@ -49,19 +64,60 @@ export default function ChapterQaPanel({
   const [answer, setAnswer] = useState<ChapterAnswer | undefined>();
   /** 卸载后丢弃迟到的 setState（切章 / 切页时不写已卸组件）。 */
   const aliveRef = useAliveRef();
+  /** 追问线程（会话级；不落库，见文件头 D6）。 */
+  const [turns, setTurns] = useState<ChapterQaTurn[]>([]);
+  /** 用户手动改档（undefined = 用掌握度推荐的档位）。 */
+  const [tierOverride, setTierOverride] = useState<TutorTier | undefined>();
+  /** 本章掌握度：mount 时读一次，**不轮询**（避免多余 IO）。 */
+  const [mastery, setMastery] = useState<number | undefined>();
+  /** 追问框（与首轮输入分开，避免互相清空）。 */
+  const [followUp, setFollowUp] = useState("");
+
+  useEffect(() => {
+    // 切章：线程、手动档、上一轮答案全部作废（会话级语义）。
+    if (!aliveRef.current) return;
+    void (async () => {
+      const learner = await storage.getLearnerState();
+      if (aliveRef.current) setMastery(learner.byUnit[chapter.id]?.mastery);
+    })();
+  }, [chapter.id, aliveRef]);
+
+  const tier = tierOverride ?? tutorTierOf(mastery);
+  const TIER_TEXT: Record<TutorTier, string> = {
+    scaffold: t.tierScaffold,
+    standard: t.tierStandard,
+    direct: t.tierDirect,
+  };
+  const tierText = t.tierLabel(Math.round((mastery ?? 0) * 100));
 
   const tooLong = question.length > MAX_QUESTION_CHARS;
   const canAsk = aiReady && question.trim().length > 0 && !tooLong && !asking;
+  const followTooLong = followUp.length > MAX_QUESTION_CHARS;
+  const canFollow =
+    aiReady && followUp.trim().length > 0 && !followTooLong && !asking && answer !== undefined;
 
-  const ask = async (q: string) => {
+  const ask = async (q: string, nextTier: TutorTier = tier) => {
     setAsking(true);
     try {
       const res = await askChapter({
         documentId: doc.id,
         chapterId: chapter.id,
         question: q,
+        history: trimThread(turns),
+        tier: nextTier,
       });
-      if (aliveRef.current) setAnswer(res);
+      if (!aliveRef.current) return;
+      setAnswer(res);
+      // 只有真的拿到回答才进线程：no-ai / error 不污染上下文
+      if (res.status === "answered" || res.status === "unanchored") {
+        setTurns((prev) => [
+          ...prev,
+          { role: "user", text: q },
+          { role: "tutor", text: res.answer ?? "" },
+        ]);
+      }
+      // 只清追问框：首轮输入框的既有行为（提交后保留内容）不改，避免顺手改坏。
+      setFollowUp("");
     } finally {
       if (aliveRef.current) setAsking(false);
     }
@@ -71,6 +127,31 @@ export default function ChapterQaPanel({
     <section className="space-y-2" data-testid="chapter-qa-root">
       <Section title={t.eyebrow} />
       <div className="rounded-xl border border-line bg-surface p-4">
+        {/* 档位标签：常态只在「非标准档 / 用户改过档」时才给出改回入口，避免常态噪音 */}
+        <div
+          className="mb-2 flex items-center justify-between gap-2"
+          data-testid="chapter-qa-tier"
+        >
+          <span className="flex min-w-0 items-center gap-1.5 text-xs text-ink-3">
+            <span
+              className="rounded bg-subtle px-1.5 py-0.5 font-medium text-ink-2"
+              data-testid="chapter-qa-tier-badge"
+            >
+              {TIER_TEXT[tier]}
+            </span>
+            <span className="truncate">{tierText}</span>
+          </span>
+          {tierOverride ? (
+            <button
+              type="button"
+              data-testid="chapter-qa-tier-reset"
+              onClick={() => setTierOverride(undefined)}
+              className="shrink-0 text-xs text-primary hover:underline"
+            >
+              {t.tierReset}
+            </button>
+          ) : null}
+        </div>
         <Textarea
           data-testid="chapter-qa-input"
           rows={2}
@@ -142,6 +223,65 @@ export default function ChapterQaPanel({
             onJumpChapter={onJumpChapter}
             onRetry={() => void ask(answer.question)}
           />
+        ) : null}
+
+        {/* 追问线程：只在真拿到回答后出现（no-ai / error 时追问没有意义） */}
+        {answer && (answer.status === "answered" || answer.status === "unanchored") ? (
+          <div className="mt-3 space-y-2 border-t border-line pt-3" data-testid="chapter-qa-thread">
+            <div className="flex items-end gap-2">
+              <Textarea
+                data-testid="chapter-qa-followup"
+                rows={2}
+                className="resize-none text-sm"
+                value={followUp}
+                placeholder={t.followUpPlaceholder}
+                disabled={!aiReady || asking}
+                onChange={(e) => setFollowUp(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (canFollow) void ask(followUp);
+                  }
+                }}
+              />
+              <Button
+                data-testid="chapter-qa-followup-send"
+                size="sm"
+                disabled={!canFollow}
+                onClick={() => void ask(followUp)}
+              >
+                {asking ? t.asking : t.followUpSend}
+              </Button>
+            </div>
+            {followTooLong ? (
+              <p className="text-xs text-state-failed">{t.tooLong(MAX_QUESTION_CHARS)}</p>
+            ) : null}
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                data-testid="chapter-qa-rephrase"
+                disabled={asking}
+                onClick={() => void ask(t.rephrase)}
+                className="rounded-lg border border-line bg-surface px-2.5 py-1 text-xs leading-5 text-ink-2 transition-colors hover:border-ink-3/40 disabled:opacity-50"
+              >
+                {t.rephrase}
+              </button>
+              <button
+                type="button"
+                data-testid="chapter-qa-direct"
+                disabled={asking}
+                onClick={() => {
+                  // 不只这一次用直达档：改档后**持续生效**，直到用户点「改回推荐档」——
+                  // 否则用户每次追问都要再点一次，档位就成了摆设。
+                  setTierOverride("direct");
+                  void ask(answer.question, "direct");
+                }}
+                className="rounded-lg border border-line bg-surface px-2.5 py-1 text-xs leading-5 text-ink-2 transition-colors hover:border-ink-3/40 disabled:opacity-50"
+              >
+                {t.directAnswer}
+              </button>
+            </div>
+          </div>
         ) : null}
       </div>
       <p className="text-xs leading-5 text-ink-3">{t.footnote}</p>
