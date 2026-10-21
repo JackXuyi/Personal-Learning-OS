@@ -83,6 +83,29 @@ export function needsAI(q: PaperQuestion): boolean {
   return isSubjectiveType(q.type);
 }
 
+/**
+ * 本地参考答案文本（决策 D3：这条路**完全不经过 AI**）。
+ *
+ * choice → 「B · <选项原文>」；judge → 「对 ✓」/「错 ✗」；主观题无「标准选项」
+ * 可言 → undefined。
+ *
+ * 为什么单独一个函数：参考答案是**本地已有的数据**，与「AI 讲解」是两条独立
+ * 的揭示通道（D2 分层）。放在这里而不是 `explain-service.ts`，是因为它要读
+ * i18n 字典做文案映射，而 service 层取不到 `src/i18n`。
+ */
+export function referenceOptionText(q: PaperQuestion, m: Messages = zh): string | undefined {
+  if (q.type === "judge") {
+    return q.answer === "true" ? m.quiz.report.trueLabel : m.quiz.report.falseLabel;
+  }
+  if (q.type === "choice" && q.answer !== undefined && q.options) {
+    const i = Number(q.answer);
+    const opt = q.options[i];
+    if (opt === undefined) return undefined;
+    return `${String.fromCharCode(65 + i)} · ${opt}`;
+  }
+  return undefined;
+}
+
 /** 「3 分钟前」样式的相对时间。 */
 export function ago(at: number, m: Messages = zh): string {
   const diff = Math.max(0, Date.now() - at);
