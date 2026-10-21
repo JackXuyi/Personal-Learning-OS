@@ -436,7 +436,7 @@ Every capability the project intends to ship — this doubles as the roadmap.
 
 - [x] Chapter reader — original text beside AI key points
 - [x] Per-chapter concept graph
-- [x] In-chapter Q&A grounded in your own text — every citation jumps back to the source passage
+- [x] In-chapter Q&A grounded in your own text — every citation jumps back to the source passage; the answer's depth follows the chapter's mastery (weak chapters get scaffolding, strong ones get a direct answer), and you can follow up on the same answer for up to 3 turns of context
 - [x] Highlights and notes — select text to highlight it, optionally attach a note; the side panel lists them and jumps back to the passage (zero AI, not written to the evidence log, no mastery change; re-anchored automatically after a re-split or chapter merge)
 - [x] Feynman restatement — explain a chapter in your own words; the AI diffs it against the chapter text (covered / missed / got wrong, each anchored back to the source) and can schedule a review without moving mastery
 - [x] Flashcards from key points — one click sends a chapter's quoted key points into a card-level spaced-repetition queue (four-grade self-rating, 1/2/4/7-day intervals, no mastery change, **works fully offline / without AI**)
@@ -445,7 +445,7 @@ Every capability the project intends to ship — this doubles as the roadmap.
 ### 📝 Assessment
 
 - [x] 4 paper modes — unit / stage / final / retake, with adaptive difficulty
-- [x] Local objective grading, instant
+- [x] Local objective grading, instant — plus an on-the-spot hint while you answer: key points drawn from your own text and anchored back to it. It never reveals the correct option, and the local reference answer stays folded away until you ask for it
 - [x] AI subjective grading with feedback and a source pointer
 - [x] Report — per-chapter mastery deltas, wrong answers, weak points
 - [x] Mastery smoothing: `0.65 × score + 0.35 × previous`
