@@ -1,7 +1,6 @@
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import AppShell from "./components/layout/AppShell";
 import HomePage from "./features/home/HomePage";
-import SpacesPage from "./features/spaces/SpacesPage";
 import LibraryPage from "./features/learn/LibraryPage";
 import DocumentDetailPage from "./features/learn/DocumentDetailPage";
 import ChapterReaderPage from "./features/learn/ChapterReaderPage";
@@ -32,7 +31,10 @@ export default function App() {
       <Routes>
         <Route element={<AppShell />}>
           <Route index element={<HomePage />} />
-          <Route path="spaces" element={<SpacesPage />} />
+          {/* 原 /spaces 学习空间占位页已下线（docs/copy-optimization-design-2026-10.md §5.2 T-P0-4）：
+              该页文案是开发备忘（讲 src/storage 预留、chunking 流水线），无功能、无数据、无导航入口；
+              断链按历史 URL 处理 → 归首页。*/}
+          <Route path="spaces" element={<Navigate to="/" replace />} />
           {/* 原 /knowledge 图谱列表被 V2 章节目录取代（docs §4 P1）；N5 图谱回归为章内概念图谱 */}
           <Route path="knowledge" element={<Navigate to="/learn" replace />} />
           {/* V2 资料库：列表页 + 详情页 + 旧链接兼容 */}

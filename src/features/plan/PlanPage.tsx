@@ -153,7 +153,7 @@ export default function PlanPage() {
         subtitle={
           plan
             ? m.plan.subtitle(
-                plan.goal?.title ?? m.spaces.title,
+                plan.goal?.title ?? m.learn.library.title,
                 plan.mastered,
                 plan.total,
                 plan.actions.length,
