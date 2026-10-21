@@ -42,13 +42,16 @@ async function check(name: string, fn: () => Promise<void> | void) {
   }
 }
 
-/** 可注入 fetch：按 host + pathname（+query 子串）精确路由返回 JSON/文本。 */
-function mockFetch(routes: { host: string; pathname: string; query?: string; json?: unknown; text?: string; status?: number }[]) {
+/** 可注入 fetch：按 host + pathname（+query 子串）精确路由返回 JSON/文本。
+ *  netFail=true 模拟网络级失败（连接被阻断/超时，fetch reject 而非 HTTP 错误）。 */
+function mockFetch(routes: { host: string; pathname: string; query?: string; json?: unknown; text?: string; status?: number; netFail?: boolean }[]) {
   return async (input: string | URL, init?: RequestInit): Promise<Response> => {
     const url = new URL(String(input));
     for (const r of routes) {
-      if (url.hostname !== r.host || url.pathname !== r.pathname) continue;
+      if (url.hostname !== r.host) continue;
+      if (r.pathname !== undefined && url.pathname !== r.pathname) continue;
       if (r.query && !url.search.includes(r.query)) continue;
+      if (r.netFail) throw new TypeError("mock network failure");
       const status = r.status ?? 200;
       if (r.json !== undefined) {
         return new Response(JSON.stringify(r.json), { status, headers: { "content-type": "application/json" } });
@@ -56,6 +59,8 @@ function mockFetch(routes: { host: string; pathname: string; query?: string; jso
       if (r.text !== undefined) {
         return new Response(r.text, { status, headers: { "content-type": "text/plain" } });
       }
+      // 只有 status：返回空体错误响应（无 body 路由）。
+      return new Response("error", { status });
     }
     return new Response("not found", { status: 404 });
   };
@@ -226,6 +231,35 @@ const run = async () => {
     assert.equal(unit.format, "markdown");
     assert.ok(unit.text.includes("# docs/01-intro.md"));
     assert.ok(unit.text.startsWith("# README.md"));
+  });
+
+  await check("buildGithubUnit raw 网络级失败 → api contents 兜底", async () => {
+    // raw 域名不可达（如中国大陆网络被阻断）：fetch 直接 reject → 走 api.github.com 兜底。
+    const fetchImpl = mockFetch([
+      { host: "api.github.com", pathname: "/repos/o/r", json: { full_name: "o/r", default_branch: "main" } },
+      { host: "api.github.com", pathname: "/repos/o/r/git/trees/main", query: "recursive=1", json: REPO_TREE },
+      { host: "raw.githubusercontent.com", netFail: true },
+      { host: "api.github.com", pathname: "/repos/o/r/contents/README.md", query: "ref=main", text: "仓库说明（经 API 兜底）" },
+      { host: "api.github.com", pathname: "/repos/o/r/contents/docs/01-intro.md", query: "ref=main", text: "# 第一章\n内容" },
+      { host: "api.github.com", pathname: "/repos/o/r/contents/docs/02-rag.md", query: "ref=main", text: "# 第二章\n内容" },
+    ]);
+    const p = await resolveGithubUrl(fetchImpl, "https://github.com/o/r");
+    const unit = await buildGithubUnit(fetchImpl, p);
+    assert.ok(unit.text.includes("仓库说明（经 API 兜底）"));
+    assert.ok(unit.text.includes("# docs/01-intro.md"));
+  });
+
+  await check("buildGithubUnit raw HTTP 404 → 不走 API 兜底", async () => {
+    // raw 的 HTTP 状态错误是真实答复（省 API 配额）：404 直接计入失败。
+    const fetchImpl = mockFetch([
+      { host: "api.github.com", pathname: "/repos/o/r", json: { full_name: "o/r", default_branch: "main" } },
+      { host: "api.github.com", pathname: "/repos/o/r/git/trees/main", query: "recursive=1", json: REPO_TREE },
+      { host: "raw.githubusercontent.com", status: 404 },
+    ]);
+    const p = await resolveGithubUrl(fetchImpl, "https://github.com/o/r");
+    const unit = await buildGithubUnit(fetchImpl, p).catch((e: unknown) => e);
+    assert.ok(unit instanceof GithubImportError);
+    assert.equal((unit as GithubImportError).kind, "fetch-failed");
   });
 
   // ---- 7) pipeline：注入内存后端 ----

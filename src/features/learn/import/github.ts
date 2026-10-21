@@ -2,7 +2,8 @@
  * GitHub 公开仓库导入适配器（整库/子目录/单文件 md）。
  *
  * 链路：URL 解析 → 仓库元信息（default_branch）→ git trees 递归文件树 →
- * 过滤 Markdown → raw.githubusercontent.com 并行拉取 → 合并为一份 Markdown。
+ * 过滤 Markdown → raw.githubusercontent.com 并行拉取（网络级失败时
+ * api.github.com contents 兜底，raw 域名在部分网络被阻断）→ 合并为一份 Markdown。
  *
  * 设计要点（docs/knowledge-import-design-2026-09.md §4.2）：
  * - 仅公开仓库（无 token）；api.github.com 未认证限流 60 次/时 → trees 只调 1 次，
@@ -209,7 +210,37 @@ export async function listMarkdownFiles(
   return { ...pickMarkdownEntries(record.tree as TreeEntry[], prefix), branch: ref };
 }
 
-/** 拉取单个文件原文（raw.githubusercontent.com；目标文件超护栏在此也兜底）。 */
+/** raw CDN 单次拉取超时：raw.githubusercontent.com 在部分网络（如中国大陆）常被阻断，
+ * 不设超时会让导入按钮无限转圈；快速失败后转 api.github.com 兜底（见 fetchRawText）。 */
+const RAW_TIMEOUT_MS = 10_000;
+
+/** 经 api.github.com contents 端点拉取文件原文（Accept: vnd.github.raw 返回原文）。
+ * 注意未认证配额 60 次/时 —— 仅在 raw CDN 网络级失败时兜底，不作为常规路径。 */
+async function fetchRawViaApi(
+  fetchImpl: FetchLike,
+  owner: string,
+  repo: string,
+  ref: string,
+  path: string,
+): Promise<string> {
+  const url = `https://api.github.com/repos/${encodeSegments(`${owner}/${repo}`)}/contents/${encodeSegments(path)}?ref=${encodeSegments(ref)}`;
+  let res: Response;
+  try {
+    res = await fetchImpl(url, { headers: { Accept: "application/vnd.github.raw" } });
+  } catch (err) {
+    throw new GithubImportError("network", err instanceof Error ? err.message : String(err));
+  }
+  if (!res.ok) return mapError(url, res);
+  const text = await res.text();
+  if (text.length > LIMITS.githubTotalChars) {
+    throw new GithubImportError("merged-too-large", `file ${text.length}>${LIMITS.githubTotalChars}`);
+  }
+  return text;
+}
+
+/** 拉取单个文件原文。主路径 raw.githubusercontent.com（不受 API 配额限制）；
+ * 网络级失败（连接失败 / 超时，典型为 raw 域名被阻断）→ api.github.com contents 兜底。
+ * raw 的 HTTP 状态错误（404/403）是真实答复，不兜底（省配额，API 同 ref 也会同样失败）。 */
 export async function fetchRawText(
   fetchImpl: FetchLike,
   owner: string,
@@ -220,9 +251,10 @@ export async function fetchRawText(
   const url = `https://raw.githubusercontent.com/${encodeSegments(`${owner}/${repo}/${ref}/${path}`)}`;
   let res: Response;
   try {
-    res = await fetchImpl(url);
-  } catch (err) {
-    throw new GithubImportError("network", err instanceof Error ? err.message : String(err));
+    res = await fetchImpl(url, { signal: AbortSignal.timeout(RAW_TIMEOUT_MS) });
+  } catch {
+    // 网络级失败：raw 域名不可达（阻断/超时）→ 走 api.github.com 兜底。
+    return fetchRawViaApi(fetchImpl, owner, repo, ref, path);
   }
   if (!res.ok) return mapError(url, res);
   const text = await res.text();
