@@ -12,6 +12,31 @@
  */
 
 /**
+ * 讲解档位：由**章掌握度**决定 AI 讲解的深浅（Feature B，决策 D5）。
+ *
+ * 由 `features/learn/chapter-qa-service.ts::tutorTierOf` 唯一产出 —— 阈值不放
+ * 在常量表里散落，因为「弱章先给脚手架」是一条产品口径，不是可调参数。
+ */
+export type TutorTier =
+  /** 掌握 < 0.4（含从未测评）：先给指向性提示，问用户要不要更完整的讲解。 */
+  | "scaffold"
+  /** 0.4 ≤ 掌握 < 0.75：短答 + 一句追问（改动前的既有行为）。 */
+  | "standard"
+  /** 掌握 ≥ 0.75：直接给完整回答，不必再引导。 */
+  | "direct";
+
+/**
+ * 追问线程中的一轮。
+ *
+ * **仅存在于会话内存，不落库**（决策 D6）：沿用本文件顶部「只读消费型类型」
+ * 的定位 —— 不参与掌握度与证据流，不需要 schema 迁移，也不会产生脏数据。
+ */
+export interface ChapterQaTurn {
+  role: "user" | "tutor";
+  text: string;
+}
+
+/**
  * 一条「答案 → 原文」的引用。
  */
 export interface QaCitation {

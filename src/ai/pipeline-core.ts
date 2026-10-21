@@ -101,10 +101,30 @@ export const PIPELINE_LIMITS = {
   capabilityMaterialChars: 12_000,
   /** 单任务作答注入上限（对齐 CAPABILITY_LIMITS.answerMaxChars）。 */
   capabilityAnswerChars: 4_000,
+  /** 客观题即时解释：单条引文字符上限（对齐 keyPointQuoteMaxChars）。 */
+  explainQuoteMaxChars: 200,
+  /** 客观题即时解释：引文条数上限（比章内提问更严 —— 解释只要够用的依据，不是综述）。 */
+  explainMaxQuotes: 3,
+  /** 章内追问线程：注入的最近「往返」轮数上限（一轮 = 1 条 user + 1 条 tutor）。 */
+  qaThreadMaxTurns: 3,
+  /** 章内追问线程：单条文本字符上限（防线程无限膨胀吃掉小模型上下文）。 */
+  qaThreadTurnChars: 400,
 } as const;
 
-/** 温度：精修/出题偏稳定，批改最低（事实判定）。 */
-export const TEMPERATURE = { refine: 0.2, quiz: 0.3, grade: 0.1, concept: 0.2, keyPoint: 0.2 };
+/**
+ * 温度：精修/出题偏稳定，批改最低（事实判定）。
+ *
+ * `explain`（客观题即时解释）与 `grade` 同档 0.1 —— 同为「只许说原文里有的事」，
+ * 温度一高小模型就开始补自己的推理。
+ */
+export const TEMPERATURE = {
+  refine: 0.2,
+  quiz: 0.3,
+  grade: 0.1,
+  concept: 0.2,
+  keyPoint: 0.2,
+  explain: 0.1,
+} as const;
 
 /* ------------------------------------------------------------------ */
 /* JSON 归一化                                                         */
