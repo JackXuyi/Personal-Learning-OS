@@ -614,7 +614,7 @@ function fmtDelta(v: number): { text: string; tone: "up" | "down" | "neutral" } 
 function AllDoneCard() {
   const { m } = useI18n();
   return (
-    <Card className="mt-6 border-emerald-200 bg-emerald-50/40">
+    <Card className="mt-6 border-mastered-border bg-mastered-soft/40">
       <p className="text-lg font-semibold text-ink-1">{m.home.allDoneTitle}</p>
       <p className="mt-1 text-sm text-ink-2">{m.home.allDoneDesc}</p>
       <div className="mt-4 flex gap-3">

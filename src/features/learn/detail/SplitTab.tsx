@@ -494,7 +494,7 @@ export default function SplitTab({ doc, chapters, learner, onChanged }: SplitTab
                 </p>
               )}
               <p>{t.learn.detail.chaptersEdit.mergeConfirmNote}</p>
-              <p className="font-medium text-amber-700">
+              <p className="font-medium text-state-weak">
                 {t.learn.detail.chaptersEdit.mergeConfirmWarn}
               </p>
             </div>

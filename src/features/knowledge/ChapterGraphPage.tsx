@@ -141,7 +141,7 @@ export default function ChapterGraphPage() {
   if (!chapter || !graph || !doc) {
     return (
       <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-sm text-slate-500">{t.opening}</p>
+        <p className="text-sm text-ink-2">{t.opening}</p>
       </div>
     );
   }
@@ -153,22 +153,22 @@ export default function ChapterGraphPage() {
       {/* 面包屑 + 工具栏 */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <Link to={`/learn/${chapter.id}`} className="text-xs text-slate-400 hover:text-indigo-600">
+          <Link to={`/learn/${chapter.id}`} className="text-xs text-ink-3 hover:text-primary">
             {t.backToReader}
           </Link>
-          <p className="mt-0.5 truncate text-xs text-slate-400">
+          <p className="mt-0.5 truncate text-xs text-ink-3">
             {doc.title} · {m.chapter.ordinal(chapter.order)} · {t.crumbSuffix}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {/* 终态 pill 带新鲜度门（R2）：同 id 记录跨页面残留的陈旧终态不再展示 */}
           {task.status === "done" && task.message && isTerminalFresh(task) ? (
-            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+            <span className="rounded-full bg-mastered-soft px-3 py-1 text-xs font-medium text-mastered-ink">
               {task.message}
             </span>
           ) : null}
           {(error || (task.status === "error" && task.message && isTerminalFresh(task))) ? (
-            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+            <span className="rounded-full bg-weak-soft px-3 py-1 text-xs font-medium text-weak-ink">
               {error ?? task.message}
             </span>
           ) : null}
@@ -180,7 +180,7 @@ export default function ChapterGraphPage() {
 
       {hasConcepts ? (
         <>
-          <p className="mb-3 text-xs text-slate-400">{t.hint}</p>
+          <p className="mb-3 text-xs text-ink-3">{t.hint}</p>
           <GraphView
             graph={chapterUnits}
             masteryByUnit={masteryByUnit}
@@ -193,14 +193,14 @@ export default function ChapterGraphPage() {
         </>
       ) : (
         <Card className="p-10 text-center">
-          <p className="text-base font-semibold text-slate-800">{t.emptyTitle}</p>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+          <p className="text-base font-semibold text-ink-1">{t.emptyTitle}</p>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-ink-2">
             {t.emptyDesc}
           </p>
           {buildActiveProvider().isConfigured() ? null : (
             <Link
               to="/settings"
-              className="mt-4 inline-block rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+              className="mt-4 inline-block rounded-lg border border-learning-border bg-learning-soft px-4 py-2 text-sm font-medium text-learning-ink hover:bg-learning-soft"
             >
               {t.goConfigure}
             </Link>

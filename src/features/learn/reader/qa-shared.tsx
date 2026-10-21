@@ -30,7 +30,7 @@ export function QaNotice({
 }) {
   const cls =
     kind === "warn"
-      ? "mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700"
+      ? "mt-3 rounded-lg border border-weak-border bg-weak-soft px-3 py-2 text-xs leading-5 text-weak-ink"
       : kind === "muted"
         ? "mt-3 text-xs leading-5 text-ink-3"
         : "mt-3 rounded-lg border border-line bg-subtle px-3 py-2 text-xs leading-5 text-ink-2";

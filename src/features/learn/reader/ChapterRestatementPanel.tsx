@@ -269,7 +269,7 @@ function RestatementNotice({
 }) {
   const cls =
     kind === "warn"
-      ? "mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700"
+      ? "mt-3 rounded-lg border border-weak-border bg-weak-soft px-3 py-2 text-xs leading-5 text-weak-ink"
       : kind === "muted"
         ? "mt-3 text-xs leading-5 text-ink-3"
         : "mt-3 rounded-lg border border-line bg-subtle px-3 py-2 text-xs leading-5 text-ink-2";
@@ -445,7 +445,7 @@ function PointGroup({
               onClick={() => onHighlight(p.start, p.end)}
               className="w-full rounded-md px-2 py-1.5 text-left text-xs leading-5 text-ink-2 transition-colors hover:bg-subtle hover:text-primary"
             >
-              <span className={tone === "missed" ? "font-medium text-amber-700" : "font-medium text-ink-1"}>
+              <span className={tone === "missed" ? "font-medium text-weak-ink" : "font-medium text-ink-1"}>
                 {p.point}
               </span>
               <br />
@@ -615,7 +615,7 @@ function HistoryRow({
                       <button
                         type="button"
                         onClick={() => onHighlight(p.start, p.end)}
-                        className="w-full rounded px-1 py-0.5 text-left text-xs text-amber-700 transition-colors hover:bg-subtle"
+                        className="w-full rounded px-1 py-0.5 text-left text-xs text-weak-ink transition-colors hover:bg-subtle"
                       >
                         ⚠ {p.point} 「{previewOf(p.quote)}」
                       </button>

@@ -204,7 +204,7 @@ export default function GraphView({
         </ReactFlow>
 
         {/* 操作提示（顶部角标） */}
-        <div className="pointer-events-none absolute right-3 top-3 rounded-full bg-white/90 px-3 py-1 text-[11px] text-slate-400 ring-1 ring-slate-200">
+        <div className="pointer-events-none absolute right-3 top-3 rounded-full bg-white/90 px-3 py-1 text-[11px] text-ink-3 ring-1 ring-line">
           {k.hintPill}
         </div>
       </div>
@@ -213,22 +213,22 @@ export default function GraphView({
       <aside className="w-full shrink-0 lg:w-72">
         {focusUnit ? (
           <div className="sticky top-4 space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="rounded-xl border border-line bg-white p-4 shadow-sm">
               <div className="flex items-start justify-between gap-2">
-                <h4 className="text-sm font-semibold text-slate-900">{focusUnit.title}</h4>
+                <h4 className="text-sm font-semibold text-ink-1">{focusUnit.title}</h4>
                 <BandBadge band={bandOf(masteryByUnit[focusUnit.id] ?? 0)} />
               </div>
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="mt-1 text-xs text-ink-3">
                 {focusAlias ? `${focusAlias} · ` : ""}
                 {k.masteryOf(Math.round((masteryByUnit[focusUnit.id] ?? 0) * 100), degreeOf(graph.relations, focusUnit.id))}
               </p>
               {focusUnit.summary ? (
                 <MarkdownBlock
                   text={focusUnit.summary}
-                  className="mt-2 text-sm leading-6 text-slate-600"
+                  className="mt-2 text-sm leading-6 text-ink-2"
                 />
               ) : (
-                <p className="mt-2 text-xs text-slate-400">{k.noSummary}</p>
+                <p className="mt-2 text-xs text-ink-3">{k.noSummary}</p>
               )}
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
@@ -237,14 +237,14 @@ export default function GraphView({
                       ? onReviewUnit(focusUnit.id)
                       : navigate(`/study/session?unit=${focusUnit.id}`)
                   }
-                  className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+                  className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary"
                 >
                   {k.review}
                 </button>
                 {ownerDocIdOf(focusUnit) ? (
                   <button
                     onClick={() => onOpenDocument?.(ownerDocIdOf(focusUnit)!)}
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
+                    className="rounded-lg border border-line px-3 py-1.5 text-xs text-ink-2 hover:bg-subtle"
                   >
                     {k.viewSource}
                   </button>
@@ -252,7 +252,7 @@ export default function GraphView({
               </div>
               {requiredUnitIds.includes(focusUnit.id) &&
               (masteryByUnit[focusUnit.id] ?? 0) < GAP_THRESHOLD ? (
-                <p className="mt-2 rounded-md bg-indigo-50 px-2 py-1 text-[11px] text-indigo-600">
+                <p className="mt-2 rounded-md bg-learning-soft px-2 py-1 text-[11px] text-primary">
                   {k.gapNote}
                 </p>
               ) : null}
@@ -260,8 +260,8 @@ export default function GraphView({
 
             {/* 关系清单（含不画边的关系类型，保证信息不丢失） */}
             {focusRelations.length > 0 ? (
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+              <div className="rounded-xl border border-line bg-white p-4 shadow-sm">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-3">
                   {k.relationsTitle}
                 </p>
                 <ul className="space-y-1.5">
@@ -272,11 +272,11 @@ export default function GraphView({
                       <li key={r.id} className="flex items-center justify-between gap-2 text-sm">
                         <button
                           onClick={() => setFocusId(r.fromId === focusUnit.id ? r.toId : r.fromId)}
-                          className="min-w-0 truncate text-slate-700 hover:text-indigo-600"
+                          className="min-w-0 truncate text-ink-1 hover:text-primary"
                         >
                           {other ? other.title : ""}
                         </button>
-                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">
+                        <span className="shrink-0 rounded-full bg-subtle px-2 py-0.5 text-[11px] text-ink-2">
                           {label}
                         </span>
                       </li>
@@ -285,14 +285,14 @@ export default function GraphView({
                 </ul>
               </div>
             ) : (
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-xs text-slate-400">{k.noRelations}</p>
+              <div className="rounded-xl border border-line bg-white p-4 shadow-sm">
+                <p className="text-xs text-ink-3">{k.noRelations}</p>
               </div>
             )}
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-white/60 p-4 text-sm text-slate-400">
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">{k.focusEyebrow}</p>
+          <div className="rounded-xl border border-dashed border-line bg-white/60 p-4 text-sm text-ink-3">
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-3">{k.focusEyebrow}</p>
             {k.focusPlaceholder}
           </div>
         )}

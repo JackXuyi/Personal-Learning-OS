@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "layer:check": "node scripts/layer-boundary-scan.mjs --fail-on-violation",
-    "ui:check": "node scripts/ui-consistency-scan.mjs --fail-on-native --fail-on-sticky-glass --fail-on-palette --palette-baseline=52",
+    "ui:check": "node scripts/ui-consistency-scan.mjs --fail-on-native --fail-on-sticky-glass --fail-on-palette --palette-baseline=0",
     "copy:check": "node --experimental-strip-types --no-warnings scripts/copy-scan.mjs",
     "test:i18n": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/i18n-alignment.test.ts",
     "test:goal": "node --experimental-strip-types --no-warnings --import ./tests/register-loader.mjs tests/goal-repo.test.ts",

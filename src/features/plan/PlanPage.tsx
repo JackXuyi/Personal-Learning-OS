@@ -231,7 +231,7 @@ export default function PlanPage() {
                   <p className="mt-0.5 text-sm text-ink-2" data-testid="plan-quota">
                     {m.plan.quotaToday(quotaLine.min, quotaLine.count)}
                     {" · "}
-                    <span className={quotaLine.overdue ? "text-amber-700" : undefined}>
+                    <span className={quotaLine.overdue ? "text-state-weak" : undefined}>
                       {quotaLine.overdue
                         ? m.plan.quotaOverdue(quotaLine.days)
                         : m.plan.quotaDaysLeft(quotaLine.days)}

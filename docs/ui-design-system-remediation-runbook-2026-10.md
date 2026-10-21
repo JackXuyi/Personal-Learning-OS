@@ -43,7 +43,7 @@
 | T5 后（quiz **−141**，方案估 149） | 242 | **242** |
 | T6 后（study+assessment −103，与方案估算一致） | 139 | **139** |
 | T7 后（settings −87，与方案估算一致） | 52 | **52** |
-| T8 后（剩余 −52） | 0 | **0** |
+| T8 后（剩余 **−52**，方案估 97） | 0 | **0** ✅ 归零 |
 
 > ⚠️ 方案原表按「T5 才开始收敛」写（436/287/184/97/0）；**实测** T2–T4 的徽标与空态
 > 收口已顺带减掉 53，且 quiz 实为 141（非 149）⇒ 全体下移，此处为实测值。
@@ -190,10 +190,19 @@
 ### T8 — 剩余域收敛（基线 → 0）
 
 - **Scope**：knowledge + learn + 首页/计划 剩余 10 文件
-- **Done**：−97 命中；**基线归零**；`test:library` 全绿
-- **Status**：☐
-- **Outcome**：
-- **Notes**：⚠️ `text-amber-700`（PlanPage:1 / SplitTab:1）须人工判定（落后警示 → `text-state-weak`；徽标字 → `text-weak-ink`）
+- **Done**：−52 命中；**基线归零**；`test:library` 全套 ALL PASS
+- **Status**：✅
+- **Outcome**：剩余 7 文件 **52 处全部收敛** —— `palette` **436 → 0（归零）**，19 → 0 文件；
+  基线降至 0，差值 0 达标。**硬编码调色板色在本仓彻底清零，暗色模式由此解锁**。
+- **Notes**：① 构成：机械映射 49 + 人工判定 3 = 52。
+  ② 方案标注须人工判定的 `text-amber-700` 实测**两处都是警示语义**：PlanPage 的
+  逾期天数（`quotaLine.overdue`）、SplitTab 的合并确认警告（`mergeConfirmWarn`）
+  → 走既有 `text-state-weak`（警示实色），**不是**徽标字 `text-weak-ink`；
+  同名的其余 4 处（ChapterGraphPage 错误徽标、qa-shared / ChapterRestatementPanel
+  的 warn 提示块）才是徽标字 → `text-weak-ink`。
+  ③ `ring-slate-200`→`ring-line`；`bg-emerald-50/40` 由 `\b` 边界自动保留透明度
+  → `bg-mastered-soft/40`（无需单独规则）。
+  ④ 门禁：typecheck / layer:check / ui:check / copy:check / test:i18n / test:library 全绿。
 
 ### T9 — 字号全量替换
 
@@ -240,7 +249,7 @@
 | T5 | ✅ | ✅ | ✅ | — | — | test:quiz 17/17 · test:explain 16/16 | **242** |
 | T6 | ✅ | ✅ | ✅ | — | — | test:rating · test:capability 全绿 | **139** |
 | T7 | ✅ | ✅ | ✅ | ✅ | ✅ | — | **52** |
-| T8 | | | | | | | **0** |
+| T8 | ✅ | ✅ | ✅ | ✅ | ✅ | test:library 全套 ALL PASS | **0** ✅ |
 | T9 | | | | | | | 0 |
 | T10–T12 | | | | | | | 0 |
 
