@@ -20,7 +20,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Card } from "../../components/primitives";
+import { Card, ErrorState } from "../../components/primitives";
 import type {
   Chapter,
   LearnerState,
@@ -191,23 +191,31 @@ export default function QuizGradingPage() {
 
   if (missing) {
     return (
-      <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-base font-semibold text-slate-900">{g.missingTitle}</p>
-        <Link to="/quiz" className="mt-4 inline-block text-sm text-indigo-600 hover:underline">
-          {g.backToCenter}
-        </Link>
+      <div className="mx-auto max-w-3xl px-8 py-8">
+        <ErrorState
+          title={g.missingTitle}
+          action={
+            <Link to="/quiz" className="text-sm text-primary hover:underline">
+              {g.backToCenter}
+            </Link>
+          }
+        />
       </div>
     );
   }
 
   if (phase === "error") {
     return (
-      <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-base font-semibold text-slate-900">{g.cannotTitle}</p>
-        <p className="mt-1 text-sm text-slate-500">{message}</p>
-        <Link to="/quiz" className="mt-4 inline-block text-sm text-indigo-600 hover:underline">
-          {g.backToCenter}
-        </Link>
+      <div className="mx-auto max-w-3xl px-8 py-8">
+        <ErrorState
+          title={g.cannotTitle}
+          desc={message}
+          action={
+            <Link to="/quiz" className="text-sm text-primary hover:underline">
+              {g.backToCenter}
+            </Link>
+          }
+        />
       </div>
     );
   }

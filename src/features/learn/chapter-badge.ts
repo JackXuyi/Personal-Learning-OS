@@ -21,12 +21,19 @@ export interface ChapterBadge {
   cls: string;
 }
 
+/**
+ * 配色走 main.css 状态语义三件套（浅底 / 描边 / 字），颜色值不在此出现。
+ *
+ * ⚠️ 五档必须**两两可辨**：原 `learning`(sky 浅蓝) 与 `ready`(indigo 紫蓝) 若都并入
+ * learning 三件套会撞色 —— 两个状态徽标长得一样等于丢信息。故按语义重新分配：
+ * 在学(蓝紫) → 待考(琥珀) → 已掌握(绿) / 待补考(红)。
+ */
 const BADGE_CLS: Record<ChapterStatus, string> = {
   "not-started": "border-line bg-subtle text-ink-3",
-  learning: "border-sky-200 bg-sky-50 text-sky-700",
-  ready: "border-indigo-200 bg-indigo-50 text-indigo-700",
-  mastered: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  retake: "border-amber-200 bg-amber-50 text-amber-700",
+  learning: "border-learning-border bg-learning-soft text-learning-ink",
+  ready: "border-weak-border bg-weak-soft text-weak-ink",
+  mastered: "border-mastered-border bg-mastered-soft text-mastered-ink",
+  retake: "border-failed-border bg-failed-soft text-failed-ink",
 };
 
 /** 由状态机 + 卷面掌握度派生目录/阅读页徽标。mastery 可缺省（未考）。 */

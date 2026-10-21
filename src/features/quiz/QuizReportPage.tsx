@@ -14,7 +14,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Bar, Card } from "../../components/primitives";
+import { Bar, Card, EmptyState, ErrorState } from "../../components/primitives";
 import { Button, buttonVariants } from "../../components/ui/button";
 import { cn } from "../../lib/utils";
 import { DeltaBadge } from "../../components/DeltaBadge";
@@ -327,23 +327,31 @@ export default function QuizReportPage() {
 
   if (missing) {
     return (
-      <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-base font-semibold text-ink-1">{r.missingTitle}</p>
-        <Link to="/quiz" className="mt-4 inline-block text-sm text-primary hover:underline">
-          {r.backToCenter}
-        </Link>
+      <div className="mx-auto max-w-3xl px-8 py-8">
+        <ErrorState
+          title={r.missingTitle}
+          action={
+            <Link to="/quiz" className="text-sm text-primary hover:underline">
+              {r.backToCenter}
+            </Link>
+          }
+        />
       </div>
     );
   }
 
   if (noResult) {
     return (
-      <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-base font-semibold text-ink-1">{r.noResultTitle}</p>
-        <p className="mt-1 text-sm text-ink-2">{r.noResultDesc}</p>
-        <Link to="/quiz" className="mt-4 inline-block text-sm text-primary hover:underline">
-          {r.backToCenter}
-        </Link>
+      <div className="mx-auto max-w-3xl px-8 py-8">
+        <EmptyState
+          title={r.noResultTitle}
+          desc={r.noResultDesc}
+          action={
+            <Link to="/quiz" className="text-sm text-primary hover:underline">
+              {r.backToCenter}
+            </Link>
+          }
+        />
       </div>
     );
   }

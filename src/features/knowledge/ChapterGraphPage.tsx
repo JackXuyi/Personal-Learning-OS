@@ -14,7 +14,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Card } from "../../components/primitives";
+import { Card, ErrorState } from "../../components/primitives";
 import type {
   Chapter,
   KnowledgeGraph,
@@ -124,12 +124,16 @@ export default function ChapterGraphPage() {
 
   if (missing) {
     return (
-      <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-base font-semibold text-slate-900">{t.missingTitle}</p>
-        <p className="mt-1 text-sm text-slate-500">{t.missingDesc}</p>
-        <Link to="/learn" className="mt-4 inline-block text-sm text-indigo-600 hover:underline">
-          {t.backToCatalog}
-        </Link>
+      <div className="mx-auto max-w-3xl px-8 py-8">
+        <ErrorState
+          title={t.missingTitle}
+          desc={t.missingDesc}
+          action={
+            <Link to="/learn" className="text-sm text-primary hover:underline">
+              {t.backToCatalog}
+            </Link>
+          }
+        />
       </div>
     );
   }

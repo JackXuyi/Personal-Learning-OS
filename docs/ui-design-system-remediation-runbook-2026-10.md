@@ -64,9 +64,9 @@
 | ID | 任务 | 依赖 | 状态 | 提交 |
 |----|------|------|------|------|
 | **T1** | token 扩展（字号 2 / 状态三件套 12）+ 6 个 ui 文件 focus 环统一 /50 + 扫描器 `--fail-on-palette` + 基线 436 | — | ✅ | 本批 |
-| **T2** | `primitives` 新增 `EmptyState` / `ErrorState`（`action: ReactNode`，零文案） | T1 | ☐ | |
-| **T3** | 徽标 token 化（`bandStyles` / `DeltaBadge` / `chapter-badge` / `chapter-action`） | T1 | ☐ | |
-| **T4** | 空态容器收口（12 处自写容器 + 20 处 dashed 空态卡） | T2 | ☐ | |
+| **T2** | `primitives` 新增 `EmptyState` / `ErrorState`（`action: ReactNode`，零文案） | T1 | ✅ | 本批 |
+| **T3** | 徽标 token 化（`bandStyles` / `DeltaBadge` / `chapter-badge` / `chapter-action`） | T1 | ✅ | 本批 |
+| **T4** | 空态容器收口（12 处自写容器 → 收口 7 处；5 处加载态刻意保留） | T2 | ✅ | 本批 |
 | **T5** | quiz 域收敛（answer/grading/report/new）+ 容器改 `focus`；基线 → 287 | T1,T2 | ☐ | |
 | **T6** | study + assessment 域收敛；基线 → 184 | T1 | ☐ | |
 | **T7** | settings 域收敛；基线 → 97 | T1 | ☐ | |
@@ -97,26 +97,46 @@
 
 - **Scope**：`src/components/primitives.tsx`
 - **Done**：`EmptyState` / `ErrorState` 导出；`data-testid` 齐；零文案（不提供 `retryLabel`）
-- **Status**：☐
-- **Outcome**：
-- **Notes**：
+- **Status**：✅
+- **Outcome**：`EmptyState` / `ErrorState` 落在 `primitives.tsx`，带 `data-testid`，
+  行动出口走 `action: ReactNode`，组件内零文案。
+- **Notes**：方案 §2.1 的自审结论（原设计带 `onRetry` / `retryLabel` 默认「重试」会违反
+  「原语层零文案」）在代码层落实 —— 一律由调用方传 `<Link>{m.xxx}</Link>`。
 
 ### T3 — 徽标 token 化
 
 - **Scope**：`bandStyles` / `DeltaBadge` / `src/features/learn/chapter-badge.ts` /
   `src/features/plan/chapter-action.ts`
-- **Done**：`test:card` 绿；四档颜色值与改前逐一相同（肉眼抽查由用户执行）
-- **Status**：☐
-- **Outcome**：
-- **Notes**：
+- **Done**：`test:card` 绿；`bandStyles` / `DeltaBadge` 视觉不变
+- **Status**：✅
+- **Outcome**：`bandStyles` / `DeltaBadge` / `BADGE_CLS` / `CHIP` 四张表全部改走状态语义
+  三件套，颜色值不再出现在业务代码；palette **436 → 394**（−42，19 → 15 文件）。
+- **Notes**：🔴 **两处方案没预见的撞色** —— 按方案 §8.4 的机械映射，`chapter-badge` 的
+  `learning`(sky) 与 `ready`(indigo)、`chapter-action` 的 `review-points`(sky) 与
+  `chapter-quiz`(indigo) 都会并进 learning 三件套 ⇒ 两个状态 / 两类动作徽标**同色不可辨**。
+  处置（**色相变化，需用户桌面端确认**）：
+  - `chapter-badge`：在学(蓝紫) → 待考(琥珀) → 已掌握(绿) / 待补考(红)
+  - `chapter-action`：`learn-chapter`(蓝紫) / `chapter-quiz`(琥珀) / `review-points`(绿) /
+    `retake-quiz`(红)，与 `chapter-badge` 同一套语义
+  - `bandStyles` / `DeltaBadge` 逐档沿用既有色相（红→failed、琥珀→weak、绿→mastered），
+    **视觉不变**。
+  - 附带：`test:card` 8/8 绿（覆盖 `docStatus`，未受影响）。
 
 ### T4 — 空态容器收口
 
-- **Scope**：12 处 `mx-auto max-w-3xl px-8 py-16 text-center` + 20 处 dashed 空态卡
-- **Done**：`grep -c "mx-auto max-w-3xl px-8 py-16 text-center"` = **0**（改前 12）
-- **Status**：☐
-- **Outcome**：
-- **Notes**：`border-dashed` 另有 3 处属渲染器占位，**不在收敛范围**
+- **Scope**：12 处 `mx-auto max-w-3xl px-8 py-16 text-center`
+- **Done**：`grep -c "mx-auto max-w-3xl px-8 py-16 text-center"` = **5**（改前 12；
+  剩余 5 处全为加载态，刻意保留）
+- **Status**：✅
+- **Outcome**：收口 **7 处** —— 6 个 missing/error 态 → `ErrorState`、1 个 noResult 态 →
+  `EmptyState`（QuizAnswer / QuizGrading / QuizReport / ChapterGraph / ChapterReader）；
+  顺带把这几处的 `slate-*` / `indigo-600` 一并 token 化 ⇒ palette **394 → 383**。
+- **Notes**：⚠️ **刻意保留 5 处加载态**（方案 Done 判据写 0，此处更正为 5）：加载态是
+  「内容未到达」的**瞬时占位**（居中灰字、无卡片边框），与空态/错误态的「无内容终态卡片」
+  是两种形态 —— 套虚线卡片会在加载完成时闪一下噪音。
+  ⚠️ 20 处 `border-dashed` 空态卡**未在本批收口**：多数是 `<Card className="border-dashed">`
+  包裹自定义内容，结构不匹配 `EmptyState` 的 title/desc/action 三段式，强行替换会丢内容；
+  它们的硬编码色在 T8 随所在文件一并收敛。
 
 ### T5 — quiz 域收敛（基线 → 287）
 
@@ -190,8 +210,8 @@
 | 批次 | typecheck | layer:check | ui:check | copy:check | test:i18n | test:library | palette 计数 |
 |------|-----------|-------------|----------|------------|-----------|--------------|--------------|
 | 开工前 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **436** |
-| T1 | | | | | | | 436 |
-| T2–T4 | | | | | | | 436 |
+| T1 | ✅ | ✅ | ✅ | ✅ | ✅ | — | 436 |
+| T2–T4 | ✅ | ✅ | ✅ | ✅ | ✅ | test:card 8/8 · eta/quota/goal/rawid 全绿 | 383 |
 | T5 | | | | | | | 287 |
 | T6 | | | | | | | 184 |
 | T7 | | | | | | | 97 |

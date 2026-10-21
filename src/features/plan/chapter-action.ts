@@ -17,14 +17,22 @@ export interface ChapterActionMeta {
   cta: string;
 }
 
+/**
+ * 配色走 main.css 状态语义三件套（浅底 / 描边 / 字），颜色值不在此出现。
+ *
+ * ⚠️ 四类动作必须**两两可辨**：原 `review-points`(sky) 与 `chapter-quiz`(indigo)
+ * 若都并入 learning 三件套会撞色。按「动作所属阶段」重新分配，并与
+ * `chapter-badge` 的档位色保持同一套语义：
+ * 在学(蓝紫) → 待考(琥珀) → 复习已学(绿) / 待补考(红)。
+ */
 const CHIP: Record<string, string> = {
-  "learn-chapter": "border-red-200 bg-red-50 text-red-600",
-  "retake-quiz": "border-amber-200 bg-amber-50 text-amber-700",
-  "review-points": "border-sky-200 bg-sky-50 text-sky-700",
-  "chapter-quiz": "border-indigo-200 bg-indigo-50 text-indigo-700",
+  "learn-chapter": "border-learning-border bg-learning-soft text-learning-ink",
+  "retake-quiz": "border-failed-border bg-failed-soft text-failed-ink",
+  "review-points": "border-mastered-border bg-mastered-soft text-mastered-ink",
+  "chapter-quiz": "border-weak-border bg-weak-soft text-weak-ink",
 };
 
-const FALLBACK_CHIP = "border-slate-200 bg-slate-100 text-slate-600";
+const FALLBACK_CHIP = "border-line bg-subtle text-ink-2";
 
 export function chapterActionMeta(
   kind: NextAction["kind"],

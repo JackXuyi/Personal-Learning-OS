@@ -27,11 +27,18 @@ const toneDot: Record<StatusTone, string> = {
   failed: "bg-state-failed",
 };
 
+/**
+ * 掌握度徽标配色 —— 走 main.css 的状态语义三件套（浅底 / 描边 / 字）。
+ *
+ * ⚠️ 保持**既有视觉语义**逐档对齐（红 → failed、琥珀 → weak、绿 → mastered），
+ * 只换名字不换观感。`learning` 用红底是既有设计（低掌握 = 待补），是否改走
+ * indigo 属独立的视觉决策，本轮不动。
+ */
 const bandStyles: Record<MasteryBand, string> = {
   "not-started": "bg-subtle text-ink-3 border-line",
-  learning: "bg-red-50 text-red-600 border-red-200",
-  proficient: "bg-amber-50 text-amber-600 border-amber-200",
-  mastered: "bg-emerald-50 text-emerald-600 border-emerald-200",
+  learning: "bg-failed-soft text-failed-ink border-failed-border",
+  proficient: "bg-weak-soft text-weak-ink border-weak-border",
+  mastered: "bg-mastered-soft text-mastered-ink border-mastered-border",
 };
 
 /** 掌握度徽标：基于 `Badge`（outline）+ 领域状态色表（方案 §7，M3 收敛）。 */
@@ -52,6 +59,68 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
       className={`rounded-xl border border-line bg-surface p-5 shadow-sm ${className}`}
     >
       {children}
+    </div>
+  );
+}
+
+/**
+ * 空态 —— 全站唯一形态（12 处自写容器 + 20 处 dashed 空态卡收口于此）。
+ *
+ * 纯展示：文案由调用方经 i18n 传入，本组件不含任何文案与状态逻辑
+ * （「ui/ 与原语层零文案」约定）。
+ */
+export function EmptyState({
+  title,
+  desc,
+  action,
+  className = "",
+}: {
+  title: string;
+  desc?: string;
+  action?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      data-testid="empty-state"
+      className={`rounded-xl border border-dashed border-line bg-surface p-6 ${className}`}
+    >
+      <p className="text-base font-semibold text-ink-1">{title}</p>
+      {desc ? <p className="mt-1 text-sm text-ink-2">{desc}</p> : null}
+      {action ? <div className="mt-4 flex flex-wrap gap-3">{action}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * 错误态 —— 在空态之上追加「技术细节行」+ 一个行动出口。
+ *
+ * ⚠️ 刻意**不提供** `onRetry` / `retryLabel` 便捷 props —— 那需要组件内给默认文案
+ * （「重试」），违反「ui/ 与原语层不含文案」的约定。行动出口一律由调用方传
+ * `<Button onClick={…}>{m.xxx.retry}</Button>`，文案始终走 i18n。
+ */
+export function ErrorState({
+  title,
+  desc,
+  detail,
+  action,
+  className = "",
+}: {
+  title: string;
+  desc?: string;
+  detail?: string;
+  action?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      data-testid="error-state"
+      className={`rounded-xl border border-dashed border-line bg-surface p-6 ${className}`}
+    >
+      <p className="text-base font-semibold text-state-failed">{title}</p>
+      {desc ? <p className="mt-1 text-sm text-ink-2">{desc}</p> : null}
+      {detail ? <p className="mt-2 break-all text-xs text-ink-3">{detail}</p> : null}
+      {action ? <div className="mt-4 flex flex-wrap gap-3">{action}</div> : null}
     </div>
   );
 }

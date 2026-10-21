@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
-import { Bar, Card } from "../../components/primitives";
+import { Bar, Card, ErrorState } from "../../components/primitives";
 import type { ChapterAnswer, Paper, PaperAnswers, PaperQuestion } from "../../domain";
 import { storage } from "../../stores/useLoopStore";
 import { useAiTask } from "../../stores/useAiTaskStore";
@@ -161,12 +161,16 @@ export default function QuizAnswerPage() {
 
   if (missing) {
     return (
-      <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-base font-semibold text-slate-900">{a.missingTitle}</p>
-        <p className="mt-1 text-sm text-slate-500">{a.missingDesc}</p>
-        <Link to="/quiz" className="mt-4 inline-block text-sm text-indigo-600 hover:underline">
-          {a.backToCenter}
-        </Link>
+      <div className="mx-auto max-w-3xl px-8 py-8">
+        <ErrorState
+          title={a.missingTitle}
+          desc={a.missingDesc}
+          action={
+            <Link to="/quiz" className="text-sm text-primary hover:underline">
+              {a.backToCenter}
+            </Link>
+          }
+        />
       </div>
     );
   }

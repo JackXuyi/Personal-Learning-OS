@@ -34,8 +34,8 @@ export function DeltaBadge({
           unchanged
             ? "border-line bg-surface text-ink-2"
             : up
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border-red-200 bg-red-50 text-red-600"
+              ? "border-mastered-border bg-mastered-soft text-mastered-ink"
+              : "border-failed-border bg-failed-soft text-failed-ink"
         }`}
       >
         {unchanged ? m.common.delta.unchanged : `${sign}${pct}%`}

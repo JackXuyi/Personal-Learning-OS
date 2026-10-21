@@ -24,7 +24,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Bar, Card, EvidenceRow, Section } from "../../components/primitives";
+import { Bar, Card, ErrorState, EvidenceRow, Section } from "../../components/primitives";
 import { Button } from "../../components/ui/button";
 import { MASTERY_THRESHOLD, isDueReview } from "../../domain";
 import type { Annotation, Chapter, LearnerState, SourceDocument } from "../../domain";
@@ -313,12 +313,16 @@ export default function ChapterReaderPage() {
 
   if (missing) {
     return (
-      <div className="mx-auto max-w-3xl px-8 py-16 text-center">
-        <p className="text-base font-semibold text-ink-1">{t.missingTitle}</p>
-        <p className="mt-1 text-sm text-ink-2">{t.missingDesc}</p>
-        <Link to="/learn" className="mt-4 inline-block text-sm font-medium text-primary hover:underline">
-          {t.backToCatalog}
-        </Link>
+      <div className="mx-auto max-w-3xl px-8 py-8">
+        <ErrorState
+          title={t.missingTitle}
+          desc={t.missingDesc}
+          action={
+            <Link to="/learn" className="text-sm font-medium text-primary hover:underline">
+              {t.backToCatalog}
+            </Link>
+          }
+        />
       </div>
     );
   }
