@@ -1201,10 +1201,11 @@ explain: {
 | 2 | §8.2 选项块免责声明 | 「【本题选项】（仅作语境参考，**不含正确项信息**）」 | 「【本题选项】（仅作语境参考）」 | 原措辞**本身含「正确项」三字**，会命中自己的泄露扫描（TC-EX-A01）；且提了等于提醒模型「存在一个答案」 |
 | 3 | §8.9 `useAiTask` 路径 | 未标注 | 位于 `src/stores/useAiTaskStore.ts`（**非** `src/hooks/`）；`AiTaskId` 需增 ``explain:${string}`` | 仓库实际结构 |
 | 4 | §8.10 `referenceOptionText` | 签名 `(q, m)` | `(q, m = zh)`，且 `meta.ts` 的 i18n 导入改为直连 `i18n/messages/zh` | 走 `i18n` 索引会连带 `I18nProvider.tsx`，node 单测不支持 JSX ⇒ 本文件无法被单测引用 |
-| 5 | §7.1 引用跳转 | `/learn/chapter/:chapterId?at=<abs>` | 沿用该写法（与既有 `ChapterQaPanel` 一致） | ⚠️ **但阅读页当前并不消费 `?at=`**（`ChapterReaderPage` 未读 searchParams）—— 属**既有缺口**，点击引用会落在章首而非精确位置。本轮不越界修复，已登记待办 |
+| 5 | §7.1 引用跳转 | `/learn/chapter/:chapterId?at=<abs>` | 沿用该写法（与既有 `ChapterQaPanel` 一致） | ✅ **「阅读页不消费 `?at=`」经核实为误判，已撤回**：`ChapterReaderPage.tsx:81–82` 读参、`:212–213` 换算为章内相对偏移后走 `highlightSourceRange`（`learn-chapter-qa` T7 落地、`learn-highlight-note` T12 修正偏移口径）。点引用落在精确位置 |
 
 **待办（本轮不做的已知缺口）**
 
-- `ChapterReaderPage` 未消费 `?at=` ⇒ 从答题页点引用只跳到章首。影响范围含既有
-  的跨章引用跳转（非本方案引入）。建议作为独立小任务：mount 时读一次 `at` 并
-  触发既有高亮通道。
+- ~~`ChapterReaderPage` 未消费 `?at=` ⇒ 从答题页点引用只跳到章首~~ —— **2026-10-21
+  核实为误判，撤回**：该参数在 `ChapterReaderPage.tsx:81–82` 读取、`:212–213` 换算后
+  走既有高亮通道，接线记录见 `docs/learn-chapter-qa-task-runbook-2026-09.md` §T7。
+  **本项无遗留待办**（教训：登记"既有缺口"前须先 Grep 消费方实测，勿凭局部印象下判）。

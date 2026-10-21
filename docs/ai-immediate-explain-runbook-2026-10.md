@@ -177,5 +177,10 @@
 EX-A02（未配置 AI）、EX-A03（未建索引）、EX-A05（引用缺失提示）、UC-04/UC-05
 （弱章脚手架档与追问线程的手感）。
 
-**已知缺口（登记待办，非本轮引入）**：`ChapterReaderPage` 未消费 `?at=` 参数，
-因此从答题页点引用会落在章首而非精确位置 —— 影响范围含既有的跨章引用跳转。
+~~**已知缺口（登记待办，非本轮引入）**：`ChapterReaderPage` 未消费 `?at=` 参数，
+因此从答题页点引用会落在章首而非精确位置~~
+
+**撤回（2026-10-21 核实为误判）**：`?at=` 早已接线 —— `ChapterReaderPage.tsx:81–82`
+读参、`:212–213` 按 `at - chapter.contentRef.start` 换算为章内相对偏移后走既有
+`highlightSourceRange` 通道（`learn-chapter-qa` T7 落地，`learn-highlight-note` T12
+修正过偏移口径）。本轮点引用落在精确位置，**该条待办作废，无遗留缺口**。
