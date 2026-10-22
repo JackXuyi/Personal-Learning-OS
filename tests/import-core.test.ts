@@ -340,6 +340,34 @@ const run = async () => {
     );
   });
 
+  await check("stripMarkdownNoise：HTML 样式壳剥标签保内容，script/style 连内容删除", () => {
+    // 线上案例：README 标题区的排版 div 以字面文本混进正文（截图 `<div align="center">`）。
+    const md = [
+      "<div align=\"center\">",
+      "# Advanced RAG Techniques",
+      "",
+      "A community-driven hub of notebooks.",
+      "</div>",
+    ].join("\n");
+    const out = stripMarkdownNoise(md);
+    assert.ok(!out.includes("<div"), "开标签不应残留");
+    assert.ok(!out.includes("</div>"), "闭标签不应残留");
+    assert.ok(out.includes("Advanced RAG Techniques"), "壳内标题内容应保留");
+    assert.ok(out.includes("A community-driven hub"), "壳内正文内容应保留");
+
+    // `<br>` 转换行（剥壳后前后行不拼接）；script/style 连内容整段删除。
+    assert.equal(stripMarkdownNoise("第一行<br>第二行"), "第一行\n第二行");
+    assert.equal(stripMarkdownNoise("前<script>var x = 1;</script>后"), "前后");
+    assert.equal(stripMarkdownNoise("<style>.a { color: red }</style>正文"), "正文");
+    assert.equal(stripMarkdownNoise('跨行属性\n<div\n  align="center">\n内容'), "跨行属性\n\n内容");
+
+    // ``` 围栏内的 HTML 教学示例不受剥壳影响（网页导入 pushPre 的代码块同口径）。
+    const fenced = "说明：\n\n```html\n<div align=\"center\">示例</div>\n```\n\n<div>壳外</div>";
+    const fencedOut = stripMarkdownNoise(fenced);
+    assert.ok(fencedOut.includes('<div align="center">示例</div>'), "围栏内标签应原样保留");
+    assert.ok(!fencedOut.includes("<div>壳外</div>") && fencedOut.includes("壳外"), "围栏外照常剥壳保内容");
+  });
+
   await check("stripMarkdownNoise：普通文本 / 代码块不误伤", () => {
     const plain = "# 标题\n\n正文段落，含 [a](b) 吗？";
     assert.equal(stripMarkdownNoise(plain), "# 标题\n\n正文段落，含 a 吗？");
