@@ -492,6 +492,56 @@ export const en: Messages = {
         hint: "Only replaces titles derived from a file name or the “Untitled” fallback; titles you typed are kept.",
         noAi: "Takes effect once an AI model is configured.",
       },
+      /**
+       * Translation target language (docs/learn-ai-translation-design-2026-10.md D1 / D7-A).
+       * Keys mirror `domain/translation.ts::TRANSLATION_TARGETS`.
+       */
+      translation: {
+        title: "Translation",
+        desc: "Which language your material is translated into while reading.",
+        options: {
+          auto: "Follow interface language",
+          zh: "中文",
+          en: "English",
+          ja: "日本語",
+          ko: "한국어",
+          fr: "Français",
+          de: "Deutsch",
+          es: "Español",
+          ru: "Русский",
+        },
+        /** Honest note about the D3-A trade-off: re-reading means re-translating. */
+        /**
+         * ⚠️ v6 removed `sessionOnly` ("translations are never saved") — it became
+         * false once translations moved into SQLite. Deleting the key (instead of
+         * rewording) makes any stale reference a compile error.
+         */
+        noAi: "Takes effect once an AI model is configured.",
+        /** ===== Whole-library translation (v6) ===== */
+        libraryTitle: "Whole library",
+        libraryDesc:
+          "Translate every chapter once and keep it on this machine, so opening a chapter later needs no waiting.",
+        libraryProgress: (done: number, total: number) => `${done} / ${total} chapters translated`,
+        libraryEmpty: "There are no translatable chapters in your library yet.",
+        libraryStart: "Translate the whole library",
+        libraryResume: "Continue translating",
+        libraryPause: "Pause",
+        /** Cancellation only takes effect between blocks — say so, or users expect an instant stop. */
+        libraryStopHint: "After pausing, the current section still has to finish (about half a minute).",
+        libraryEstimate: (hours: string) =>
+          `With the local model this takes about ${hours} hours. Consider translating only the material you are reading, or switching to a cloud model.`,
+        libraryDone: (n: number) => `${n} chapters translated this time.`,
+        libraryCancelled: "Paused. Everything translated so far has been saved.",
+        libraryFailed:
+          "This run did not finish. Everything translated so far has been saved — start again and it will pick up from there.",
+        clear: "Delete translations",
+        clearTitle: "Delete all translations?",
+        clearDesc:
+          "The translations will be removed and will need to be generated again. Your original material is not affected.",
+        clearConfirm: "Delete",
+        clearCancel: "Cancel",
+        cleared: "Translations deleted.",
+      },
     },
     /** Settings · vector index (needed by semantic retrieval). */
     embedding: {
@@ -1835,6 +1885,46 @@ export const en: Messages = {
           capped: "This chapter has reached the highlight limit.",
           "no-body": "This chapter has no text snapshot.",
           error: "Save failed. Please retry.",
+        },
+        /** Selection translation (the snippet entry of D2-A; writes nothing, leaves highlights untouched). */
+        translate: {
+          action: "Translate",
+          loading: "Translating…",
+          failed: "This passage could not be translated. Please retry.",
+          close: "Close",
+        },
+      },
+      /**
+       * Whole-chapter translation (docs/learn-ai-translation-design-2026-10.md §7.2).
+       * The `errors` keys are the service's `TranslationErrorKind` machine values.
+       */
+      translation: {
+        source: "Original",
+        target: "Translation",
+        running: "Translating…",
+        runningAt: (k: number, total: number) => `Translating… ${k}/${total}`,
+        retry: "Retry",
+        /** Button label when a cached translation exists (v6: translations are stored). */
+        cached: "Translation ✓",
+        /** Progressive rendering progress: `done` of `total` blocks are on screen. */
+        progressHint: (done: number, total: number) =>
+          `${done}/${total} sections done; the rest is still translating, so you can start reading now.`,
+        /** Re-translate (drops the cached copy first) — used when sections were skipped. */
+        refresh: "Translate again",
+        skipped: (n: number, total: number) =>
+          `${n} of ${total} sections could not be translated and were skipped.`,
+        tooLong: (n: number, max: number) =>
+          `This chapter is too long (${n} characters, limit ${max}) to translate as a whole; select a passage to translate instead.`,
+        noAi: "AI is not ready — configure a model in Settings → AI models first.",
+        goConfigure: "Set up AI →",
+        errors: {
+          "no-body": "This chapter has no text, so there is nothing to translate.",
+          "too-long": "The content is too long to translate in one go.",
+          "no-ai": "AI is not ready — configure a model in Settings → AI models first.",
+          "not-configured": "AI is not ready — configure a model in Settings → AI models first.",
+          parse: "The model did not return a usable translation this time. Please retry.",
+          generic: "Translation failed. Please retry later.",
+          fetch: "Could not read the material. Please retry.",
         },
       },
     },

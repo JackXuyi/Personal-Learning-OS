@@ -7,6 +7,7 @@ import BuiltinModelsPanel from "./BuiltinModelsPanel";
 import ApiModelsTab from "./ApiModelsTab";
 import VectorIndexCard from "./VectorIndexCard";
 import ImportEnrichCard from "./ImportEnrichCard";
+import TranslationCard from "./TranslationCard";
 
 /**
  * 设置 · AI 模型中心（U6b 由 SettingsPage 迁移，作为「AI」分区内容）。
@@ -99,6 +100,9 @@ export default function AIModelsSection() {
 
       {/* 导入后 AI 整理：后台生成资料标题与整篇概览（开关只关自动，不关手动）。 */}
       <ImportEnrichCard />
+
+      {/* 翻译目标语言（D7-A：落 AI 分区，不新增分区键）。 */}
+      <TranslationCard />
     </div>
   );
 }

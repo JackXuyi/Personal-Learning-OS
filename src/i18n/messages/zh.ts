@@ -492,6 +492,55 @@ export const zh = {
         hint: "只替换来自文件名或「未命名」的标题；你手填过的标题不会被改动。",
         noAi: "配置 AI 模型后才会生效。",
       },
+      /**
+       * 翻译目标语言（docs/learn-ai-translation-design-2026-10.md D1 / D7-A）。
+       * `options` 的键与 `domain/translation.ts::TRANSLATION_TARGETS` 一一对应
+       * （少一个键 TS 会报不满足 Record）。
+       */
+      translation: {
+        title: "翻译",
+        desc: "阅读时把资料正文翻成哪种语言。",
+        options: {
+          auto: "跟随界面语言",
+          zh: "中文",
+          en: "English",
+          ja: "日本語",
+          ko: "한국어",
+          fr: "Français",
+          de: "Deutsch",
+          es: "Español",
+          ru: "Русский",
+        },
+        /**
+         * 诚实说明 D3 的代价：重看要重翻。
+         *
+         * ⚠️ **v6 起这句话不再成立**（译文已落库）：`sessionOnly` 已删除，
+         * 若别处还引用它会 TS 报错 —— 这正是删除而不是改文案的原因，
+         * 留着旧键迟早被复制进新界面。
+         */
+        noAi: "配置 AI 模型后才会生效。",
+        /** ===== 整库翻译（v6）===== */
+        libraryTitle: "整个资料库",
+        libraryDesc: "把资料库里的章节都翻好存在本地，以后打开直接读，不用再等。",
+        libraryProgress: (done: number, total: number) => `已翻 ${done} / ${total} 章`,
+        libraryEmpty: "资料库里还没有可翻译的章节。",
+        libraryStart: "翻译整个资料库",
+        libraryResume: "继续翻译",
+        libraryPause: "暂停",
+        /** 取消只能在块间生效，必须如实说，否则用户以为点了立刻停。 */
+        libraryStopHint: "暂停后最多还要等当前这一段翻完（约半分钟）。",
+        libraryEstimate: (hours: string) =>
+          `用本地模型跑完大约要 ${hours} 小时。建议只翻正在读的资料，或换成云端模型。`,
+        libraryDone: (n: number) => `这次翻好了 ${n} 章。`,
+        libraryCancelled: "已暂停。已经翻好的部分都存下来了。",
+        libraryFailed: "这次没跑完。已经翻好的部分都存下来了，再点一次会接着翻。",
+        clear: "清空译文",
+        clearTitle: "清空所有译文？",
+        clearDesc: "译文会被删除，之后再看要重新翻。原文资料不受影响。",
+        clearConfirm: "清空",
+        clearCancel: "取消",
+        cleared: "译文已清空。",
+      },
     },
     /** 设置 · 向量索引（RAG 接线：语义检索所需）。 */
     embedding: {
@@ -1790,6 +1839,52 @@ export const zh = {
           capped: "本章划线数量已达上限。",
           "no-body": "本章没有正文快照。",
           error: "保存失败，请重试。",
+        },
+        /** 划选翻译（D2-A 的片段入口；零写入、不影响划线）。 */
+        translate: {
+          action: "翻译",
+          loading: "翻译中…",
+          failed: "这段没能翻译出来，请重试。",
+          close: "关闭",
+        },
+      },
+      /**
+       * 整章译文（docs/learn-ai-translation-design-2026-10.md §7.2）。
+       *
+       * `errors` 的键是服务层的 `TranslationErrorKind` 字面量（机器值）——
+       * 服务层只产分类，文案在这里映射（穷尽映射由 UI 的 switch 保证）。
+       */
+      translation: {
+        source: "原文",
+        target: "译文",
+        running: "翻译中…",
+        /** 多块进度（`k/K`），由 `useAiTask` 的 phase 展示。 */
+        runningAt: (k: number, total: number) => `翻译中… ${k}/${total}`,
+        retry: "重试",
+        /** 有缓存译文时的按钮文案（v6 起译文落库，重看 0 等待）。 */
+        cached: "译文 ✓",
+        /** 渐进渲染进度：已出 done 段、共 total 段（首段即出，后续陆续追加）。 */
+        progressHint: (done: number, total: number) =>
+          `已完成 ${done}/${total} 段，后面的还在翻译，可以先读。`,
+        /** 有段落没翻出来时的「重翻」（先删缓存再翻）。 */
+        refresh: "重翻",
+        /**
+         * ⚠️ 措辞必须与实现一致：失败块是**被跳过**（不写入占位、不显示原文），
+         * 所以不能说「该段仍显示原文」——那是另一套实现才成立的说法。
+         */
+        skipped: (n: number, total: number) => `${total} 段里有 ${n} 段没能翻译出来，已跳过。`,
+        tooLong: (n: number, max: number) =>
+          `这一章太长了（${n} 字，上限 ${max} 字），暂时无法整章翻译；可以划选片段翻译。`,
+        noAi: "AI 未就绪——请先到「设置 → AI 模型中心」配置模型。",
+        goConfigure: "去配置 AI →",
+        errors: {
+          "no-body": "这一章没有正文，无法翻译。",
+          "too-long": "内容太长，无法一次翻译。",
+          "no-ai": "AI 未就绪——请先到「设置 → AI 模型中心」配置模型。",
+          "not-configured": "AI 未就绪——请先到「设置 → AI 模型中心」配置模型。",
+          parse: "AI 这次没有给出可用的译文，请重试。",
+          generic: "翻译失败，请稍后重试。",
+          fetch: "读取资料失败，请重试。",
         },
       },
     },

@@ -23,6 +23,17 @@ interface SelectionToolbarProps {
   hostRef: React.RefObject<HTMLDivElement | null>;
   /** 提交（quote + note）→ 服务层结果；`ok` / `duplicate` 视为成功（工具条关闭）。 */
   onCreate: (quote: string, note: string) => Promise<{ status: AnnotationStatus }>;
+  /**
+   * 划选翻译（docs/learn-ai-translation-design-2026-10.md D2-A 的片段入口）。
+   *
+   * 失败时带**已映射好的文案**：i18n 映射只该有一份（页面侧），本组件不重复
+   * 一份 `errorKind → 文案`，否则两处必然漂移。
+   */
+  onTranslate: (
+    quote: string,
+  ) => Promise<{ status: "ok"; text: string } | { status: "error"; message: string }>;
+  /** AI 未就绪 → 禁用「翻译」（与「问这一章」面板同款口径：不给无效入口）。 */
+  translateEnabled: boolean;
 }
 
 interface SelectionState {
@@ -30,16 +41,24 @@ interface SelectionState {
   /** 相对宿主的坐标（选区正上方）。 */
   top: number;
   left: number;
-  mode: "idle" | "note";
+  mode: "idle" | "note" | "translate";
 }
 
-export default function SelectionToolbar({ rootRef, hostRef, onCreate }: SelectionToolbarProps) {
+export default function SelectionToolbar({
+  rootRef,
+  hostRef,
+  onCreate,
+  onTranslate,
+  translateEnabled,
+}: SelectionToolbarProps) {
   const { m } = useI18n();
   const t = m.learn.reader.annotations;
   const [sel, setSel] = useState<SelectionState | undefined>();
   const [note, setNote] = useState("");
   const [message, setMessage] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
+  /** 划选译文（仅 `mode === "translate"` 时有值；关闭即丢弃，零持久化）。 */
+  const [translation, setTranslation] = useState<string | undefined>();
   /** 工具条自身 —— 用于把「发生在工具条里的 mouseup」排除在选区重算之外。 */
   const toolbarRef = useRef<HTMLDivElement>(null);
 
@@ -47,6 +66,7 @@ export default function SelectionToolbar({ rootRef, hostRef, onCreate }: Selecti
     setSel(undefined);
     setNote("");
     setMessage(undefined);
+    setTranslation(undefined);
     window.getSelection()?.removeAllRanges();
   };
 
@@ -81,6 +101,7 @@ export default function SelectionToolbar({ rootRef, hostRef, onCreate }: Selecti
       });
       setNote("");
       setMessage(undefined);
+      setTranslation(undefined);
     };
     document.addEventListener("mouseup", onMouseUp);
     return () => document.removeEventListener("mouseup", onMouseUp);
@@ -132,6 +153,27 @@ export default function SelectionToolbar({ rootRef, hostRef, onCreate }: Selecti
     }
   };
 
+  /**
+   * 划选翻译：单次调用即出译文，**不落库、不影响划线**（与 `onCreate` 完全独立）。
+   * 失败 → 留在 idle 态内联错误（与划线失败同款就近反馈，不用 Toast）。
+   */
+  const runTranslate = async () => {
+    if (!sel) return;
+    setBusy(true);
+    setMessage(undefined);
+    try {
+      const r = await onTranslate(sel.quote);
+      if (r.status === "ok") {
+        setTranslation(r.text);
+        setSel({ ...sel, mode: "translate" });
+        return;
+      }
+      setMessage(r.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!sel) return null;
 
   const overLimit = note.length > ANNOTATION_LIMITS.maxNoteChars;
@@ -163,6 +205,35 @@ export default function SelectionToolbar({ rootRef, hostRef, onCreate }: Selecti
           >
             ▏{t.markWithNote}
           </Button>
+          {/* 划选翻译（D2-A 片段入口）：AI 未就绪时禁用 —— 不给无效入口 */}
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!translateEnabled || busy}
+            data-testid="reader-selection-translate"
+            onClick={() => void runTranslate()}
+          >
+            ⇄ {busy ? t.translate.loading : t.translate.action}
+          </Button>
+        </div>
+      ) : sel.mode === "translate" ? (
+        <div className="w-72 space-y-1.5 p-2">
+          <div
+            data-testid="reader-selection-translation"
+            className="max-h-40 overflow-y-auto whitespace-pre-wrap text-xs leading-5 text-ink-1"
+          >
+            {translation ?? ""}
+          </div>
+          <div className="flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              data-testid="reader-selection-translation-close"
+              onClick={close}
+            >
+              {t.translate.close}
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="w-64 space-y-1.5 p-2">
