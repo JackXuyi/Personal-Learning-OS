@@ -36,6 +36,9 @@ import type {
   Restatement,
   Section,
   SourceDocument,
+  TranslationIndexRow,
+  TranslationLang,
+  TranslationRecord,
 } from "../domain";
 
 /** RAG 检索范围限定（用于 fullTextSearch / vectorSearch 等）。 */
@@ -101,6 +104,33 @@ export interface StorageAdapter {
   // ===== 章节（V2 章节化学习主对象；切分/微调后整批写回）=====
   listChapters(documentId: string): Promise<Chapter[]>;
   saveChapters(documentId: string, chapters: Chapter[]): Promise<void>;
+
+  // ===== 章译文（v6 · D3 改判：落库 + 整库翻译）=====
+  //
+  // 语义：一章 × 一种目标语言 = 一条，**覆盖写**（译文是派生数据，原文还在）。
+  // `bodyHash` 是失效判据：读时比对，不匹配即视为无缓存（**不删行**，重翻覆盖）。
+  //
+  // ⚠️ 索引与正文**分两个方法**：`listTranslationIndex` 不带 `text`。整库 500 章
+  // 的译文几十 MB，索引若带正文就等于每次启动全量读进内存 —— 那是把「下沉
+  // SQLite 省下的内存」原样搬回来（同 `db_list_embedding_vectors` 的口径）。
+  /** 全库译文索引（无正文）。无译文返回空数组（不抛错）。 */
+  listTranslationIndex(): Promise<TranslationIndexRow[]>;
+  /** 单章单语言译文（含正文）；无缓存返回 `undefined`（**不做哈希校验**，调用方比对）。 */
+  getTranslation(
+    documentId: string,
+    chapterId: string,
+    target: TranslationLang,
+  ): Promise<TranslationRecord | undefined>;
+  /** 按 `(documentId, chapterId, target)` upsert（覆盖写）。 */
+  saveTranslation(record: TranslationRecord): Promise<void>;
+  /** 删单章单语言。幂等（不存在时静默返回）。 */
+  deleteTranslation(
+    documentId: string,
+    chapterId: string,
+    target: TranslationLang,
+  ): Promise<void>;
+  /** 删某资料全部译文（「这份资料重翻」）；幂等。删资料本身的级联在各后端内部完成。 */
+  deleteTranslationsByDocument(documentId: string): Promise<void>;
 
   // ===== Section 层（RAG 三层结构）=====
   listSections(chapterId: string): Promise<Section[]>;

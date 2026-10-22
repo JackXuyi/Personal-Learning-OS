@@ -37,8 +37,11 @@ import type {
   KnowledgeUnit,
   Section,
   SourceDocument,
+  TranslationIndexRow,
+  TranslationLang,
+  TranslationRecord,
 } from "../domain";
-import { sortChaptersByOrder } from "../domain";
+import { sortChaptersByOrder, translationKeyOf } from "../domain";
 import {
   diffIds,
   fromRelationDto,
@@ -227,6 +230,59 @@ function fromChapterDto(d: ChapterDto): Chapter {
   };
 }
 
+// ===== DTO：Translation（v6 · D3 改判）=====
+//
+// 字段名与领域**完全同名**（Rust 侧已 `rename_all = "camelCase"`），唯一的差异
+// 是 `target` 在 JSON 里是 `string` 而领域是联合类型 —— 所以映射函数里只做这一处
+// 断言，**不逐字段重排**：多一层搬运只会在加字段时静默丢一个。
+
+interface TranslationDto {
+  documentId: string;
+  chapterId: string;
+  target: string;
+  bodyHash: string;
+  text: string;
+  blocks: number;
+  skipped: number;
+  sourceChars: number;
+  createdAt: number;
+}
+
+/** 索引行（**无 text**，见 `TranslationIndexRow` 的注释）。 */
+interface TranslationIndexDto {
+  documentId: string;
+  chapterId: string;
+  target: string;
+  bodyHash: string;
+  blocks: number;
+  skipped: number;
+  sourceChars: number;
+  createdAt: number;
+}
+
+function fromTranslationIndexDto(d: TranslationIndexDto): TranslationIndexRow {
+  return { ...d, target: d.target as TranslationLang };
+}
+
+function fromTranslationDto(d: TranslationDto): TranslationRecord {
+  return { ...d, target: d.target as TranslationLang };
+}
+
+/** 领域 → 写入 DTO（`input` 参数体，字段与 `TranslationInput` 对齐）。 */
+function toTranslationDto(r: TranslationRecord): TranslationDto {
+  return {
+    documentId: r.documentId,
+    chapterId: r.chapterId,
+    target: r.target,
+    bodyHash: r.bodyHash,
+    text: r.text,
+    blocks: r.blocks,
+    skipped: r.skipped,
+    sourceChars: r.sourceChars,
+    createdAt: r.createdAt,
+  };
+}
+
 /**
  * 镜像重建：章节按 `documentId` 分组。
  *
@@ -377,6 +433,8 @@ export interface DbStatus {
     knowledgeUnits: number;
     relations: number;
     embeddings: number;
+    /** v6：译文行数（排障区确认「整库翻译真的写进库了」的唯一证据）。 */
+    translations: number;
   };
 }
 
@@ -534,6 +592,63 @@ export class TauriStorage extends LocalStorageAdapter implements StorageAdapter 
    */
   protected override persistDocuments(): void {
     /* 见方法注释：刻意空实现 */
+  }
+
+  // ===== 章译文（v6 · D3 改判）=====
+  //
+  // 降级分档（与类头的三分法一致，落到派生数据这一档）：
+  // - **读**（index / get）失败 → 回退父类内存实现。理由：译文是派生数据，
+  //   读不到最多重翻一次，不该让整库进度页 / 阅读页崩掉；
+  // - **写 / 删**失败 → 抛 `StorageUnavailableError`。理由：静默成功会让
+  //   「已缓存 ✓」标记撒谎（用户以为存住了，下次还得等几十分钟）。
+  //   调用方（translation-service）catch 之后降级为「这次不缓存」并告警。
+
+  override async listTranslationIndex(): Promise<TranslationIndexRow[]> {
+    const r = await this.trySqlite<TranslationIndexDto[]>("db_translation_index", {});
+    return r.ok ? r.value.map(fromTranslationIndexDto) : super.listTranslationIndex();
+  }
+
+  override async getTranslation(
+    documentId: string,
+    chapterId: string,
+    target: TranslationLang,
+  ): Promise<TranslationRecord | undefined> {
+    const r = await this.trySqlite<TranslationDto | null>("db_get_translation", {
+      documentId,
+      chapterId,
+      target,
+    });
+    if (!r.ok) return super.getTranslation(documentId, chapterId, target);
+    return r.value ? fromTranslationDto(r.value) : undefined;
+  }
+
+  override async saveTranslation(record: TranslationRecord): Promise<void> {
+    const r = await this.trySqlite("db_save_translation", { input: toTranslationDto(record) });
+    if (!r.ok) throw new StorageUnavailableError("db_save_translation");
+    // 内存镜像同步（与 saveChapters → rememberChapters 同形态）：本会话内的
+    // 「已缓存」判据读到的是内存，不同步会出现「刚翻完却显示未缓存」。
+    this.translations.set(
+      translationKeyOf(record.documentId, record.chapterId, record.target),
+      { ...record },
+    );
+  }
+
+  override async deleteTranslation(
+    documentId: string,
+    chapterId: string,
+    target: TranslationLang,
+  ): Promise<void> {
+    const r = await this.trySqlite("db_delete_translation", { documentId, chapterId, target });
+    if (!r.ok) throw new StorageUnavailableError("db_delete_translation");
+    this.translations.delete(translationKeyOf(documentId, chapterId, target));
+  }
+
+  override async deleteTranslationsByDocument(documentId: string): Promise<void> {
+    const r = await this.trySqlite("db_delete_translations_by_document", { documentId });
+    if (!r.ok) throw new StorageUnavailableError("db_delete_translations_by_document");
+    for (const [key, rec] of this.translations) {
+      if (rec.documentId === documentId) this.translations.delete(key);
+    }
   }
 
   // ===== 迁移工具（`tauri.ts` 旧注释里的「T9 迁移工具」= 本条 + RAG / 图两条）=====

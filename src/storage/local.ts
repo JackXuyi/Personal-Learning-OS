@@ -206,6 +206,15 @@ export class LocalStorageAdapter extends InMemoryStorage implements StorageAdapt
    *
    * 与 `persistDocuments()` 的边界是「是否属于已下沉 SQLite 的实体」：
    * 将来再有实体下沉时，从这里移出去即可，`persist()` 本身不用动。
+   *
+   * ⚠️ **章译文（v6）刻意不在这里，也没有对应的 KEY_ 常量**：
+   * 整库译文体积 ≈ 全库正文（几十 MB），localStorage 5–10 MB 配额装不下 ——
+   * 这与文档 / 章节下沉 SQLite（D12）是**同一个理由**。同理它也不进
+   * `ALL_KEYS`：本档的译文只活在内存里，刷新即丢。
+   * 故本类**不覆写** `saveTranslation` 等五个方法（直接用基类的内存实现）；
+   * 桌面端由 `TauriStorage` 覆写走 SQLite（那才是真源）。
+   * 不要「顺手补上」，那会击穿配额并让 `persistRest()` 里排在后面的实体
+   * （goals / learner / 包记录）跟着写失败。
    */
   protected persistRest(): void {
     // RAG 存储层持久化

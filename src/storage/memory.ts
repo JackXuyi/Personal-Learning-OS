@@ -34,8 +34,15 @@ import type {
   Restatement,
   Section,
   SourceDocument,
+  TranslationIndexRow,
+  TranslationRecord,
 } from "../domain";
-import { PACK_LOCAL_STORE_BUDGET_BYTES, pruneMemoryDocForClear, sortChaptersByOrder } from "../domain";
+import {
+  PACK_LOCAL_STORE_BUDGET_BYTES,
+  pruneMemoryDocForClear,
+  sortChaptersByOrder,
+  translationKeyOf,
+} from "../domain";
 import type { ImportedPackRecord, RetrievalScope, StorageAdapter } from "./types";
 
 /**
@@ -97,6 +104,14 @@ export class InMemoryStorage implements StorageAdapter {
   protected importedPacks = new Map<string, ImportedPackRecord>();
   /** 章级前置人工覆盖（F7 范围 4）。key = `chapterId`（每章至多一条）。 */
   protected prereqOverrides = new Map<string, ChapterPrereqOverride>();
+  /**
+   * 章译文（v6 · D3 改判）。key = `translationKeyOf(docId, chapterId, target)`。
+   *
+   * 内存 Map 存**全文**（含 text）—— 与 SQLite 侧的索引/正文分离不矛盾：
+   * SQLite 分离是为了「不把几十 MB 读进内存」，而这里的上限就是内存本身
+   * （只有当前会话翻过的章，量级几十条）。
+   */
+  protected translations = new Map<string, TranslationRecord>();
 
   // RAG 存储层：Section / Chunk / Knowledge / Relation / Embedding
   protected sections = new Map<string, Section>();
@@ -118,7 +133,7 @@ export class InMemoryStorage implements StorageAdapter {
     this.documents.set(doc.id, doc);
   }
 
-  /** 忘掉一份资料（纯内存）：资料本体 + 其章节 + 归属它的批注。 */
+  /** 忘掉一份资料（纯内存）：资料本体 + 其章节 + 归属它的批注 + 它的译文。 */
   protected forgetDocument(id: string): void {
     this.documents.delete(id);
     // 级联清理：删除文档时一并移除其章节，保持数据一致性。
@@ -126,6 +141,12 @@ export class InMemoryStorage implements StorageAdapter {
     // 级联清理（F5 第 2 条）：批注归属资料，资料没了批注即成孤儿 → 一并删除。
     for (const [annId, ann] of this.annotations) {
       if (ann.documentId === id) this.annotations.delete(annId);
+    }
+    // 级联清理（v6）：译文归属资料。**必须在这里做** —— SQLite 侧靠
+    // `delete_document_impl` 的 DELETE，内存态若不清，两个后端的可见状态就分叉了
+    // （内存后端表现为「删了资料，整库翻译进度还算着重它」）。
+    for (const [key, rec] of this.translations) {
+      if (rec.documentId === id) this.translations.delete(key);
     }
   }
 
@@ -152,6 +173,61 @@ export class InMemoryStorage implements StorageAdapter {
   }
   async saveChapters(documentId: string, chapters: Chapter[]): Promise<void> {
     this.rememberChapters(documentId, chapters);
+  }
+
+  // ===== 章译文（v6 · D3 改判）=====
+  /**
+   * 全库索引（**不含 text**）。
+   *
+   * 排序三键全序，与 SQLite 侧 `ORDER BY document_id, chapter_id, target` 同口径
+   * —— 同一份数据在两个后端读出的顺序必须一致，否则「整库进度」这类
+   * 顺序敏感的比较会在切换后端时莫名不等。
+   */
+  async listTranslationIndex(): Promise<TranslationIndexRow[]> {
+    return [...this.translations.values()]
+      // 显式逐字段构造（不用 `{ text, ...row }` 解构）：这样将来 `TranslationRecord`
+      // 新增字段时，索引行**不会**自动带上它 —— 那是本接口唯一要防的事。
+      .map((r) => ({
+        documentId: r.documentId,
+        chapterId: r.chapterId,
+        target: r.target,
+        bodyHash: r.bodyHash,
+        blocks: r.blocks,
+        skipped: r.skipped,
+        sourceChars: r.sourceChars,
+        createdAt: r.createdAt,
+      }))
+      .sort(
+        (a, b) =>
+          a.documentId.localeCompare(b.documentId) ||
+          a.chapterId.localeCompare(b.chapterId) ||
+          a.target.localeCompare(b.target),
+      );
+  }
+  async getTranslation(
+    documentId: string,
+    chapterId: string,
+    target: TranslationRecord["target"],
+  ): Promise<TranslationRecord | undefined> {
+    return this.translations.get(translationKeyOf(documentId, chapterId, target));
+  }
+  async saveTranslation(record: TranslationRecord): Promise<void> {
+    this.translations.set(
+      translationKeyOf(record.documentId, record.chapterId, record.target),
+      { ...record },
+    );
+  }
+  async deleteTranslation(
+    documentId: string,
+    chapterId: string,
+    target: TranslationRecord["target"],
+  ): Promise<void> {
+    this.translations.delete(translationKeyOf(documentId, chapterId, target));
+  }
+  async deleteTranslationsByDocument(documentId: string): Promise<void> {
+    for (const [key, rec] of this.translations) {
+      if (rec.documentId === documentId) this.translations.delete(key);
+    }
   }
 
   // ===== Section 层 =====
@@ -596,6 +672,10 @@ export class InMemoryStorage implements StorageAdapter {
     // F7 范围 4：人工覆盖是用户的手工修正，但**依赖已清掉的章 id** —— 清库后
     // 全是孤儿（消费侧按「章是否还在」兜底），留着只会让新库带一堆无效记录。
     this.prereqOverrides = new Map();
+    // v6：译文是**派生数据**（原文还在，随时可重翻）⇒ 清库整份清掉。
+    // 留着比丢更危险：重新导入同名资料时，指纹可能恰好一致 → 直接命中旧译文，
+    // 用户看到的是上一份库的内容（"看起来正常"的错）。
+    this.translations = new Map();
   }
 
   // ===== 学习者记忆（F9）=====
