@@ -22,6 +22,7 @@ import { AiProviderError } from "./types";
 import { aiErrPreview, aiLog } from "./log";
 import { TEMPERATURE } from "./pipeline-core";
 import { planTextBlocks } from "./text-blocks";
+import type { TextBlock } from "./text-blocks";
 
 /**
  * 翻译系统提示词（**唯一真源**，勿在别处复制一份）。
@@ -180,13 +181,32 @@ async function translateBlock(
 }
 
 /**
+ * 块计划 —— **块尺寸恒定、块数随正文线性增长**。
+ *
+ * 导出的理由：服务层拆批时要预知「每批多少块」才能给跨批进度一个稳定分母。
+ * 让执行侧与报进度侧调**同一个函数**，比各算一遍 `ceil(len / blockChars)`
+ * 可靠得多（`planTextBlocks` 会按段落边界切，实际块数不严格等于总数）。
+ *
+ * ⚠️ `maxChunks` 传的是 `ceil(len / blockChars)` **本身** —— 这是「别放大块尺寸」
+ * 的声明，不是上限。`planTextBlocks` 在块数超限时会放大块尺寸重跑，一放大
+ * 首字延迟就跟着涨（4.6 万字会被改成 1148 字一块）。
+ */
+export function planTranslationBlocks(text: string): TextBlock[] {
+  return planTextBlocks({
+    text,
+    chunkChars: TRANSLATION_LIMITS.blockChars,
+    maxChunks: Math.max(1, Math.ceil(text.length / TRANSLATION_LIMITS.blockChars)),
+  });
+}
+
+/**
  * 翻译一段正文：按 `blockChars` 分块、逐块串行调用、拼接结果。
  *
  * 串行而非并发：本地模型（默认 `qwen3.5:4b`）单实例推理，并发只会把请求排队，
  * 却让进度条乱跳；串行还能让上文的术语在块间自然延续（同一进程、同一会话）。
  *
  * 抛错条件（其余一律计 skip）：
- * - 空正文 / 未配置（`AiProviderError`，走 `aiFailureKindOf` 分类）；
+ * - 空正文 / 单批超限 / 未配置（`AiProviderError`，走 `aiFailureKindOf` 分类）；
  * - **全部**块失败（`request-failed`）—— 此时没有任何可用译文，不能报成功。
  */
 export async function translateText(
@@ -197,6 +217,14 @@ export async function translateText(
   if (text.length === 0) {
     throw new AiProviderError("request-failed", "正文为空，无法翻译。");
   }
+  // 单次调用只负责**一批**：更长的正文必须由 `translateChapterBody` 先拆批。
+  // 这里 fail loud，而不是让它一路传下去被 `planTextBlocks` 悄悄放大块尺寸。
+  if (text.length > TRANSLATION_LIMITS.bodyMaxChars) {
+    throw new AiProviderError(
+      "request-failed",
+      `单批正文超限（${text.length} > ${TRANSLATION_LIMITS.bodyMaxChars}），请走 translateChapterBody。`,
+    );
+  }
   if (!provider.isConfigured()) {
     throw new AiProviderError("not-configured", "AI 未就绪。");
   }
@@ -204,11 +232,7 @@ export async function translateText(
     throw new AiProviderError("request-failed", "已取消。");
   }
 
-  const blocks = planTextBlocks({
-    text,
-    chunkChars: TRANSLATION_LIMITS.blockChars,
-    maxChunks: TRANSLATION_LIMITS.blockMax,
-  });
+  const blocks = planTranslationBlocks(text);
   if (blocks.length === 0) {
     throw new AiProviderError("request-failed", "正文为空，无法翻译。");
   }

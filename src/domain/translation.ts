@@ -161,15 +161,19 @@ export function bodyFingerprint(text: string): string {
  */
 const BLOCK_CHARS = 700;
 
-/** 块数硬上限（700 × 40 = 28 000 > bodyMaxChars，故正文上限始终先触发）。 */
-const BLOCK_MAX = 40;
-
 /**
- * 整章正文硬上限（超出 → **拒绝**，绝不静默截断）。
+ * 单批正文上限 —— **超出不是拒绝，是拆批**。
  *
- * ⚠️ **刻意不再是 `BLOCK_CHARS * BLOCK_MAX` 的派生值**：两者已解耦 ——
- * 块尺寸是为「首字延迟」调的，正文上限是为「单章成本」定的。若下次有人
- * 「顺手修正」成乘积，上限会静默变成 28 000（多出 4 000 字 ≈ 2 分钟等待）。
+ * ⚠️ 语义在 2026-10-22 二次修订（首版口径是「整章硬上限，超出直接拒绝并提示
+ * 划选片段」）。那个口径对真实内容不成立：4.6 万字的长章（长篇小说、整篇论文、
+ * 未切分的长文）恰恰最需要译，而它本来就是逐块翻的 —— 没有任何技术理由翻不了。
+ *
+ * 现在的口径：`translateChapterBody` 按段落边界把正文切成
+ * `ceil(len / bodyMaxChars)` 批，逐批串行、逐批上屏，整章翻完仍只存**一条**记录
+ * （主键不变，段不是持久化单位）。
+ *
+ * 保留的是**成本闸**含义：本地模型 30 字/秒 ⇒ 24 000 字 ≈ 13 分钟，这是「一次
+ * 点击最多让用户等多久」的上界。拆批不改变首字延迟（块恒 700 字 ≈ 25 秒）。
  */
 const BODY_MAX_CHARS = 24_000;
 
@@ -178,14 +182,18 @@ const BODY_MAX_CHARS = 24_000;
  *
  * ⚠️ 不用 `as const` 字面量类型：本项目已踩过「字面量类型被推断进参数默认值
  * ⇒ 传别的值即 TS2345」的坑（见 `LIMITS` 的教训）。这里显式标注 `number`。
+ *
+ * ⚠️ 2026-10-22 **删掉了 `blockMax`**：块数不该有上限 —— 该恒定的是块**尺寸**
+ * （700 字，决定首字延迟），块数随正文线性增长。当初的 `blockMax = 40` 只是
+ * 「整章上限」的配套副产品；闸门拆掉后它反而成了隐患：`planTextBlocks` 会在
+ * 块数超限时**放大块尺寸**，于是 4.6 万字的章被改成 1148 字一块、首字延迟
+ * 从 25 秒涨到 38 秒，再长就一路恶化。
  */
 export const TRANSLATION_LIMITS: {
   readonly blockChars: number;
-  readonly blockMax: number;
-  /** 整章正文硬上限（超出 → 拒绝，不静默截断）。 */
+  /** 单批正文上限（超出 → 拆批，不拒绝）。 */
   readonly bodyMaxChars: number;
 } = {
   blockChars: BLOCK_CHARS,
-  blockMax: BLOCK_MAX,
   bodyMaxChars: BODY_MAX_CHARS,
 };

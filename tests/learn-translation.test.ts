@@ -14,9 +14,9 @@ import assert from "node:assert/strict";
 import type { AIProvider, ChatInput, ChatOutput } from "../src/ai/types.ts";
 import { AiProviderError } from "../src/ai/types.ts";
 import { TEMPERATURE } from "../src/ai/pipeline-core.ts";
-import { planTextBlocks } from "../src/ai/text-blocks.ts";
 import {
   buildTranslationMessages,
+  planTranslationBlocks,
   translateText,
   translationConcurrencyOf,
 } from "../src/ai/translation.ts";
@@ -81,6 +81,23 @@ function expectedBlocks(len: number): number {
 }
 
 /**
+ * 拆批后的期望块数：**每批各自 ceil**。
+ *
+ * ⚠️ 它 ≥ `expectedBlocks(len)`，不是笔误 —— 批边界处必然多切一次（前一批到
+ * `bodyMaxChars` 就停，后一批从那里重新累积）。块数多一点没有代价（总 token
+ * 守恒），但断言必须按拆批口径算，否则「拆了就红」。
+ */
+function expectedBlocksSplit(len: number): number {
+  const part = TRANSLATION_LIMITS.bodyMaxChars;
+  if (len <= part) return expectedBlocks(len);
+  let n = 0;
+  for (let start = 0; start < len; start += part) {
+    n += expectedBlocks(Math.min(part, len - start));
+  }
+  return n;
+}
+
+/**
  * 假 provider：`reply(i, input)` 决定第 i 次调用返回什么（返回 `Error` 即抛错）。
  * 默认返回固定译文「译」。
  */
@@ -140,34 +157,31 @@ it("提示词语言名与目标表一一对应", () => {
 
 /* ---------------- 尺寸口径 ---------------- */
 
-it("TC-UC01-04a 尺寸三项是显式常量（700 / 40 / 24 000）", () => {
+it("TC-UC01-04a 尺寸是显式常量（700 / 24 000）", () => {
   assert.equal(TRANSLATION_LIMITS.blockChars, 700);
-  assert.equal(TRANSLATION_LIMITS.blockMax, 40);
   assert.equal(TRANSLATION_LIMITS.bodyMaxChars, 24_000);
 });
 
-it("TC-UC01-04b 正文上限**不再**由块尺寸派生（解耦不可回退）", () => {
-  // 700 × 40 = 28 000 ≠ 24 000。这条断言存在的意义：若有人把 BODY_MAX_CHARS
-  // 「顺手修正」成乘机，上限会静默放宽 4 000 字（≈ 2 分钟等待）。
-  assert.notEqual(
-    TRANSLATION_LIMITS.bodyMaxChars,
-    TRANSLATION_LIMITS.blockChars * TRANSLATION_LIMITS.blockMax,
-  );
-  // 但两条约束的**先后**必须是正文上限先触发：否则 blockMax 会先夹住块数，
-  // 超长正文被「算术均分」硬翻出来，而不是被拒绝。
+it("TC-UC01-04b 块尺寸不随正文变长而放大（首字延迟恒定）", () => {
+  /**
+   * 4.6 万字的章 —— 真实触发过的那一档。若块数被某个上限夹住，
+   * `planTextBlocks` 会**放大块尺寸**重跑：700 字/块 → 1148 字/块，
+   * 首字延迟从 25 秒涨到 38 秒，再长就一路恶化。
+   * 当初的 `blockMax = 40` 正是这么夹的，已删；这条断言防止它被加回来。
+   */
+  const text = flatBody(46_000);
+  const blocks = planTranslationBlocks(text);
+  const longest = Math.max(...blocks.map((b) => b.end - b.start));
   assert.ok(
-    TRANSLATION_LIMITS.bodyMaxChars <= TRANSLATION_LIMITS.blockChars * TRANSLATION_LIMITS.blockMax,
-    "正文上限必须先于块数上限触发",
+    longest <= TRANSLATION_LIMITS.blockChars * 1.1,
+    `最长块 ${longest} 字 —— 块尺寸被放大了（块数被上限夹住？）`,
   );
+  assert.equal(blocks.map((b) => text.slice(b.start, b.end)).join(""), text);
 });
 
 it("TC-UC01-05 短章单块（blockChars 内不做二次切分）", () => {
   const len = TRANSLATION_LIMITS.blockChars - 1;
-  const blocks = planTextBlocks({
-    text: flatBody(len),
-    chunkChars: TRANSLATION_LIMITS.blockChars,
-    maxChunks: TRANSLATION_LIMITS.blockMax,
-  });
+  const blocks = planTranslationBlocks(flatBody(len));
   assert.equal(blocks.length, 1);
   assert.deepEqual([blocks[0].start, blocks[0].end], [0, len]);
 });
@@ -176,12 +190,7 @@ it("TC-UC01-06 分块覆盖全文（非整除长度也不留尾巴）", () => {
   // 刻意取非整除：整除长度的边界错误（漏末块 / 末块过短）会被整除掩盖。
   const len = TRANSLATION_LIMITS.blockChars * 5 + 137;
   const text = flatBody(len);
-  const blocks = planTextBlocks({
-    text,
-    chunkChars: TRANSLATION_LIMITS.blockChars,
-    maxChunks: TRANSLATION_LIMITS.blockMax,
-  });
-  assert.ok(blocks.length <= TRANSLATION_LIMITS.blockMax, `块数 ${blocks.length} 超上限`);
+  const blocks = planTranslationBlocks(text);
   assert.equal(blocks.length, expectedBlocks(len));
   assert.equal(blocks[0].start, 0);
   assert.equal(blocks[blocks.length - 1].end, len);
@@ -191,18 +200,10 @@ it("TC-UC01-06 分块覆盖全文（非整除长度也不留尾巴）", () => {
   assert.equal(blocks.map((b) => text.slice(b.start, b.end)).join(""), text);
 });
 
-it("TC-UC01-15 上限处刚好装下（24 000 字）", () => {
+it("TC-UC01-15 单批上限处刚好装下（24 000 字）", () => {
   const text = flatBody(TRANSLATION_LIMITS.bodyMaxChars);
-  const blocks = planTextBlocks({
-    text,
-    chunkChars: TRANSLATION_LIMITS.blockChars,
-    maxChunks: TRANSLATION_LIMITS.blockMax,
-  });
-  // 关键：24 000 字**不能**撞到 blockMax（撞到就说明上限口径又漂了）。
-  assert.ok(
-    blocks.length < TRANSLATION_LIMITS.blockMax,
-    `块数 ${blocks.length} 已达到 blockMax —— 正文上限本该先触发`,
-  );
+  const blocks = planTranslationBlocks(text);
+  assert.equal(blocks.length, expectedBlocks(TRANSLATION_LIMITS.bodyMaxChars));
   assert.equal(blocks.map((b) => text.slice(b.start, b.end)).join(""), text);
 });
 
@@ -236,16 +237,69 @@ it("提示词：多块带 k/K 位置感，上下文可选注入", () => {
 
 /* ---------------- 服务层门槛 ---------------- */
 
-it("TC-UC01-07 超长拒绝（provider 零调用）", async () => {
+it("TC-UC01-07 超长章不再拒绝：拆批判、全文覆盖", async () => {
   const { provider, calls } = mockProvider();
+  const len = TRANSLATION_LIMITS.bodyMaxChars + 8_192;
+  const r = await translateChapterBody({ body: flatBody(len), target: "zh", provider });
+  assert.equal(r.status, "ok");
+  if (r.status !== "ok") return;
+  // 两批 ⇒ 至少两次调用（每批至少一块）。只调一次说明没拆。
+  assert.ok(calls.length >= 2, `只调了 ${calls.length} 次 —— 没拆批`);
+  assert.equal(r.blocks, expectedBlocksSplit(len));
+  assert.equal(r.skippedBlocks, 0);
+  assert.equal(r.cancelled, false);
+});
+
+it("跨批进度：分母恒为整章块数（不跳变）、分子递增到最后一块", async () => {
+  const { provider } = mockProvider();
+  const len = TRANSLATION_LIMITS.bodyMaxChars + 8_192;
+  const seen: { done: number; total: number }[] = [];
   const r = await translateChapterBody({
-    body: flatBody(TRANSLATION_LIMITS.bodyMaxChars + 1),
+    body: flatBody(len),
     target: "zh",
     provider,
+    onProgress: (done, total) => seen.push({ done, total }),
   });
-  assert.equal(r.status, "error");
-  if (r.status === "error") assert.equal(r.errorKind, "too-long");
-  assert.equal(calls.length, 0);
+  assert.equal(r.status, "ok");
+  const total = expectedBlocksSplit(len);
+  assert.ok(seen.length > 0);
+  const totals = [...new Set(seen.map((s) => s.total))];
+  assert.deepEqual(totals, [total], `分母跳变了：${totals.join(",")}`);
+  assert.equal(seen[seen.length - 1].done, total);
+  for (let i = 1; i < seen.length; i++) {
+    assert.ok(seen[i].done > seen[i - 1].done, "done 必须严格递增");
+  }
+});
+
+it("跨批 onBlockDone：index 全局连续（第二批不从 0 重来）", async () => {
+  const { provider } = mockProvider();
+  const len = TRANSLATION_LIMITS.bodyMaxChars + 8_192;
+  const idx: number[] = [];
+  await translateChapterBody({
+    body: flatBody(len),
+    target: "zh",
+    provider,
+    onBlockDone: (i) => idx.push(i),
+  });
+  // 从 0 起、步长 1 —— 跨批若重置，这里会出现 0,1,2,0,1,…
+  assert.deepEqual(idx, Array.from({ length: idx.length }, (_, i) => i));
+  assert.equal(idx.length, expectedBlocksSplit(len));
+});
+
+it("后续批整体失败：交回已完成部分 + 计入 skip（不整体判失败）", async () => {
+  const part1 = TRANSLATION_LIMITS.bodyMaxChars;
+  const len = part1 + 8_192;
+  const firstBlocks = expectedBlocks(part1);
+  const restBlocks = expectedBlocks(len - part1);
+  // 前 firstBlocks 次调用（第一批）成功，之后（第二批）全抛错。
+  const { provider } = mockProvider({
+    reply: (i) => (i < firstBlocks ? "译" : new Error("boom")),
+  });
+  const r = await translateChapterBody({ body: flatBody(len), target: "zh", provider });
+  assert.equal(r.status, "ok");
+  if (r.status !== "ok") return;
+  assert.ok(r.text.length > 0, "第一批的译文必须交回");
+  assert.equal(r.skippedBlocks, restBlocks, "第二批的块必须计入 skip（UI 会如实标注）");
 });
 
 it("TC-UC01-08 空正文", async () => {
@@ -697,10 +751,11 @@ it("整库：目标语言不同则各存一行（不互相顶替）", async () =
   assert.equal(saved[0].target, "zh");
 });
 
-it("整库：空正文 / 超单章上限计入 failed 且不进分母", async () => {
+it("整库：超长章照翻（拆批），只有空正文计入 failed", async () => {
   resetIndex();
   const a = makeDoc("d1", "资料一", [
     ["正常章", 300],
+    ["空章", 0],
     ["超长章", TRANSLATION_LIMITS.bodyMaxChars + 1],
   ]);
   const { store } = fake({ docs: [a] });
@@ -712,12 +767,14 @@ it("整库：空正文 / 超单章上限计入 failed 且不进分母", async ()
     storage: store,
     onProgress: (p) => seen.push(`${p.doneChapters}/${p.totalChapters}`),
   });
+  // 空正文章是唯一的失败。超长章曾经被整章跳过 —— 最该翻的章一个都不翻，
+  // 而 UI 只报「已翻 N 章」，用户无从知道漏了它。
   assert.equal(r.failed, 1);
-  assert.equal(r.translated, 1);
-  assert.equal(calls.length, 1);
-  // 分母只有 1 章（超长章不在分母里）⇒ 进度从 0/1 走到 1/1，不会先跳到 50%
-  assert.equal(seen[0], "0/1");
-  assert.equal(seen[seen.length - 1], "1/1");
+  assert.equal(r.translated, 2);
+  assert.ok(calls.length >= 3, `只调了 ${calls.length} 次 —— 超长章没被拆批翻`);
+  // 分母 = 有正文的 2 章（空章不进分母，否则进度先跳再倒算）
+  assert.equal(seen[0], "0/2");
+  assert.equal(seen[seen.length - 1], "2/2");
 });
 
 it("整库：单章失败不中断（继续翻下一章）", async () => {

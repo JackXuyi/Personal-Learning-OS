@@ -17,24 +17,20 @@
  *
  * 本模块是纯 TS（无 React / 无 i18n）→ 可被 `node --experimental-strip-types` 直跑。
  */
-import { translationConcurrencyOf, translateText } from "../../ai/translation";
+import { translationConcurrencyOf } from "../../ai/translation";
 import type { AIProvider } from "../../ai/types";
-import {
-  TRANSLATION_LIMITS,
-  bodyFingerprint,
-  translationKeyOf,
-} from "../../domain";
+import { bodyFingerprint, translationKeyOf } from "../../domain";
 import type { Chapter, TranslationLang, TranslationIndexRow } from "../../domain";
 import type { StorageAdapter } from "../../storage";
 import { storage } from "../../stores/useLoopStore";
 import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { useTranslationIndexStore } from "../../stores/useTranslationIndexStore";
-import { persistTranslation } from "./translation-service";
+import { persistTranslation, translateChapterBody } from "./translation-service";
 
 export interface LibraryProgress {
   /** 已处理章数（含「已有缓存跳过」与失败章 —— 进度条的分子）。 */
   doneChapters: number;
-  /** 可翻译章总数（有正文且未超单章上限）。 */
+  /** 待翻译章总数（有正文的章，**不按长度过滤** —— 长章会被拆批翻）。 */
   totalChapters: number;
   doneChars: number;
   totalChars: number;
@@ -60,7 +56,7 @@ export interface LibraryJobResult {
   translated: number;
   /** 索引里已有且指纹一致的章数（零调用）。 */
   skippedExisting: number;
-  /** 失败 / 空正文 / 超单章上限的章数。 */
+  /** 翻不出来的章数（空正文 / AI 失败 / 写库失败）。 */
   failed: number;
   /** 被 signal 中断（当前块跑完后退出）。 */
   cancelled: boolean;
@@ -107,8 +103,11 @@ export async function translateLibrary(input: LibraryJobInput): Promise<LibraryJ
     const chapters = await store.listChapters(doc.id);
     for (const chapter of chapters) {
       const body = text.slice(chapter.contentRef.start, chapter.contentRef.end);
-      // 空正文 / 超单章上限：计入 failed 并**继续**（不中断整库）。
-      if (body.trim().length === 0 || body.length > TRANSLATION_LIMITS.bodyMaxChars) {
+      // 空正文：计入 failed 并**继续**（不中断整库）。
+      // ⚠️ 长度**不再**过滤：长章交给 `translateChapterBody` 拆批翻。
+      // 这里曾按 `bodyMaxChars` 跳过，等于「最该翻的章一个都不翻」——
+      // 而整库跑完 UI 只报「已翻 N 章」，用户无从知道漏的是哪几章。
+      if (body.trim().length === 0) {
         failed += 1;
         continue;
       }
@@ -185,48 +184,52 @@ export async function translateLibrary(input: LibraryJobInput): Promise<LibraryJ
       }
 
       try {
-        const out = await translateText(provider, {
-          text: body,
+        /**
+         * 走 `translateChapterBody` 而不是直接 `translateText`：拆批逻辑只该有
+         * 一份。直连 `translateText` 时超长章会被它顶部的单批断言拒掉。
+         */
+        const r = await translateChapterBody({
+          body,
           target: input.target,
-          context: {
-            ...(task.chapter.title ? { title: task.chapter.title } : {}),
-            ...(task.chapter.keyPoints.length > 0
-              ? { keyPoints: task.chapter.keyPoints.slice(0, 5) }
-              : {}),
-          },
+          ...(task.chapter.title ? { chapterTitle: task.chapter.title } : {}),
+          ...(task.chapter.keyPoints.length > 0
+            ? { keyPoints: task.chapter.keyPoints.slice(0, 5) }
+            : {}),
+          provider,
           ...(input.signal ? { signal: input.signal } : {}),
         });
-        if (out.cancelled) {
+        if (r.status === "error") {
+          // 取消导致的「错误」不是失败章：这一章根本没跑完，如实报暂停。
+          if (input.signal?.aborted) {
+            result.cancelled = true;
+            return;
+          }
+          result.failed += 1;
+        } else if (r.cancelled) {
           // 半章译文不写库（下次会被当成完整译文读出来）。
           result.cancelled = true;
           return;
-        }
-        const saved = await serializeWrite(() =>
-          persistTranslation({
-            documentId: task.documentId,
-            chapterId: task.chapter.id,
-            body,
-            result: {
-              status: "ok",
-              text: out.text,
-              target: input.target,
-              blocks: out.blocks,
-              skippedBlocks: out.skippedBlocks,
-              cancelled: false,
-            },
-            storage: store,
-          }),
-        );
-        if (saved) {
-          result.translated += 1;
-          // 索引立即更新：整库跑几十分钟，UI 的「已翻 N 章」要跟着走，
-          // 不能等任务结束才全量刷新。
-          useTranslationIndexStore.getState().upsert(saved);
-          input.onChapterDone?.(task.documentId, task.chapter.id);
         } else {
-          // 存不住（配额 / SQLite 不可用）：这章的活白干了 ⇒ 计入失败，
-          // 不要报「已翻 N 章」却查不到（下次还得重翻）。
-          result.failed += 1;
+          const saved = await serializeWrite(() =>
+            persistTranslation({
+              documentId: task.documentId,
+              chapterId: task.chapter.id,
+              body,
+              result: r,
+              storage: store,
+            }),
+          );
+          if (saved) {
+            result.translated += 1;
+            // 索引立即更新：整库跑几十分钟，UI 的「已翻 N 章」要跟着走，
+            // 不能等任务结束才全量刷新。
+            useTranslationIndexStore.getState().upsert(saved);
+            input.onChapterDone?.(task.documentId, task.chapter.id);
+          } else {
+            // 存不住（配额 / SQLite 不可用）：这章的活白干了 ⇒ 计入失败，
+            // 不要报「已翻 N 章」却查不到（下次还得重翻）。
+            result.failed += 1;
+          }
         }
       } catch {
         result.failed += 1;

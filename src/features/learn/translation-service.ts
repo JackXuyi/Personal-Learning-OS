@@ -15,7 +15,8 @@
  */
 import type { AiFailureKind } from "../../ai/failure-kind";
 import { aiFailureKindOf } from "../../ai/failure-kind";
-import { translateText } from "../../ai/translation";
+import { planTranslationBlocks, translateText } from "../../ai/translation";
+import { planTextBlocks } from "../../ai/text-blocks";
 import type { AIProvider } from "../../ai/types";
 import { ANNOTATION_LIMITS, TRANSLATION_LIMITS, bodyFingerprint } from "../../domain";
 import type { TranslationLang, TranslationRecord } from "../../domain";
@@ -49,27 +50,40 @@ export type TranslationResult =
   | { status: "error"; errorKind: TranslationErrorKind; target: TranslationLang };
 
 export interface TranslateChapterBodyInput {
-  /** 章正文（调用方已按 `contentRef` 切片）。 */
+  /**
+   * 章正文（调用方已按 `contentRef` 切片）。
+   *
+   * **长度不设门槛**：超过 `TRANSLATION_LIMITS.bodyMaxChars` 会被本函数拆成多批
+   * 串行翻译。首版在这里硬拒绝（`too-long`），对 4.6 万字的长章等于「最该翻的
+   * 内容翻不了」，而它本来就是逐块跑的。
+   */
   body: string;
   target: TranslationLang;
   chapterTitle?: string;
   keyPoints?: readonly string[];
   /** 注入用（单测传 mock）。 */
   provider?: AIProvider;
-  /** 块进度（`done` = 已完成块数，从 1 起）；UI 接到 `useAiTask` 的 report 上。 */
+  /** 块进度（`done` = 已完成块数，从 1 起；**跨批累计**，分母是整章总块数）。 */
   onProgress?: (done: number, total: number) => void;
-  /** 每块成功后的增量译文（`index` 从 0 起）；UI 用它逐段上屏。 */
+  /** 每块成功后的增量译文（`index` 从 0 起，**跨批连续递增**）；UI 用它逐段上屏。 */
   onBlockDone?: (index: number, text: string) => void;
-  /** 取消信号（块间生效）。 */
+  /** 取消信号（批间与块间都生效）。 */
   signal?: AbortSignal;
 }
 
 /**
- * 整章正文翻译。
+ * 整章正文翻译 —— 按批切、逐批串行、逐块上屏。
  *
- * 门槛顺序**不可调换**：长度门 → 就绪门 → 调用。就绪门放在调用前是既有约定
- * （`restatement-service` 的 D6-B），保证「没配模型时零调用、零副作用」；
- * 长度门更靠前是因为它不需要读 provider —— 省一次构造。
+ * 门槛顺序**不可调换**：空正文门 → 就绪门 → 调用。就绪门放在调用前是既有约定
+ * （`restatement-service` 的 D6-B），保证「没配模型时零调用、零副作用」。
+ *
+ * 拆批而不是拒绝（2026-10-22 二次修订）：
+ * - 批 = `bodyMaxChars`（24 000 字），是**成本闸**（本地约 13 分钟），不是能力边界；
+ * - 块仍恒为 700 字 ⇒ 首字延迟不受章节总长影响（这是渐进上屏成立的前提）；
+ * - 批是纯内存概念，**不是持久化单位** —— 整章翻完仍只写一条记录，主键不变。
+ *
+ * 批间失败的处理：已有批成功时**交回已完成部分**（多出来的块计入 `skippedBlocks`），
+ * 而不是整体判失败 —— 让用户看到前 2 万字译文，远好过「全部失败」再从头跑一遍。
  */
 export async function translateChapterBody(
   input: TranslateChapterBodyInput,
@@ -77,10 +91,6 @@ export async function translateChapterBody(
   const body = input.body.trim();
   if (body.length === 0) {
     return { status: "error", errorKind: "no-body", target: input.target };
-  }
-  // 硬上限：超出**拒绝**，绝不静默截断（截断会让用户以为读的是全章译文）。
-  if (body.length > TRANSLATION_LIMITS.bodyMaxChars) {
-    return { status: "error", errorKind: "too-long", target: input.target };
   }
 
   const provider = input.provider ?? buildActiveProvider();
@@ -92,27 +102,97 @@ export async function translateChapterBody(
     ...(input.chapterTitle ? { title: input.chapterTitle } : {}),
     ...(input.keyPoints?.length ? { keyPoints: input.keyPoints } : {}),
   };
+  const hasContext = Object.keys(context).length > 0;
 
-  try {
-    const out = await translateText(provider, {
-      text: body,
-      target: input.target,
-      ...(Object.keys(context).length > 0 ? { context } : {}),
-      ...(input.onProgress ? { onBlock: input.onProgress } : {}),
-      ...(input.onBlockDone ? { onBlockDone: input.onBlockDone } : {}),
-      ...(input.signal ? { signal: input.signal } : {}),
-    });
-    return {
-      status: "ok",
-      text: out.text,
-      target: input.target,
-      blocks: out.blocks,
-      skippedBlocks: out.skippedBlocks,
-      cancelled: out.cancelled,
-    };
-  } catch (err) {
-    return { status: "error", errorKind: aiFailureKindOf(err), target: input.target };
+  // 拆批：chunkChars = 单批上限，maxChunks 传「刚好够」迫使它**不放大块尺寸**
+  // （放大块 = 首字延迟变长，见 `TRANSLATION_LIMITS` 的注释）。
+  const parts = planTextBlocks({
+    text: body,
+    chunkChars: TRANSLATION_LIMITS.bodyMaxChars,
+    maxChunks: Math.max(1, Math.ceil(body.length / TRANSLATION_LIMITS.bodyMaxChars)),
+  });
+  const slices = parts.map((p) => body.slice(p.start, p.end));
+  /**
+   * 预知总块数：跨批进度必须有一个**稳定分母**，否则每进一批分母就跳一次。
+   * 与执行侧共用 `planTranslationBlocks`（同一把尺子），不自己算 `ceil(len/700)`。
+   */
+  const totalBlocks = slices.reduce((n, s) => n + planTranslationBlocks(s).length, 0);
+
+  const texts: string[] = [];
+  let blocks = 0;
+  let skipped = 0;
+  let doneBlocks = 0;
+  /** 全局块序号（跨批累积）：UI 的 `parts` 数组按它定位，跨批不能从 0 重来。 */
+  let emitted = 0;
+
+  /**
+   * 取消时的出口：**一块都没跑完**就只能报错（空译文写进缓存会让下次「命中」
+   * 一章空内容）；已有部分则交回已完成文本 + `cancelled`。
+   *
+   * ⚠️ 这里用 `generic` 而不是新增 `cancelled` 分类：当前只有整库任务传
+   * `signal`，而它在 `status === "error"` 分支里**先判 `signal.aborted`**，
+   * 根本走不到文案映射 —— 加一个 `cancelled` 分类会得到一个永不显示的 UI 分支。
+   */
+  const cancelledSoFar = (): TranslationResult =>
+    texts.length === 0
+      ? { status: "error", errorKind: "generic", target: input.target }
+      : {
+          status: "ok",
+          text: texts.join("\n\n"),
+          target: input.target,
+          blocks,
+          skippedBlocks: skipped,
+          cancelled: true,
+        };
+
+  for (const slice of slices) {
+    if (input.signal?.aborted) return cancelledSoFar();
+    try {
+      const out = await translateText(provider, {
+        text: slice,
+        target: input.target,
+        ...(hasContext ? { context } : {}),
+        ...(input.onProgress
+          ? { onBlock: (done: number) => input.onProgress?.(doneBlocks + done, totalBlocks) }
+          : {}),
+        ...(input.onBlockDone
+          ? {
+              onBlockDone: (index: number, text: string) => {
+                input.onBlockDone?.(emitted + index, text);
+              },
+            }
+          : {}),
+        ...(input.signal ? { signal: input.signal } : {}),
+      });
+      blocks += out.blocks;
+      skipped += out.skippedBlocks;
+      doneBlocks += out.blocks;
+      emitted += out.blocks;
+      if (out.text.length > 0) texts.push(out.text);
+      if (out.cancelled) return cancelledSoFar();
+    } catch (err) {
+      // 取消导致的抛错不记 skip：它不是「这批翻不出来」，而是「用户喊停」。
+      if (input.signal?.aborted) return cancelledSoFar();
+      if (texts.length > 0) {
+        // 后续批整体失败：交回已完成部分，把这一批的块计入 skip（UI 会如实标注）。
+        skipped += planTranslationBlocks(slice).length;
+        break;
+      }
+      return { status: "error", errorKind: aiFailureKindOf(err), target: input.target };
+    }
   }
+
+  if (texts.length === 0) {
+    return { status: "error", errorKind: "generic", target: input.target };
+  }
+  return {
+    status: "ok",
+    text: texts.join("\n\n"),
+    target: input.target,
+    blocks,
+    skippedBlocks: skipped,
+    cancelled: false,
+  };
 }
 
 export interface TranslateSnippetInput {
