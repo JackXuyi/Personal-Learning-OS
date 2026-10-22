@@ -411,7 +411,7 @@ never depend on a network call.
 Every capability the project intends to ship — this doubles as the roadmap.
 `[x]` = shipped · `[ ]` = not yet · `P0` / `P1` / `P2` = priority of the unshipped items.
 
-**44 shipped · 2 not yet.**
+**45 shipped · 2 not yet.**
 
 ### 📥 Ingestion
 
@@ -440,6 +440,7 @@ Every capability the project intends to ship — this doubles as the roadmap.
 - [x] Highlights and notes — select text to highlight it, optionally attach a note; the side panel lists them and jumps back to the passage (zero AI, not written to the evidence log, no mastery change; re-anchored automatically after a re-split or chapter merge)
 - [x] Feynman restatement — explain a chapter in your own words; the AI diffs it against the chapter text (covered / missed / got wrong, each anchored back to the source) and can schedule a review without moving mastery
 - [x] Flashcards from key points — one click sends a chapter's quoted key points into a card-level spaced-repetition queue (four-grade self-rating, 1/2/4/7-day intervals, no mastery change, **works fully offline / without AI**)
+- [x] Translation — turn a chapter into the language you pick (follow the interface language or set one): the first section appears instead of waiting for the whole chapter, translated chapters are kept on this machine so reopening is instant, and the whole library can be translated in one run that resumes after a pause (no stored learning entity is touched — highlights, restatement and papers still work off the original text)
 - [x] Cross-document concept graph — the whole library's concepts on one canvas (`/graph`, entered from the sidebar): filter by document, click a node to focus its one-hop neighbourhood, double-click to jump back to the source document, start a concept review from the side panel. Renders the 40 most-connected concepts (the layout assumes ≤ 50 nodes) and says so when the pool is truncated
 
 ### 📝 Assessment
