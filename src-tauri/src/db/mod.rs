@@ -61,7 +61,8 @@ pub async fn init_pool(path: &Path) -> Result<SqlitePool, Box<dyn std::error::Er
     // 用 raw_sql 亦可，但切分后单条失败能给出更明确的错误位置。
     apply_schema(&pool).await?;
     // 版本迁移（v1 → v2：chunks_fts 改 trigram；v2 → v3：embeddings 加 vector；
-    // v3 → v4：knowledge_units 加 evidence 四列；v4 → v5：documents / chapters 两表接管）。
+    // v3 → v4：knowledge_units 加 evidence 四列；v4 → v5：documents / chapters 两表接管；
+    // v5 → v6：translations 表（章译文持久化 · D3 改判））。
     migrate(&pool).await?;
 
     Ok(pool)
@@ -78,7 +79,7 @@ async fn apply_schema(pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error
 
 /// 版本迁移入口（幂等）。按版本号顺序执行，每一步自行判断是否需要跑。
 ///
-/// 注意：各步的版本判定互相独立，因此 v1 存量库会连跑 v2 / v3 / v4 / v5 一次到位。
+/// 注意：各步的版本判定互相独立，因此 v1 存量库会连跑 v2 / v3 / v4 / v5 / v6 一次到位。
 /// 新库在 `apply_schema` 阶段就已带全部列与全部表，各步都会走「无需变更」分支。
 async fn migrate(pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
     let mut conn = pool.acquire().await?;
@@ -86,6 +87,7 @@ async fn migrate(pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
     migrate_v3(&mut conn).await?;
     migrate_v4(&mut conn).await?;
     migrate_v5(&mut conn).await?;
+    migrate_v6(&mut conn).await?;
     Ok(())
 }
 
@@ -211,6 +213,30 @@ async fn migrate_v5(
         return Ok(()); // 已是目标版本，跳过
     }
     sqlx::query("INSERT INTO _schema_version (version, applied_at) VALUES (5, ?)")
+        .bind(now_ms())
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}
+
+/// v5 → v6：`translations` 表（章译文持久化 · D3 改判）。
+///
+/// 与 v5 **完全同形**：本步不 ALTER 任何已有表 —— 新表由 schema.sql 的
+/// `CREATE TABLE IF NOT EXISTS` 建好（存量库同样如此，`apply_schema()` 每次启动
+/// 都跑），本步只写版本号。
+///
+/// ⚠️ 与 v2 的区别：**不要**在这里重跑 `apply_schema`。v2 那次是因为要 DROP 旧
+/// FTS 表后重建索引；v6 没有任何数据搬迁（译文是全新数据，旧库里本来就没有）。
+async fn migrate_v6(
+    conn: &mut sqlx::SqliteConnection,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let cur: i64 = sqlx::query_scalar("SELECT COALESCE(MAX(version), 0) FROM _schema_version")
+        .fetch_one(&mut *conn)
+        .await?;
+    if cur >= 6 {
+        return Ok(()); // 已是目标版本，跳过
+    }
+    sqlx::query("INSERT INTO _schema_version (version, applied_at) VALUES (6, ?)")
         .bind(now_ms())
         .execute(&mut *conn)
         .await?;

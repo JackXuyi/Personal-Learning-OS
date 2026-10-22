@@ -510,6 +510,63 @@ pub fn blob_to_f32(blob: &[u8]) -> Vec<f32> {
         .collect()
 }
 
+// ========== 章译文（Translation；v6 · D3 改判）==========
+
+/// 写入用的译文（整条 upsert，**没有"部分更新"语义**）。
+///
+/// 为什么 `blocks` / `skipped` / `source_chars` 都要存：读缓存时 UI 要原样恢复
+/// 「N/K 段已跳过」的诚实标注与整库统计 —— 这些是生成时的**事实**，
+/// 重算要么得重新分词（浪费），要么得再调一次 AI（荒谬）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TranslationInput {
+    pub document_id: String,
+    pub chapter_id: String,
+    /// `TranslationLang`（zh/en/ja/…）。Rust 侧不校验白名单 —— TS 的
+    /// `isTranslationTarget` 是唯一入口；这里多写一份枚举必与它漂移。
+    pub target: String,
+    /// 原文指纹（`bodyFingerprint(body)`）：读时比对，不匹配即视为无缓存。
+    pub body_hash: String,
+    pub text: String,
+    pub blocks: i64,
+    pub skipped: i64,
+    pub source_chars: i64,
+    pub created_at: i64,
+}
+
+/// 索引行 —— **刻意不含 `text`**。
+///
+/// ⚠️ 这是本表设计的硬约束，不是疏漏：整库 500 章的译文几十 MB，若索引查询顺手
+/// 带上正文，每次启动都会把它全量 IPC 进内存 —— 那正是「下沉 SQLite 省下的内存」
+/// 又被原样搬回来。同 `db_list_embedding_vectors`（检索用轻量视图）的口径。
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct TranslationIndexRow {
+    pub document_id: String,
+    pub chapter_id: String,
+    pub target: String,
+    pub body_hash: String,
+    pub blocks: i64,
+    pub skipped: i64,
+    pub source_chars: i64,
+    pub created_at: i64,
+}
+
+/// 单章单语言的完整译文（按需读，含正文）。
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct TranslationOut {
+    pub document_id: String,
+    pub chapter_id: String,
+    pub target: String,
+    pub body_hash: String,
+    pub text: String,
+    pub blocks: i64,
+    pub skipped: i64,
+    pub source_chars: i64,
+    pub created_at: i64,
+}
+
 #[cfg(test)]
 mod tests {
     //! IPC 命名契约守卫：前端 `src/storage/tauri.ts` 一律收发 camelCase。

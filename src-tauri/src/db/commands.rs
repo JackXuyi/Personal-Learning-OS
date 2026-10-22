@@ -21,7 +21,7 @@ use super::models::{
     from_json_array, json_col, json_col_required, ChapterInput, ChapterOut, ChapterRow, ChunkInput,
     ChunkOut, ChunkRow, DocumentInput, DocumentOut, DocumentRow, KnowledgeRelationInput,
     KnowledgeRelationRow, KnowledgeUnitInput, KnowledgeUnitOut, KnowledgeUnitRow, SectionInput,
-    SectionRow,
+    SectionRow, TranslationIndexRow, TranslationInput, TranslationOut,
 };
 use super::DbState;
 
@@ -118,16 +118,25 @@ pub async fn db_save_documents(
     save_documents_impl(&state.pool, &documents).await
 }
 
-/// 删除一份资料 —— 单事务内先删其章节、再删资料本体。
+/// 删除一份资料 —— 单事务内先删其译文、章节、再删资料本体。
 ///
 /// 先子后父只为日志可读（无外键约束，schema.sql 已说明）；但**必须同事务**：
 /// 分开会留下「资料没了、章节还在」的孤儿行，而章节是按 `document_id` 载入
 /// 镜像的 → 下次启动会凭空多出一批挂在不存在的资料下的章。
+///
+/// ⚠️ v6 起多了译文这一层：漏删的后果不是「多几行垃圾」，而是
+/// `db_translation_index` 会把它们读进取值域 → 界面在已删资料的章节上显示
+/// 「已翻译」标记（点进去却什么都没有）。
 pub(crate) async fn delete_document_impl(
     pool: &sqlx::SqlitePool,
     id: &str,
 ) -> Result<(), String> {
     let mut tx = pool.begin().await.map_err(|err| db_err("开启事务", err))?;
+    sqlx::query("DELETE FROM translations WHERE document_id = ?")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|err| db_err("删除资料的译文", err))?;
     sqlx::query("DELETE FROM chapters WHERE document_id = ?")
         .bind(id)
         .execute(&mut *tx)
@@ -205,6 +214,13 @@ pub(crate) async fn save_chapters_impl(
             .execute(&mut *tx)
             .await
             .map_err(|err| db_err("清空章节目录", err))?;
+        // v6：章全没了 ⇒ 该资料的译文也必须跟着走。否则索引里会留下指向
+        // 不存在章节的「已翻译」行（界面显示已翻译、点进去是空的）。
+        sqlx::query("DELETE FROM translations WHERE document_id = ?")
+            .bind(document_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|err| db_err("清空章节译文", err))?;
     } else {
         // ② diff-delete（见函数注释）。占位符逐条 bind，不拼字符串。
         let placeholders = vec!["?"; chapters.len()].join(",");
@@ -217,6 +233,20 @@ pub(crate) async fn save_chapters_impl(
         q.execute(&mut *tx)
             .await
             .map_err(|err| db_err("清理陈旧章节", err))?;
+
+        // v6：被删 / 被合并掉的章，其译文同样要清（保留章的译文**原地不动**）。
+        // 与「章节还在但正文改了」的处置刻意不同：那种情况只让 body_hash 不匹配，
+        // 不删行 —— 用户可能只是微调，删了就得重翻几十分钟。
+        let sql_tr = format!(
+            "DELETE FROM translations WHERE document_id = ? AND chapter_id NOT IN ({placeholders})"
+        );
+        let mut q2 = sqlx::query(&sql_tr).bind(document_id);
+        for c in chapters {
+            q2 = q2.bind(&c.id);
+        }
+        q2.execute(&mut *tx)
+            .await
+            .map_err(|err| db_err("清理陈旧章节译文", err))?;
     }
 
     tx.commit().await.map_err(|err| db_err("提交事务", err))
@@ -788,6 +818,149 @@ pub async fn db_delete_relation(state: State<'_, DbState>, id: String) -> Result
     Ok(())
 }
 
+// ========== 章译文（v6 · D3 改判）==========
+//
+// 语义：一章 × 一种目标语言 = 一行，**覆盖写**。译文是派生数据（原文还在），
+// 所以不留历史版本；`body_hash` 不匹配即视为无缓存（不删行，重翻覆盖）。
+//
+// ⚠️ 索引与正文是**两个命令**：`db_translation_index` 不含 `text`。
+// 整库 500 章的译文几十 MB，索引带正文就等于每次启动全量 IPC 进内存 ——
+// 那正是「下沉 SQLite 省下的内存」又被搬回来（同 `db_list_embedding_vectors`）。
+
+/// 全库译文索引（**不含正文**）。排序三键全序 → 同一份库读两次顺序一致。
+pub(crate) async fn list_translation_index_impl(
+    pool: &sqlx::SqlitePool,
+) -> Result<Vec<TranslationIndexRow>, String> {
+    sqlx::query_as::<_, TranslationIndexRow>(
+        "SELECT document_id, chapter_id, target, body_hash, blocks, skipped, source_chars, created_at \
+         FROM translations ORDER BY document_id ASC, chapter_id ASC, target ASC",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|err| db_err("读取译文索引", err))
+}
+
+pub(crate) async fn get_translation_impl(
+    pool: &sqlx::SqlitePool,
+    document_id: &str,
+    chapter_id: &str,
+    target: &str,
+) -> Result<Option<TranslationOut>, String> {
+    sqlx::query_as::<_, TranslationOut>(
+        "SELECT * FROM translations WHERE document_id = ? AND chapter_id = ? AND target = ?",
+    )
+    .bind(document_id)
+    .bind(chapter_id)
+    .bind(target)
+    .fetch_optional(pool)
+    .await
+    .map_err(|err| db_err("读取章节译文", err))
+}
+
+/// 写入一条译文（**覆盖写**：同 `(document_id, chapter_id, target)` 只留最新一版）。
+pub(crate) async fn save_translation_impl(
+    pool: &sqlx::SqlitePool,
+    input: &TranslationInput,
+) -> Result<(), String> {
+    sqlx::query(
+        "INSERT INTO translations
+           (document_id, chapter_id, target, body_hash, text, blocks, skipped, source_chars, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(document_id, chapter_id, target) DO UPDATE SET
+           body_hash = excluded.body_hash, text = excluded.text, blocks = excluded.blocks,
+           skipped = excluded.skipped, source_chars = excluded.source_chars,
+           created_at = excluded.created_at",
+    )
+    .bind(&input.document_id)
+    .bind(&input.chapter_id)
+    .bind(&input.target)
+    .bind(&input.body_hash)
+    .bind(&input.text)
+    .bind(input.blocks)
+    .bind(input.skipped)
+    .bind(input.source_chars)
+    .bind(input.created_at)
+    .execute(pool)
+    .await
+    .map_err(|err| db_err("写入章节译文", err))?;
+    Ok(())
+}
+
+/// 删单章单语言（「这一章重翻」用）。幂等。
+pub(crate) async fn delete_translation_impl(
+    pool: &sqlx::SqlitePool,
+    document_id: &str,
+    chapter_id: &str,
+    target: &str,
+) -> Result<(), String> {
+    sqlx::query(
+        "DELETE FROM translations WHERE document_id = ? AND chapter_id = ? AND target = ?",
+    )
+    .bind(document_id)
+    .bind(chapter_id)
+    .bind(target)
+    .execute(pool)
+    .await
+    .map_err(|err| db_err("删除章节译文", err))?;
+    Ok(())
+}
+
+/// 删某资料的全部译文（「这份资料重翻」/ 删资料时用）。幂等。
+pub(crate) async fn delete_translations_by_document_impl(
+    pool: &sqlx::SqlitePool,
+    document_id: &str,
+) -> Result<(), String> {
+    sqlx::query("DELETE FROM translations WHERE document_id = ?")
+        .bind(document_id)
+        .execute(pool)
+        .await
+        .map_err(|err| db_err("删除资料译文", err))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn db_translation_index(
+    state: State<'_, DbState>,
+) -> Result<Vec<TranslationIndexRow>, String> {
+    list_translation_index_impl(&state.pool).await
+}
+
+#[tauri::command]
+pub async fn db_get_translation(
+    state: State<'_, DbState>,
+    document_id: String,
+    chapter_id: String,
+    target: String,
+) -> Result<Option<TranslationOut>, String> {
+    get_translation_impl(&state.pool, &document_id, &chapter_id, &target).await
+}
+
+#[tauri::command]
+pub async fn db_save_translation(
+    state: State<'_, DbState>,
+    input: TranslationInput,
+) -> Result<(), String> {
+    save_translation_impl(&state.pool, &input).await
+}
+
+#[tauri::command]
+pub async fn db_delete_translation(
+    state: State<'_, DbState>,
+    document_id: String,
+    chapter_id: String,
+    target: String,
+) -> Result<(), String> {
+    delete_translation_impl(&state.pool, &document_id, &chapter_id, &target).await
+}
+
+#[tauri::command]
+pub async fn db_delete_translations_by_document(
+    state: State<'_, DbState>,
+    document_id: String,
+) -> Result<(), String> {
+    delete_translations_by_document_impl(&state.pool, &document_id).await
+}
+
 // ========== 健康探针 ==========
 
 /// 统计某表行数（db_status 用；表名来自本模块常量，无外部输入）。
@@ -823,6 +996,10 @@ pub async fn db_status(state: State<'_, DbState>) -> Result<serde_json::Value, S
     let embeddings = count_rows(&state.pool, "embeddings")
         .await
         .map_err(|err| db_err("统计 embeddings", err))?;
+    // v6：译文行数 —— 设置页排障区据此确认「整库翻译真的写进库了」。
+    let translations = count_rows(&state.pool, "translations")
+        .await
+        .map_err(|err| db_err("统计 translations", err))?;
 
     Ok(serde_json::json!({
         "ready": true,
@@ -834,18 +1011,23 @@ pub async fn db_status(state: State<'_, DbState>) -> Result<serde_json::Value, S
             "knowledgeUnits": units,
             "relations": relations,
             "embeddings": embeddings,
+            "translations": translations,
         },
     }))
 }
 
 // ========== 整库清空（replace 导入）==========
 
-/// 清空**九表**的实现（抽出来便于单测：命令签名带 `State` 没法直接调）。
+/// 清空**十表**的实现（抽出来便于单测：命令签名带 `State` 没法直接调）。
 ///
 /// v5 起从七表扩到九表（新增 `chapters` → `documents`，**先子后父**只为日志可读，
 /// 无外键约束）。⚠️ 这**不是**「顺手多清两张」，而是必需：分两条命令清会让
 /// 「documents 清了、chunks 没清」的半清态成为可能 —— 而 v5 之后 documents 与
 /// chunks 是**同一个用户资产**的两半（一份资料 + 它的块），清一半比不清更糟。
+///
+/// v6 再扩到十表（`translations`）。⚠️ 漏掉它的后果比多几张表更隐蔽：
+/// 清库后译文还在 ⇒ 重新导入**同名资料**时会直接命中旧译文（哈希可能恰好一致），
+/// 用户看到的是上一份库的内容 —— 这种"看起来正常"比报错难发现得多。
 ///
 /// ⚠️ `chunks_fts` 是 FTS5 虚拟表：用 `DELETE` 而不是 `DROP`（DROP 会连表结构
 /// 一起没，下次查询直接报 no such table）。
@@ -861,6 +1043,7 @@ pub(crate) async fn clear_library(pool: &sqlx::SqlitePool) -> Result<(), String>
         "DELETE FROM knowledge_relations",
         "DELETE FROM knowledge_units",
         "DELETE FROM embeddings",
+        "DELETE FROM translations",
         "DELETE FROM chapters",
         "DELETE FROM documents",
     ] {
@@ -872,7 +1055,7 @@ pub(crate) async fn clear_library(pool: &sqlx::SqlitePool) -> Result<(), String>
     tx.commit().await.map_err(|err| db_err("提交清空事务", err))
 }
 
-/// 清空**九表**（replace 导入用）。事务保证「要么全清、要么不动」。
+/// 清空**十表**（replace 导入用）。事务保证「要么全清、要么不动」。
 ///
 /// 前端 `TauriStorage.clearAll()` 依赖它：**失败必须抛错**（不要静默回退），
 /// 否则 localStorage 清了、SQLite 没清 → FTS 仍能检索到用户以为已删除的段落。
@@ -1090,11 +1273,11 @@ mod tests {
         cleanup(pool, path).await;
     }
 
-    /// TC-RUST-07：每张表插一行（含 FTS 与关联表），清空后必须全空且
-    /// `_schema_version` 仍在。v5：从七表扩到**九表**。
+    /// TC-RUST-07：每张表插一行（含 FTS、关联表与 v6 的译文表），清空后必须全空且
+    /// `_schema_version` 仍在。v5 从七表扩到九表，v6 再扩到**十表**。
     #[tokio::test]
-    async fn clear_library_empties_nine_tables_and_keeps_schema_version() {
-        let (pool, path) = temp_pool("clear-nine").await;
+    async fn clear_library_empties_ten_tables_and_keeps_schema_version() {
+        let (pool, path) = temp_pool("clear-ten").await;
 
         sqlx::query(
             "INSERT INTO documents (id, title, format, status, imported_at) \
@@ -1154,6 +1337,16 @@ mod tests {
         .execute(&pool)
         .await
         .unwrap();
+        // v6：译文表也要插一行（漏清这张表的后果最隐蔽 —— 清库后旧译文会被同名
+        // 资料的新导入直接命中）。
+        sqlx::query(
+            "INSERT INTO translations (document_id, chapter_id, target, body_hash, text, \
+             blocks, skipped, source_chars, created_at) \
+             VALUES ('d1','c1','en','h','Hello',1,0,5,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
 
         clear_library(&pool).await.unwrap();
 
@@ -1167,6 +1360,7 @@ mod tests {
             "knowledge_units",
             "knowledge_relations",
             "embeddings",
+            "translations",
         ] {
             let n: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
                 .fetch_one(&pool)
@@ -1194,11 +1388,15 @@ mod tests {
         cleanup(pool, path).await;
     }
 
-    /// TC-RUST-08：`migrate_v5` 幂等 —— 连续 `init_pool` 两次，版本号最大值为 5、
-    /// `applied_at` **不被重写**（第二次走 `cur >= 5` 提前返回），两张新表存在。
+    /// TC-RUST-08：迁移幂等 —— 连续 `init_pool` 两次，版本号最大值为 6、
+    /// `applied_at` **不被重写**（第二次走 `cur >= 6` 提前返回），新表存在且为空。
+    ///
+    /// ⚠️ 函数名刻意**不带版本号**（旧名 `migrate_v5_...`）：它测的是「迁移幂等」，
+    /// 而版本号每次加表都会变 —— 名字里写死版本会让下一个人以为「这条只测 v5」
+    /// 从而复制一份 v6 的重复用例，而把两处断言同时升级。
     #[tokio::test]
-    async fn migrate_v5_is_idempotent_and_keeps_applied_at() {
-        let path = temp_db_path("migrate-v5");
+    async fn migrate_is_idempotent_and_keeps_applied_at() {
+        let path = temp_db_path("migrate-idempotent");
 
         let pool = init_pool(&path).await.unwrap();
         let (v, at1): (i64, i64) =
@@ -1206,10 +1404,10 @@ mod tests {
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-        assert_eq!(v, 5, "v5 迁移未落版本号");
+        assert_eq!(v, 6, "v6 迁移未落版本号");
 
-        // 两张新表存在且为空（本步骤只建表，不搬数据 —— 搬迁源在宿主 localStorage）。
-        for table in ["documents", "chapters"] {
+        // 新表存在且为空（各步只建表 / 写版本，不搬数据 —— 搬迁源都在宿主侧）。
+        for table in ["documents", "chapters", "translations"] {
             let n: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
                 .fetch_one(&pool)
                 .await
@@ -1225,9 +1423,9 @@ mod tests {
                 .fetch_all(&pool2)
                 .await
                 .unwrap();
-        assert_eq!(rows.len(), 5, "版本行不该因重复启动而增加：{rows:?}");
+        assert_eq!(rows.len(), 6, "版本行不该因重复启动而增加：{rows:?}");
         let (v2, at2) = *rows.last().unwrap();
-        assert_eq!(v2, 5);
+        assert_eq!(v2, 6);
         assert_eq!(at2, at1, "applied_at 被重写了（迁移未提前返回）");
 
         cleanup(pool2, path).await;
@@ -1260,6 +1458,142 @@ mod tests {
 
         // 幂等：删不存在的 id 不报错。
         assert!(delete_document_impl(&pool, "nope").await.is_ok());
+
+        cleanup(pool, path).await;
+    }
+
+    fn translation_input(
+        document_id: &str,
+        chapter_id: &str,
+        target: &str,
+        text: &str,
+    ) -> TranslationInput {
+        TranslationInput {
+            document_id: document_id.into(),
+            chapter_id: chapter_id.into(),
+            target: target.into(),
+            body_hash: format!("h:{}", text.len()),
+            text: text.into(),
+            blocks: 1,
+            skipped: 0,
+            source_chars: text.len() as i64,
+            created_at: 1,
+        }
+    }
+
+    /// TC-RUST-09：译文 upsert 是**覆盖写**（同键只留一行），多语言共存；
+    /// 索引视图**不含正文**（否则整库几十 MB 每次启动全量 IPC）。
+    #[tokio::test]
+    async fn translation_upsert_overwrites_and_index_omits_text() {
+        let (pool, path) = temp_pool("translation-upsert").await;
+
+        save_translation_impl(&pool, &translation_input("d1", "c1", "en", "Hello"))
+            .await
+            .unwrap();
+        save_translation_impl(&pool, &translation_input("d1", "c1", "en", "Hi there"))
+            .await
+            .unwrap();
+        save_translation_impl(&pool, &translation_input("d1", "c1", "ja", "こんにちは"))
+            .await
+            .unwrap();
+
+        let idx = list_translation_index_impl(&pool).await.unwrap();
+        assert_eq!(idx.len(), 2, "同键必须覆盖（不是追加），且不同语言共存：{idx:?}");
+        // 索引行**结构上**就没有 text 字段 —— 序列化后不含该键即为证据。
+        let one = serde_json::to_value(&idx[0]).unwrap();
+        assert!(
+            one.get("text").is_none(),
+            "索引视图不得携带正文（会击穿「下沉省内存」的前提）：{one}"
+        );
+        assert!(one.get("bodyHash").is_some(), "camelCase 缺失：{one}");
+
+        let got = get_translation_impl(&pool, "d1", "c1", "en")
+            .await
+            .unwrap()
+            .expect("覆盖后应能读出");
+        assert_eq!(got.text, "Hi there", "覆盖写必须取后者");
+        assert_eq!(got.body_hash, "h:8");
+
+        // 单章删除幂等。
+        delete_translation_impl(&pool, "d1", "c1", "en").await.unwrap();
+        delete_translation_impl(&pool, "d1", "c1", "en").await.unwrap();
+        assert!(get_translation_impl(&pool, "d1", "c1", "en")
+            .await
+            .unwrap()
+            .is_none());
+        assert_eq!(list_translation_index_impl(&pool).await.unwrap().len(), 1);
+
+        // 按资料整批删。
+        delete_translations_by_document_impl(&pool, "d1").await.unwrap();
+        assert_eq!(list_translation_index_impl(&pool).await.unwrap().len(), 0);
+
+        cleanup(pool, path).await;
+    }
+
+    /// TC-RUST-10：删资料必须**级联删译文**（同事务）。
+    /// 漏删的后果不是「多几行垃圾」：索引会把它读进取值域 → 界面在已删资料的
+    /// 章节上显示「已翻译」，点进去是空的。
+    #[tokio::test]
+    async fn delete_document_cascades_its_translations() {
+        let (pool, path) = temp_pool("delete-doc-translations").await;
+
+        save_documents_impl(&pool, &[document_input("d1", "A"), document_input("d2", "B")])
+            .await
+            .unwrap();
+        save_chapters_impl(&pool, "d1", &[chapter_input("c1", 1, "一章")])
+            .await
+            .unwrap();
+        save_chapters_impl(&pool, "d2", &[chapter_input("c2", 1, "别的章")])
+            .await
+            .unwrap();
+        save_translation_impl(&pool, &translation_input("d1", "c1", "en", "One"))
+            .await
+            .unwrap();
+        save_translation_impl(&pool, &translation_input("d2", "c2", "en", "Two"))
+            .await
+            .unwrap();
+
+        delete_document_impl(&pool, "d1").await.unwrap();
+
+        let idx = list_translation_index_impl(&pool).await.unwrap();
+        assert_eq!(idx.len(), 1, "d1 的译文未被级联删除：{idx:?}");
+        assert_eq!(idx[0].document_id, "d2");
+
+        cleanup(pool, path).await;
+    }
+
+    /// TC-RUST-11：章节 diff-delete 必须级联删**被删章**的译文，且保留章的译文
+    /// 原地不动（「章节还在但正文改了」只让 body_hash 不匹配，不删行 —— 删了就得
+    /// 重翻几十分钟）。空数组分支同理（`NOT IN ()` 语法错误已有特判）。
+    #[tokio::test]
+    async fn save_chapters_cascades_translations_of_removed_chapters() {
+        let (pool, path) = temp_pool("chapters-translations").await;
+
+        save_chapters_impl(
+            &pool,
+            "d1",
+            &[chapter_input("c1", 1, "第一章"), chapter_input("c2", 2, "第二章")],
+        )
+        .await
+        .unwrap();
+        save_translation_impl(&pool, &translation_input("d1", "c1", "en", "One"))
+            .await
+            .unwrap();
+        save_translation_impl(&pool, &translation_input("d1", "c2", "en", "Two"))
+            .await
+            .unwrap();
+
+        // 只留 c1 → c2 的译文必须消失，c1 的保留。
+        save_chapters_impl(&pool, "d1", &[chapter_input("c1", 1, "第一章")])
+            .await
+            .unwrap();
+        let idx = list_translation_index_impl(&pool).await.unwrap();
+        assert_eq!(idx.len(), 1, "被删章的译文未清：{idx:?}");
+        assert_eq!(idx[0].chapter_id, "c1");
+
+        // 空数组 → 该资料章节全清，译文也必须全清。
+        save_chapters_impl(&pool, "d1", &[]).await.unwrap();
+        assert_eq!(list_translation_index_impl(&pool).await.unwrap().len(), 0);
 
         cleanup(pool, path).await;
     }

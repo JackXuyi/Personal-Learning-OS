@@ -194,11 +194,41 @@ CREATE TABLE IF NOT EXISTS chapters (
 );
 CREATE INDEX IF NOT EXISTS idx_chapters_document ON chapters(document_id);
 
+-- ===== 章译文（Translation；v6 · D3 改判）=====
+-- 语义：一章 × 一种目标语言 = 一行。**覆盖写**，不追加历史版本 ——
+-- 译文是派生数据（原文还在，随时可重翻），旧版本没有留存价值。
+--
+-- ⚠️ 为什么不把 body_hash 放进主键：章节每改一次就多一行垃圾。
+--    改为「覆盖写 + 读时比对哈希」：内容变了哈希不匹配 ⇒ 视为无缓存（**不删行**，
+--    重翻时会覆盖）。只有「章没了」才删行（见 commands.rs 的级联三处）。
+--
+-- 体积：text 是本表唯一的大列，整库量级 ≈ 全库正文（几十 MB）—— 这正是它必须
+-- 在 SQLite 而不是 localStorage 的理由（同 documents.text_preview 的注释）。
+--
+-- 索引：document_id 上的索引服务两种查询 ——
+-- ① 「删这份资料的全部译文」；② 整库翻译的进度差集（按资料取已有译文键）。
+-- 不建 (chapter_id) 单列索引：章 id 全局唯一，主键前缀已能覆盖不到，而真实查询
+-- 永远带着 target（阅读页就一次一章，走主键）。
+CREATE TABLE IF NOT EXISTS translations (
+  document_id  TEXT NOT NULL,     -- 冗余存资料 id：删资料 / 按资料清译文都要它
+  chapter_id   TEXT NOT NULL,
+  target       TEXT NOT NULL,     -- TranslationLang（zh/en/ja/...）
+  body_hash    TEXT NOT NULL,     -- 原文指纹（失效判据，见 domain/translation.ts::bodyFingerprint）
+  text         TEXT NOT NULL,     -- 译文全文（本表唯一的大列）
+  blocks       INTEGER NOT NULL,  -- 实际块数（UI 显示「N/K 段未翻译」）
+  skipped      INTEGER NOT NULL,  -- 失败 / 空输出被跳过的块数
+  source_chars INTEGER NOT NULL,  -- 原文长度（整库预估与统计）
+  created_at   INTEGER NOT NULL,  -- epoch ms
+  PRIMARY KEY (document_id, chapter_id, target)
+);
+CREATE INDEX IF NOT EXISTS idx_translations_document ON translations(document_id);
+
 -- ===== schema 版本 =====
--- 结构变更时 +1，并在 Rust 侧补对应的迁移步骤；当前版本 = 5。
+-- 结构变更时 +1，并在 Rust 侧补对应的迁移步骤；当前版本 = 6。
 -- v1 = 初版（embeddings 仅元数据）；v2 = chunks_fts 改 trigram；v3 = embeddings 加 vector；
 -- v4 = knowledge_units 加 evidence 四列（概念原文出处不再在往返中丢失）；
--- v5 = documents / chapters 两表接管（Document / Chapter 下沉 SQLite · D12）。
+-- v5 = documents / chapters 两表接管（Document / Chapter 下沉 SQLite · D12）；
+-- v6 = translations 表（章译文持久化 + 整库翻译 · D3 改判）。
 CREATE TABLE IF NOT EXISTS _schema_version (
   version    INTEGER PRIMARY KEY,
   applied_at INTEGER NOT NULL   -- epoch ms；初始占位的 0 表示「建表时刻未知」

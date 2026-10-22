@@ -210,10 +210,18 @@ pub fn run() {
             db::commands::db_list_embedding_vectors,
             db::commands::db_delete_embedding,
             db::commands::db_delete_embeddings_by_target,
+            // 章译文（v6 · D3 改判：译文持久化 + 整库翻译）
+            // ⚠️ 注册遗漏 = 运行时 Command not found（前端 trySqlite 会降级成
+            // 「不缓存」，症状是「译文总是重新翻」——比报错难发现）。
+            db::commands::db_translation_index,
+            db::commands::db_get_translation,
+            db::commands::db_save_translation,
+            db::commands::db_delete_translation,
+            db::commands::db_delete_translations_by_document,
             // 整库清空（replace 导入；⚠️ 注册遗漏 = 运行时 Command not found）
-            // v5 起由 db_clear_rag 改名为 db_clear_library（清 **9** 表，含
-            // documents / chapters）—— 与前端 `tauri.ts::clearAll` 的调用点同一批改，
-            // 否则中间态就是运行时 Command not found。
+            // v5 起由 db_clear_rag 改名为 db_clear_library（v6 起清 **10** 表，
+            // 含 documents / chapters / translations）—— 与前端 `tauri.ts::clearAll`
+            // 的调用点同一批改，否则中间态就是运行时 Command not found。
             db::commands::db_clear_library,
             // 网页抓取（docs/url-import-design-2026-10.md §8.1）
             // ⚠️ 本仓库唯一一条**用户任意 URL** 的出网命令：webview 的 fetch 受
