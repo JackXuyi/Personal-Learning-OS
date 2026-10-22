@@ -431,6 +431,51 @@ export default function ChapterReaderPage() {
   const Renderer = pickRenderer(doc.format);
 
   /**
+   * 缓存命中时**自动恢复**译文视图（v6.1）：切走再回来、换章再切回，已翻过的
+   * 章直接落在译文上（0 等待），不用再点一次「译文 ✓」。
+   *
+   * 两条边界：
+   * - **只读缓存，绝不自动翻译**（见 `showTranslation` 的注释）—— 没有缓存或
+   *   指纹不符（章节被编辑过）就保持原文视图；
+   * - **任务运行中不恢复**：离开时正在翻、回来任务还在跑的话，渐进内容挂在
+   *   旧组件实例上已经丢了，切到译文只会看到空白 —— 等任务写完库再点按钮。
+   *
+   * 与上方的重置 effect 同触发集、声明在其后 ⇒ 同一轮 commit 先清后恢复，
+   * 不会互相覆盖。用户手动切回「原文」后本 effect 不会重跑（deps 没变），
+   * 不会强行把人拽回译文。
+   */
+  useEffect(() => {
+    if (trTask.running) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const cached = await readCachedTranslation({
+          documentId: doc.id,
+          chapterId: chapter.id,
+          target,
+          body,
+        });
+        if (alive && cached) {
+          setTr({
+            target,
+            parts: [cached.text],
+            blocks: cached.blocks,
+            skipped: cached.skipped,
+            fromCache: true,
+          });
+          setView("translation");
+        }
+      } catch {
+        // 存储不可用 → 保持原文视图（与 showTranslation ② 的降级同口径）。
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // `body` 随 doc/chapter 派生，指纹校验在读缓存内部兜底（不符 = 不命中）。
+  }, [doc?.id, chapter?.id, target, trTask.running]);
+
+  /**
    * 本章译文是否有可用缓存（按钮的「✓」态）。
    *
    * ⚠️ 比的是 `bodyFingerprint(body)` 而不是「索引里有这一行」：章节可能已被
