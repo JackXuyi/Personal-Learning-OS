@@ -33,7 +33,7 @@
 
 | 位置 | 现状 |
 |------|------|
-| `src/features/learn/ChapterReaderPage.tsx`（625 行，实测） | 左栏渲染章正文：`body = doc.textPreview.slice(chapter.contentRef.start, chapter.contentRef.end)`，`Renderer = pickRenderer(doc.format)`；右栏六区；`SelectionToolbar` 挂在 `bodyBoxRef` 上 |
+| `src/features/learn/ChapterReaderPage.tsx`（625 行，实测） | 左栏渲染章正文：`body = doc.textPreview.slice(chapter.contentRef.start, chapter.contentRef.end)`，`Renderer = pickRenderer(doc.format)`；右栏六区；`SelectionToolbar` 挂在 `bodyBoxRef` 上。**已被取代（2026-10-22）**：阅读页已按「外壳 / 容器 / 三栏」拆开，本节描述的能力现落在 `reader/ChapterReaderMain.tsx`（左栏 + 译文全部状态与动作）、`reader/ChapterReaderSidebar.tsx`（右栏六区）、`reader/ChapterReader.tsx`（容器，持跨栏状态与正文 DOM ref）；`ChapterReaderPage.tsx` 只剩加载与早退（**100 行，实测**）。拆分的动因是「早退 return 之后挂着 hook」导致的 hook 数量不一致（89 → 90），见 `ChapterReaderPage.tsx` 文件头注释 |
 | `src/features/learn/reader/SelectionToolbar.tsx` | 选区浮层，`mode: "idle" \| "note"`，落库走 `onCreate`；选区长度已被 `ANNOTATION_LIMITS.minQuoteChars / maxQuoteChars` 过滤（≤2 000 字才弹） |
 | `src/ai/types.ts` | `AIProvider.chat(input)` 唯一契约；`AiProviderError(code: not-configured / not-implemented / request-failed)` |
 | `src/ai/pipeline-core.ts` | `PIPELINE_LIMITS` / `TEMPERATURE` / `chatJson`（**JSON 通道，翻译不需要**）/ `isRecord` / `str` |
@@ -125,6 +125,7 @@ flowchart TB
 | `features/learn/translation-service.ts`（新增） | 长度门 → AI 就绪阻断门 → 调用 → 错误分类；~~**不落库**~~ → **已改判：读写 `translations` 表（§14.5 / §14.12 T24）** | 纯 TS，可 node 直跑 |
 | `stores/useLangStore.ts`（修改） | 持久化 `translationTarget`（沿用 `plos:lang:v1`） | zustand persist |
 | `features/learn/ChapterReaderPage.tsx`（修改） | 译文状态、切换按钮、错误内联、译文模式禁用划线 | React + i18n |
+| → `features/learn/reader/ChapterReaderMain.tsx`（2026-10-22 迁移） | 同上，且是译文状态与动作的**唯一持有者**（容器只搬跨栏的东西） | React + i18n |
 | `features/learn/reader/SelectionToolbar.tsx`（修改） | 新增「翻译」入口与译文态 | React + i18n |
 | `features/settings/TranslationCard.tsx`（新增） | 目标语言下拉（AI 分区内） | `components/ui/select` |
 
@@ -1220,7 +1221,7 @@ UI 用 `parts: (string | null)[]` 累积渲染（`null` = 未完成，显示「�
 | `src/features/learn/translation-service.ts` | 修改 | `readCachedTranslation`（读时比指纹）/ `persistTranslation`（返回记录、吞异常） |
 | `src/features/learn/translation-library-service.ts` | 新增 | `translateLibrary`（两遍：算量+剔除缓存 → 按并发度消费队列；写库串行化） |
 | `src/stores/useTranslationIndexStore.ts` | 新增 | 索引缓存（`Map` + refresh/upsert/remove/clear/get），**不持久化** |
-| `src/features/learn/ChapterReaderPage.tsx` | 修改 | `TrView`；三路径取译文；渐进上屏；三态按钮；部分缺失的「重翻」 |
+| `src/features/learn/ChapterReaderPage.tsx` | 修改 | `TrView`；三路径取译文；渐进上屏；三态按钮；部分缺失的「重翻」（**2026-10-22 已迁至 `src/features/learn/reader/ChapterReaderMain.tsx`**，内容逐字搬移，含「重置 effect 声明在恢复 effect 之前」的顺序约束） |
 | `src/features/settings/TranslationCard.tsx` | 重写 | 目标语言 + 整库区（统计 / 进度 / 开始-继续-暂停-清空 / 成本预估 / 通知） |
 | `src/stores/ai-task-types.ts` | 修改 | 注释登记 `translation:library` 与 `translation:${chapterId}` 共用命名空间 |
 | `src/i18n/messages/{zh,en}.ts` | 修改 | **删** `sessionOnly`；加 `cached` / `progressHint` / `refresh`（阅读页）与 `library*` / `clear*` / `cleared` / `libraryFailed`（设置页） |
