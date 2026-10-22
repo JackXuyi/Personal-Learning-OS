@@ -40,7 +40,14 @@ export type AiTaskId =
   | `concepts:${string}`
   | `graph-extract:${string}`
   /** 客观题即时要点提示（`explain:${paperId}:${questionId}`）。 */
-  | `explain:${string}`;
+  | `explain:${string}`
+  /**
+   * 译文任务。两种形态，共用同一个命名空间：
+   * - `translation:${chapterId}` —— 单章译文，只在阅读页内消费；
+   * - `translation:library` —— 整库翻译（v6），设置页发起、跨页存活。
+   * 任务态同样不持久化：译文本身已落 SQLite，任务态只是「这次跑到哪了」。
+   */
+  | `translation:${string}`;
 
 /**
  * 终态新鲜度窗口（毫秒）。
