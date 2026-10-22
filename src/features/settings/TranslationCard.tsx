@@ -35,14 +35,7 @@ import {
 } from "../../domain";
 import type { LibraryProgress } from "../learn/translation-library-service";
 import { translateLibrary } from "../learn/translation-library-service";
-
-/**
- * 本地模型的翻译吞吐（字符/秒）—— **本机实测值**，用于给用户一个量级感。
- *
- * 取自 2026-10-22 应用日志：682 字 / 24.8s、715 字 / 20.5s ⇒ ≈30 字/秒。
- * 刻意只放在 UI（不进 domain）：换机器 / 换模型就会变，写进领域层会被当契约读。
- */
-const LOCAL_CHARS_PER_SEC = 30;
+import { estimatedMinutesOf } from "../learn/translation-estimate";
 
 /**
  * 整库任务的取消句柄（**模块级**）。
@@ -63,13 +56,18 @@ export default function TranslationCard() {
   const target = resolveTranslationTarget(targetPref, lang);
 
   const rows = useTranslationIndexStore((s) => s.rows);
-  const doneChapters = [...rows.values()].filter((r) => r.target === target).length;
 
   /** 整库任务（跨页存活；`running` 即「正在跑」）。 */
   const libTask = useAiTask("translation:library");
   const running = libTask.running;
 
-  /** 可翻译章数与总字数（设置页打开时算一次；用于预估与分母）。 */
+  /**
+   * 可翻译章数与总字数（设置页打开时算一次；用于预估与分母）。
+   *
+   * ⚠️ 判据必须与 `translateLibrary` 的 `totalChapters` **完全一致**：那边只剔除
+   * 空正文，不再按长度剔除（长章会被拆批翻）。曾经这里算「全部有长度的章」、
+   * 那边算「未超上限的章」，于是分母差着几章 —— 进度条永远到不了 100%。
+   */
   const [stats, setStats] = useState<{ chapters: number; chars: number } | undefined>();
   const [progress, setProgress] = useState<LibraryProgress | undefined>();
   /** 一句结果提示（完成 / 暂停 / 清空），**只显示一次**，下次操作覆盖。 */
@@ -87,12 +85,10 @@ export default function TranslationCard() {
           const text = doc.textPreview ?? "";
           if (text.length === 0) continue;
           for (const ch of await storage.listChapters(doc.id)) {
-            const start = Math.max(0, ch.contentRef.start);
-            const end = Math.min(text.length, ch.contentRef.end);
-            const len = end - start;
-            if (len <= 0) continue;
+            const body = text.slice(ch.contentRef.start, ch.contentRef.end);
+            if (body.trim().length === 0) continue;
             chapters += 1;
-            chars += len;
+            chars += body.length;
           }
         }
         if (alive) setStats({ chapters, chars });
@@ -106,8 +102,20 @@ export default function TranslationCard() {
   }, []);
 
   /** 本地模型下的小时数（≥0.1 才显示，避免「约 0.0 小时」这种噪音）。 */
-  const estimateHours = stats && stats.chars > 0 ? stats.chars / LOCAL_CHARS_PER_SEC / 3600 : 0;
-  const isLocal = buildActiveProvider().kind === "builtin";
+  const estimateMinutes = stats ? estimatedMinutesOf(stats.chars, buildActiveProvider().kind) : undefined;
+  const estimateHours = estimateMinutes !== undefined ? estimateMinutes / 60 : undefined;
+
+  /**
+   * 已翻章数（索引行数，按当前目标语言过滤）。
+   *
+   * ⚠️ 必须 **clamp 到 `stats.chapters`**：索引是按资料级联删的，但资料被重切分后
+   * 可能留下「章节已不存在、行还在」的孤儿（指纹不符会让它重翻，行本身不删）。
+   * 不夹取就会出现「已翻 122 / 120 章」，比少显示几章更让人怀疑数据坏了。
+   */
+  const doneChapters = Math.min(
+    [...rows.values()].filter((r) => r.target === target).length,
+    stats?.chapters ?? Number.POSITIVE_INFINITY,
+  );
 
   const startLibrary = async () => {
     if (running) return;
@@ -129,9 +137,17 @@ export default function TranslationCard() {
           },
         }),
       );
-      setNotice(
-        r.cancelled ? t.libraryCancelled : r.translated > 0 ? t.libraryDone(r.translated) : undefined,
-      );
+      /**
+       * 结果提示：**把失败章也报出来**。
+       *
+       * `failed` 曾在服务层计了数却没人读 —— 用户点「整库翻译」、界面显示「完成」，
+       * 而正文为空 / 调用失败的章一个都没翻，他无从知道漏了哪些。
+       */
+      const lines: string[] = [];
+      if (r.translated > 0) lines.push(t.libraryDone(r.translated));
+      if (r.failed > 0) lines.push(t.libraryFailedChapters(r.failed));
+      if (r.cancelled) lines.push(t.libraryCancelled);
+      setNotice(lines.length > 0 ? lines.join(" ") : undefined);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       // 重入被拦：不是错误，保持现状（别把「已经在跑了」显示成失败）。
@@ -244,7 +260,7 @@ export default function TranslationCard() {
 
             {running ? <p className="mt-2 text-xs text-ink-3">{t.libraryStopHint}</p> : null}
             {/* 本地模型整库是「数小时」级任务 —— 必须在点之前说清，不能等跑起来才让人后悔 */}
-            {isLocal && estimateHours >= 0.1 ? (
+            {estimateHours !== undefined && estimateHours >= 0.1 ? (
               <p className="mt-2 text-xs leading-relaxed text-state-weak">
                 {t.libraryEstimate(estimateHours.toFixed(1))}
               </p>

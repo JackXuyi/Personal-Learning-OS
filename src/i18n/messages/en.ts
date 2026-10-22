@@ -534,6 +534,9 @@ export const en: Messages = {
         libraryCancelled: "Paused. Everything translated so far has been saved.",
         libraryFailed:
           "This run did not finish. Everything translated so far has been saved — start again and it will pick up from there.",
+        /** Per-chapter failures (empty text / failed call) — must be surfaced, not just counted. */
+        libraryFailedChapters: (n: number) =>
+          `${n} chapters could not be translated (empty text or a failed call); the next run will retry them.`,
         clear: "Delete translations",
         clearTitle: "Delete all translations?",
         clearDesc:
@@ -1913,8 +1916,15 @@ export const en: Messages = {
         refresh: "Translate again",
         skipped: (n: number, total: number) =>
           `${n} of ${total} sections could not be translated and were skipped.`,
-        tooLong: (n: number, max: number) =>
-          `This chapter is too long (${n} characters, limit ${max}) to translate as a whole; select a passage to translate instead.`,
+        /**
+         * ⚠️ Only covers an over-limit **selection** (`ANNOTATION_LIMITS.maxQuoteChars`).
+         * Whole chapters no longer have a length gate — long ones are translated in
+         * batches — so this string must not say "this chapter is too long".
+         */
+        tooLong: (max: number) =>
+          `Keep the selection under ${max} characters; select a long passage in a few parts.`,
+        /** Long chapter: say how long the wait is before the click (local model, measured throughput). */
+        targetLong: (minutes: number) => `Translate (~${minutes} min)`,
         noAi: "AI is not ready — configure a model in Settings → AI models first.",
         goConfigure: "Set up AI →",
         errors: {

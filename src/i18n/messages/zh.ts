@@ -534,6 +534,9 @@ export const zh = {
         libraryDone: (n: number) => `这次翻好了 ${n} 章。`,
         libraryCancelled: "已暂停。已经翻好的部分都存下来了。",
         libraryFailed: "这次没跑完。已经翻好的部分都存下来了，再点一次会接着翻。",
+        /** 逐章失败数（空正文 / 调用失败）—— 必须报，不能只在服务层计数。 */
+        libraryFailedChapters: (n: number) =>
+          `有 ${n} 章没能翻（正文为空或调用失败），下次再点会重试这几章。`,
         clear: "清空译文",
         clearTitle: "清空所有译文？",
         clearDesc: "译文会被删除，之后再看要重新翻。原文资料不受影响。",
@@ -1873,8 +1876,14 @@ export const zh = {
          * 所以不能说「该段仍显示原文」——那是另一套实现才成立的说法。
          */
         skipped: (n: number, total: number) => `${total} 段里有 ${n} 段没能翻译出来，已跳过。`,
-        tooLong: (n: number, max: number) =>
-          `这一章太长了（${n} 字，上限 ${max} 字），暂时无法整章翻译；可以划选片段翻译。`,
+        /**
+         * ⚠️ 只描述**划选片段**超限（`ANNOTATION_LIMITS.maxQuoteChars`）。
+         * 整章不再有长度门槛 —— 长章按批拆开翻（见 `TRANSLATION_LIMITS` 的注释），
+         * 所以这句话里不能再出现「这一章太长」。
+         */
+        tooLong: (max: number) => `划选的内容请控制在 ${max} 字以内，长一点请分几次划。`,
+        /** 长章按钮：点之前就告诉用户要等多久（本地模型按实测吞吐估）。 */
+        targetLong: (minutes: number) => `译文（约 ${minutes} 分钟）`,
         noAi: "AI 未就绪——请先到「设置 → AI 模型中心」配置模型。",
         goConfigure: "去配置 AI →",
         errors: {

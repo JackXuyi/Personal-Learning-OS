@@ -27,8 +27,8 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { Bar, Card, ErrorState, EvidenceRow, Section } from "../../components/primitives";
 import { Button } from "../../components/ui/button";
 import {
+  ANNOTATION_LIMITS,
   MASTERY_THRESHOLD,
-  TRANSLATION_LIMITS,
   bodyFingerprint,
   isDueReview,
   resolveTranslationTarget,
@@ -40,6 +40,7 @@ import { isUsefulKeyPoint } from "../../lib/text-quality";
 import { storage, useLoopStore } from "../../stores/useLoopStore";
 import { useAiTask } from "../../stores/useAiTaskStore";
 import { useTranslationIndexStore } from "../../stores/useTranslationIndexStore";
+import { buildActiveProvider } from "../../stores/useSettingsStore";
 import { useAiReady } from "../../hooks/useAiReady";
 import { useLangStore } from "../../stores/useLangStore";
 import { useI18n } from "../../i18n";
@@ -64,6 +65,7 @@ import ChapterRestatementPanel from "./reader/ChapterRestatementPanel";
 import ChapterAnnotationsPanel from "./reader/ChapterAnnotationsPanel";
 import SelectionToolbar from "./reader/SelectionToolbar";
 import { peekCardStats } from "./flashcard-service";
+import { estimatedMinutesOf } from "./translation-estimate";
 import { pickRenderer } from "./render/renderer-registry";
 import PlainTextRenderer from "./render/PlainTextRenderer";
 import RenderErrorBoundary from "./render/RenderErrorBoundary";
@@ -442,21 +444,40 @@ export default function ChapterReaderPage() {
     : "";
   /** 已完成的块数（跳过的块不计 —— 它们不会产出文本）。 */
   const trDone = tr ? tr.parts.filter((p) => p !== null).length : 0;
+  /**
+   * 本章预估耗时（分钟）。长章（4 万字级）不预告时长 = 用户点下去才发现要等半小时；
+   * 这里与设置页整库共用 `estimatedMinutesOf`（本地模型实测吞吐，云 API 不估）。
+   */
+  const trEstimateMinutes = body.length > 0
+    ? estimatedMinutesOf(body.length, buildActiveProvider().kind)
+    : undefined;
+
+  /** 译钮文案：翻译中 / 已有译文 / 长章带预估 / 默认。 */
+  const trButtonLabel = (): string => {
+    if (trTask.running) return trTask.phase ?? tt.running;
+    if (view === "translation" || trHasCache) return tt.cached;
+    // 2 分钟以下的章不标 —— 「约 1 分钟」是噪音，用户本来也愿意等。
+    if (trEstimateMinutes !== undefined && trEstimateMinutes >= 2) {
+      return tt.targetLong(Math.round(trEstimateMinutes));
+    }
+    return tt.target;
+  };
 
   // ===== 翻译动作（handler 放在 body / keyPoints 之后：它们要用这两个值）=====
 
   /**
    * 服务层分类 → 文案（穷尽 switch：新增 `TranslationErrorKind` 时 TS 报未覆盖）。
    *
-   * `too-long` 单独走 `tt.tooLong`：要带上**实测字数与上限**，否则用户不知道
-   * 「太长」到底差多少、该怎么绕（划选片段）。
+   * ⚠️ `too-long` 现在**只剩划选片段**一条路径：整章不再有长度门槛（超长章按批
+   * 拆开翻）。所以这里带的自始至终是**选区上限**，不是 `bodyMaxChars` ——
+   * 拿错的数字去解释一个已经不会发生的失败，比不解释更糟。
    */
   const translationErrorText = (kind: TranslationErrorKind): string => {
     switch (kind) {
       case "no-body":
         return tt.errors["no-body"];
       case "too-long":
-        return tt.tooLong(body.length, TRANSLATION_LIMITS.bodyMaxChars);
+        return tt.tooLong(ANNOTATION_LIMITS.maxQuoteChars);
       case "no-ai":
         return tt.errors["no-ai"];
       case "not-configured":
@@ -635,11 +656,7 @@ export default function ChapterReaderPage() {
                 data-testid="reader-translation-toggle"
                 onClick={() => void showTranslation()}
               >
-                {trTask.running
-                  ? (trTask.phase ?? tt.running)
-                  : view === "translation" || trHasCache
-                    ? tt.cached
-                    : tt.target}
+                {trButtonLabel()}
               </Button>
             </div>
           </div>
